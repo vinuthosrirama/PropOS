@@ -233,6 +233,55 @@ Return ONLY valid JSON (no markdown):
 }
 
 /**
+ * Lightweight outreach writer using Claude Haiku — for Grade C leads.
+ * Same interface as generateMessageClaude but uses haiku for cost efficiency.
+ */
+export async function generateMessageHaiku(params: GenerateParams): Promise<GenerateResult> {
+  const { agentName, agentAgency, agentSuburb, lead, strategy } = params
+
+  const prompt = `You are ${agentName}, a real estate agent at ${agentAgency} in ${agentSuburb}.
+Hard rules: first person, SMS under 160 chars, no em-dashes, 2 paragraphs max email, use lead's first name.
+
+LEAD: ${lead.name} | Budget: ${lead.budget} | Buyer type: ${lead.persona}
+Notes: ${lead.notes || "none"}
+STRATEGY: ${strategy}
+
+Respond ONLY with valid JSON:
+{"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2"]}}`
+
+  const message = await getClient().messages.create({
+    model: "claude-haiku-4-5",
+    max_tokens: 400,
+    messages: [{ role: "user", content: prompt }],
+  })
+
+  const raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
+  const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+  try {
+    return JSON.parse(cleaned) as GenerateResult
+  } catch {
+    return {
+      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here. New listing worth a look — when's a good time?`,
+      email: {
+        subject: `New listing — ${lead.name.split(" ")[0]}`,
+        body: [
+          `Hi ${lead.name.split(" ")[0]}, hope you're well.`,
+          `Cheers,\n${agentName.split(" ")[0]}`,
+        ],
+      },
+    }
+  }
+}
+
+// Model cost reference (USD per 1K tokens, approximate)
+export const MODEL_COSTS: Record<string, number> = {
+  "claude-sonnet-4-5": 0.003,
+  "gpt-4o-mini":       0.0006,
+  "claude-haiku-4-5":  0.00025,
+  "template":          0,
+}
+
+/**
  * Bulk QA: check an array of {leadName, sms, emailSubject} quickly.
  * Returns per-lead pass/fail summary. Uses Sonnet for thoroughness.
  */

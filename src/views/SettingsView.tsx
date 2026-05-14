@@ -5,6 +5,7 @@ import {
   getSLMCompleteness, type PropertySLM, type PropertyQA
 } from "../data/propertySlm"
 import { readPropertySLMFromSheet, sheetsConnected } from "../lib/sheet"
+import AnalyticsDashboard from "../components/AnalyticsDashboard"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -538,6 +539,7 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
   const [syncing, setSyncing] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [openSections, setOpenSections] = useState<Record<number, Set<number>>>({})
+  const [settingsTab, setSettingsTab] = useState<"slm" | "analytics">("slm")
 
   // Load all SLMs on mount
   useEffect(() => {
@@ -744,6 +746,32 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
           </div>
         </div>
 
+        {/* ── Top-level tab strip ── */}
+        <div style={{ display: "flex", gap: 2, marginBottom: 28 }}>
+          {(["slm", "analytics"] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setSettingsTab(tab)}
+              style={{
+                background: settingsTab === tab ? "var(--accent, rgb(166,218,255))" : C.bg2,
+                border: `1px solid ${settingsTab === tab ? "transparent" : C.border}`,
+                borderRadius: 8,
+                padding: "8px 20px",
+                fontSize: 13,
+                fontWeight: 600,
+                color: settingsTab === tab ? C.bg : C.muted,
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              {tab === "slm" ? "SLM Brain" : "Analytics"}
+            </button>
+          ))}
+        </div>
+
+        {settingsTab === "analytics" && <AnalyticsDashboard />}
+
+        {settingsTab === "slm" && (<>
         {/* ── Section 2: SLM Brain ── */}
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>
@@ -997,6 +1025,7 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
             </div>
           )
         })()}
+        </>)}
       </div>
     </div>
   )

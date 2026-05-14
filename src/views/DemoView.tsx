@@ -4,6 +4,7 @@ import {
   C, FONT, PORTFOLIO_SOLD, PORTFOLIO_ACTIVE,
   DEFAULT_THEME,
   type AgentProfile, type AgencyTheme, type PortfolioProperty,
+  type LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_ORDER,
 } from "../data"
 import {
   loadSLMForProperty, getSLMCompleteness,
@@ -12,8 +13,10 @@ import {
 import { matchLeadToListing, matchQuestionToSLM, type MatchResult } from "../lib/slmMatch"
 import {
   readLeadsFromSheet, readAllLeadsFromSheet, postEvent, sheetsConnected,
+  postLeadStatus, markAttended,
   type SheetLead,
 } from "../lib/sheet"
+import AuctionOutcomePanel from "../components/AuctionOutcomePanel"
 import { buildVoiceContext, loadCorpus } from "../lib/voiceContext"
 import { DEMO_FALLBACK_LEADS } from "../lib/demoFallback"
 import { getCachedOutreach } from "../lib/cachedOutreach"
@@ -35,6 +38,7 @@ type Stage =
   | { kind: "profile"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; allLeads: ScoredLead[] }
   | { kind: "generating"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; transcript: string; allLeads: ScoredLead[] }
   | { kind: "review"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; transcript: string; sms: string; emailSubject: string; emailBody: string[]; allLeads: ScoredLead[] }
+  | { kind: "missedOut"; auctionProperty: PortfolioProperty; leads: SheetLead[] }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -160,12 +164,13 @@ function ActiveCard({ property, onClick, theme, pipelineCount }: {
 
 // ── SoldCard ──────────────────────────────────────────────────────────────────
 
-function SoldCard({ property, leads, loading, theme, onClick }: {
+function SoldCard({ property, leads, loading, theme, onClick, onRecordAuction }: {
   property: PortfolioProperty
   leads: SheetLead[]
   loading: boolean
   theme: AgencyTheme
   onClick: () => void
+  onRecordAuction: (p: PortfolioProperty) => void
 }) {
   return (
     <div
@@ -207,6 +212,21 @@ function SoldCard({ property, leads, loading, theme, onClick }: {
         position: "absolute", bottom: 0, left: 0, right: 0, height: 3,
         background: `linear-gradient(90deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
       }} />
+
+      {/* Record auction button — top-right, only shown on hover */}
+      <button
+        onClick={e => { e.stopPropagation(); onRecordAuction(property) }}
+        style={{
+          position: "absolute", top: 10, left: 10,
+          padding: "3px 9px", borderRadius: 8,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+          border: `1px solid ${withAlpha(theme.primary, 0.4)}`,
+          color: theme.primary, fontSize: 9, fontWeight: 700,
+          cursor: "pointer", fontFamily: FONT, zIndex: 2,
+        }}
+      >
+        + Auction Result
+      </button>
 
       {/* Top badges — Sold tag in agency colour */}
       <div style={{ position: "absolute", top: 10, left: 10 }}>
@@ -276,6 +296,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, theme }: {
     property: p,
     slm: loadSLMForProperty(p.id),
   }))
+  const [attended, setAttended] = useState<Set<string>>(new Set())
 
   // For each lead, find the best-matching active listing
   const leadsWithRecs = leads.map(lead => {
@@ -365,6 +386,30 @@ function SoldLeadsPage({ soldProperty, leads, onBack, theme }: {
                         fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 20,
                         background: theme.dim, border: `1px solid ${theme.primary}33`, color: theme.primary,
                       }}>{lead.persona || "Buyer"}</span>
+                      {/* Attendance toggle — Feature 6 */}
+                      <button
+                        onClick={async e => {
+                          e.stopPropagation()
+                          const id = lead.id || lead.name
+                          const next = new Set(attended)
+                          if (attended.has(id)) {
+                            next.delete(id)
+                          } else {
+                            next.add(id)
+                            await markAttended({ leadId: id, leadName: lead.name, propertyAddress: soldProperty.address + ", " + soldProperty.suburb })
+                          }
+                          setAttended(next)
+                        }}
+                        style={{
+                          padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                          background: attended.has(lead.id || lead.name) ? "rgba(100,208,144,0.15)" : C.bg3,
+                          border: `1px solid ${attended.has(lead.id || lead.name) ? C.green : C.border}`,
+                          color: attended.has(lead.id || lead.name) ? C.green : C.muted,
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {attended.has(lead.id || lead.name) ? "Attended ✓" : "Mark attended"}
+                      </button>
                     </div>
                     <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 6 }}>
                       {lead.phone && (
@@ -503,6 +548,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, theme }: {
 }) {
   const [soldLeads, setSoldLeads] = useState<Record<number, SheetLead[]>>({})
   const [sheetsLoading, setSheetsLoading] = useState(true)
+  const [auctionPanelProperty, setAuctionPanelProperty] = useState<PortfolioProperty | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -588,6 +634,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, theme }: {
     .filter(({ pct }) => pct < 80)
 
   return (
+    <>
     <div style={{ padding: "80px 32px 56px", fontFamily: FONT, maxWidth: 1440, margin: "0 auto" }}>
 
       {/* ── SLM completeness warning ────────────────────────────────────────── */}
@@ -661,12 +708,27 @@ function PortfolioPage({ onSelectActive, onSelectSold, theme }: {
                 loading={sheetsLoading}
                 theme={theme}
                 onClick={() => onSelectSold(p, soldLeads[p.id] ?? [])}
+                onRecordAuction={setAuctionPanelProperty}
               />
             </motion.div>
           ))}
         </div>
       </div>
     </div>
+
+    {/* Auction outcome panel — modal overlay */}
+    {auctionPanelProperty && (
+      <AuctionOutcomePanel
+        propertyId={auctionPanelProperty.id}
+        propertyAddress={auctionPanelProperty.address + ", " + auctionPanelProperty.suburb}
+        suburb={auctionPanelProperty.suburb}
+        priceGuideMin={auctionPanelProperty.priceMin ?? auctionPanelProperty.price * 0.95}
+        priceGuideMax={auctionPanelProperty.priceMax ?? auctionPanelProperty.price * 1.05}
+        onClose={() => setAuctionPanelProperty(null)}
+        onSaved={() => setAuctionPanelProperty(null)}
+      />
+    )}
+    </>
   )
 }
 
@@ -1111,7 +1173,7 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
           </div>
 
           {/* Comparison strip */}
-          <div>
+          <div style={{ userSelect: "none" }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 10 }}>
               {soldSLM.address.split(",")[0]} → {property.address.split(",")[0]}
             </div>
@@ -1152,7 +1214,7 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
 
           {/* Q&A */}
           {qaPairs.length > 0 && (
-            <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
+            <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px", userSelect: "none" }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>
                 What {fname} asked at {soldSLM.address} — answered for {property.address}
               </div>
@@ -1265,7 +1327,7 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
             />
             {transcript.trim() && (
               <div style={{
-                marginTop: 8, fontSize: 11, color: C.green,
+                marginTop: 8, fontSize: 11, color: C.green, userSelect: "none",
                 display: "flex", alignItems: "center", gap: 6,
               }}>
                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green }} />
@@ -1504,24 +1566,65 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
   const [editMode, setEditMode] = useState<"sms" | "email" | null>(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [leadStatus, setLeadStatus] = useState<LeadStatus>("outreach_sent")
+  const [deliveryNote, setDeliveryNote] = useState("")
 
   const bubbleColor = theme?.primary ?? "rgb(0,122,255)"
   const avatarGrad = `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
   const fname = lead.name.split(" ")[0]
+  const leadId = lead.id || lead.name.replace(/\s+/g, "_")
+  const propertyAddress = property.address + ", " + property.suburb
+
+  // Clipboard audit — log when agent copies generated content
+  const handleCopy = (field: "sms" | "email") => {
+    postEvent({
+      leadId, leadName: lead.name, propertyAddress,
+      fromProperty: soldSLM.address, eventType: "clipboard_copied",
+      detail: field,
+    }).catch(() => {})
+  }
+
+  const handleStatusUpdate = async (status: LeadStatus) => {
+    setLeadStatus(status)
+    await postLeadStatus({ leadId, leadName: lead.name, propertyAddress, status })
+  }
 
   const handleSend = async () => {
     setSending(true)
     try {
+      // 1. Try direct delivery via server (Twilio + SendGrid)
+      const deliveryRes = await fetch("/api/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId, leadName: lead.name,
+          phone: lead.phone, email: lead.email,
+          agentEmail: agent.email,
+          sms, subject,
+          emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
+          channel: "both",
+        }),
+      }).then(r => r.json()).catch(() => null)
+
+      const delivered = deliveryRes?.ok === true
+      setDeliveryNote(
+        delivered
+          ? "Sent via Twilio + SendGrid"
+          : deliveryRes?.errors?.length
+          ? "Saved to Sheets (delivery: " + deliveryRes.errors[0] + ")"
+          : "Saved to Sheets (configure Twilio/SendGrid for direct delivery)"
+      )
+
+      // 2. Always log to Sheets regardless
       await postEvent({
-        leadId: lead.id || lead.name.replace(/\s+/g, "_"),
-        leadName: lead.name,
-        propertyAddress: property.address + ", " + property.suburb,
-        fromProperty: soldSLM.address,
-        eventType: "outreach_sent",
-        transcript,
-        smsText: sms,
-        emailSubject: subject,
+        leadId, leadName: lead.name, propertyAddress,
+        fromProperty: soldSLM.address, eventType: "outreach_sent",
+        transcript, smsText: sms, emailSubject: subject,
         emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
+        deliveryChannel: "both",
+        deliverySid: deliveryRes?.sms?.sid,
+        sendgridId: deliveryRes?.email?.messageId,
+        leadStatus: "outreach_sent",
       })
     } catch {
       // never fail the demo
@@ -1531,6 +1634,9 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
   }
 
   if (sent) {
+    const activeStatuses = LEAD_STATUS_ORDER.slice(0, 6)
+    const currentIdx = activeStatuses.indexOf(leadStatus)
+
     return (
       <div style={{
         minHeight: "80vh", display: "flex", alignItems: "center", justifyContent: "center",
@@ -1539,15 +1645,49 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         <motion.div
           initial={{ opacity: 0, scale: 0.85 }}
           animate={{ opacity: 1, scale: 1 }}
-          style={{ textAlign: "center" }}
+          style={{ textAlign: "center", maxWidth: 520 }}
         >
-          <div style={{ fontSize: 56, marginBottom: 20 }}>&#10003;</div>
+          <div style={{ fontSize: 56, marginBottom: 16 }}>&#10003;</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5, marginBottom: 8 }}>
-            Outreach saved to Google Sheets
+            Outreach approved for {fname}
           </div>
-          <div style={{ fontSize: 14, color: C.muted, marginBottom: 28 }}>
-            The approved SMS and email for {fname} are queued for delivery.
+          {deliveryNote && (
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 20, padding: "6px 14px",
+              background: C.bg3, borderRadius: 8, display: "inline-block" }}>
+              {deliveryNote}
+            </div>
+          )}
+
+          {/* Lead status lifecycle — agent advances manually */}
+          <div style={{ marginBottom: 28, padding: "20px 24px", background: C.bg2,
+            border: `1px solid ${C.border}`, borderRadius: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1,
+              textTransform: "uppercase", marginBottom: 14 }}>
+              Update lead status
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+              {activeStatuses.map((s, i) => {
+                const isPast = i < currentIdx
+                const isCurrent = i === currentIdx
+                return (
+                  <button
+                    key={s}
+                    onClick={() => handleStatusUpdate(s)}
+                    style={{
+                      padding: "6px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                      cursor: "pointer", fontFamily: FONT, transition: "all 0.15s",
+                      background: isCurrent ? theme.primary : isPast ? "rgba(100,208,144,0.1)" : C.bg3,
+                      color: isCurrent ? C.bg : isPast ? C.green : C.muted,
+                      border: `1px solid ${isCurrent ? theme.primary : isPast ? C.green : C.border}`,
+                    }}
+                  >
+                    {isPast ? "✓ " : ""}{LEAD_STATUS_LABELS[s]}
+                  </button>
+                )
+              })}
+            </div>
           </div>
+
           <button onClick={onBack} style={{
             padding: "12px 28px", borderRadius: 12, border: "none",
             background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
@@ -1610,7 +1750,10 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
               }}
             />
           ) : (
-            <div style={{ background: "rgb(24,24,24)", borderRadius: 20, padding: 16 }}>
+            <div
+              style={{ background: "rgb(24,24,24)", borderRadius: 20, padding: 16, userSelect: "none" }}
+              onCopy={e => { e.preventDefault(); handleCopy("sms") }}
+            >
               <div style={{ textAlign: "center", marginBottom: 12 }}>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>iMessage</div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.9)" }}>{fname}</div>
@@ -1679,10 +1822,13 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
               />
             </div>
           ) : (
-            <div style={{
-              background: "white", borderRadius: 12, overflow: "hidden",
-              boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
-            }}>
+            <div
+              style={{
+                background: "white", borderRadius: 12, overflow: "hidden",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.3)", userSelect: "none",
+              }}
+              onCopy={e => { e.preventDefault(); handleCopy("email") }}
+            >
               <div style={{ background: "#f1f3f4", padding: "10px 16px", borderBottom: "1px solid #e0e0e0" }}>
                 <div style={{ fontSize: 11, color: "#666", marginBottom: 2 }}>
                   <span style={{ fontWeight: 500, color: "#333" }}>From: </span>{agent.email}
@@ -1743,6 +1889,110 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       </motion.button>
       <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
         This saves the approved SMS and email to Google Sheets for delivery via Twilio and Gmail.
+      </div>
+    </div>
+  )
+}
+
+// ── Stage: Missed Out Flow ────────────────────────────────────────────────────
+
+function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: {
+  auctionProperty: PortfolioProperty
+  leads: SheetLead[]
+  onBack: () => void
+  theme: AgencyTheme
+  onSelectLead: (lead: ScoredLead, property: PortfolioProperty) => void
+}) {
+  // Re-match each missed-out lead against all OTHER active listings
+  const otherActives = PORTFOLIO_ACTIVE
+  const soldSLM = loadSLMForProperty(auctionProperty.id)
+
+  const rematched = leads.map(lead => {
+    const bedsWanted = inferBedsWanted(lead)
+    const matches = otherActives
+      .map(p => ({
+        property: p,
+        slm: loadSLMForProperty(p.id),
+        result: matchLeadToListing(
+          { budget: lead.budget, bedsWanted, persona: lead.persona, suburbs: inferSuburbs(lead), notes: lead.notes, questions: lead.questions },
+          loadSLMForProperty(p.id),
+          soldSLM,
+        ),
+      }))
+      .sort((a, b) => b.result.score - a.result.score)
+    const best = matches[0]
+    return { lead, bestProperty: best?.property, bestResult: best?.result, bedsWanted }
+  }).filter(r => r.bestResult && r.bestResult.score > 30)
+
+  if (!rematched.length) {
+    return (
+      <div style={{ maxWidth: 680, margin: "0 auto", padding: "80px 28px", fontFamily: FONT, textAlign: "center" }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", color: theme.primary, fontSize: 18, cursor: "pointer", marginBottom: 24 }}>←</button>
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 12 }}>No strong re-matches found</div>
+        <div style={{ fontSize: 13, color: C.muted }}>Add more active listings or complete their SLM data to improve matching.</div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ maxWidth: 860, margin: "0 auto", padding: "80px 28px 48px", fontFamily: FONT }}>
+      <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, marginBottom: 20, padding: 0 }}>←</button>
+
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.orange, textTransform: "uppercase", marginBottom: 6 }}>
+          Post-Auction Missed Out
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.6, marginBottom: 6 }}>
+          Re-match {rematched.length} lead{rematched.length !== 1 ? "s" : ""} who missed out
+        </div>
+        <div style={{ fontSize: 13, color: C.muted }}>
+          These leads registered to bid on {auctionProperty.address} but didn't win. They're warm — reach out now.
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {rematched.map(({ lead, bestProperty, bestResult, bedsWanted }) => {
+          if (!bestProperty || !bestResult) return null
+          const scoredLead: ScoredLead = {
+            ...lead,
+            matchResult: bestResult,
+            fromPropertyId: auctionProperty.id,
+            bedsWanted,
+          }
+          return (
+            <motion.div
+              key={lead.id || lead.name}
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              style={{
+                background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 14,
+                padding: "20px 22px", display: "flex", alignItems: "center", gap: 16,
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>{lead.name}</div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>{lead.persona} · {fmt(lead.budget)} budget</div>
+                <div style={{ fontSize: 12, color: theme.primary }}>
+                  Best match: {bestProperty.address} — {Math.round(bestResult.score)}/99
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: scoreColor(bestResult.score) }}>
+                  {Math.round(bestResult.score)}
+                </div>
+                <button
+                  onClick={() => onSelectLead(scoredLead, bestProperty)}
+                  style={{
+                    padding: "8px 18px", borderRadius: 10, border: "none", cursor: "pointer",
+                    background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                    color: "white", fontSize: 12, fontWeight: 700, fontFamily: FONT,
+                  }}
+                >
+                  Generate outreach
+                </button>
+              </div>
+            </motion.div>
+          )
+        })}
       </div>
     </div>
   )
@@ -1924,6 +2174,25 @@ export default function DemoView({
             emailSubject={stage.emailSubject}
             emailBody={stage.emailBody}
             onBack={() => setStage({ kind: "leads", property: stage.property, allLeads: stage.allLeads })}
+          />
+        </motion.div>
+      )}
+      {stage.kind === "missedOut" && (
+        <motion.div key="missedOut" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <MissedOutPage
+            auctionProperty={stage.auctionProperty}
+            leads={stage.leads}
+            onBack={() => setStage({ kind: "portfolio" })}
+            theme={theme}
+            onSelectLead={(lead, property) =>
+              setStage({
+                kind: "profile",
+                property,
+                lead,
+                soldSLM: loadSLMForProperty(stage.auctionProperty.id),
+                allLeads: [lead],
+              })
+            }
           />
         </motion.div>
       )}

@@ -72,6 +72,56 @@ export function getAgencyTheme(agency: string): AgencyTheme {
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 export type ViewId = "demo" | "setup"
 
+export type LeadStatus =
+  | "outreach_sent"
+  | "email_opened"
+  | "sms_replied"
+  | "email_clicked"
+  | "inspection_booked"
+  | "inspection_attended"
+  | "registered_to_bid"
+  | "bid_placed"
+  | "property_won"
+  | "missed_out"
+  | "nurture_sequence"
+  | "opted_out"
+
+export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
+  outreach_sent:       "Sent",
+  email_opened:        "Opened",
+  sms_replied:         "Replied",
+  email_clicked:       "Clicked",
+  inspection_booked:   "Booked",
+  inspection_attended: "Attended",
+  registered_to_bid:   "Registered",
+  bid_placed:          "Bid",
+  property_won:        "Won",
+  missed_out:          "Missed out",
+  nurture_sequence:    "Nurturing",
+  opted_out:           "Opted out",
+}
+
+export const LEAD_STATUS_ORDER: LeadStatus[] = [
+  "outreach_sent", "email_opened", "sms_replied", "email_clicked",
+  "inspection_booked", "inspection_attended", "registered_to_bid",
+  "bid_placed", "property_won",
+]
+
+export interface AuctionOutcome {
+  propertyId:             number
+  propertyAddress:        string
+  suburb:                 string
+  auctionDate:            string
+  hammerPrice:            number
+  registeredBidders:      number
+  activeBidders:          number
+  priceGuideMin:          number
+  priceGuideMax:          number
+  propOSLeadsContacted:   number
+  propOSLeadsAtAuction:   number
+  notes:                  string
+}
+
 /** Single entry in the agent's voice training corpus */
 export interface TrainingEntry {
   id:        string

@@ -1,6 +1,6 @@
 import { Router } from "express"
 import { generateMessage, type GenerateParams } from "../lib/openai.js"
-import { analyseLead, qaMessage, generateMessageClaude } from "../lib/claude.js"
+import { analyseLead, qaMessage, generateMessageClaude, generateMessageHaiku, MODEL_COSTS } from "../lib/claude.js"
 
 const router = Router()
 
@@ -68,16 +68,50 @@ router.post("/", async (req, res) => {
       }
     }
 
-    // ── Step 2: AddVantage AI writes the message (Claude fallback if OpenAI fails) ─
-    let result = await generateMessage(enrichedParams).catch(async (openAiErr) => {
-      console.warn("OpenAI failed, falling back to Claude:", openAiErr)
-      if (!process.env.ANTHROPIC_API_KEY) throw openAiErr
-      return generateMessageClaude(enrichedParams)
-    })
+    // ── Step 2: Route to model by lead grade ──────────────────────────────────
+    // A → Claude Sonnet (best quality), B → GPT-4o-mini, C → Haiku, D → template
+    const grade = analysis?.grade ?? "B"
+    let modelUsed = "gpt-4o-mini"
+    let result
 
-    // ── Step 3: Claude Sonnet QA (optional) ───────────────────────────────────
+    if (grade === "D") {
+      modelUsed = "template"
+      result = {
+        sms: `Hi ${params.lead.name.split(" ")[0]}, ${params.agentName.split(" ")[0]} here. Worth a chat about your property search? When suits?`,
+        email: {
+          subject: `Checking in — ${params.lead.name.split(" ")[0]}`,
+          body: [
+            `Hi ${params.lead.name.split(" ")[0]}, hope you're well.`,
+            `Wanted to touch base on your property search. Happy to help when the timing's right.`,
+            `Cheers,\n${params.agentName.split(" ")[0]}`,
+          ],
+        },
+      }
+    } else if (grade === "C" && process.env.ANTHROPIC_API_KEY) {
+      modelUsed = "claude-haiku-4-5"
+      result = await generateMessageHaiku(enrichedParams).catch(async () => {
+        modelUsed = "gpt-4o-mini"
+        return generateMessage(enrichedParams)
+      })
+    } else if (grade === "A" && process.env.ANTHROPIC_API_KEY) {
+      modelUsed = "claude-sonnet-4-5"
+      result = await generateMessageClaude(enrichedParams).catch(async () => {
+        modelUsed = "gpt-4o-mini"
+        return generateMessage(enrichedParams)
+      })
+    } else {
+      // Grade B (or fallback) — GPT-4o-mini primary
+      result = await generateMessage(enrichedParams).catch(async (openAiErr) => {
+        console.warn("OpenAI failed, falling back to Claude:", openAiErr)
+        if (!process.env.ANTHROPIC_API_KEY) throw openAiErr
+        modelUsed = "claude-sonnet-4-5"
+        return generateMessageClaude(enrichedParams)
+      })
+    }
+
+    // ── Step 3: Claude Sonnet QA — only for Grade A/B leads (skip C/D) ────────
     let qa = null
-    if (process.env.ANTHROPIC_API_KEY && !params.skipQA) {
+    if (process.env.ANTHROPIC_API_KEY && !params.skipQA && (grade === "A" || grade === "B")) {
       try {
         qa = await qaMessage({
           agentName: params.agentName,
@@ -101,7 +135,8 @@ router.post("/", async (req, res) => {
       }
     }
 
-    res.json({ ...result, meta: { pipeline: "full", analysis, qa } })
+    const estimatedCostUsd = MODEL_COSTS[modelUsed] ?? 0
+    res.json({ ...result, meta: { pipeline: "full", model_used: modelUsed, estimated_cost_usd: estimatedCostUsd, analysis, qa } })
   } catch (err) {
     console.error("Generate error:", err)
     res.status(500).json({ error: "Generation failed" })
