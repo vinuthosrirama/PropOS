@@ -1568,6 +1568,17 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
   const [sent, setSent] = useState(false)
   const [leadStatus, setLeadStatus] = useState<LeadStatus>("outreach_sent")
   const [deliveryNote, setDeliveryNote] = useState("")
+  const [testMode, setTestMode] = useState<{ phone: string | null; email: string | null } | null>(null)
+
+  // Fetch server test mode config once on mount
+  useEffect(() => {
+    fetch("/api/health")
+      .then(r => r.json())
+      .then((h: { testMode?: boolean; testPhone?: string | null; testEmail?: string | null }) => {
+        if (h.testMode) setTestMode({ phone: h.testPhone ?? null, email: h.testEmail ?? null })
+      })
+      .catch(() => {})
+  }, [])
 
   const bubbleColor = theme?.primary ?? "rgb(0,122,255)"
   const avatarGrad = `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
@@ -1867,6 +1878,24 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         </div>
       </div>
 
+      {/* Test mode banner */}
+      {testMode && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
+          padding: "10px 16px", borderRadius: 10,
+          background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)",
+        }}>
+          <div style={{ fontSize: 14 }}>⚠️</div>
+          <div style={{ fontSize: 12, color: "#f59e0b", lineHeight: 1.4 }}>
+            <span style={{ fontWeight: 700 }}>Test mode active</span> — messages will go to{" "}
+            {testMode.phone && <span style={{ fontFamily: "monospace" }}>{testMode.phone}</span>}
+            {testMode.phone && testMode.email && " / "}
+            {testMode.email && <span style={{ fontFamily: "monospace" }}>{testMode.email}</span>}
+            {" "}instead of {lead.name}
+          </div>
+        </div>
+      )}
+
       {/* Send button */}
       <motion.button
         whileHover={{ scale: 1.02 }}
@@ -2008,6 +2037,25 @@ export default function DemoView({
   theme?: AgencyTheme
 }) {
   const [stage, setStage] = useState<Stage>({ kind: "portfolio" })
+  const [unreadReplies, setUnreadReplies] = useState(0)
+  const [showInbox, setShowInbox] = useState(false)
+  const [inboxThreads, setInboxThreads] = useState<Array<{ leadName: string; phone: string; propertyAddress: string; lastReplyAt: string; messages: Array<{ role: string; body: string; ts: string }> }>>([])
+
+  // Poll for unread SMS replies every 30 seconds
+  useEffect(() => {
+    const poll = () => {
+      fetch("/api/conversations")
+        .then(r => r.json())
+        .then((d: { unread: number; threads: typeof inboxThreads }) => {
+          setUnreadReplies(d.unread ?? 0)
+          setInboxThreads(d.threads ?? [])
+        })
+        .catch(() => {})
+    }
+    poll()
+    const id = setInterval(poll, 30_000)
+    return () => clearInterval(id)
+  }, [])
 
   // Ctrl+Z or Cmd+Shift+R — instant reset to portfolio during live demo
   useEffect(() => {
@@ -2048,6 +2096,96 @@ export default function DemoView({
           ← Portfolio
         </motion.button>
       )}
+
+      {/* Reply inbox badge — top-right, always visible when there are unread replies */}
+      {inboxThreads.length > 0 && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          onClick={() => setShowInbox(!showInbox)}
+          style={{
+            position: "fixed", top: 16, right: 16, zIndex: 200,
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "6px 12px", borderRadius: 8,
+            background: unreadReplies > 0 ? "rgba(245,158,11,0.15)" : C.bg2,
+            border: `1px solid ${unreadReplies > 0 ? "rgba(245,158,11,0.4)" : C.border}`,
+            color: unreadReplies > 0 ? "#f59e0b" : C.muted,
+            fontSize: 12, fontWeight: 700, fontFamily: FONT, cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+          }}
+        >
+          💬 Replies
+          {unreadReplies > 0 && (
+            <span style={{
+              background: "#f59e0b", color: C.bg,
+              borderRadius: "50%", width: 18, height: 18,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 10, fontWeight: 800,
+            }}>{unreadReplies}</span>
+          )}
+        </motion.button>
+      )}
+
+      {/* Inbox drawer */}
+      <AnimatePresence>
+        {showInbox && (
+          <motion.div
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 24 }}
+            style={{
+              position: "fixed", top: 60, right: 16, zIndex: 199,
+              width: 340, maxHeight: "70vh", overflowY: "auto",
+              background: C.bg2, border: `1px solid ${C.border}`,
+              borderRadius: 14, fontFamily: FONT,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+            }}
+          >
+            <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>SMS Replies</div>
+              <button onClick={() => setShowInbox(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>×</button>
+            </div>
+            {inboxThreads.map(t => {
+              const last = t.messages[t.messages.length - 1]
+              const isUnread = t.messages.some(m => m.role === "lead") &&
+                new Date(t.lastReplyAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)
+              return (
+                <div key={t.phone} style={{
+                  padding: "12px 16px", borderBottom: `1px solid ${C.border}`,
+                  background: isUnread ? "rgba(245,158,11,0.05)" : "transparent",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: isUnread ? "#f59e0b" : C.text }}>
+                      {isUnread && "● "}{t.leadName}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.faint }}>
+                      {new Date(t.lastReplyAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {t.propertyAddress || t.phone}
+                  </div>
+                  {last && (
+                    <div style={{ fontSize: 12, color: last.role === "lead" ? C.text : C.muted, fontStyle: last.role === "agent" ? "italic" : "normal" }}>
+                      {last.role === "agent" ? "You: " : ""}{last.body.slice(0, 80)}{last.body.length > 80 ? "…" : ""}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                    {t.messages.map((m, i) => (
+                      <div key={i} style={{
+                        maxWidth: 200, padding: "4px 8px", borderRadius: m.role === "agent" ? "8px 8px 2px 8px" : "8px 8px 8px 2px",
+                        background: m.role === "agent" ? theme.primary + "33" : C.bg3,
+                        fontSize: 10, color: C.text,
+                      }}>{m.body.slice(0, 60)}{m.body.length > 60 ? "…" : ""}</div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     <AnimatePresence mode="wait">
       {stage.kind === "portfolio" && (
         <motion.div key="portfolio" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
