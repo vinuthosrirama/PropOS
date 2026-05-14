@@ -1,5 +1,6 @@
 import { Router } from "express"
 import { addOptOut } from "../lib/compliance.js"
+import { addReplyToThread } from "../lib/conversations.js"
 
 const router = Router()
 
@@ -39,6 +40,8 @@ router.post("/sms", async (req, res) => {
     await addOptOut(from, "sms", "reply")
     // Twilio automatically honours STOP — we just persist it
   } else {
+    // Track in conversation thread store + update Sheets lead status
+    await addReplyToThread(from, body)
     await updateLeadStatusInSheets({ phone: from, status: "sms_replied", detail: body.slice(0, 200) })
   }
 

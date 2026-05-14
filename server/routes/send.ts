@@ -2,6 +2,7 @@ import { Router } from "express"
 import { checkCompliance } from "../lib/compliance.js"
 import { sendSMS, twilioConfigured } from "../lib/twilio.js"
 import { sendEmail, sendgridConfigured } from "../lib/sendgrid.js"
+import { addAgentMessageToThread } from "../lib/conversations.js"
 
 const router = Router()
 
@@ -86,7 +87,14 @@ router.post("/", async (req, res) => {
   }
 
   const delivered = !!(results.sms || results.email)
-  res.json({ ok: delivered, ...results })
+
+  // Record outbound message in conversation thread so agent can see the full thread
+  if (delivered && phone && sms) {
+    await addAgentMessageToThread(phone, sms, { leadId, leadName, email })
+  }
+
+  const testMode = !!(process.env.TEST_RECIPIENT_PHONE || process.env.TEST_RECIPIENT_EMAIL)
+  res.json({ ok: delivered, testMode, ...results })
 })
 
 export default router
