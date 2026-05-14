@@ -6,6 +6,7 @@ import {
 } from "../data/propertySlm"
 import { readPropertySLMFromSheet, sheetsConnected } from "../lib/sheet"
 import AnalyticsDashboard from "../components/AnalyticsDashboard"
+import { loadCorpus, saveCorpus, type TrainingEntry } from "../lib/voiceContext"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -539,7 +540,9 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
   const [syncing, setSyncing] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [openSections, setOpenSections] = useState<Record<number, Set<number>>>({})
-  const [settingsTab, setSettingsTab] = useState<"slm" | "analytics">("slm")
+  const [settingsTab, setSettingsTab] = useState<"slm" | "voice" | "analytics">("slm")
+  const [corpus, setCorpus] = useState<TrainingEntry[]>(() => loadCorpus())
+  const [stylePaste, setStylePaste] = useState("")
 
   // Load all SLMs on mount
   useEffect(() => {
@@ -748,7 +751,7 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
 
         {/* ── Top-level tab strip ── */}
         <div style={{ display: "flex", gap: 2, marginBottom: 28 }}>
-          {(["slm", "analytics"] as const).map(tab => (
+          {(["slm", "voice", "analytics"] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setSettingsTab(tab)}
@@ -764,12 +767,43 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
                 transition: "all 0.15s",
               }}
             >
-              {tab === "slm" ? "SLM Brain" : "Analytics"}
+              {tab === "slm" ? "SLM Brain" : tab === "voice" ? "Writing Style" : "Analytics"}
             </button>
           ))}
         </div>
 
         {settingsTab === "analytics" && <AnalyticsDashboard />}
+
+        {settingsTab === "voice" && (
+          <VoiceStylePanel
+            corpus={corpus}
+            stylePaste={stylePaste}
+            onPasteChange={setStylePaste}
+            onAdd={(text, type) => {
+              const entry: TrainingEntry = {
+                id: `entry_${Date.now()}`,
+                type,
+                text: text.trim(),
+                timestamp: new Date().toISOString(),
+                wordCount: text.trim().split(/\s+/).length,
+                source: type === "email" ? "Email example" : "SMS example",
+              }
+              const updated = [...corpus, entry]
+              saveCorpus(updated)
+              setCorpus(updated)
+              setStylePaste("")
+            }}
+            onRemove={(id) => {
+              const updated = corpus.filter(e => e.id !== id)
+              saveCorpus(updated)
+              setCorpus(updated)
+            }}
+            onClearAll={() => {
+              saveCorpus([])
+              setCorpus([])
+            }}
+          />
+        )}
 
         {settingsTab === "slm" && (<>
         {/* ── Section 2: SLM Brain ── */}
@@ -1026,6 +1060,174 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
           )
         })()}
         </>)}
+      </div>
+    </div>
+  )
+}
+
+// ── VoiceStylePanel ────────────────────────────────────────────────────────────
+
+interface VoiceStylePanelProps {
+  corpus: TrainingEntry[]
+  stylePaste: string
+  onPasteChange: (v: string) => void
+  onAdd: (text: string, type: "email" | "paste") => void
+  onRemove: (id: string) => void
+  onClearAll: () => void
+}
+
+function VoiceStylePanel({ corpus, stylePaste, onPasteChange, onAdd, onRemove, onClearAll }: VoiceStylePanelProps) {
+  const card: React.CSSProperties = {
+    background: C.bg2,
+    border: `1px solid ${C.border}`,
+    borderRadius: 12,
+    padding: "20px 24px",
+    marginBottom: 20,
+  }
+  const label: React.CSSProperties = {
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    color: C.muted,
+    textTransform: "uppercase" as const,
+    marginBottom: 10,
+  }
+
+  return (
+    <div>
+      {/* Explainer */}
+      <div style={{ ...card, borderColor: "rgba(166,218,255,0.2)", background: "rgba(166,218,255,0.05)" }}>
+        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>
+          <strong style={{ color: C.blue }}>How this works:</strong> Paste 2-5 real texts or emails you've sent to leads. The AI reads these and matches your exact tone, vocabulary, and sign-off style in every generated message. The more specific and real these are, the better the output.
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
+          Examples are stored locally on this device only. They are never sent to any server except during outreach generation.
+        </div>
+      </div>
+
+      {/* Paste area */}
+      <div style={card}>
+        <div style={label}>Paste an example message</div>
+        <textarea
+          value={stylePaste}
+          onChange={e => onPasteChange(e.target.value)}
+          placeholder={"Paste a real SMS or email you've sent to a lead...\n\nExample:\nHey Michelle, Simon here. Just heard back on the Toorak inspection - they loved it. Wanted to let you know first before it goes to contract. Worth a chat today?"}
+          style={{
+            width: "100%",
+            minHeight: 130,
+            background: C.bg3,
+            border: `1px solid ${C.border}`,
+            borderRadius: 8,
+            color: C.text,
+            fontSize: 13,
+            padding: "12px 14px",
+            resize: "vertical",
+            fontFamily: FONT,
+            lineHeight: 1.5,
+            boxSizing: "border-box",
+          }}
+        />
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <button
+            onClick={() => { if (stylePaste.trim().length > 10) onAdd(stylePaste, "paste") }}
+            disabled={stylePaste.trim().length <= 10}
+            style={{
+              background: stylePaste.trim().length > 10 ? C.blue : C.bg3,
+              color: stylePaste.trim().length > 10 ? C.bg : C.muted,
+              border: "none",
+              borderRadius: 8,
+              padding: "9px 18px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: stylePaste.trim().length > 10 ? "pointer" : "not-allowed",
+            }}
+          >
+            + Add as SMS / Short message
+          </button>
+          <button
+            onClick={() => { if (stylePaste.trim().length > 10) onAdd(stylePaste, "email") }}
+            disabled={stylePaste.trim().length <= 10}
+            style={{
+              background: stylePaste.trim().length > 10 ? "rgba(166,218,255,0.12)" : C.bg3,
+              color: stylePaste.trim().length > 10 ? C.blue : C.muted,
+              border: `1px solid ${stylePaste.trim().length > 10 ? "rgba(166,218,255,0.3)" : C.border}`,
+              borderRadius: 8,
+              padding: "9px 18px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: stylePaste.trim().length > 10 ? "pointer" : "not-allowed",
+            }}
+          >
+            + Add as Email
+          </button>
+        </div>
+      </div>
+
+      {/* Saved examples */}
+      <div style={card}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={label}>Saved examples ({corpus.length} / 20)</div>
+          {corpus.length > 0 && (
+            <button
+              onClick={onClearAll}
+              style={{ fontSize: 12, color: C.red ?? "#ef4444", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+
+        {corpus.length === 0 ? (
+          <div style={{ fontSize: 13, color: C.muted, textAlign: "center", padding: "24px 0" }}>
+            No examples yet. Paste a message above to get started.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[...corpus].reverse().map(entry => (
+              <div
+                key={entry.id}
+                style={{
+                  background: C.bg3,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 8,
+                  padding: "12px 14px",
+                  display: "flex",
+                  gap: 12,
+                  alignItems: "flex-start",
+                }}
+              >
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.06em",
+                  color: entry.type === "email" ? C.blue : C.green,
+                  background: entry.type === "email" ? "rgba(166,218,255,0.1)" : "rgba(100,220,130,0.1)",
+                  border: `1px solid ${entry.type === "email" ? "rgba(166,218,255,0.2)" : "rgba(100,220,130,0.2)"}`,
+                  borderRadius: 4,
+                  padding: "2px 7px",
+                  flexShrink: 0,
+                  marginTop: 1,
+                }}>
+                  {entry.type === "email" ? "EMAIL" : "SMS"}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, wordBreak: "break-word" }}>
+                    {entry.text.length > 160 ? entry.text.slice(0, 160) + "..." : entry.text}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                    {entry.wordCount} words · {new Date(entry.timestamp).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onRemove(entry.id)}
+                  style={{ fontSize: 14, color: C.muted, background: "none", border: "none", cursor: "pointer", padding: "0 4px", flexShrink: 0 }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
