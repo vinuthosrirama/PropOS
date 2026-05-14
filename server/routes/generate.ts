@@ -4,6 +4,26 @@ import { analyseLead, qaMessage, generateMessageClaude, generateMessageHaiku, MO
 
 const router = Router()
 
+// Hard-cap SMS at 160 chars — Twilio charges per segment above this
+function clampSMS(sms: string): string {
+  if (sms.length <= 160) return sms
+  return sms.slice(0, 157).trimEnd() + "..."
+}
+
+// Strip em-dashes from all model output — enforced after every generation path
+function sanitise<T extends { sms: string; email: { subject: string; body: string[] } }>(r: T): T {
+  const clean = (s: string) => s.replace(/—/g, "-").replace(/--/g, "-")
+  return {
+    ...r,
+    sms: clampSMS(clean(r.sms)),
+    email: {
+      ...r.email,
+      subject: clean(r.email.subject),
+      body: r.email.body.map(clean),
+    },
+  }
+}
+
 /**
  * POST /api/generate
  *
@@ -25,16 +45,19 @@ router.post("/", async (req, res) => {
 
   // ── No OpenAI key: return template ──────────────────────────────────────────
   if (!process.env.OPENAI_API_KEY) {
+    const firstName = params.lead.name.split(" ")[0]
     return res.json({
-      sms: `Hi ${params.lead.name}, ${params.strategy} update for ${params.agentSuburb ?? "your area"} — worth a chat? When suits?`,
-      email: {
-        subject: `${params.strategy} — ${params.lead.name}`,
-        body: [
-          `Hi ${params.lead.name}, hope you are well.`,
-          `I had a chance to review your situation and wanted to share a relevant update using our ${params.strategy} approach.`,
-          `Would love to connect — does a quick call this week work for you?`,
-        ],
-      },
+      ...sanitise({
+        sms: `Hi ${firstName}, ${params.agentName.split(" ")[0]} here. Thought of you for a new listing in ${params.agentSuburb ?? "your area"}. Worth a look? When suits a chat?`,
+        email: {
+          subject: `New listing for you, ${firstName}`,
+          body: [
+            `Hi ${firstName}, hope you are well.`,
+            `I had a chance to review your situation and wanted to share a relevant update using our ${params.strategy} approach.`,
+            `Would love to connect. Does a quick call this week work for you?`,
+          ],
+        },
+      }),
       meta: { pipeline: "template", analysis: null, qa: null },
     })
   }
@@ -76,37 +99,39 @@ router.post("/", async (req, res) => {
 
     if (grade === "D") {
       modelUsed = "template"
+      const fn = params.lead.name.split(" ")[0]
+      const an = params.agentName.split(" ")[0]
       result = {
-        sms: `Hi ${params.lead.name.split(" ")[0]}, ${params.agentName.split(" ")[0]} here. Worth a chat about your property search? When suits?`,
+        sms: clampSMS(`Hi ${fn}, ${an} here. Worth a chat about your property search? When suits?`),
         email: {
-          subject: `Checking in — ${params.lead.name.split(" ")[0]}`,
+          subject: `Checking in, ${fn}`,
           body: [
-            `Hi ${params.lead.name.split(" ")[0]}, hope you're well.`,
+            `Hi ${fn}, hope you're well.`,
             `Wanted to touch base on your property search. Happy to help when the timing's right.`,
-            `Cheers,\n${params.agentName.split(" ")[0]}`,
+            `Cheers,\n${an}`,
           ],
         },
       }
     } else if (grade === "C" && process.env.ANTHROPIC_API_KEY) {
       modelUsed = "claude-haiku-4-5"
-      result = await generateMessageHaiku(enrichedParams).catch(async () => {
+      result = sanitise(await generateMessageHaiku(enrichedParams).catch(async () => {
         modelUsed = "gpt-4o-mini"
         return generateMessage(enrichedParams)
-      })
+      }))
     } else if (grade === "A" && process.env.ANTHROPIC_API_KEY) {
       modelUsed = "claude-sonnet-4-5"
-      result = await generateMessageClaude(enrichedParams).catch(async () => {
+      result = sanitise(await generateMessageClaude(enrichedParams).catch(async () => {
         modelUsed = "gpt-4o-mini"
         return generateMessage(enrichedParams)
-      })
+      }))
     } else {
       // Grade B (or fallback) — GPT-4o-mini primary
-      result = await generateMessage(enrichedParams).catch(async (openAiErr) => {
+      result = sanitise(await generateMessage(enrichedParams).catch(async (openAiErr) => {
         console.warn("OpenAI failed, falling back to Claude:", openAiErr)
         if (!process.env.ANTHROPIC_API_KEY) throw openAiErr
         modelUsed = "claude-sonnet-4-5"
         return generateMessageClaude(enrichedParams)
-      })
+      }))
     }
 
     // ── Step 3: Claude Sonnet QA — only for Grade A/B leads (skip C/D) ────────
@@ -124,12 +149,14 @@ router.post("/", async (req, res) => {
           leadQuestions: params.lead.questions,
           slmContext: params.slmContext,
         })
-        // Auto-apply QA fixes
+        // Auto-apply QA fixes, then re-sanitise and re-clamp
         if (!qa.passed) {
-          if (qa.revisedSMS) result.sms = qa.revisedSMS
-          if (qa.revisedSubject) result.email.subject = qa.revisedSubject
-          if (qa.revisedEmailBody) result.email.body = qa.revisedEmailBody
+          if (qa.revisedSMS)       result.sms = clampSMS(qa.revisedSMS.replace(/—/g, "-"))
+          if (qa.revisedSubject)   result.email.subject = qa.revisedSubject.replace(/—/g, "-")
+          if (qa.revisedEmailBody) result.email.body = qa.revisedEmailBody.map(p => p.replace(/—/g, "-"))
         }
+        // Always hard-clamp SMS even if QA passed
+        result.sms = clampSMS(result.sms)
       } catch (e) {
         console.warn("Claude QA skipped:", e)
       }
