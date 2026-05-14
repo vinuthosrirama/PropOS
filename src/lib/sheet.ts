@@ -128,12 +128,21 @@ export interface SheetEventV2 {
   leadName: string
   propertyAddress: string   // active listing being pitched
   fromProperty: string      // sold property lead came from
-  eventType: "voice_note" | "outreach_sent" | "lead_matched" | "lead_added"
+  eventType:
+    | "voice_note" | "outreach_sent" | "lead_matched" | "lead_added"
+    | "open_home_attended" | "lead_status_update" | "auction_outcome"
+    | "clipboard_copied" | "outreach_replied" | "email_opened" | "email_clicked"
   transcript?: string
   smsText?: string
   emailSubject?: string
   emailBody?: string
   detail?: string
+  matchScore?: number
+  leadGrade?: string
+  deliveryChannel?: "sms" | "email" | "both"
+  deliverySid?: string
+  sendgridId?: string
+  leadStatus?: string
 }
 
 export async function postEvent(event: SheetEventV2): Promise<void> {
@@ -265,6 +274,69 @@ export async function readPropertySLMFromSheet(propertyId: number): Promise<Reco
     if (!res.ok) return null
     const data = await res.json()
     return data.slm ?? null
+  } catch {
+    return null
+  }
+}
+
+// ── Lead status update ────────────────────────────────────────────────────────
+
+export async function postLeadStatus(params: {
+  leadId: string
+  leadName: string
+  propertyAddress: string
+  status: string
+  detail?: string
+}): Promise<void> {
+  if (!SHEET_URL) return
+  try {
+    await fetch(SHEET_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        type: "lead_status",
+        timestamp: new Date().toISOString(),
+        ...params,
+      }),
+    })
+  } catch { /* fail silently */ }
+}
+
+// ── Mark lead as attended an open home ───────────────────────────────────────
+
+export async function markAttended(params: {
+  leadId: string
+  leadName: string
+  propertyAddress: string
+}): Promise<void> {
+  return postLeadStatus({ ...params, status: "open_home_attended" })
+}
+
+// ── Post auction outcome ──────────────────────────────────────────────────────
+
+export async function postAuctionOutcome(outcome: import("../data").AuctionOutcome): Promise<void> {
+  if (!SHEET_URL) return
+  try {
+    await fetch(SHEET_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        type: "auction_outcome",
+        timestamp: new Date().toISOString(),
+        ...outcome,
+      }),
+    })
+  } catch { /* fail silently */ }
+}
+
+// ── Read leads from Boxdice via server proxy (when configured) ───────────────
+
+export async function readLeadsFromBoxdice(listingId: number, listingAddress: string): Promise<SheetLead[] | null> {
+  try {
+    const res = await fetch(`/api/boxdice/leads?listingId=${listingId}&listingAddress=${encodeURIComponent(listingAddress)}`)
+    if (!res.ok) return null
+    const data = await res.json() as { ok?: boolean; leads?: SheetLead[] }
+    return data.leads ?? null
   } catch {
     return null
   }
