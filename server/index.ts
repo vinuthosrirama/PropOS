@@ -11,13 +11,15 @@ import nurtureRouter from "./routes/nurture.js"
 import analyticsRouter from "./routes/analytics.js"
 import boxdiceRouter from "./routes/boxdice.js"
 import { loadOptOuts } from "./lib/compliance.js"
+import { gmailConfigured } from "./lib/gmail.js"
 import conversationsRouter from "./routes/conversations.js"
+import replyAgentRouter from "./routes/reply-agent.js"
 import { loadConversations } from "./lib/conversations.js"
 
 const app = express()
 const PORT = process.env.PORT ?? 3001
 
-app.use(cors({ origin: ["http://localhost:3003", "http://localhost:5173", process.env.BASE_URL].filter(Boolean) as string[] }))
+app.use(cors({ origin: ["http://localhost:3003", "http://localhost:5173", "https://propos.addvantage.site", process.env.BASE_URL].filter(Boolean) as string[] }))
 app.use(express.json())
 // Twilio webhook sends URL-encoded body
 app.use("/api/webhook/sms", express.urlencoded({ extended: false }))
@@ -32,6 +34,7 @@ app.use("/api/nurture",     nurtureRouter)
 app.use("/api/analytics",   analyticsRouter)
 app.use("/api/boxdice",       boxdiceRouter)
 app.use("/api/conversations", conversationsRouter)
+app.use("/api/reply-agent",  replyAgentRouter)
 
 app.get("/api/health", (_req, res) => {
   const testPhone = process.env.TEST_RECIPIENT_PHONE?.trim() || null
@@ -42,7 +45,7 @@ app.get("/api/health", (_req, res) => {
     anthropic:  !!process.env.ANTHROPIC_API_KEY,
     sheet:      !!process.env.SHEET_URL,
     twilio:     !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
-    sendgrid:   !!process.env.SENDGRID_API_KEY,
+    gmail:      gmailConfigured(),
     boxdice:    !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
     testMode:   !!(testPhone || testEmail),
     testPhone,
@@ -56,7 +59,7 @@ app.listen(PORT, async () => {
   console.log(`  Anthropic: ${process.env.ANTHROPIC_API_KEY ? "configured" : "not set (skipping analysis + QA)"}`)
   console.log(`  Sheet:     ${process.env.SHEET_URL         ? "configured" : "not set (demo mode)"}`)
   console.log(`  Twilio:    ${process.env.TWILIO_ACCOUNT_SID ? "configured" : "not set (SMS disabled)"}`)
-  console.log(`  SendGrid:  ${process.env.SENDGRID_API_KEY   ? "configured" : "not set (email disabled)"}`)
+  console.log(`  Gmail:     ${gmailConfigured()              ? "configured" : "not set (email disabled)"}`)
   console.log(`  Boxdice:   ${process.env.BOXDICE_DOMAIN      ? "configured" : "not set (CRM disabled)"}`)
   if (process.env.TEST_RECIPIENT_PHONE) console.log(`  TEST SMS → ${process.env.TEST_RECIPIENT_PHONE}`)
   if (process.env.TEST_RECIPIENT_EMAIL) console.log(`  TEST Email → ${process.env.TEST_RECIPIENT_EMAIL}`)

@@ -78,11 +78,10 @@ function withAlpha(color: string, alpha: number): string {
 
 // ── ActiveCard ────────────────────────────────────────────────────────────────
 
-function ActiveCard({ property, onClick, theme, pipelineCount }: {
+function ActiveCard({ property, onClick, theme }: {
   property: PortfolioProperty
   onClick: () => void
   theme: AgencyTheme
-  pipelineCount: number
 }) {
   const slm = loadSLMForProperty(property.id)
   const completeness = slm ? getSLMCompleteness(slm) : null
@@ -93,7 +92,7 @@ function ActiveCard({ property, onClick, theme, pipelineCount }: {
       style={{
         background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`,
         overflow: "hidden", cursor: "pointer",
-        transition: "border 0.15s, box-shadow 0.15s",
+        transition: "border 0.15s, box-shadow 0.15s, transform 0.15s",
       }}
       onMouseEnter={e => {
         const el = e.currentTarget as HTMLDivElement
@@ -142,17 +141,10 @@ function ActiveCard({ property, onClick, theme, pipelineCount }: {
             <span key={s} style={{ fontSize: 10, color: C.faint }}>{s}</span>
           ))}
         </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: theme.primary }}>
-            {property.priceMin && property.priceMax
-              ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
-              : fmt(property.price)}
-          </div>
-          {pipelineCount > 0 && (
-            <div style={{ fontSize: 10, color: C.muted }}>
-              <span style={{ fontWeight: 700, color: theme.primary }}>{pipelineCount}</span> leads
-            </div>
-          )}
+        <div style={{ fontSize: 13, fontWeight: 700, color: theme.primary }}>
+          {property.priceMin && property.priceMax
+            ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
+            : fmt(property.price)}
         </div>
         {property.openDate && (
           <div style={{ marginTop: 6, fontSize: 10, color: C.muted }}>{property.openDate}</div>
@@ -178,7 +170,7 @@ function SoldCard({ property, leads, loading, theme, onClick, onRecordAuction }:
       style={{
         borderRadius: 16, border: `1px solid ${withAlpha(theme.primary, 0.25)}`,
         overflow: "hidden", cursor: "pointer", position: "relative",
-        height: 260,
+        height: 280,
         transition: "border 0.15s, box-shadow 0.15s, transform 0.15s",
       }}
       onMouseEnter={e => {
@@ -194,91 +186,86 @@ function SoldCard({ property, leads, loading, theme, onClick, onRecordAuction }:
         el.style.transform = "translateY(0)"
       }}
     >
-      {/* Full-bleed photo */}
+      {/* Layer 1 — full-bleed photo */}
       <img
         src={property.image}
         alt={property.address}
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
       />
 
-      {/* Gradient — clear at top, smoothly darkens from ~55% to full opacity at bottom */}
+      {/* Layer 2 — agency colour gradient: transparent at top → solid at bottom */}
       <div style={{
         position: "absolute", inset: 0,
-        background: "linear-gradient(180deg, rgba(0,0,0,0.0) 0%, rgba(0,0,0,0.0) 35%, rgba(0,0,0,0.55) 65%, rgba(0,0,0,0.92) 100%)",
+        background: `linear-gradient(180deg, ${withAlpha(theme.primary, 0)} 0%, ${withAlpha(theme.primary, 0)} 28%, ${withAlpha(theme.primary, 0.75)} 62%, ${withAlpha(theme.primary, 1)} 100%)`,
       }} />
 
-      {/* Agency colour accent strip at very bottom */}
+      {/* Sold badge — top left */}
       <div style={{
-        position: "absolute", bottom: 0, left: 0, right: 0, height: 3,
-        background: `linear-gradient(90deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
-      }} />
+        position: "absolute", top: 10, left: 10,
+        padding: "3px 10px", borderRadius: 20,
+        background: "rgba(0,0,0,0.50)", backdropFilter: "blur(6px)",
+        fontSize: 10, fontWeight: 800, color: "#fff", zIndex: 2,
+      }}>
+        Sold {fmt(property.price)}
+      </div>
 
-      {/* Record auction button — top-right, only shown on hover */}
+      {/* Sold date — top right */}
+      {property.soldDate && (
+        <div style={{
+          position: "absolute", top: 10, right: 10,
+          padding: "3px 10px", borderRadius: 20,
+          background: "rgba(0,0,0,0.50)", backdropFilter: "blur(4px)",
+          fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.85)", zIndex: 2,
+        }}>
+          {property.soldDate}
+        </div>
+      )}
+
+      {/* Auction result button — top left below sold badge */}
       <button
         onClick={e => { e.stopPropagation(); onRecordAuction(property) }}
         style={{
-          position: "absolute", top: 10, left: 10,
+          position: "absolute", top: 38, left: 10,
           padding: "3px 9px", borderRadius: 8,
-          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
-          border: `1px solid ${withAlpha(theme.primary, 0.4)}`,
-          color: theme.primary, fontSize: 9, fontWeight: 700,
+          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+          border: `1px solid rgba(255,255,255,0.18)`,
+          color: "rgba(255,255,255,0.80)", fontSize: 9, fontWeight: 700,
           cursor: "pointer", fontFamily: FONT, zIndex: 2,
         }}
       >
         + Auction Result
       </button>
 
-      {/* Top badges — Sold tag in agency colour */}
-      <div style={{ position: "absolute", top: 10, left: 10 }}>
-        <div style={{
-          padding: "3px 10px", borderRadius: 20,
-          background: withAlpha(theme.primary, 0.90), backdropFilter: "blur(6px)",
-          fontSize: 10, fontWeight: 800, color: "white",
-        }}>
-          Sold {fmt(property.price)}
-        </div>
-      </div>
-      {property.soldDate && (
-        <div style={{
-          position: "absolute", top: 10, right: 10,
-          padding: "3px 10px", borderRadius: 20,
-          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
-          fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.85)",
-        }}>
-          {property.soldDate}
-        </div>
-      )}
-
-      {/* Bottom text — overlaid on dark gradient */}
-      <div style={{ position: "absolute", bottom: 12, left: 14, right: 14 }}>
+      {/* Layer 3 — text block */}
+      <div style={{ position: "absolute", bottom: 16, left: 14, right: 14 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.25, marginBottom: 3 }}>
           {property.address}
         </div>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", marginBottom: 7 }}>
           {property.suburb} {property.state}
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", gap: 10 }}>
             {[`${property.beds} bd`, `${property.baths} ba`, `${property.cars} car`,
               property.land ? `${property.land} m²` : null].filter(Boolean).map(s => (
-              <span key={s} style={{ fontSize: 10, color: "rgba(255,255,255,0.55)" }}>{s}</span>
+              <span key={s} style={{ fontSize: 10, color: "rgba(255,255,255,0.70)" }}>{s}</span>
             ))}
           </div>
-          {/* Attendee count */}
           {loading ? (
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontStyle: "italic" }}>…</span>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontStyle: "italic" }}>…</span>
           ) : (
-            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-              <span style={{ fontSize: 18, fontWeight: 800, color: theme.primary, lineHeight: 1 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+              <span style={{ fontSize: 16, fontWeight: 800, color: "#fff", lineHeight: 1 }}>
                 {leads.length}
               </span>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.70)" }}>
                 {leads.length === 1 ? "attendee" : "attendees"}
               </span>
             </div>
           )}
         </div>
       </div>
+
     </div>
   )
 }
@@ -619,15 +606,6 @@ function PortfolioPage({ onSelectActive, onSelectSold, theme }: {
     return () => { mounted = false; clearTimeout(fallbackTimer) }
   }, [])
 
-  const allLeadsFlat = Object.values(soldLeads).flat()
-
-  // Per-listing pipeline count: leads whose budget can realistically reach this property
-  // (within 15% below price guide low — captures stretch buyers too)
-  const pipelineCountFor = (active: PortfolioProperty): number => {
-    const floor = (active.priceMin ?? active.price * 0.9) * 0.85
-    return allLeadsFlat.filter(l => l.budget >= floor).length
-  }
-
   // SLM completeness check — warn if any active listing is below 80% complete
   const slmWarnings = PORTFOLIO_ACTIVE
     .map(p => ({ p, pct: getSLMCompleteness(loadSLMForProperty(p.id)).pct }))
@@ -674,9 +652,8 @@ function PortfolioPage({ onSelectActive, onSelectSold, theme }: {
             >
               <ActiveCard
                 property={p}
-                onClick={() => onSelectActive(p, soldLeads)}
                 theme={theme}
-                pipelineCount={pipelineCountFor(p)}
+                onClick={() => onSelectActive(p, soldLeads)}
               />
             </motion.div>
           ))}
@@ -1569,6 +1546,9 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
   const [leadStatus, setLeadStatus] = useState<LeadStatus>("outreach_sent")
   const [deliveryNote, setDeliveryNote] = useState("")
   const [testMode, setTestMode] = useState<{ phone: string | null; email: string | null } | null>(null)
+  const [showNurture, setShowNurture] = useState(false)
+  const [loadingNurture, setLoadingNurture] = useState(false)
+  const [nurtureSeq, setNurtureSeq] = useState<Array<{ day: number; strategy: string; sms: string; email: { subject: string; body: string[] } }>>([])
 
   // Fetch server test mode config once on mount
   useEffect(() => {
@@ -1579,6 +1559,49 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       })
       .catch(() => {})
   }, [])
+
+  const handleNurturePreview = async () => {
+    if (nurtureSeq.length > 0) { setShowNurture(true); return }
+    setLoadingNurture(true)
+    try {
+      const res = await fetch("/api/nurture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentName:   agent.name,
+          agentAgency: agent.agency,
+          agentSuburb: agent.suburb ?? property.suburb,
+          lead: {
+            name:       lead.name,
+            budget:     lead.budget,
+            timeline:   lead.timeline,
+            persona:    lead.persona,
+            notes:      lead.notes ?? "",
+            transcript: transcript ?? "",
+            questions:  Array.isArray(lead.questions) ? lead.questions.join("; ") : (lead.questions ?? ""),
+          },
+          strategy: "Nurture Sequence",
+          channel: "both",
+          grade: "B",
+        }),
+      }).then(r => r.json())
+      setNurtureSeq(res.sequence ?? [])
+      setShowNurture(true)
+    } catch {
+      // fallback — generate minimal sequence client-side so modal is never empty
+      const fname = lead.name.split(" ")[0]
+      const aname = agent.name.split(" ")[0]
+      setNurtureSeq([
+        { day: 0,  strategy: "New Listing Match",  sms: `Hi ${fname}, ${aname} here. I think ${property.address} is a great match for what you're looking for. Worth a look?`, email: { subject: `New listing match — ${property.address}`, body: [`Hi ${fname}, I wanted to reach out about a listing I think you'll love.`] } },
+        { day: 7,  strategy: "Market Pulse",        sms: `Hi ${fname}, ${aname} here. Interesting week in ${property.suburb} - a comparable home sold well above guide. Worth keeping in touch?`, email: { subject: `Market update — ${property.suburb}`, body: [`Hi ${fname}, quick market update from the week.`] } },
+        { day: 14, strategy: "Social Proof Drop",   sms: `Hi ${fname}, ${aname} here. Another buyer just moved on a similar place in ${property.suburb}. Competition's picking up - happy to chat. ${aname}`, email: { subject: `Moving fast in ${property.suburb}`, body: [`Hi ${fname}, things are moving quickly in this market.`] } },
+        { day: 30, strategy: "Life Check-In",       sms: `Hi ${fname}, ${aname} here. Just checking in - how's the search going? Happy to chat anytime. ${aname}`, email: { subject: `Checking in — ${fname}`, body: [`Hi ${fname}, just wanted to check in on where you're at with your search.`] } },
+      ])
+      setShowNurture(true)
+    } finally {
+      setLoadingNurture(false)
+    }
+  }
 
   const bubbleColor = theme?.primary ?? "rgb(0,122,255)"
   const avatarGrad = `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
@@ -1603,14 +1626,25 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
   const handleSend = async () => {
     setSending(true)
     try {
-      // 1. Try direct delivery via server (Twilio + SendGrid)
+      // 1. Try direct delivery via server (Twilio + Gmail)
+      const priceGuide = property.priceMin && property.priceMax
+        ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
+        : fmt(property.price)
+
       const deliveryRes = await fetch("/api/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           leadId, leadName: lead.name,
           phone: lead.phone, email: lead.email,
-          agentEmail: agent.email,
+          agentEmail:      agent.email,
+          agentName:       agent.name,
+          agentAgency:     agent.agency,
+          agentPhone:      agent.phone,
+          agencyColor:     theme.primary,
+          agencyTagline:   agent.tagline,
+          propertyAddress: propertyAddress,
+          priceGuide,
           sms, subject,
           emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
           channel: "both",
@@ -1620,10 +1654,10 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       const delivered = deliveryRes?.ok === true
       setDeliveryNote(
         delivered
-          ? "Sent via Twilio + SendGrid"
+          ? "Sent via Twilio + Gmail"
           : deliveryRes?.errors?.length
           ? "Saved to Sheets (delivery: " + deliveryRes.errors[0] + ")"
-          : "Saved to Sheets (configure Twilio/SendGrid for direct delivery)"
+          : "Saved to Sheets (configure Twilio/Gmail for direct delivery)"
       )
 
       // 2. Always log to Sheets regardless
@@ -1637,6 +1671,23 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         sendgridId: deliveryRes?.email?.messageId,
         leadStatus: "outreach_sent",
       })
+
+      // 3. Upsert lead row with voice transcript + generated content
+      await fetch("/api/transcript", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId,
+          leadName: lead.name,
+          phone: lead.phone,
+          propertyAddress,
+          transcript,
+          generatedSMS: sms,
+          generatedEmail: bodyText,
+          emailSubject: subject,
+          timestamp: new Date().toISOString(),
+        }),
+      }).catch(() => {}) // non-fatal
     } catch {
       // never fail the demo
     }
@@ -1663,11 +1714,90 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
             Outreach approved for {fname}
           </div>
           {deliveryNote && (
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 20, padding: "6px 14px",
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, padding: "6px 14px",
               background: C.bg3, borderRadius: 8, display: "inline-block" }}>
               {deliveryNote}
             </div>
           )}
+
+          {/* Nurture sequence preview */}
+          <div style={{ marginBottom: 20 }}>
+            <button
+              onClick={handleNurturePreview}
+              disabled={loadingNurture}
+              style={{
+                padding: "9px 20px", borderRadius: 10, fontSize: 12, fontWeight: 700,
+                background: loadingNurture ? C.bg3 : "rgba(139,92,246,0.12)",
+                border: `1px solid ${loadingNurture ? C.border : "rgba(139,92,246,0.35)"}`,
+                color: loadingNurture ? C.muted : "#8b5cf6",
+                cursor: loadingNurture ? "default" : "pointer", fontFamily: FONT,
+              }}
+            >
+              {loadingNurture ? "Generating nurture sequence…" : "✦ Preview 30-day nurture sequence →"}
+            </button>
+          </div>
+
+          {/* Nurture modal */}
+          <AnimatePresence>
+            {showNurture && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+                onClick={() => setShowNurture(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, y: 16 }}
+                  animate={{ scale: 1, y: 0 }}
+                  exit={{ scale: 0.9, y: 16 }}
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`,
+                    width: "100%", maxWidth: 580, maxHeight: "80vh", overflowY: "auto",
+                    boxShadow: "0 24px 64px rgba(0,0,0,0.5)", fontFamily: FONT,
+                  }}
+                >
+                  <div style={{ padding: "18px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>30-Day Nurture Sequence</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>for {lead.name} · {property.address}</div>
+                    </div>
+                    <button onClick={() => setShowNurture(false)} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer", padding: 0 }}>×</button>
+                  </div>
+                  <div style={{ padding: "16px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
+                    {nurtureSeq.map((step, i) => (
+                      <div key={i} style={{ background: C.bg3, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                        <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{
+                            padding: "2px 10px", borderRadius: 20, fontSize: 10, fontWeight: 800,
+                            background: theme.primary + "22", color: theme.primary,
+                            border: `1px solid ${theme.primary + "44"}`, flexShrink: 0,
+                          }}>
+                            Day {step.day}
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{step.strategy}</span>
+                        </div>
+                        <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+                          <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase" }}>SMS</div>
+                          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.55, background: C.bg2, borderRadius: 8, padding: "8px 10px" }}>{step.sms}</div>
+                          <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", marginTop: 4 }}>Email subject</div>
+                          <div style={{ fontSize: 12, color: C.text, fontStyle: "italic" }}>{step.email.subject}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ padding: "14px 24px", borderTop: `1px solid ${C.border}`, textAlign: "center" }}>
+                    <button onClick={() => setShowNurture(false)} style={{
+                      padding: "9px 28px", borderRadius: 10, border: "none",
+                      background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                      color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+                    }}>Done</button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Lead status lifecycle — agent advances manually */}
           <div style={{ marginBottom: 28, padding: "20px 24px", background: C.bg2,
@@ -2039,7 +2169,13 @@ export default function DemoView({
   const [stage, setStage] = useState<Stage>({ kind: "portfolio" })
   const [unreadReplies, setUnreadReplies] = useState(0)
   const [showInbox, setShowInbox] = useState(false)
-  const [inboxThreads, setInboxThreads] = useState<Array<{ leadName: string; phone: string; propertyAddress: string; lastReplyAt: string; messages: Array<{ role: string; body: string; ts: string }> }>>([])
+  const [inboxThreads, setInboxThreads] = useState<Array<{ leadId: string; leadName: string; phone: string; propertyAddress: string; email: string; lastReplyAt: string; messages: Array<{ role: string; body: string; ts: string }> }>>([])
+  const [selectedThreadPhone, setSelectedThreadPhone] = useState<string | null>(null)
+  const [replyDraft, setReplyDraft] = useState<{ draft: string; intent: string; reasoning: string } | null>(null)
+  const [replyText, setReplyText] = useState("")
+  const [draftingReply, setDraftingReply] = useState(false)
+  const [sendingReply, setSendingReply] = useState(false)
+  const [seedingDemo, setSeedingDemo] = useState(false)
 
   // Poll for unread SMS replies every 30 seconds
   useEffect(() => {
@@ -2097,12 +2233,12 @@ export default function DemoView({
         </motion.button>
       )}
 
-      {/* Reply inbox badge — top-right, always visible when there are unread replies */}
-      {inboxThreads.length > 0 && (
+      {/* Reply inbox badge — top-right */}
+      {(inboxThreads.length > 0 || unreadReplies > 0) && (
         <motion.button
           initial={{ opacity: 0, scale: 0.85 }}
           animate={{ opacity: 1, scale: 1 }}
-          onClick={() => setShowInbox(!showInbox)}
+          onClick={() => { setShowInbox(!showInbox); setSelectedThreadPhone(null); setReplyDraft(null) }}
           style={{
             position: "fixed", top: 16, right: 16, zIndex: 200,
             display: "flex", alignItems: "center", gap: 6,
@@ -2128,62 +2264,264 @@ export default function DemoView({
 
       {/* Inbox drawer */}
       <AnimatePresence>
-        {showInbox && (
-          <motion.div
-            initial={{ opacity: 0, x: 24 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 24 }}
-            style={{
-              position: "fixed", top: 60, right: 16, zIndex: 199,
-              width: 340, maxHeight: "70vh", overflowY: "auto",
-              background: C.bg2, border: `1px solid ${C.border}`,
-              borderRadius: 14, fontFamily: FONT,
-              boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-            }}
-          >
-            <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>SMS Replies</div>
-              <button onClick={() => setShowInbox(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16 }}>×</button>
-            </div>
-            {inboxThreads.map(t => {
-              const last = t.messages[t.messages.length - 1]
-              const isUnread = t.messages.some(m => m.role === "lead") &&
-                new Date(t.lastReplyAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)
-              return (
-                <div key={t.phone} style={{
-                  padding: "12px 16px", borderBottom: `1px solid ${C.border}`,
-                  background: isUnread ? "rgba(245,158,11,0.05)" : "transparent",
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: isUnread ? "#f59e0b" : C.text }}>
-                      {isUnread && "● "}{t.leadName}
+        {showInbox && (() => {
+          const selectedThread = inboxThreads.find(t => t.phone === selectedThreadPhone) ?? null
+          const leadMsgs = selectedThread?.messages.filter(m => m.role === "lead") ?? []
+          const lastLeadMsg = leadMsgs[leadMsgs.length - 1]
+
+          const handleDraftReply = async () => {
+            if (!selectedThread || !lastLeadMsg) return
+            setDraftingReply(true)
+            setReplyDraft(null)
+            try {
+              const res = await fetch("/api/reply-agent", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  leadName:        selectedThread.leadName,
+                  leadPhone:       selectedThread.phone,
+                  propertyAddress: selectedThread.propertyAddress,
+                  agentName:       agent.name,
+                  agentAgency:     agent.agency,
+                  thread:          selectedThread.messages,
+                  latestReply:     lastLeadMsg.body,
+                }),
+              }).then(r => r.json())
+              setReplyDraft(res)
+              setReplyText(res.draft ?? "")
+            } catch {
+              const fallback = `Hi ${selectedThread.leadName.split(" ")[0]}, thanks for getting back to me. Happy to help - what would you like to know? ${agent.name.split(" ")[0]}`
+              setReplyDraft({ draft: fallback, intent: "UNKNOWN", reasoning: "Network error - contingency framework used" })
+              setReplyText(fallback)
+            } finally {
+              setDraftingReply(false)
+            }
+          }
+
+          const handleSendReply = async () => {
+            if (!selectedThread || !replyText.trim()) return
+            setSendingReply(true)
+            try {
+              await fetch("/api/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  leadId:          selectedThread.leadId || selectedThread.phone,
+                  leadName:        selectedThread.leadName,
+                  phone:           selectedThread.phone,
+                  email:           selectedThread.email,
+                  agentEmail:      agent.email,
+                  agentName:       agent.name,
+                  agentAgency:     agent.agency,
+                  agentPhone:      agent.phone,
+                  agencyColor:     theme.primary,
+                  agencyTagline:   agent.tagline,
+                  propertyAddress: selectedThread.propertyAddress,
+                  sms:             replyText,
+                  subject:         "",
+                  emailBody:       "",
+                  channel:         "sms",
+                }),
+              })
+              // Refresh threads after sending
+              const updated = await fetch("/api/conversations").then(r => r.json())
+              setInboxThreads(updated.threads ?? [])
+              setUnreadReplies(updated.unread ?? 0)
+              setReplyDraft(null)
+              setReplyText("")
+            } finally {
+              setSendingReply(false)
+            }
+          }
+
+          const intentColors: Record<string, string> = {
+            INTEREST: "#22c55e", QUESTION: "#3b82f6", OBJECTION: "#f59e0b",
+            BOOKING: "#8b5cf6", OPT_OUT: "#ef4444", UNKNOWN: C.muted,
+          }
+
+          return (
+            <motion.div
+              key="inbox"
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 24 }}
+              style={{
+                position: "fixed", top: 60, right: 16, zIndex: 199,
+                width: 360, maxHeight: "78vh",
+                display: "flex", flexDirection: "column",
+                background: C.bg2, border: `1px solid ${C.border}`,
+                borderRadius: 14, fontFamily: FONT,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+              }}
+            >
+              {/* Header */}
+              <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                {selectedThread ? (
+                  <button onClick={() => { setSelectedThreadPhone(null); setReplyDraft(null); setReplyText("") }}
+                    style={{ background: "none", border: "none", color: theme.primary, cursor: "pointer", fontSize: 14, padding: "0 4px 0 0", fontFamily: FONT }}>
+                    ←
+                  </button>
+                ) : null}
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.text }}>
+                  {selectedThread ? selectedThread.leadName : "SMS Replies"}
+                </div>
+                {!selectedThread && (
+                  <button
+                    disabled={seedingDemo}
+                    onClick={async () => {
+                      setSeedingDemo(true)
+                      try {
+                        await fetch("/api/conversations/seed-demo", { method: "POST" })
+                        const updated = await fetch("/api/conversations").then(r => r.json())
+                        setInboxThreads(updated.threads ?? [])
+                        setUnreadReplies(updated.unread ?? 0)
+                      } finally { setSeedingDemo(false) }
+                    }}
+                    style={{
+                      padding: "3px 9px", borderRadius: 6, fontSize: 10, fontWeight: 700,
+                      background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)",
+                      color: "#f59e0b", cursor: "pointer", fontFamily: FONT,
+                    }}
+                  >
+                    {seedingDemo ? "…" : "Simulate reply"}
+                  </button>
+                )}
+                <button onClick={() => { setShowInbox(false); setSelectedThreadPhone(null); setReplyDraft(null) }}
+                  style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, padding: 0 }}>×</button>
+              </div>
+
+              {/* Thread list */}
+              {!selectedThread && (
+                <div style={{ overflowY: "auto", flex: 1 }}>
+                  {inboxThreads.length === 0 ? (
+                    <div style={{ padding: "24px 16px", textAlign: "center", color: C.muted, fontSize: 12 }}>
+                      No replies yet. Hit "Simulate reply" to demo the inbox flow.
                     </div>
-                    <div style={{ fontSize: 10, color: C.faint }}>
-                      {new Date(t.lastReplyAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </div>
+                  ) : inboxThreads.map(t => {
+                    const last = t.messages[t.messages.length - 1]
+                    const isUnread = t.messages.some(m => m.role === "lead") &&
+                      new Date(t.lastReplyAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)
+                    return (
+                      <div key={t.phone}
+                        onClick={() => { setSelectedThreadPhone(t.phone); setReplyDraft(null); setReplyText(""); fetch(`/api/conversations/${encodeURIComponent(t.phone)}/read`, { method: "POST" }) }}
+                        style={{
+                          padding: "12px 14px", borderBottom: `1px solid ${C.border}`,
+                          background: isUnread ? "rgba(245,158,11,0.05)" : "transparent",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: isUnread ? "#f59e0b" : C.text }}>
+                            {isUnread && <span style={{ marginRight: 5 }}>●</span>}{t.leadName}
+                          </div>
+                          <div style={{ fontSize: 10, color: C.faint }}>
+                            {new Date(t.lastReplyAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {t.propertyAddress || t.phone}
+                        </div>
+                        {last && (
+                          <div style={{ fontSize: 12, color: last.role === "lead" ? C.text : C.faint, fontStyle: last.role === "agent" ? "italic" : "normal" }}>
+                            {last.role === "agent" ? "You: " : ""}{last.body.slice(0, 90)}{last.body.length > 90 ? "…" : ""}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Thread expand view */}
+              {selectedThread && (
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                  {/* Property tag */}
+                  <div style={{ padding: "6px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 11, color: C.muted, flexShrink: 0 }}>
+                    {selectedThread.propertyAddress}
                   </div>
-                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {t.propertyAddress || t.phone}
-                  </div>
-                  {last && (
-                    <div style={{ fontSize: 12, color: last.role === "lead" ? C.text : C.muted, fontStyle: last.role === "agent" ? "italic" : "normal" }}>
-                      {last.role === "agent" ? "You: " : ""}{last.body.slice(0, 80)}{last.body.length > 80 ? "…" : ""}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                    {t.messages.map((m, i) => (
-                      <div key={i} style={{
-                        maxWidth: 200, padding: "4px 8px", borderRadius: m.role === "agent" ? "8px 8px 2px 8px" : "8px 8px 8px 2px",
-                        background: m.role === "agent" ? theme.primary + "33" : C.bg3,
-                        fontSize: 10, color: C.text,
-                      }}>{m.body.slice(0, 60)}{m.body.length > 60 ? "…" : ""}</div>
+
+                  {/* Message bubbles */}
+                  <div style={{ overflowY: "auto", flex: 1, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                    {selectedThread.messages.map((m, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: m.role === "agent" ? "flex-end" : "flex-start" }}>
+                        <div style={{
+                          maxWidth: "80%", padding: "8px 11px",
+                          borderRadius: m.role === "agent" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                          background: m.role === "agent" ? theme.primary + "33" : C.bg3,
+                          border: `1px solid ${m.role === "agent" ? theme.primary + "44" : C.border}`,
+                          fontSize: 12, color: C.text, lineHeight: 1.5,
+                        }}>
+                          {m.body}
+                          <div style={{ fontSize: 9, color: C.faint, marginTop: 3, textAlign: m.role === "agent" ? "right" : "left" }}>
+                            {new Date(m.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        </div>
+                      </div>
                     ))}
                   </div>
+
+                  {/* AI Reply section */}
+                  <div style={{ borderTop: `1px solid ${C.border}`, padding: "12px 14px", flexShrink: 0 }}>
+                    {!replyDraft ? (
+                      <button
+                        onClick={handleDraftReply}
+                        disabled={draftingReply}
+                        style={{
+                          width: "100%", padding: "9px 0", borderRadius: 8, border: "none",
+                          background: draftingReply ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                          color: draftingReply ? C.muted : "white",
+                          fontSize: 12, fontWeight: 700, fontFamily: FONT, cursor: draftingReply ? "default" : "pointer",
+                        }}
+                      >
+                        {draftingReply ? "Drafting AI reply…" : "✦ Draft AI Reply"}
+                      </button>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{
+                            padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700,
+                            background: (intentColors[replyDraft.intent] ?? C.muted) + "22",
+                            color: intentColors[replyDraft.intent] ?? C.muted,
+                            border: `1px solid ${(intentColors[replyDraft.intent] ?? C.muted) + "44"}`,
+                          }}>{replyDraft.intent}</span>
+                          <span style={{ fontSize: 10, color: C.faint, flex: 1 }}>{replyDraft.reasoning}</span>
+                          <button onClick={handleDraftReply} style={{ background: "none", border: "none", color: theme.primary, fontSize: 10, cursor: "pointer", fontFamily: FONT }}>Redraft</button>
+                        </div>
+                        <textarea
+                          value={replyText}
+                          onChange={e => setReplyText(e.target.value)}
+                          rows={3}
+                          style={{
+                            width: "100%", background: C.bg3, border: `1px solid ${C.border}`,
+                            borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 12,
+                            fontFamily: FONT, lineHeight: 1.5, resize: "none", outline: "none",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 10, color: replyText.length > 160 ? "#ef4444" : C.faint }}>{replyText.length}/160</span>
+                          <button
+                            onClick={handleSendReply}
+                            disabled={sendingReply || !replyText.trim()}
+                            style={{
+                              padding: "7px 18px", borderRadius: 8, border: "none",
+                              background: sendingReply || !replyText.trim() ? C.bg3 : theme.primary,
+                              color: sendingReply || !replyText.trim() ? C.muted : "white",
+                              fontSize: 12, fontWeight: 700, fontFamily: FONT,
+                              cursor: sendingReply || !replyText.trim() ? "default" : "pointer",
+                            }}
+                          >
+                            {sendingReply ? "Sending…" : "Send Reply"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )
-            })}
-          </motion.div>
-        )}
+              )}
+            </motion.div>
+          )
+        })()}
       </AnimatePresence>
 
     <AnimatePresence mode="wait">
@@ -2258,7 +2596,17 @@ export default function DemoView({
                 allLeads: stage.allLeads,
               })
             }
-            onGenerate={transcript =>
+            onGenerate={transcript => {
+              // Log voice note to Sheets immediately when agent taps Generate
+              if (transcript.trim()) {
+                postEvent({
+                  leadId: stage.lead.id, leadName: stage.lead.name,
+                  propertyAddress: stage.property.address + ", " + stage.property.suburb,
+                  fromProperty: stage.soldSLM.address,
+                  eventType: "voice_note",
+                  transcript,
+                })
+              }
               setStage({
                 kind: "generating",
                 property: stage.property,
@@ -2267,7 +2615,7 @@ export default function DemoView({
                 transcript,
                 allLeads: stage.allLeads,
               })
-            }
+            }}
             theme={theme}
           />
         </motion.div>
