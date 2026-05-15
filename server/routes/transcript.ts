@@ -47,16 +47,19 @@ router.post("/", async (req, res) => {
 
   try {
     const payload = {
-      action:         "upsert_lead",
-      leadId:         leadId ?? "",
-      leadName:       leadName ?? "",
-      phone:          phone ?? "",
+      // patch_lead_outreach — Apps Script must only update outreach columns,
+      // never touch name/phone/email/budget/notes/persona.
+      // Transcript is appended (separated by \n---\n), not replaced.
+      action:          "patch_lead_outreach",
+      leadId:          leadId ?? "",
+      leadName:        leadName ?? "",
+      phone:           phone ?? "",
       propertyAddress: propertyAddress ?? "",
-      transcript:     transcript ?? "",
-      generatedSMS:   generatedSMS ?? "",
-      generatedEmail: generatedEmail ?? "",
-      emailSubject:   emailSubject ?? "",
-      timestamp:      timestamp ?? new Date().toISOString(),
+      transcript:      transcript ?? "",
+      generatedSMS:    generatedSMS ?? "",
+      generatedEmail:  generatedEmail ?? "",
+      emailSubject:    emailSubject ?? "",
+      timestamp:       timestamp ?? new Date().toISOString(),
     }
 
     const response = await fetch(sheetUrl, {
