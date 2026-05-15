@@ -509,7 +509,7 @@ function QACard({
       </div>
 
       {/* Answer */}
-      <div>
+      <div style={{ marginBottom: 8 }}>
         <div style={{ fontSize: 11, color: C.muted, marginBottom: 3, fontWeight: 500 }}>Answer</div>
         <textarea
           rows={2}
@@ -523,6 +523,21 @@ function QACard({
             fontFamily: FONT,
           }}
           onChange={(e) => onChange({ ...qa, answer: e.target.value || "TBD" })}
+        />
+      </div>
+
+      {/* Keywords */}
+      <div>
+        <div style={{ fontSize: 11, color: C.muted, marginBottom: 3, fontWeight: 500 }}>Keywords <span style={{ color: C.faint, fontWeight: 400 }}>(comma-separated, used for matching)</span></div>
+        <input
+          type="text"
+          value={qa.keywords.join(", ")}
+          placeholder="e.g. land size, sqm, allotment"
+          style={{ ...inputStyle(false), fontSize: 11 }}
+          onChange={(e) => onChange({
+            ...qa,
+            keywords: e.target.value.split(",").map(k => k.trim()).filter(Boolean),
+          })}
         />
       </div>
     </div>

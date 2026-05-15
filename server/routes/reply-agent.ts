@@ -1,8 +1,5 @@
 /**
- * Approach C — AI Reply Draft Agent
- *
- * NOT registered in server/index.ts — code is complete and QA'd but not deployed.
- * To activate: add `app.use("/api/reply-agent", replyAgentRouter)` to index.ts.
+ * AI Reply Draft Agent — registered at /api/reply-agent in server/index.ts
  *
  * What it does:
  *   1. Receives an inbound SMS reply + the full conversation thread + lead SLM context
