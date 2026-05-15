@@ -76,15 +76,51 @@ function sanitise(s: string): string {
   return s.replace(/—/g, "-").replace(/--/g, "-")
 }
 
-router.post("/", async (req, res) => {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" })
-  }
+// Contingency frameworks — used when AI call fails or returns unparseable JSON.
+// Each template is intent-specific so the message is always contextually appropriate.
+const INTENT_FRAMEWORKS: Record<ReplyIntent, (ctx: {
+  leadFirst:   string
+  agentFirst:  string
+  agentPhone?: string
+  auctionDate?: string
+}) => string> = {
+  INTEREST:  ({ leadFirst, agentFirst }) =>
+    clampSMS(`Hi ${leadFirst}, great to hear from you! When are you free for a private inspection? I can arrange a viewing at short notice. ${agentFirst}`),
+  QUESTION:  ({ leadFirst, agentFirst, agentPhone }) =>
+    clampSMS(`Hi ${leadFirst}, happy to answer that. Give me a call on ${agentPhone ?? "the office"} or I can arrange a walkthrough this week. ${agentFirst}`),
+  OBJECTION: ({ leadFirst, agentFirst }) =>
+    clampSMS(`Hi ${leadFirst}, I understand - still worth seeing it in person. I can arrange a private viewing on your terms. ${agentFirst}`),
+  BOOKING:   ({ leadFirst, agentFirst, auctionDate }) =>
+    clampSMS(`Hi ${leadFirst}, confirmed${auctionDate ? ` - see you ${auctionDate}` : ""}! Any questions before then, just reply here. ${agentFirst}`),
+  OPT_OUT:   () => "",
+  UNKNOWN:   ({ leadFirst, agentFirst }) =>
+    clampSMS(`Hi ${leadFirst}, thanks for getting back to me. Happy to help - what would you like to know? ${agentFirst}`),
+}
 
+function contingencyDraft(intent: ReplyIntent, body: ReplyAgentRequest): string {
+  return INTENT_FRAMEWORKS[intent]({
+    leadFirst:   body.leadName.split(" ")[0],
+    agentFirst:  body.agentName.split(" ")[0],
+    auctionDate: body.auctionDate,
+  })
+}
+
+router.post("/", async (req, res) => {
   const body = req.body as ReplyAgentRequest
 
   if (!body.leadName || !body.latestReply || !body.agentName) {
     return res.status(400).json({ error: "leadName, latestReply, and agentName are required" })
+  }
+
+  // No API key — return contingency framework immediately so inbox is never blank
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.json({
+      intent:     "UNKNOWN",
+      confidence: 0,
+      draft:      contingencyDraft("UNKNOWN", body),
+      reasoning:  "AI not configured - using contingency framework",
+      autoSend:   false,
+    } satisfies ReplyAgentResponse)
   }
 
   // Build thread summary (last 6 messages for context, oldest first)
@@ -147,20 +183,22 @@ Return ONLY valid JSON (no markdown):
     let parsed: ReplyAgentResponse
     try {
       const p = JSON.parse(cleaned)
+      const intent = (p.intent as ReplyIntent) ?? "UNKNOWN"
+      const aiDraft = clampSMS(sanitise(p.draft ?? ""))
       parsed = {
-        intent:     p.intent ?? "UNKNOWN",
+        intent,
         confidence: p.confidence ?? 50,
-        draft:      clampSMS(sanitise(p.draft ?? "")),
+        draft:      aiDraft || contingencyDraft(intent, body),
         reasoning:  p.reasoning ?? "",
         autoSend:   false,
       }
     } catch {
       parsed = {
-        intent:    "UNKNOWN",
+        intent:     "UNKNOWN",
         confidence: 0,
-        draft:     clampSMS(`Hi ${body.leadName.split(" ")[0]}, ${body.agentName.split(" ")[0]} here. Thanks for getting back to me. Happy to answer any questions - what would you like to know?`),
-        reasoning: "JSON parse failed - returned safe fallback",
-        autoSend:  false,
+        draft:      contingencyDraft("UNKNOWN", body),
+        reasoning:  "JSON parse failed - using contingency framework",
+        autoSend:   false,
       }
     }
 
@@ -168,7 +206,14 @@ Return ONLY valid JSON (no markdown):
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error("Reply agent error:", msg)
-    res.status(500).json({ error: "Reply agent failed", detail: msg })
+    // Return contingency framework so the inbox is never blank
+    res.json({
+      intent:     "UNKNOWN",
+      confidence: 0,
+      draft:      contingencyDraft("UNKNOWN", body),
+      reasoning:  "AI unavailable - using contingency framework",
+      autoSend:   false,
+    } satisfies ReplyAgentResponse)
   }
 })
 
