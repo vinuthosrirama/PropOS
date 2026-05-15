@@ -133,7 +133,7 @@ function ActiveCard({ property, onClick, theme }: {
         </div>
         <div style={{ display: "flex", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
           {[
-            `${property.beds} bed`,
+            `${property.beds} bd`,
             `${property.baths} bath`,
             `${property.cars} car`,
             property.land ? `${property.land}sqm` : null,
@@ -252,7 +252,11 @@ function SoldCard({ property, leads, loading, theme, onClick, onRecordAuction }:
             ))}
           </div>
           {loading ? (
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontStyle: "italic" }}>…</span>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2 }}>
+              <span style={{ animation: "blink 1s ease-in-out infinite" }}>.</span>
+              <span style={{ animation: "blink 1s ease-in-out 0.33s infinite" }}>.</span>
+              <span style={{ animation: "blink 1s ease-in-out 0.66s infinite" }}>.</span>
+            </span>
           ) : (
             <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
               <span style={{ fontSize: 16, fontWeight: 800, color: "#fff", lineHeight: 1 }}>
@@ -1245,6 +1249,11 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase" }}>
                 Voice Note
               </div>
+              {!voice.supported && (
+                <span style={{ fontSize: 11, color: C.faint }}>
+                  Unavailable — use Chrome or Safari
+                </span>
+              )}
               {voice.supported && (
                 <motion.button
                   whileTap={{ scale: 0.93 }}
@@ -1882,6 +1891,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
               autoFocus
               value={sms}
               onChange={e => setSMS(e.target.value)}
+              maxLength={160}
               style={{
                 width: "100%", minHeight: 120, background: C.bg3,
                 border: `1px solid ${theme.primary}44`, borderRadius: 12,

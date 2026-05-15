@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "framer-motion": "^11.0.0",
-    "pdfjs-dist": "^5.7.284",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },
