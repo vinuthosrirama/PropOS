@@ -3,7 +3,7 @@
  * Reuses the BoxDiceClient from mcp-boxdice/src/client.ts via direct import.
  */
 
-import { BoxDiceClient, type Contact, type SalesListing, type InspectionAttendance } from "../../mcp-boxdice/src/client.js"
+import { BoxDiceClient, type Contact, type SalesListing, type InspectionAttendance } from "./boxdiceClient.js"
 
 let _client: BoxDiceClient | null = null
 

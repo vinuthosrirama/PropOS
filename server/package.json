@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch index.ts",
-    "start": "tsx index.ts"
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",
