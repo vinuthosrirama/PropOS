@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import type { GenerateParams, GenerateResult } from "./openai.js"
+import { sanitiseResult, sanitiseText } from "./sanitise.js"
 
 // Lazy init — only creates the client when ANTHROPIC_API_KEY is set
 let _client: Anthropic | null = null
@@ -90,19 +91,19 @@ Respond ONLY with valid JSON, no markdown:
   // Strip potential markdown fences
   const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
   try {
-    return JSON.parse(cleaned) as GenerateResult
+    return sanitiseResult(JSON.parse(cleaned) as GenerateResult)
   } catch {
-    return {
-      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here from ${agentAgency}. Thought of you for a new listing — would love to share the details. When suits a quick chat?`,
+    return sanitiseResult({
+      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here from ${agentAgency}. Thought of you for a new listing - would love to share the details. When suits a quick chat?`,
       email: {
-        subject: `New listing — thought of you, ${lead.name.split(" ")[0]}`,
+        subject: `New listing - thought of you, ${lead.name.split(" ")[0]}`,
         body: [
           `Hi ${lead.name.split(" ")[0]}, hope you're well.`,
           `I came across a new listing that made me think of you straight away. Given what you were looking for, it's worth a look. Happy to send through the details?`,
           `Cheers,\n${agentName.split(" ")[0]}`,
         ],
       },
-    }
+    })
   }
 }
 
@@ -226,7 +227,12 @@ Return ONLY valid JSON (no markdown):
   const raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
   const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
   try {
-    return JSON.parse(cleaned) as QAResult
+    const result = JSON.parse(cleaned) as QAResult
+    // Strip any em-dashes the QA rewriter may have introduced
+    if (result.revisedSMS) result.revisedSMS = sanitiseText(result.revisedSMS)
+    if (result.revisedSubject) result.revisedSubject = sanitiseText(result.revisedSubject)
+    if (result.revisedEmailBody) result.revisedEmailBody = result.revisedEmailBody.map(sanitiseText)
+    return result
   } catch {
     return { passed: true, smsOk: true, emailOk: true, personalisationOk: true, issues: [] }
   }
@@ -258,18 +264,18 @@ Respond ONLY with valid JSON:
   const raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
   const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
   try {
-    return JSON.parse(cleaned) as GenerateResult
+    return sanitiseResult(JSON.parse(cleaned) as GenerateResult)
   } catch {
-    return {
-      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here. New listing worth a look — when's a good time?`,
+    return sanitiseResult({
+      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here. New listing worth a look - when's a good time?`,
       email: {
-        subject: `New listing — ${lead.name.split(" ")[0]}`,
+        subject: `New listing - ${lead.name.split(" ")[0]}`,
         body: [
           `Hi ${lead.name.split(" ")[0]}, hope you're well.`,
           `Cheers,\n${agentName.split(" ")[0]}`,
         ],
       },
-    }
+    })
   }
 }
 
