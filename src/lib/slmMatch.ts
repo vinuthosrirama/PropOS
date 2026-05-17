@@ -516,8 +516,17 @@ function buildReasons(
 }
 
 // ---------------------------------------------------------------------------
-// matchQuestionToSLM (unchanged — used by DemoView for Q&A panel)
+// matchQuestionToSLM — used by DemoView for Q&A panel
 // ---------------------------------------------------------------------------
+
+const STOP_WORDS = new Set(["a","an","the","is","it","in","on","at","to","do","of","and","or","for","with","was","are","how","what","does","can","will","this","that","would","about","has","have","any","its","your"])
+
+function questionOverlap(asked: string, candidate: string): number {
+  const tokenise = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9 ]/g, "").split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w))
+  const a = new Set(tokenise(asked))
+  return tokenise(candidate).filter(w => a.has(w)).length
+}
 
 export function matchQuestionToSLM(
   question: string,
@@ -525,6 +534,10 @@ export function matchQuestionToSLM(
   alreadyShown: Set<string>
 ): PropertyQA | null {
   const lower = question.toLowerCase()
+  const candidates = slm.qa.filter(qa => !alreadyShown.has(qa.question))
+  if (candidates.length === 0) return null
+
+  // Pass 1 — keyword scoring (only accept if a genuine match, score > 0)
   const matchedFields: string[] = []
   for (const [field, keywords] of Object.entries(KEYWORD_MAP)) {
     if (keywords.some((kw) => lower.includes(kw))) matchedFields.push(field)
@@ -532,9 +545,8 @@ export function matchQuestionToSLM(
 
   if (matchedFields.length > 0) {
     let bestQA: PropertyQA | null = null
-    let bestScore = -1
-    for (const qa of slm.qa) {
-      if (alreadyShown.has(qa.question)) continue
+    let bestScore = 0
+    for (const qa of candidates) {
       let s = 0
       for (const kw of qa.keywords) { if (lower.includes(kw)) s += 2 }
       for (const field of matchedFields) {
@@ -543,13 +555,20 @@ export function matchQuestionToSLM(
       }
       if (s > bestScore) { bestScore = s; bestQA = qa }
     }
-    if (bestQA && bestScore >= 0) return bestQA
+    if (bestQA && bestScore > 0) return bestQA
   }
 
-  for (const qa of slm.qa) {
-    if (!alreadyShown.has(qa.question)) return qa
+  // Pass 2 — word-overlap between the asked question and each QA's question text
+  let bestOverlapQA: PropertyQA | null = null
+  let bestOverlap = 0
+  for (const qa of candidates) {
+    const overlap = questionOverlap(question, qa.question)
+    if (overlap > bestOverlap) { bestOverlap = overlap; bestOverlapQA = qa }
   }
-  return null
+  if (bestOverlapQA && bestOverlap > 0) return bestOverlapQA
+
+  // Pass 3 — first unshown (original fallback)
+  return candidates[0]
 }
 
 // ---------------------------------------------------------------------------
