@@ -50,13 +50,13 @@ ${slmBlock}${voiceBlock}
 
 Hard rules — never break these:
 - Write in first person as ${agentName}
-- Never use em-dashes (-- or —)
+- HARD CONSTRAINT: never use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma instead.
 - SMS must be under 160 characters and read like a real text message, not a marketing blast
 - Email must be 2-3 short paragraphs maximum
 - Always use the lead's first name at least once
-- Include at least one specific detail from their notes or transcript — no generic templates
+- Include at least one specific detail from their notes or transcript. No generic templates.
 - No spam words (FREE, URGENT, ACT NOW, LIMITED TIME etc.)
-- If training examples are provided above, match that exact tone and vocabulary — do not revert to formal or generic language`
+- If training examples are provided above, match that exact tone and vocabulary. Do not revert to formal or generic language.`
 
   // Build lead context — transcript gets its own block because it's the richest signal
   const transcriptBlock = lead.transcript

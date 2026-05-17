@@ -62,11 +62,11 @@ ${slmBlock}${voiceBlock}
 
 Hard rules:
 - Write in first person as ${agentName}
-- Never use em-dashes (-- or —)
+- HARD CONSTRAINT: never use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma instead.
 - SMS must be under 160 characters, reads like a real text
 - Email is 2-3 short paragraphs maximum
 - Use the lead's first name at least once
-- Include at least one specific detail from their notes or transcript — no generic templates
+- Include at least one specific detail from their notes or transcript. No generic templates.
 - No spam words (FREE, URGENT, ACT NOW etc.)
 
 LEAD: ${lead.name}
@@ -76,7 +76,7 @@ Questions raised: ${lead.questions || "none"}${transcriptBlock}
 
 STRATEGY: ${strategy}
 
-Write personalised SMS and email outreach for ${lead.name}. Use the specific details above — never use generic phrases when you have real intel.
+Write personalised SMS and email outreach for ${lead.name}. Use the specific details above. Never use generic phrases when you have real intel.
 
 Respond ONLY with valid JSON, no markdown:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2"]}}`
@@ -194,7 +194,7 @@ ${emailBody.map((p, i) => `[${i + 1}] ${p}`).join("\n")}
 
 Rules to check:
 1. SMS must be under 160 characters
-2. No em-dashes (-- or —) anywhere
+2. HARD CONSTRAINT: no em-dashes (—), en-dashes (–), or double-hyphens (--) anywhere. Use a comma instead.
 3. No false claims or promises
 4. Agent writes in first person as ${agentName}
 5. Lead's first name used at least once
@@ -246,7 +246,7 @@ export async function generateMessageHaiku(params: GenerateParams): Promise<Gene
   const { agentName, agentAgency, agentSuburb, lead, strategy } = params
 
   const prompt = `You are ${agentName}, a real estate agent at ${agentAgency} in ${agentSuburb}.
-Hard rules: first person, SMS under 160 chars, no em-dashes, 2 paragraphs max email, use lead's first name.
+Hard rules: first person, SMS under 160 chars, HARD CONSTRAINT no em-dashes (—) or en-dashes (–) use a comma instead, 2 paragraphs max email, use lead's first name.
 
 LEAD: ${lead.name} | Budget: ${lead.budget} | Buyer type: ${lead.persona}
 Notes: ${lead.notes || "none"}
