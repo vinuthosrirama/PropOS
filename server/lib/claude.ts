@@ -94,9 +94,9 @@ Respond ONLY with valid JSON, no markdown:
     return sanitiseResult(JSON.parse(cleaned) as GenerateResult)
   } catch {
     return sanitiseResult({
-      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here from ${agentAgency}. Thought of you for a new listing - would love to share the details. When suits a quick chat?`,
+      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here from ${agentAgency}. Thought of you for a new listing, would love to share the details. When suits a quick chat?`,
       email: {
-        subject: `New listing - thought of you, ${lead.name.split(" ")[0]}`,
+        subject: `New listing, thought of you, ${lead.name.split(" ")[0]}`,
         body: [
           `Hi ${lead.name.split(" ")[0]}, hope you're well.`,
           `I came across a new listing that made me think of you straight away. Given what you were looking for, it's worth a look. Happy to send through the details?`,
@@ -267,9 +267,9 @@ Respond ONLY with valid JSON:
     return sanitiseResult(JSON.parse(cleaned) as GenerateResult)
   } catch {
     return sanitiseResult({
-      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here. New listing worth a look - when's a good time?`,
+      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here. New listing worth a look, when's a good time?`,
       email: {
-        subject: `New listing - ${lead.name.split(" ")[0]}`,
+        subject: `New listing, ${lead.name.split(" ")[0]}`,
         body: [
           `Hi ${lead.name.split(" ")[0]}, hope you're well.`,
           `Cheers,\n${agentName.split(" ")[0]}`,

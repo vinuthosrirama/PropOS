@@ -91,7 +91,7 @@ Respond ONLY with valid JSON, no markdown:
     return sanitiseResult(JSON.parse(raw) as GenerateResult)
   } catch {
     return sanitiseResult({
-      sms: "Hi, I wanted to follow up - would love to chat about your property search. When suits?",
+      sms: "Hi, I wanted to follow up, would love to chat about your property search. When suits?",
       email: { subject: "Following up from the open home", body: ["Hi, just wanted to touch base."] },
     })
   }
