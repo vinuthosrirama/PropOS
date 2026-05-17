@@ -70,7 +70,7 @@ function clampSMS(s: string): string {
 }
 
 function sanitise(s: string): string {
-  return s.replace(/—/g, "-").replace(/--/g, "-")
+  return s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
 }
 
 // Contingency frameworks — used when AI call fails or returns unparseable JSON.
@@ -156,7 +156,8 @@ Your job:
    - For BOOKING: confirm the open home time and offer to meet them there or separately
    - For OBJECTION: acknowledge the concern without being pushy; offer one specific counter-point
    - For OPT_OUT: just return empty string "" — the system handles opt-out separately
-   - No em-dashes. Australian tone. Warm but brief.
+   - HARD CONSTRAINT: no em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma instead.
+   - Australian tone. Warm but brief.
    - Sign off with ${body.agentName.split(" ")[0]}'s first name only
 
 Return ONLY valid JSON (no markdown):
