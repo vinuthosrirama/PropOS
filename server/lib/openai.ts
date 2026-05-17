@@ -1,5 +1,6 @@
 import OpenAI from "openai"
 import fs from "fs"
+import { sanitiseResult } from "./sanitise.js"
 
 export const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -87,12 +88,12 @@ Respond ONLY with valid JSON, no markdown:
 
   const raw = completion.choices[0]?.message?.content ?? "{}"
   try {
-    return JSON.parse(raw) as GenerateResult
+    return sanitiseResult(JSON.parse(raw) as GenerateResult)
   } catch {
-    return {
-      sms: "Hi, I wanted to follow up — would love to chat about your property search. When suits?",
+    return sanitiseResult({
+      sms: "Hi, I wanted to follow up - would love to chat about your property search. When suits?",
       email: { subject: "Following up from the open home", body: ["Hi, just wanted to touch base."] },
-    }
+    })
   }
 }
 
