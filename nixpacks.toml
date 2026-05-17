@@ -1,0 +1,8 @@
+# Nixpacks config — tells Railway to build and run the Express backend
+# from the server/ subdirectory, ignoring the root Vite frontend.
+
+[phases.install]
+cmds = ["cd server && npm install"]
+
+[start]
+cmd = "cd server && ./node_modules/.bin/tsx index.ts"
