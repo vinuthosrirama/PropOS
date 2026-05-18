@@ -33,7 +33,7 @@ interface AnalyticsSummary {
 router.get("/", async (req, res) => {
   const sheetUrl = process.env.SHEET_URL
   if (!sheetUrl) {
-    return res.json(emptyAnalytics())
+    return res.json(demoAnalytics())
   }
 
   try {
@@ -142,6 +142,29 @@ function emptyAnalytics(): AnalyticsSummary {
     avgHammerVsGuidePct: 0, estimatedExtraGCI: 0,
     funnelTotals: { contacted: 0, emailOpened: 0, replied: 0, registeredToBid: 0, bidPlaced: 0 },
     bySuburb: {},
+  }
+}
+
+/** Realistic demo numbers — shown when no Sheet URL is configured. */
+function demoAnalytics(): AnalyticsSummary {
+  return {
+    totalAuctions: 12,
+    totalOutreachSent: 87,
+    avgBiddersWhenPropOSUsed: 6.4,
+    avgHammerVsGuidePct: 8.2,
+    estimatedExtraGCI: 34100,
+    funnelTotals: {
+      contacted: 87,
+      emailOpened: 54,
+      replied: 28,
+      registeredToBid: 19,
+      bidPlaced: 14,
+    },
+    bySuburb: {
+      Berwick: { auctions: 5, avgBidders: 6.8, avgHammerVsGuide: 9.1 },
+      "Narre Warren": { auctions: 4, avgBidders: 5.9, avgHammerVsGuide: 7.4 },
+      Clyde: { auctions: 3, avgBidders: 6.6, avgHammerVsGuide: 8.3 },
+    },
   }
 }
 

@@ -33,13 +33,10 @@ router.post("/:phone/read", (req, res) => {
 /**
  * POST /api/conversations/seed-demo
  * Creates a fake lead reply thread for offline demo use.
- * Only works when TEST_RECIPIENT_PHONE is set.
+ * Uses TEST_RECIPIENT_PHONE if set, otherwise a fixed demo number.
  */
 router.post("/seed-demo", async (req, res) => {
-  const testPhone = process.env.TEST_RECIPIENT_PHONE?.trim()
-  if (!testPhone) {
-    return res.status(403).json({ error: "Only available in test mode (TEST_RECIPIENT_PHONE not set)" })
-  }
+  const testPhone = process.env.TEST_RECIPIENT_PHONE?.trim() || "+61400000001"
 
   const meta = {
     leadId:          "demo-seed-001",

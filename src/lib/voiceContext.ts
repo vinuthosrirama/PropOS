@@ -66,6 +66,74 @@ export function clearCorpus(): void {
   localStorage.removeItem(CORPUS_KEY)
 }
 
+/**
+ * Cameron Knoll's real messages — used as seed corpus so the demo
+ * starts with a trained voice from day one. 5 emails + 4 texts.
+ */
+const CAMERON_SEED: Array<{ type: "email" | "paste"; text: string; source: string }> = [
+  {
+    type: "email",
+    text: "Hi Vinuth and Aneesha, Thank you for your attendance today. Great to see some familiar faces in the crowd! Rental appraisal attached and will keep in touch for any other suitable properties. Happy to arrange a time to work through a demo of the product you have created. Let me know when suits. Enjoy the weekend and chat soon! Best",
+    source: "Email — post open home follow-up",
+  },
+  {
+    type: "email",
+    text: "Hi Vinuth, Apologies for the delayed response. Saturday mornings are okay. Can't do this Saturday, how about next week the 16th? Cheers",
+    source: "Email — scheduling reply",
+  },
+  {
+    type: "email",
+    text: "Hi Vinuth and Aneesha, Apologies for the delayed response. I won't be available this Saturday at that time. Saturday's can be tricky due to open homes and auctions. Can we take it week-by-week and I can let you know if we could make this work on a Saturday which may have less open homes? Thank you",
+    source: "Email — scheduling reply",
+  },
+  {
+    type: "paste",
+    text: "No problem, chat then!",
+    source: "SMS — casual reply",
+  },
+  {
+    type: "paste",
+    text: "No problem, Vinuth. Are you wanting to register for the auction? Yes please send a demo. Thank you",
+    source: "SMS — auction inquiry reply",
+  },
+  {
+    type: "paste",
+    text: "Hi Vinuth, No need to apologise! Appreciate you doing your due diligence. I can let you know if this changes. If I can provide more confidence and clarity around this, let me know. Thank you for the demo. I tried to play around. Might be user error 😊",
+    source: "SMS — feedback reply",
+  },
+  {
+    type: "paste",
+    text: "How is early afternoon for you?",
+    source: "SMS — scheduling",
+  },
+  {
+    type: "paste",
+    text: "Hi Vinuth, I am out of the office at the moment. Are you available around 1pm?",
+    source: "SMS — scheduling reply",
+  },
+]
+
+/**
+ * Seeds the training corpus with Cameron's real messages if empty.
+ * Called once on app mount — idempotent.
+ */
+export function seedCorpusIfEmpty(): TrainingEntry[] {
+  const existing = loadCorpus()
+  if (existing.length > 0) return existing
+
+  const seeded: TrainingEntry[] = CAMERON_SEED.map((s, i) => ({
+    id:        `seed_cameron_${i}`,
+    type:      s.type,
+    text:      s.text,
+    timestamp: new Date(Date.now() - (CAMERON_SEED.length - i) * 86400000).toISOString(),
+    wordCount: s.text.split(/\s+/).length,
+    source:    s.source,
+  }))
+
+  saveCorpus(seeded)
+  return seeded
+}
+
 // ── Voice context compiler ────────────────────────────────────────────────────
 
 /**
@@ -140,7 +208,7 @@ export function buildVoiceContext(
   }
 
   // Raw training examples — most powerful signal for voice matching
-  const examples = corpus.filter(e => e.text.trim().length > 20).slice(-5)  // latest 5
+  const examples = corpus.filter(e => e.text.trim().length > 20).slice(-8)  // latest 8
   if (examples.length > 0) {
     lines.push("")
     lines.push(`Training examples — write to match this style exactly:`)
