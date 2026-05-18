@@ -808,6 +808,19 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
               setCorpus(updated)
               setStylePaste("")
             }}
+            onBulkAdd={(entries) => {
+              const newEntries: TrainingEntry[] = entries.map((e, i) => ({
+                id: `bulk_${Date.now()}_${i}`,
+                type: e.type,
+                text: e.text.trim(),
+                timestamp: new Date().toISOString(),
+                wordCount: e.text.trim().split(/\s+/).length,
+                source: e.type === "email" ? "Email example" : "SMS example",
+              }))
+              const updated = [...corpus, ...newEntries]
+              saveCorpus(updated)
+              setCorpus(updated)
+            }}
             onRemove={(id) => {
               const updated = corpus.filter(e => e.id !== id)
               saveCorpus(updated)
@@ -1087,11 +1100,14 @@ interface VoiceStylePanelProps {
   stylePaste: string
   onPasteChange: (v: string) => void
   onAdd: (text: string, type: "email" | "paste") => void
+  onBulkAdd: (entries: Array<{ text: string; type: "email" | "paste" }>) => void
   onRemove: (id: string) => void
   onClearAll: () => void
 }
 
-function VoiceStylePanel({ corpus, stylePaste, onPasteChange, onAdd, onRemove, onClearAll }: VoiceStylePanelProps) {
+function VoiceStylePanel({ corpus, stylePaste, onPasteChange, onAdd, onBulkAdd, onRemove, onClearAll }: VoiceStylePanelProps) {
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkText, setBulkText] = useState("")
   const card: React.CSSProperties = {
     background: C.bg2,
     border: `1px solid ${C.border}`,
@@ -1176,6 +1192,73 @@ function VoiceStylePanel({ corpus, stylePaste, onPasteChange, onAdd, onRemove, o
             + Add as Email
           </button>
         </div>
+      </div>
+
+      {/* Bulk import toggle */}
+      <div style={card}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: bulkMode ? 12 : 0 }}>
+          <div style={label}>Bulk import</div>
+          <button
+            onClick={() => setBulkMode(!bulkMode)}
+            style={{
+              fontSize: 12, fontWeight: 600, color: C.blue,
+              background: "none", border: "none", cursor: "pointer", padding: 0,
+            }}
+          >
+            {bulkMode ? "Hide" : "Paste multiple messages at once →"}
+          </button>
+        </div>
+        {bulkMode && (
+          <>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>
+              Paste multiple messages separated by a blank line. Each block becomes a separate training example.
+              Prefix with <code style={{ color: C.text, background: C.bg3, padding: "1px 4px", borderRadius: 3 }}>EMAIL:</code> or{" "}
+              <code style={{ color: C.text, background: C.bg3, padding: "1px 4px", borderRadius: 3 }}>TEXT:</code> to tag type (default: SMS).
+            </div>
+            <textarea
+              value={bulkText}
+              onChange={e => setBulkText(e.target.value)}
+              placeholder={"EMAIL: Hi James, thank you for attending...\n\nTEXT: No problem, chat then!\n\nTEXT: Hi Vinuth, I am out of the office..."}
+              style={{
+                width: "100%", minHeight: 160, background: C.bg3,
+                border: `1px solid ${C.border}`, borderRadius: 8,
+                color: C.text, fontSize: 13, padding: "12px 14px",
+                resize: "vertical", fontFamily: FONT, lineHeight: 1.5, boxSizing: "border-box",
+              }}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+              <button
+                onClick={() => {
+                  const blocks = bulkText.split(/\n\s*\n/).map(b => b.trim()).filter(b => b.length > 10)
+                  if (blocks.length === 0) return
+                  const entries = blocks.map(block => {
+                    const isEmail = /^EMAIL:\s*/i.test(block)
+                    const cleaned = block.replace(/^(EMAIL|TEXT):\s*/i, "").trim()
+                    return { text: cleaned, type: (isEmail ? "email" : "paste") as "email" | "paste" }
+                  })
+                  onBulkAdd(entries)
+                  setBulkText("")
+                  setBulkMode(false)
+                }}
+                disabled={bulkText.trim().length <= 10}
+                style={{
+                  background: bulkText.trim().length > 10 ? C.blue : C.bg3,
+                  color: bulkText.trim().length > 10 ? C.bg : C.muted,
+                  border: "none", borderRadius: 8, padding: "9px 18px",
+                  fontSize: 13, fontWeight: 600,
+                  cursor: bulkText.trim().length > 10 ? "pointer" : "not-allowed",
+                }}
+              >
+                Import all
+              </button>
+              {bulkText.trim().length > 10 && (
+                <span style={{ fontSize: 11, color: C.muted }}>
+                  {bulkText.split(/\n\s*\n/).map(b => b.trim()).filter(b => b.length > 10).length} messages detected
+                </span>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Saved examples */}

@@ -34,12 +34,12 @@ export interface AgencyTheme {
 }
 
 // Hex codes verified by direct CSS extraction from each agency's live website (May 2026)
-// Peake: #3b1f77 from --plyr-color-main CSS var · Barry Plant: #001FB9 cobalt from inline HTML · Jellis Craig: #8EC6B5 from CSS
+// Peake: #3f0278 (RGB 63,2,120) confirmed brand color · Barry Plant: #001FB9 cobalt from inline HTML · Jellis Craig: #8EC6B5 from CSS
 // Ray White: #FFD200 from sponsor placements · Harcourts: #001F49/#C8102E from brand PDF · McGrath: #E67200 from rebrand docs
 // LJ Hooker: #E8001D from ljhooker.com · Others: best available public source
 export const AGENCY_THEMES: Record<string, AgencyTheme> = {
   // ── Verified ──────────────────────────────────────────────────────────────
-  "Peake":                    { name: "Peake",                    primary: "#9B6FD4",             dim: "rgba(155,111,212,0.12)",    glow: "rgba(155,111,212,0.07)",    logo: "PK", gradient: ["#9B6FD4", "#3b1f77"]                       },
+  "Peake":                    { name: "Peake",                    primary: "#3f0278",             dim: "rgba(63,2,120,0.12)",       glow: "rgba(63,2,120,0.07)",       logo: "PK", gradient: ["#7B35BE", "#3f0278"]                       },
   "Ray White":                { name: "Ray White",                primary: "#FFD200",             dim: "rgba(255,210,0,0.12)",      glow: "rgba(255,210,0,0.07)",      logo: "RW", gradient: ["#FFD200", "#E8A800"]                       },
   "Barry Plant":              { name: "Barry Plant",              primary: "#001FB9",             dim: "rgba(0,31,185,0.12)",       glow: "rgba(0,31,185,0.07)",       logo: "BP", gradient: ["#4c96ff", "#001FB9"]                       },
   "Jellis Craig":             { name: "Jellis Craig",             primary: "#8EC6B5",             dim: "rgba(142,198,181,0.12)",    glow: "rgba(142,198,181,0.07)",    logo: "JC", gradient: ["#8EC6B5", "#4A9B88"]                       },
@@ -164,16 +164,16 @@ export const DEFAULT_AGENT: AgentProfile = {
   suburb:  "Berwick",
   tagline: "Berwick specialist. Genuine results.",
   voiceProfile: {
-    greeting:       "Hey",
+    greeting:       "Hi",
     closing:        "Cheers",
-    lengthStyle:    "medium",
+    lengthStyle:    "short",
     formalityScore: 2,
-    aussieIndex:    3,
-    specificity:    4,
-    emojiUsage:     "none",
-    examplesCount:  0,
-    confidence:     0,
-    detectedTraits: [],
+    aussieIndex:    2,
+    specificity:    3,
+    emojiUsage:     "occasional",
+    examplesCount:  9,
+    confidence:     82,
+    detectedTraits: ["warm", "appreciative", "concise", "responsive"],
   },
   trainingCorpus: [],
 }

@@ -8,6 +8,7 @@ import Nav from "./components/Nav"
 import AgentLogin from "./views/AgentLogin"
 import DemoView from "./views/DemoView"
 import SettingsView from "./views/SettingsView"
+import { seedCorpusIfEmpty } from "./lib/voiceContext"
 
 export default function App() {
   const [loggedIn, setLoggedIn]       = useState(false)
@@ -20,6 +21,7 @@ export default function App() {
     setAgent(newAgent)
     setTheme(newTheme)
     setLoggedIn(true)
+    seedCorpusIfEmpty()
   }
 
   // Ping Sheet URL on login to drive the Nav "Sheet live" indicator
@@ -62,7 +64,7 @@ export default function App() {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}>
 
-          {view === "demo"  && <DemoView agent={agent} theme={theme} />}
+          {view === "demo"  && <DemoView agent={agent} theme={theme} onSettings={() => navigate("setup")} />}
           {view === "setup" && <SettingsView agent={agent} />}
         </motion.div>
       </AnimatePresence>

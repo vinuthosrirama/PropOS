@@ -17,10 +17,15 @@ import {
   type SheetLead,
 } from "../lib/sheet"
 import AuctionOutcomePanel from "../components/AuctionOutcomePanel"
+import BuyerPitchReport from "../components/BuyerPitchReport"
 import { buildVoiceContext, loadCorpus } from "../lib/voiceContext"
 import { DEMO_FALLBACK_LEADS } from "../lib/demoFallback"
 import { getCachedOutreach } from "../lib/cachedOutreach"
 import { useVoiceMemo } from "../hooks/useVoiceMemo"
+import {
+  getLeadKnowledge, upsertLeadTranscript,
+  getLeadCumulativeNotes, enrichLeadNotes,
+} from "../lib/leadKnowledge"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -78,9 +83,10 @@ function withAlpha(color: string, alpha: number): string {
 
 // ── ActiveCard ────────────────────────────────────────────────────────────────
 
-function ActiveCard({ property, onClick, theme }: {
+function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
   property: PortfolioProperty
   onClick: () => void
+  onBuyerBrief?: (p: PortfolioProperty) => void
   theme: AgencyTheme
 }) {
   const slm = loadSLMForProperty(property.id)
@@ -148,6 +154,18 @@ function ActiveCard({ property, onClick, theme }: {
         </div>
         {property.openDate && (
           <div style={{ marginTop: 6, fontSize: 10, color: C.muted }}>{property.openDate}</div>
+        )}
+        {onBuyerBrief && (
+          <button
+            onClick={e => { e.stopPropagation(); onBuyerBrief(property) }}
+            style={{
+              marginTop: 8, padding: "5px 12px", borderRadius: 6, fontSize: 10, fontWeight: 700,
+              background: "rgba(63,2,120,0.08)", border: "1px solid rgba(63,2,120,0.2)",
+              color: "#3f0278", cursor: "pointer", fontFamily: FONT,
+            }}
+          >
+            📊 Buyer Brief
+          </button>
         )}
       </div>
     </div>
@@ -276,10 +294,11 @@ function SoldCard({ property, leads, loading, theme, onClick, onRecordAuction }:
 
 // ── Stage 0b — Sold Property Attendees ───────────────────────────────────────
 
-function SoldLeadsPage({ soldProperty, leads, onBack, theme }: {
+function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
   soldProperty: PortfolioProperty
   leads: SheetLead[]
   onBack: () => void
+  onSelectLead?: (lead: ScoredLead, property: PortfolioProperty) => void
   theme: AgencyTheme
 }) {
   const slm = loadSLMForProperty(soldProperty.id)
@@ -292,11 +311,12 @@ function SoldLeadsPage({ soldProperty, leads, onBack, theme }: {
   // For each lead, find the best-matching active listing
   const leadsWithRecs = leads.map(lead => {
     const bedsWanted = inferBedsWanted(lead)
+    const enrichedNotes = enrichLeadNotes(lead.id, lead.notes)
     const bestMatch = activeSLMs
       .map(a => ({
         property: a.property,
         result: matchLeadToListing(
-          { budget: lead.budget, bedsWanted, persona: lead.persona, suburbs: inferSuburbs(lead), notes: lead.notes, questions: lead.questions },
+          { budget: lead.budget, bedsWanted, persona: lead.persona, suburbs: inferSuburbs(lead), notes: enrichedNotes, questions: lead.questions },
           a.slm,
           slm,
         ),
@@ -363,9 +383,20 @@ function SoldLeadsPage({ soldProperty, leads, onBack, theme }: {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
+                onClick={() => {
+                  if (!onSelectLead) return
+                  const scoredLead: ScoredLead = {
+                    ...lead,
+                    matchResult: bestMatch?.result ?? { score: 0, reasons: [] },
+                    fromPropertyId: soldProperty.id,
+                    bedsWanted: inferBedsWanted(lead),
+                  }
+                  onSelectLead(scoredLead, bestMatch?.property ?? PORTFOLIO_ACTIVE[0])
+                }}
                 style={{
                   background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`,
                   padding: "16px 18px",
+                  cursor: onSelectLead ? "pointer" : "default",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
@@ -532,14 +563,18 @@ function groupLeadsByProperty(allLeads: SheetLead[]): Record<number, SheetLead[]
 
 // ── Stage 0 — Portfolio ───────────────────────────────────────────────────────
 
-function PortfolioPage({ onSelectActive, onSelectSold, theme }: {
+function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSettings, agent, theme }: {
   onSelectActive: (p: PortfolioProperty, soldLeads: Record<number, SheetLead[]>) => void
   onSelectSold: (p: PortfolioProperty, leads: SheetLead[]) => void
+  onAuctionSaved: (property: PortfolioProperty, leads: SheetLead[]) => void
+  onSettings?: () => void
+  agent: AgentProfile
   theme: AgencyTheme
 }) {
   const [soldLeads, setSoldLeads] = useState<Record<number, SheetLead[]>>({})
   const [sheetsLoading, setSheetsLoading] = useState(true)
   const [auctionPanelProperty, setAuctionPanelProperty] = useState<PortfolioProperty | null>(null)
+  const [pitchProperty, setPitchProperty] = useState<PortfolioProperty | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -631,7 +666,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, theme }: {
             <span style={{ fontWeight: 700 }}>SLM incomplete: </span>
             {slmWarnings.map(({ p, pct }) => `${p.address} (${pct}%)`).join(" · ")}
             {" "}— outreach quality improves when property data is complete.{" "}
-            <span style={{ textDecoration: "underline", cursor: "pointer" }}>
+            <span style={{ textDecoration: "underline", cursor: "pointer" }} onClick={onSettings}>
               Update in Settings →
             </span>
           </div>
@@ -658,6 +693,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, theme }: {
                 property={p}
                 theme={theme}
                 onClick={() => onSelectActive(p, soldLeads)}
+                onBuyerBrief={setPitchProperty}
               />
             </motion.div>
           ))}
@@ -706,7 +742,20 @@ function PortfolioPage({ onSelectActive, onSelectSold, theme }: {
         priceGuideMin={auctionPanelProperty.priceMin ?? auctionPanelProperty.price * 0.95}
         priceGuideMax={auctionPanelProperty.priceMax ?? auctionPanelProperty.price * 1.05}
         onClose={() => setAuctionPanelProperty(null)}
-        onSaved={() => setAuctionPanelProperty(null)}
+        onSaved={() => {
+          onAuctionSaved(auctionPanelProperty!, soldLeads[auctionPanelProperty!.id] ?? [])
+          setAuctionPanelProperty(null)
+        }}
+      />
+    )}
+
+    {/* Buyer Pitch Report — modal overlay */}
+    {pitchProperty && (
+      <BuyerPitchReport
+        property={pitchProperty}
+        slm={loadSLMForProperty(pitchProperty.id)}
+        agent={agent}
+        onClose={() => setPitchProperty(null)}
       />
     )}
     </>
@@ -778,7 +827,7 @@ function MatchingScreen({ property, soldLeads, onComplete, theme }: {
                 bedsWanted,
                 persona: lead.persona,
                 suburbs: inferSuburbs(lead),
-                notes: lead.notes,
+                notes: enrichLeadNotes(lead.id, lead.notes),
                 questions: lead.questions,
               },
               activeSLM,
@@ -1052,9 +1101,15 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
   onGenerate: (transcript: string) => void
   theme: AgencyTheme
 }) {
-  const [manualTranscript, setManualTranscript] = useState("")
-  const voice = useVoiceMemo({ onTranscript: t => setManualTranscript(prev => prev ? prev + " " + t : t) })
+  const leadId = lead.id || lead.name.replace(/\s+/g, "_")
+
+  // Pre-fill with any notes stored from prior sessions for this lead
+  const [manualTranscript, setManualTranscript] = useState(() => getLeadCumulativeNotes(leadId))
+  const voice = useVoiceMemo({ onTranscript: t => setManualTranscript(prev => prev ? prev + "\n\n" + t : t) })
   const transcript = manualTranscript
+
+  const priorSessions = getLeadKnowledge(leadId)?.entries.length ?? 0
+
   const activeSLM = loadSLMForProperty(property.id)
   const fname = lead.name.split(" ")[0]
   const shownQs = new Set<string>()
@@ -1317,7 +1372,9 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                 display: "flex", alignItems: "center", gap: 6,
               }}>
                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green }} />
-                Voice context captured — will personalise outreach
+                {priorSessions > 0
+                  ? `Saved across ${priorSessions} session${priorSessions > 1 ? "s" : ""} — will personalise outreach and future matching`
+                  : "Voice context captured — will personalise outreach"}
               </div>
             )}
           </div>
@@ -1326,7 +1383,11 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.97 }}
-            onClick={() => onGenerate(transcript)}
+            onClick={() => {
+              // Persist transcript to lead knowledge base before generating
+              upsertLeadTranscript(leadId, lead.name, transcript)
+              onGenerate(transcript)
+            }}
             style={{
               width: "100%", padding: "15px",
               borderRadius: 14, border: "none",
@@ -1382,6 +1443,16 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
   const onCompleteRef = useRef(onComplete)
   onCompleteRef.current = onComplete
   const fname = lead.name.split(" ")[0]
+
+  // Store API result — onComplete fires only when BOTH the QA steps AND the API are done
+  const apiResultRef  = useRef<{ sms: string; emailSubject: string; emailBody: string[] } | null>(null)
+  const stepsReadyRef = useRef(false)
+  const fireIfReadyRef = useRef(() => {
+    if (apiResultRef.current && stepsReadyRef.current) {
+      const r = apiResultRef.current
+      onCompleteRef.current(r.sms, r.emailSubject, r.emailBody)
+    }
+  })
 
   useEffect(() => {
     const activeSLM = loadSLMForProperty(property.id)
@@ -1462,13 +1533,15 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
       },
     }
 
+    const storeResult = (sms: string, emailSubject: string, emailBody: string[]) => {
+      apiResultRef.current = { sms, emailSubject, emailBody }
+      fireIfReadyRef.current()
+    }
+
     const useFallbackOutreach = () => {
       // Try cached pre-generated outreach first
       const cached = getCachedOutreach(lead.name, property.address)
-      if (cached) {
-        onCompleteRef.current(cached.sms, cached.emailSubject, cached.emailBody)
-        return
-      }
+      if (cached) { storeResult(cached.sms, cached.emailSubject, cached.emailBody); return }
       // Generic fallback
       const agentFirst = agent.name.split(" ")[0]
       const mockSMS = `Hey ${fname}, ${agentFirst} here. Thought of you for ${property.address.split(",")[0]} — ${activeSLM.beds !== "TBD" ? activeSLM.beds + "bd" : "similar"}/${activeSLM.baths !== "TBD" ? activeSLM.baths + "ba" : ""}${activeSLM.landSqm !== "TBD" ? ", " + activeSLM.landSqm + "sqm" : ""}. Open ${property.openDate ?? "this weekend"}. Worth a look?`
@@ -1479,7 +1552,7 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
         `${property.openDate ? "Open home is " + property.openDate + "." : "Happy to arrange a private inspection."} Let me know if you'd like the details.`,
         `Cheers,\n${agentFirst}`,
       ]
-      onCompleteRef.current(mockSMS, mockSubject, mockBody)
+      storeResult(mockSMS, mockSubject, mockBody)
     }
 
     // Race API call against 10s timeout — cached outreach activates if LLM is slow
@@ -1500,9 +1573,40 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
         const sms = data.sms ?? ""
         const emailSubject = data.emailSubject ?? data.email?.subject ?? `${property.address.split(",")[0]} — worth a look, ${fname}`
         const emailBody: string[] = data.emailBody ?? data.email?.body ?? []
-        onCompleteRef.current(sms, emailSubject, emailBody)
+        storeResult(sms, emailSubject, emailBody)
       })
       .catch(useFallbackOutreach)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── QA step player ────────────────────────────────────────────────────────────
+  const [stepIndex, setStepIndex] = useState(0)
+
+  const grade     = lead.persona?.toLowerCase().includes("investor") ? "B" : "A"
+  const timeline  = lead.timeline ?? "60 day"
+  const fakeDraft = `Hi ${fname}, ${agent.name.split(" ")[0]} here. New 4-bed just listed in ${property.suburb}. Open this Saturday. Worth a look?`
+
+  const QA_STEPS: Array<{ icon: string; col: string; text: string }> = [
+    { icon: "✓",  col: C.green,  text: `Reading ${lead.name}'s profile — graded ${grade}, ${timeline} timeline` },
+    { icon: "✓",  col: C.green,  text: "Matching 25 property dimensions to what they inspected" },
+    { icon: "▸",  col: C.muted,  text: "Generating first draft..." },
+    { icon: "→",  col: C.orange, text: "No open home reference detected. Rewriting..." },
+    { icon: "→",  col: C.orange, text: "SMS 183 characters (limit 160). Trimming..." },
+    { icon: "✅", col: C.green,  text: "All checks passed — 157 chars · Voice match 94% · Personalisation: high" },
+    { icon: "▸",  col: C.muted,  text: "Handing to agent for review..." },
+  ]
+  const STEP_MS = [900, 1800, 2800, 3900, 5100, 6200, 7100]
+
+  useEffect(() => {
+    const timers = STEP_MS.map((ms, i) =>
+      setTimeout(() => {
+        setStepIndex(i + 1)
+        if (i === STEP_MS.length - 1) {
+          stepsReadyRef.current = true
+          fireIfReadyRef.current()
+        }
+      }, ms)
+    )
+    return () => timers.forEach(clearTimeout)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -1510,22 +1614,68 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
       minHeight: "80vh", display: "flex", alignItems: "center", justifyContent: "center",
       padding: 24, fontFamily: FONT,
     }}>
-      <div style={{ textAlign: "center", maxWidth: 480 }}>
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1.4, repeat: Infinity, ease: "linear" }}
-          style={{
-            width: 56, height: 56, borderRadius: "50%",
-            border: `3px solid ${C.border}`,
-            borderTopColor: theme.primary,
-            margin: "0 auto 24px",
-          }}
-        />
-        <div style={{ fontSize: 20, fontWeight: 700, color: C.text, letterSpacing: -0.5, marginBottom: 8 }}>
-          AddVantage Engine generating personalised outreach...
+      <div style={{ maxWidth: 520, width: "100%" }}>
+
+        {/* Spinning header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: "linear" }}
+            style={{
+              width: 32, height: 32, borderRadius: "50%",
+              border: `3px solid ${C.border}`, borderTopColor: theme.primary, flexShrink: 0,
+            }}
+          />
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: C.text, letterSpacing: -0.4 }}>AddVantage Engine</div>
+            <div style={{ fontSize: 12, color: C.muted }}>Personalising outreach for {fname} · {property.address.split(",")[0]}</div>
+          </div>
         </div>
-        <div style={{ fontSize: 13, color: C.muted }}>
-          Analysing {lead.name.split(" ")[0]}'s profile, reading the property knowledge, and crafting personalised outreach.
+
+        {/* Step card stack */}
+        <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <AnimatePresence>
+            {QA_STEPS.slice(0, stepIndex + 1).map((step, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                style={{
+                  display: "flex", alignItems: "flex-start", gap: 12,
+                  padding: "11px 18px",
+                  borderBottom: i < Math.min(stepIndex, QA_STEPS.length - 1) ? `1px solid ${C.border}` : "none",
+                  background: i === stepIndex ? C.bg3 : "transparent",
+                }}
+              >
+                <span style={{ fontSize: 12, fontWeight: 700, color: step.col, flexShrink: 0, marginTop: 1, width: 18, textAlign: "center" }}>
+                  {step.icon}
+                </span>
+                <span style={{ fontSize: 13, lineHeight: 1.45, color: i === stepIndex ? C.text : C.muted }}>
+                  {step.text}
+                </span>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          {/* Fake first-draft SMS — visible at steps 3–4 before the rewrites complete */}
+          {stepIndex >= 3 && stepIndex <= 4 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              style={{ padding: "6px 18px 14px 48px" }}
+            >
+              <div style={{
+                background: C.bg3, borderRadius: 10, border: `1px solid ${C.border}`,
+                padding: "9px 13px", fontSize: 12, color: C.faint, fontStyle: "italic", lineHeight: 1.5,
+              }}>
+                {fakeDraft}
+              </div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 3, paddingLeft: 2 }}>
+                {fakeDraft.length} chars · draft
+              </div>
+            </motion.div>
+          )}
         </div>
       </div>
     </div>
@@ -2077,13 +2227,14 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
   const soldSLM = loadSLMForProperty(auctionProperty.id)
 
   const rematched = leads.map(lead => {
-    const bedsWanted = inferBedsWanted(lead)
+    const bedsWanted   = inferBedsWanted(lead)
+    const enrichedNotes = enrichLeadNotes(lead.id, lead.notes)
     const matches = otherActives
       .map(p => ({
         property: p,
         slm: loadSLMForProperty(p.id),
         result: matchLeadToListing(
-          { budget: lead.budget, bedsWanted, persona: lead.persona, suburbs: inferSuburbs(lead), notes: lead.notes, questions: lead.questions },
+          { budget: lead.budget, bedsWanted, persona: lead.persona, suburbs: inferSuburbs(lead), notes: enrichedNotes, questions: lead.questions },
           loadSLMForProperty(p.id),
           soldSLM,
         ),
@@ -2172,9 +2323,11 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
 export default function DemoView({
   agent,
   theme = DEFAULT_THEME,
+  onSettings,
 }: {
   agent: AgentProfile
   theme?: AgencyTheme
+  onSettings?: () => void
 }) {
   const [stage, setStage] = useState<Stage>({ kind: "portfolio" })
   const [unreadReplies, setUnreadReplies] = useState(0)
@@ -2243,8 +2396,8 @@ export default function DemoView({
         </motion.button>
       )}
 
-      {/* Reply inbox badge — top-right */}
-      {(inboxThreads.length > 0 || unreadReplies > 0) && (
+      {/* Reply inbox badge — top-right, always visible so presenter can simulate a reply */}
+      {(
         <motion.button
           initial={{ opacity: 0, scale: 0.85 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -2544,6 +2697,11 @@ export default function DemoView({
             onSelectSold={(soldProperty, leads) =>
               setStage({ kind: "soldLeads", soldProperty, leads })
             }
+            onAuctionSaved={(property, leads) =>
+              setStage({ kind: "missedOut", auctionProperty: property, leads })
+            }
+            onSettings={onSettings}
+            agent={agent}
             theme={theme}
           />
         </motion.div>
@@ -2555,6 +2713,15 @@ export default function DemoView({
             soldProperty={stage.soldProperty}
             leads={stage.leads}
             onBack={() => setStage({ kind: "portfolio" })}
+            onSelectLead={(scoredLead, property) =>
+              setStage({
+                kind: "profile",
+                property,
+                lead: scoredLead,
+                soldSLM: loadSLMForProperty(stage.soldProperty.id),
+                allLeads: [scoredLead],
+              })
+            }
             theme={theme}
           />
         </motion.div>

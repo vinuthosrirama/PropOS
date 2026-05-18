@@ -59,9 +59,9 @@ export default function AgentLogin({ onLogin }: Props) {
       tagline: `${form.suburb} specialist.`,
       voiceProfile: {
         greeting: "Hi", closing: "Cheers",
-        lengthStyle: "medium", formalityScore: 3,
-        aussieIndex: 3, specificity: 3,
-        emojiUsage: "none", examplesCount: 0,
+        lengthStyle: "short", formalityScore: 2,
+        aussieIndex: 2, specificity: 3,
+        emojiUsage: "occasional", examplesCount: 0,
         confidence: 0, detectedTraits: [],
       },
       trainingCorpus: [],
