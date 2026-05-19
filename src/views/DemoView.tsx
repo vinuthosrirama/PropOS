@@ -1533,49 +1533,58 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
       },
     }
 
+    const stripDashes = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
+
     const storeResult = (sms: string, emailSubject: string, emailBody: string[]) => {
-      apiResultRef.current = { sms, emailSubject, emailBody }
+      apiResultRef.current = {
+        sms: stripDashes(sms),
+        emailSubject: stripDashes(emailSubject),
+        emailBody: emailBody.map(stripDashes),
+      }
       fireIfReadyRef.current()
     }
 
-    const useFallbackOutreach = () => {
-      // Try cached pre-generated outreach first
-      const cached = getCachedOutreach(lead.name, property.address)
-      if (cached) { storeResult(cached.sms, cached.emailSubject, cached.emailBody); return }
-      // Generic fallback
-      const agentFirst = agent.name.split(" ")[0]
-      const mockSMS = `Hey ${fname}, ${agentFirst} here. Thought of you for ${property.address.split(",")[0]} — ${activeSLM.beds !== "TBD" ? activeSLM.beds + "bd" : "similar"}/${activeSLM.baths !== "TBD" ? activeSLM.baths + "ba" : ""}${activeSLM.landSqm !== "TBD" ? ", " + activeSLM.landSqm + "sqm" : ""}. Open ${property.openDate ?? "this weekend"}. Worth a look?`
-      const mockSubject = `${property.address.split(",")[0]} — worth a look, ${fname}`
-      const mockBody = [
-        `Hey ${fname}, hope you're well.`,
-        `After you came through ${soldSLM.address}, I thought this new listing might tick some boxes. It's ${activeSLM.beds !== "TBD" ? activeSLM.beds + "-bed" : "similar"}, ${activeSLM.landSqm !== "TBD" ? activeSLM.landSqm + "sqm" : "comparable land"} — ${activeSLM.priceMin !== "TBD" && activeSLM.priceMax !== "TBD" ? "price guide " + fmt(activeSLM.priceMin as number) + " to " + fmt(activeSLM.priceMax as number) : "priced competitively"}.`,
-        `${property.openDate ? "Open home is " + property.openDate + "." : "Happy to arrange a private inspection."} Let me know if you'd like the details.`,
-        `Cheers,\n${agentFirst}`,
-      ]
-      storeResult(mockSMS, mockSubject, mockBody)
+    // Use cached (hand-written) outreach as PRIMARY source — it's vetted, on-brand,
+    // em-dash-free, and written in Cameron's actual voice. LLM is the fallback.
+    const cached = getCachedOutreach(lead.name, property.address)
+    if (cached) {
+      storeResult(cached.sms, cached.emailSubject, cached.emailBody)
+    } else {
+      // No cached outreach — fall back to LLM generation
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("generation timeout")), 10000)
+      )
+
+      const useFallbackOutreach = () => {
+        const agentFirst = agent.name.split(" ")[0]
+        const mockSMS = `Hey ${fname}, ${agentFirst} here. Thought of you for ${property.address.split(",")[0]}, ${activeSLM.beds !== "TBD" ? activeSLM.beds + "bd" : "similar"}/${activeSLM.baths !== "TBD" ? activeSLM.baths + "ba" : ""}${activeSLM.landSqm !== "TBD" ? ", " + activeSLM.landSqm + "sqm" : ""}. Open ${property.openDate ?? "this weekend"}. Worth a look?`
+        const mockSubject = `${property.address.split(",")[0]}, worth a look, ${fname}`
+        const mockBody = [
+          `Hey ${fname}, hope you're well.`,
+          `After you came through ${soldSLM.address}, I thought this new listing might tick some boxes. It's ${activeSLM.beds !== "TBD" ? activeSLM.beds + "-bed" : "similar"}, ${activeSLM.landSqm !== "TBD" ? activeSLM.landSqm + "sqm" : "comparable land"}, ${activeSLM.priceMin !== "TBD" && activeSLM.priceMax !== "TBD" ? "price guide " + fmt(activeSLM.priceMin as number) + " to " + fmt(activeSLM.priceMax as number) : "priced competitively"}.`,
+          `${property.openDate ? "Open home is " + property.openDate + "." : "Happy to arrange a private inspection."} Let me know if you'd like the details.`,
+          `Cheers,\n${agentFirst}`,
+        ]
+        storeResult(mockSMS, mockSubject, mockBody)
+      }
+
+      Promise.race([
+        fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }),
+        timeoutPromise,
+      ])
+        .then(res => (res as Response).json())
+        .then(data => {
+          const sms = data.sms ?? ""
+          const emailSubject = data.emailSubject ?? data.email?.subject ?? `${property.address.split(",")[0]}, worth a look, ${fname}`
+          const emailBody: string[] = data.emailBody ?? data.email?.body ?? []
+          storeResult(sms, emailSubject, emailBody)
+        })
+        .catch(useFallbackOutreach)
     }
-
-    // Race API call against 10s timeout — cached outreach activates if LLM is slow
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("generation timeout")), 10000)
-    )
-
-    Promise.race([
-      fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }),
-      timeoutPromise,
-    ])
-      .then(res => (res as Response).json())
-      .then(data => {
-        const sms = data.sms ?? ""
-        const emailSubject = data.emailSubject ?? data.email?.subject ?? `${property.address.split(",")[0]} — worth a look, ${fname}`
-        const emailBody: string[] = data.emailBody ?? data.email?.body ?? []
-        storeResult(sms, emailSubject, emailBody)
-      })
-      .catch(useFallbackOutreach)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── QA step player ────────────────────────────────────────────────────────────

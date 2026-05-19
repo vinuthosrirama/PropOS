@@ -85,6 +85,8 @@ export const KEYWORD_MAP: Record<string, string[]> = {
   batteryStorage:             ["battery", "powerwall", "energy storage"],
   grannyFlatApproved:         ["granny flat", "secondary dwelling", "unit", "adu"],
   bodyCorporateFees:          ["body corporate", "strata", "owners corp", "fees"],
+  vacancyRate:                ["vacancy", "vacant", "vacancy rate", "tenant demand"],
+  comparableSales:            ["comparable", "comps", "comparable sales", "recent sales", "sold nearby", "similar sales", "90 days"],
 }
 
 // ---------------------------------------------------------------------------
@@ -567,8 +569,8 @@ export function matchQuestionToSLM(
   }
   if (bestOverlapQA && bestOverlap > 0) return bestOverlapQA
 
-  // Pass 3 — first unshown (original fallback)
-  return candidates[0]
+  // Pass 3 — no good match found; return null rather than an irrelevant answer
+  return null
 }
 
 // ---------------------------------------------------------------------------
