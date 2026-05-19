@@ -1907,6 +1907,18 @@ export const SLM_DATA: Record<number, PropertySLM> = {
         keywords: ["pool", "swimming", "spa", "potential", "add", "rear"],
       },
       {
+        question: "What is the vacancy rate in the suburb?",
+        answer: "Berwick vacancy is running below 1.5%, well under the Melbourne metro average. Strong tenant demand driven by school catchments, train access, and family-friendly amenity.",
+        category: "financial",
+        keywords: ["vacancy", "vacant", "tenant", "demand", "rental", "market", "suburb"],
+      },
+      {
+        question: "What are the comparable sales in the last 90 days?",
+        answer: "3 sales in Grand Arch Way and surrounding courts in the last 90 days, ranging $940K to $1.27M. Average 28 days on market. The most recent was 8 Grand Arch Way at $1.21M in February 2026.",
+        category: "financial",
+        keywords: ["comparable", "comps", "sales", "sold", "recent", "90 days", "similar", "comparables"],
+      },
+      {
         question: "Is there subdivision potential?",
         answer: "No. The Grand Arch estate covenant restricts single dwelling only.",
         category: "planning",

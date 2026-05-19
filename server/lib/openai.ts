@@ -2,7 +2,12 @@ import OpenAI from "openai"
 import fs from "fs"
 import { sanitiseResult } from "./sanitise.js"
 
-export const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+// Lazy init — only creates the client when actually called (avoids crash when key is empty)
+let _openai: OpenAI | null = null
+function getOpenAI(): OpenAI {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "not-set" })
+  return _openai
+}
 
 export interface GenerateParams {
   agentName: string
@@ -75,7 +80,7 @@ Write the message now. Use the specific details above — never use generic phra
 Respond ONLY with valid JSON, no markdown:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2"]}}`
 
-  const completion = await openai.chat.completions.create({
+  const completion = await getOpenAI().chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: system },
@@ -99,7 +104,7 @@ Respond ONLY with valid JSON, no markdown:
 
 /** Transcribe an audio file via OpenAI Whisper */
 export async function transcribeAudio(filePath: string): Promise<string> {
-  const transcription = await openai.audio.transcriptions.create({
+  const transcription = await getOpenAI().audio.transcriptions.create({
     file: fs.createReadStream(filePath),
     model: "whisper-1",
     language: "en",

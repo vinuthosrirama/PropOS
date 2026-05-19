@@ -1,4 +1,11 @@
-import "dotenv/config"
+import path from "path"
+import { fileURLToPath } from "url"
+import dotenv from "dotenv"
+
+// Load .env from server/ directory regardless of cwd
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: path.resolve(__dirname, ".env") })
+
 import express from "express"
 import cors from "cors"
 import generateRouter from "./routes/generate.js"
@@ -19,7 +26,7 @@ import { loadConversations } from "./lib/conversations.js"
 const app = express()
 const PORT = process.env.PORT ?? 3001
 
-app.use(cors({ origin: ["http://localhost:3003", "http://localhost:5173", "https://propos.addvantage.site", process.env.BASE_URL].filter(Boolean) as string[] }))
+app.use(cors({ origin: ["http://localhost:3001", "http://localhost:3003", "http://localhost:5173", "https://propos.addvantage.site", process.env.BASE_URL].filter(Boolean) as string[] }))
 app.use(express.json())
 // Twilio webhook sends URL-encoded body
 app.use("/api/webhook/sms", express.urlencoded({ extended: false }))
@@ -36,6 +43,10 @@ app.use("/api/boxdice",       boxdiceRouter)
 app.use("/api/conversations", conversationsRouter)
 app.use("/api/reply-agent",  replyAgentRouter)
 
+// Serve Vite production build from /dist so port 3001 serves both API + frontend
+const distPath = path.resolve(__dirname, "..", "dist")
+app.use(express.static(distPath))
+
 app.get("/api/health", (_req, res) => {
   const testPhone = process.env.TEST_RECIPIENT_PHONE?.trim() || null
   const testEmail = process.env.TEST_RECIPIENT_EMAIL?.trim() || null
@@ -51,6 +62,11 @@ app.get("/api/health", (_req, res) => {
     testPhone,
     testEmail,
   })
+})
+
+// SPA catch-all — serve index.html for non-API routes (must be last)
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(distPath, "index.html"))
 })
 
 app.listen(PORT, async () => {

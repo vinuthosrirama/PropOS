@@ -35,7 +35,7 @@ const CACHE: Record<string, CachedOutreach> = {
       "17 Grand Arch Way, Berwick  - 4-bed, 2-bath on 680sqm. Rental appraisal is $540 to $600 per week, putting gross yield at around 4.9 to 5.4% at the price guide of $1.10M to $1.25M. Very similar land and configuration to 3 Thirlmere Court, which you attended in May.",
       "The school zone catchment keeps demand steady from family tenants  - Berwick runs sub-1.5% vacancy consistently. I can put together a comparable sales summary if that helps your numbers.",
       "Open home is Saturday 17 May at 11am. Happy to walk you through separately beforehand if you'd prefer a quiet look.",
-      "Cameron",
+      "Kind regards,\nCameron",
     ],
   },
 
@@ -48,7 +48,7 @@ const CACHE: Record<string, CachedOutreach> = {
       "17 Grand Arch Way has just listed  - 4-bed, 2-bath on 680sqm in Berwick, price guide $1.10M to $1.25M. You asked about comparable sales at the open home, so here's the last 90 days: 3 sales in the street and surrounding courts ranging $940K to $1.27M, average 28 days on market.",
       "Rental appraisal for this type of property sits at $540 to $600 per week. Berwick vacancy is running below 1.5%.",
       "Open home is Saturday 17 May at 11am. Happy to run through the full numbers if you want to come through early.",
-      "Cameron",
+      "Kind regards,\nCameron",
     ],
   },
 
@@ -74,7 +74,7 @@ const CACHE: Record<string, CachedOutreach> = {
       "When you came through 3 Thirlmere Court you mentioned the court position and proximity to the maternal health centre. 17 Grand Arch Way ticks both  - it's in a quiet court and the Berwick Maternal and Child Health Centre is about 1.8km away.",
       "It's a 4-bedroom on 680sqm with a good-sized second bedroom that works well as a nursery. Price guide is $1.10M to $1.25M. Open home is Saturday 17 May at 11am.",
       "Happy to send through the floor plan if you'd like to see the layout before Saturday.",
-      "Cameron",
+      "Cheers,\nCameron",
     ],
   },
 
@@ -100,7 +100,7 @@ const CACHE: Record<string, CachedOutreach> = {
       "12 Broadway Street is a 4-bedroom on 601sqm with a lower entry point  - guide $820K to $920K. Rental appraisal is $480 to $520 per week, and it's walking distance to Berwick station which keeps tenant demand strong.",
       "The yield profile is similar to what you'd expect from a comparable street-position property. Good option if you want exposure at a lower price point.",
       "Open home is Saturday 17 May at 12:30pm. Happy to run the numbers on both and compare.",
-      "Cameron",
+      "Kind regards,\nCameron",
     ],
   },
 }
