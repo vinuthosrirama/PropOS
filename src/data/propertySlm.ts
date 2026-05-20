@@ -2509,12 +2509,99 @@ export function getSLMCompleteness(slm: PropertySLM): { filled: number; total: n
 }
 
 // ---------------------------------------------------------------------------
-// localStorage persistence
+// localStorage persistence + Sheet-backed runtime cache
 // ---------------------------------------------------------------------------
 
 const SLM_KEY_PREFIX = "propOS_slm_v2_"
 
+// Runtime cache populated by preloadSLMsFromSheet() — Sheet data takes priority
+const sheetSLMCache: Record<number, PropertySLM> = {}
+let sheetPreloadDone = false
+
+/**
+ * Map a raw Sheet row (flat key-value) into a PropertySLM.
+ * Sheet Q&A columns: qa_1_question, qa_1_answer, ... qa_25_question, qa_25_answer
+ */
+function mapSheetRowToSLM(raw: Record<string, unknown>, propertyId: number): PropertySLM {
+  const fallback = SLM_DATA[propertyId]
+  if (!fallback) return raw as unknown as PropertySLM // unknown property, pass through
+
+  // Start from hardcoded as base, overlay any non-empty Sheet values
+  const merged: any = { ...fallback }
+  for (const [k, v] of Object.entries(raw)) {
+    if (k.startsWith("qa_")) continue // handle Q&A separately
+    if (v === null || v === undefined || v === "") continue
+    if (k in merged) {
+      // Coerce types to match PropertySLM
+      const existing = merged[k]
+      if (typeof existing === "number" && typeof v === "string") {
+        const n = Number(v)
+        if (!isNaN(n)) { merged[k] = n; continue }
+      }
+      if (typeof existing === "boolean" && typeof v === "string") {
+        merged[k] = v === "true" || v === "TRUE" || v === "1"
+        continue
+      }
+      merged[k] = v
+    }
+  }
+
+  // Build Q&A array from qa_N_question / qa_N_answer columns
+  const qaFromSheet: PropertyQA[] = []
+  for (let i = 1; i <= 25; i++) {
+    const q = String(raw[`qa_${i}_question`] ?? "").trim()
+    const a = String(raw[`qa_${i}_answer`] ?? "").trim()
+    if (q && a) {
+      // Try to find matching category/keywords from hardcoded Q&A
+      const match = fallback.qa.find(qa => qa.question.toLowerCase() === q.toLowerCase())
+      qaFromSheet.push({
+        question: q,
+        answer: a,
+        category: match?.category ?? "physical",
+        keywords: match?.keywords ?? q.toLowerCase().split(/\s+/).filter(w => w.length > 2),
+      })
+    }
+  }
+  if (qaFromSheet.length > 0) {
+    merged.qa = qaFromSheet
+  }
+
+  return merged as PropertySLM
+}
+
+/**
+ * Preload SLMs from Google Sheets for all known property IDs.
+ * Called once at app startup. Populates sheetSLMCache.
+ * Priority: Sheet → localStorage → hardcoded.
+ */
+export async function preloadSLMsFromSheet(propertyIds: number[]): Promise<void> {
+  const { readPropertySLMFromSheet, sheetsConnected } = await import("../lib/sheet")
+  if (!sheetsConnected()) { sheetPreloadDone = true; return }
+
+  await Promise.allSettled(
+    propertyIds.map(async (id) => {
+      const raw = await readPropertySLMFromSheet(id)
+      if (raw) sheetSLMCache[id] = mapSheetRowToSLM(raw, id)
+    })
+  )
+  sheetPreloadDone = true
+  console.log(`[SLM] Preloaded ${Object.keys(sheetSLMCache).length}/${propertyIds.length} from Sheets`)
+}
+
+/** Check if Sheet SLM preload is complete */
+export function isSLMPreloadDone(): boolean { return sheetPreloadDone }
+
+/**
+ * Load SLM for a property. Priority:
+ *   1. Sheet runtime cache (populated by preloadSLMsFromSheet)
+ *   2. localStorage (user edits from SettingsView)
+ *   3. Hardcoded SLM_DATA (offline fallback)
+ */
 export function loadSLMForProperty(propertyId: number): PropertySLM {
+  // 1. Sheet cache (dynamic, live data)
+  if (sheetSLMCache[propertyId]) return sheetSLMCache[propertyId]
+
+  // 2. localStorage (user-edited via Settings)
   try {
     const raw = localStorage.getItem(`${SLM_KEY_PREFIX}${propertyId}`)
     if (raw) {
@@ -2523,15 +2610,20 @@ export function loadSLMForProperty(propertyId: number): PropertySLM {
   } catch {
     // fall through to default
   }
+
+  // 3. Hardcoded fallback
   return SLM_DATA[propertyId]
 }
 
 export function saveSLMForProperty(slm: PropertySLM): void {
+  // Save to localStorage AND update the runtime cache
   try {
     localStorage.setItem(`${SLM_KEY_PREFIX}${slm.propertyId}`, JSON.stringify(slm))
   } catch {
     // storage may be unavailable in SSR or private browsing — silently ignore
   }
+  // Also update Sheet cache so the save is reflected immediately
+  sheetSLMCache[slm.propertyId] = slm
 }
 
 export function resetSLMForProperty(propertyId: number): PropertySLM {
@@ -2540,5 +2632,7 @@ export function resetSLMForProperty(propertyId: number): PropertySLM {
   } catch {
     // ignore
   }
+  // Clear Sheet cache for this property so it falls back to hardcoded
+  delete sheetSLMCache[propertyId]
   return SLM_DATA[propertyId]
 }

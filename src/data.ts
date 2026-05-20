@@ -201,6 +201,20 @@ export interface PortfolioProperty {
   leadCount:   number          // expected attendees / known leads
 }
 
+// ── Agent gating — Cam Knoll / Peake gets the real demo data ──────────────────
+
+export function isCamKnoll(agent: AgentProfile): boolean {
+  const name = agent.name.toLowerCase().trim()
+  const agency = agent.agency.toLowerCase().trim()
+  return (name.startsWith("cam") && name.includes("knoll")) && agency.includes("peake")
+}
+
+export function getPortfolioForAgent(agent: AgentProfile): { sold: PortfolioProperty[]; active: PortfolioProperty[] } {
+  if (isCamKnoll(agent)) return { sold: PORTFOLIO_SOLD, active: PORTFOLIO_ACTIVE }
+  // Other agents see empty portfolio — they'll set up their own listings via Sheets
+  return { sold: [], active: [] }
+}
+
 // Sold comparable properties — leads come exclusively from Google Sheets (Leads tab, inspectedProperty column)
 export const PORTFOLIO_SOLD: PortfolioProperty[] = [
   {
