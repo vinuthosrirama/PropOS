@@ -56,6 +56,7 @@ export const AGENCY_THEMES: Record<string, AgencyTheme> = {
   "First National Real Estate":{ name: "First National Real Estate",primary:"#005CA9",            dim: "rgba(0,92,169,0.12)",       glow: "rgba(0,92,169,0.07)",       logo: "FN", gradient: ["#0078D4", "#005CA9"]                       },
   "Kay & Burton":             { name: "Kay & Burton",             primary: "#B0A090",             dim: "rgba(176,160,144,0.12)",    glow: "rgba(176,160,144,0.07)",    logo: "KB", gradient: ["#C0B0A0", "#786050"]                       },
   "Biggin & Scott":           { name: "Biggin & Scott",           primary: "#4C78CC",             dim: "rgba(76,120,204,0.12)",     glow: "rgba(76,120,204,0.07)",     logo: "BS", gradient: ["#6492E0", "#4C78CC"]                       },
+  "Area Specialist":          { name: "Area Specialist",          primary: "#d4d4d4",              dim: "rgba(212,212,212,0.08)",    glow: "rgba(212,212,212,0.04)",    logo: "AS", gradient: ["#484848", "#111111"]                       },
   "Other":                    { name: "Other",                    primary: "rgb(166,218,255)",    dim: "rgba(166,218,255,0.12)",    glow: "rgba(166,218,255,0.06)",    logo: "AV", gradient: ["rgb(166,218,255)", "rgb(100,208,144)"]      },
 }
 
@@ -156,6 +157,28 @@ export interface VoiceProfile {
   detectedTraits: string[]
 }
 
+export const PAS_DEFAULT_AGENT: AgentProfile = {
+  name:    "Pas Sunilchandra",
+  agency:  "Area Specialist",
+  email:   "pas.sunilchandra@areaspecialist.com.au",
+  phone:   "0400 000 000",
+  suburb:  "Berwick",
+  tagline: "SE Melbourne specialist. Results driven.",
+  voiceProfile: {
+    greeting:       "Hi",
+    closing:        "Cheers",
+    lengthStyle:    "short",
+    formalityScore: 2,
+    aussieIndex:    2,
+    specificity:    3,
+    emojiUsage:     "none",
+    examplesCount:  0,
+    confidence:     50,
+    detectedTraits: ["professional", "concise", "data-focused"],
+  },
+  trainingCorpus: [],
+}
+
 export const DEFAULT_AGENT: AgentProfile = {
   name:    "Cameron Knoll",
   agency:  "Peake",
@@ -201,7 +224,7 @@ export interface PortfolioProperty {
   leadCount:   number          // expected attendees / known leads
 }
 
-// ── Agent gating — Cam Knoll / Peake gets the real demo data ──────────────────
+// ── Agent gating ──────────────────────────────────────────────────────────────
 
 export function isCamKnoll(agent: AgentProfile): boolean {
   const name = agent.name.toLowerCase().trim()
@@ -209,9 +232,16 @@ export function isCamKnoll(agent: AgentProfile): boolean {
   return (name.startsWith("cam") && name.includes("knoll")) && agency.includes("peake")
 }
 
+export function isPasSunilchandra(agent: AgentProfile): boolean {
+  const name = agent.name.toLowerCase().trim()
+  const agency = agent.agency.toLowerCase().trim()
+  return (name.startsWith("pas") && name.includes("sunilchandra")) && agency.includes("area specialist")
+}
+
 export function getPortfolioForAgent(agent: AgentProfile): { sold: PortfolioProperty[]; active: PortfolioProperty[] } {
   if (isCamKnoll(agent)) return { sold: PORTFOLIO_SOLD, active: PORTFOLIO_ACTIVE }
-  // Other agents see empty portfolio — they'll set up their own listings via Sheets
+  if (isPasSunilchandra(agent)) return { sold: PAS_PORTFOLIO_SOLD, active: PAS_PORTFOLIO_ACTIVE }
+  // Other agents see empty portfolio
   return { sold: [], active: [] }
 }
 
@@ -266,6 +296,80 @@ export const PORTFOLIO_SOLD: PortfolioProperty[] = [
     image: "https://rimh2.domainstatic.com.au/vQZsuF67_udtR6syb8UOXkIBsD0=/660x440/filters:format(jpeg):quality(80)/2020596427_3_1_260211_032609-w2048-h1365",
     description: "Kingsmere Estate 4-bed family home. Ducted heating, reverse cycle cooling, decked pergola, double garage on 621sqm.",
     leadCount: 14,
+  },
+]
+
+// ── Pas Sunilchandra / Area Specialist — SE Melbourne portfolio ───────────────
+
+export const PAS_PORTFOLIO_SOLD: PortfolioProperty[] = [
+  {
+    id: 301,
+    address: "58 Broadway Street",
+    suburb: "Berwick", state: "VIC", postcode: "3806",
+    price: 932000, beds: 4, baths: 2, cars: 2, land: 612,
+    type: "House", status: "sold", soldDate: "14 May 2026",
+    image: "/58-broadway-street.jpg",
+    description: "Brand new 2025 Metricon build in established Berwick. 4-bed family home with double garage. Berwick Chase Primary catchment, close to Berwick Station.",
+    leadCount: 16,
+  },
+  {
+    id: 302,
+    address: "32 Seattle Crescent",
+    suburb: "Cranbourne North", state: "VIC", postcode: "3977",
+    price: 797000, beds: 4, baths: 2, cars: 2, land: 476,
+    type: "House", status: "sold", soldDate: "28 Apr 2026",
+    image: "/32-seattle-crescent.jpg",
+    description: "Modern 4-bed in Cranbourne North estate. Open plan living, stone benchtops, ducted reverse-cycle, double garage on 476sqm.",
+    leadCount: 14,
+  },
+  {
+    id: 303,
+    address: "20 Elwick Drive",
+    suburb: "Clyde North", state: "VIC", postcode: "3978",
+    price: 670000, beds: 3, baths: 2, cars: 1, land: 289,
+    type: "House", status: "sold", soldDate: "04 Feb 2026",
+    image: "/20-elwick-drive.jpg",
+    description: "Neat 3-bed home in Clyde North. Modern kitchen, split-system cooling, low-maintenance 289sqm block. Ideal entry-level or investment.",
+    leadCount: 12,
+  },
+]
+
+export const PAS_PORTFOLIO_ACTIVE: PortfolioProperty[] = [
+  {
+    id: 401,
+    address: "51 Hedgeville Drive",
+    suburb: "Officer", state: "VIC", postcode: "3809",
+    price: 905000, priceMin: 850000, priceMax: 960000,
+    beds: 4, baths: 2, cars: 2, land: 391,
+    type: "House", status: "active",
+    openDate: "Saturday 24 May 2026, 11:00am",
+    image: "/51-hedgeville-drive.jpg",
+    description: "Custom 46+ square two-storey home in Officer. Grand entry, theatre room, study, stone kitchen with butler's pantry, freestanding bath in ensuite. 6-star energy rating. Officer Secondary College zone.",
+    leadCount: 0,
+  },
+  {
+    id: 402,
+    address: "8/59-61 Belgrave Hallam Road",
+    suburb: "Hallam", state: "VIC", postcode: "3803",
+    price: 510000, priceMin: 490000, priceMax: 540000,
+    beds: 2, baths: 1, cars: 1, land: 162,
+    type: "Unit", status: "active",
+    openDate: "Saturday 24 May 2026, 1:30pm",
+    image: "/8-belgrave-hallam-road.jpg",
+    description: "2-bed townhouse in a boutique 2018 complex on Belgrave Hallam Road. Open plan living, private courtyard, single garage. 1.1km to Hallam Station. Excellent entry-level or investment.",
+    leadCount: 0,
+  },
+  {
+    id: 403,
+    address: "12 Swallowtail Avenue",
+    suburb: "Clyde North", state: "VIC", postcode: "3978",
+    price: 815000, priceMin: 780000, priceMax: 850000,
+    beds: 4, baths: 2, cars: 2, land: 380,
+    type: "House", status: "active",
+    openDate: "Sunday 25 May 2026, 11:00am",
+    image: "/12-swallowtail-avenue.jpg",
+    description: "Contemporary 4-bed family home in Clyde North's Berwick Waters estate (2018 build). Butler's pantry, ducted reverse-cycle, alfresco, double garage. Wilandra Rise Primary zone.",
+    leadCount: 0,
   },
 ]
 

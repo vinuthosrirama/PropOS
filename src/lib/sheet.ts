@@ -189,11 +189,21 @@ export interface SheetLead {
 
 // Fallback questions for known demo leads — used when Sheet data is corrupted
 const DEMO_FALLBACK_QUESTIONS: Record<string, string[]> = {
+  // Cameron Knoll / Peake
   "james whitfield":  ["School zone?", "Backyard dimensions?", "Renovation history?"],
   "claire thompson":  ["Primary school catchment?", "Second bedroom size?", "Walk to train?"],
   "michael tran":     ["Rental yield?", "Vacancy rate in suburb?", "Comparable sales last 90 days?"],
   "kevin liu":        ["Rental appraisal?", "Gross yield at asking price?", "Body corporate fees?"],
   "simone dubois":    ["Maternal health centre nearby?", "Nursery room size?", "Quiet street?"],
+  // Pas Sunilchandra / Area Specialist
+  "liam o'brien":     ["School zone?", "Backyard size?", "How far to Berwick train station?"],
+  "raj patel":        ["Rental yield?", "Vacancy rate in Berwick?", "Comparable sales last 90 days?"],
+  "sophie nguyen":    ["School zone?", "NBN type?", "Ducted air conditioning?"],
+  "david kim":        ["Rental yield?", "Vacancy rate in suburb?", "Body corporate fees?"],
+  "priya sharma":     ["Primary school catchment?", "Quiet street?", "Parks nearby?"],
+  "jake thompson":    ["First home buyer stamp duty?", "Comparable sales nearby?", "Solar system size?"],
+  "marcus chen":      ["Rental yield?", "Comparable sales last 90 days?", "Vacancy rate in Clyde North?"],
+  "anika johansson":  ["First home buyer grant?", "School zone?", "Future infrastructure nearby?"],
 }
 
 // ── Lead row mapper (shared) ──────────────────────────────────────────────────
