@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { C, FONT, PORTFOLIO_ACTIVE, PORTFOLIO_SOLD, type AgentProfile } from "../data"
+import { C, FONT, PORTFOLIO_ACTIVE, PORTFOLIO_SOLD, getAgencyTheme, type AgentProfile } from "../data"
 import {
   loadSLMForProperty, saveSLMForProperty, resetSLMForProperty,
   getSLMCompleteness, type PropertySLM, type PropertyQA
@@ -787,7 +787,7 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
           ))}
         </div>
 
-        {settingsTab === "analytics" && <AnalyticsDashboard />}
+        {settingsTab === "analytics" && <AnalyticsDashboard agent={agent} theme={getAgencyTheme(agent.agency)} />}
 
         {settingsTab === "voice" && (
           <VoiceStylePanel

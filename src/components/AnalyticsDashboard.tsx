@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
-import { C, FONT } from "../data"
+import { C, FONT, type AgentProfile, type AgencyTheme } from "../data"
+import VendorPitchSlide from "./VendorPitchSlide"
 
 // ── GCI Impact Calculator ─────────────────────────────────────────────────────
 
@@ -140,10 +141,11 @@ function FunnelBar({ steps }: { steps: FunnelStep[] }) {
   )
 }
 
-export default function AnalyticsDashboard() {
+export default function AnalyticsDashboard({ agent, theme }: { agent?: AgentProfile; theme?: AgencyTheme }) {
   const [data, setData]       = useState<AnalyticsSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState("")
+  const [showVendorSlide, setShowVendorSlide] = useState(false)
 
   useEffect(() => {
     fetch("/api/analytics")
@@ -187,6 +189,33 @@ export default function AnalyticsDashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28, fontFamily: FONT }}>
+      {/* Header with Vendor Slide button */}
+      {agent && theme && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            onClick={() => setShowVendorSlide(true)}
+            style={{
+              padding: "9px 18px", borderRadius: 10, border: "none", cursor: "pointer",
+              background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+              color: "white", fontSize: 12, fontWeight: 700, fontFamily: FONT,
+              boxShadow: `0 4px 16px ${theme.glow}`,
+            }}
+          >
+            Generate Vendor Slide →
+          </button>
+        </div>
+      )}
+
+      {/* Vendor pitch slide modal */}
+      {showVendorSlide && agent && theme && data && (
+        <VendorPitchSlide
+          data={data}
+          agent={agent}
+          theme={theme}
+          onClose={() => setShowVendorSlide(false)}
+        />
+      )}
+
       {/* KPI row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
         {kpiCard("Auctions tracked",    String(data.totalAuctions),           "with PropOS outreach",              C.text)}

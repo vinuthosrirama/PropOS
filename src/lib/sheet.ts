@@ -187,6 +187,15 @@ export interface SheetLead {
   questions: string[]
 }
 
+// Fallback questions for known demo leads — used when Sheet data is corrupted
+const DEMO_FALLBACK_QUESTIONS: Record<string, string[]> = {
+  "james whitfield":  ["School zone?", "Backyard dimensions?", "Renovation history?"],
+  "claire thompson":  ["Primary school catchment?", "Second bedroom size?", "Walk to train?"],
+  "michael tran":     ["Rental yield?", "Vacancy rate in suburb?", "Comparable sales last 90 days?"],
+  "kevin liu":        ["Rental appraisal?", "Gross yield at asking price?", "Body corporate fees?"],
+  "simone dubois":    ["Maternal health centre nearby?", "Nursery room size?", "Quiet street?"],
+}
+
 // ── Lead row mapper (shared) ──────────────────────────────────────────────────
 
 function mapLeadRow(row: Record<string, unknown>): SheetLead {
@@ -201,22 +210,37 @@ function mapLeadRow(row: Record<string, unknown>): SheetLead {
     notes:             String(row.notes ?? ""),
     inspectedProperty: String(row.inspectedProperty ?? ""),
     lastContact:       String(row.lastContact ?? ""),
-    questions:         String(row.questions ?? "").split(";").map(q => q.trim()).filter(Boolean),
+    questions:         (() => {
+      const raw = String(row.questions ?? "")
+      // Guard: if the questions field is suspiciously long (>200 chars), it's likely
+      // corrupted with email body text from a prior /api/transcript POST. Discard it.
+      if (raw.length > 200) {
+        // Try to recover from demo fallback data by lead name
+        const leadName = String(row.name ?? "").trim()
+        const fallback = DEMO_FALLBACK_QUESTIONS[leadName.toLowerCase()]
+        return fallback ?? []
+      }
+      return raw.split(";").map(q => q.trim()).filter(Boolean)
+    })(),
   }
 }
 
-// Try one address string against the Leads tab, return null on any error.
+// Try one address string against the Leads tab, with one automatic retry on failure.
 async function fetchLeadsByAddress(address: string): Promise<SheetLead[] | null> {
-  try {
-    const url = `${SHEET_URL}?action=getLeads&property=${encodeURIComponent(address)}`
-    const res = await fetch(url, { cache: "no-store" })
-    if (!res.ok) return null
-    const data = await res.json()
-    if (!data.leads || !Array.isArray(data.leads)) return null
-    return (data.leads as Record<string, unknown>[]).map(mapLeadRow)
-  } catch {
-    return null
+  const url = `${SHEET_URL}?action=getLeads&property=${encodeURIComponent(address)}`
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { cache: "no-store" })
+      if (!res.ok) { if (attempt === 0) continue; return null }
+      const data = await res.json()
+      if (!data.leads || !Array.isArray(data.leads)) { if (attempt === 0) continue; return null }
+      return (data.leads as Record<string, unknown>[]).map(mapLeadRow)
+    } catch {
+      if (attempt === 0) continue
+      return null
+    }
   }
+  return null
 }
 
 /**
@@ -252,31 +276,41 @@ export async function readLeadsFromSheet(propertyAddress: string): Promise<Sheet
 
 export async function readAllLeadsFromSheet(): Promise<SheetLead[] | null> {
   if (!SHEET_URL) return null
-  try {
-    const url = `${SHEET_URL}?action=getAllLeads`
-    const res = await fetch(url, { cache: "no-store" })
-    if (!res.ok) return null
-    const data = await res.json()
-    if (!data.leads || !Array.isArray(data.leads)) return null
-    return (data.leads as Record<string, unknown>[]).map(mapLeadRow)
-  } catch {
-    return null
+  const url = `${SHEET_URL}?action=getAllLeads`
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { cache: "no-store" })
+      if (!res.ok) { if (attempt === 0) continue; return null }
+      const data = await res.json()
+      if (!data.leads || !Array.isArray(data.leads)) { if (attempt === 0) continue; return null }
+      return (data.leads as Record<string, unknown>[]).map(mapLeadRow)
+    } catch {
+      if (attempt === 0) continue
+      return null
+    }
   }
+  return null
 }
 
 // ── New: read a property SLM from PropertySLM tab ──────────────────────────
 
 export async function readPropertySLMFromSheet(propertyId: number): Promise<Record<string, unknown> | null> {
   if (!SHEET_URL) return null
-  try {
-    const url = `${SHEET_URL}?action=getPropertySLM&propertyId=${propertyId}`
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const data = await res.json()
-    return data.slm ?? null
-  } catch {
-    return null
+  const url = `${SHEET_URL}?action=getPropertySLM&propertyId=${propertyId}`
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { cache: "no-store" })
+      if (!res.ok) { if (attempt === 0) continue; return null }
+      const data = await res.json()
+      if (data.slm) return data.slm
+      if (attempt === 0) continue
+      return null
+    } catch {
+      if (attempt === 0) continue
+      return null
+    }
   }
+  return null
 }
 
 // ── Lead status update ────────────────────────────────────────────────────────

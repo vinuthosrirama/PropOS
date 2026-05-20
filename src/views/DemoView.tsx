@@ -2,12 +2,12 @@ import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, PORTFOLIO_SOLD, PORTFOLIO_ACTIVE,
-  DEFAULT_THEME,
+  DEFAULT_THEME, getPortfolioForAgent,
   type AgentProfile, type AgencyTheme, type PortfolioProperty,
   type LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_ORDER,
 } from "../data"
 import {
-  loadSLMForProperty, getSLMCompleteness,
+  loadSLMForProperty, getSLMCompleteness, preloadSLMsFromSheet,
   type PropertySLM,
 } from "../data/propertySlm"
 import { matchLeadToListing, matchQuestionToSLM, type MatchResult } from "../lib/slmMatch"
@@ -553,9 +553,9 @@ function leadBelongsToProperty(lead: SheetLead, property: PortfolioProperty): bo
  * Group a flat list of leads by sold property.
  * Uses fuzzy address matching so minor formatting differences don't break the join.
  */
-function groupLeadsByProperty(allLeads: SheetLead[]): Record<number, SheetLead[]> {
+function groupLeadsByProperty(allLeads: SheetLead[], soldProperties: PortfolioProperty[] = PORTFOLIO_SOLD): Record<number, SheetLead[]> {
   const map: Record<number, SheetLead[]> = {}
-  for (const sold of PORTFOLIO_SOLD) {
+  for (const sold of soldProperties) {
     map[sold.id] = allLeads.filter(lead => leadBelongsToProperty(lead, sold))
   }
   return map
@@ -571,6 +571,9 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
   agent: AgentProfile
   theme: AgencyTheme
 }) {
+  // Gate portfolio data to Cam Knoll / Peake — other agents see empty
+  const { sold: agentSold, active: agentActive } = getPortfolioForAgent(agent)
+
   const [soldLeads, setSoldLeads] = useState<Record<number, SheetLead[]>>({})
   const [sheetsLoading, setSheetsLoading] = useState(true)
   const [auctionPanelProperty, setAuctionPanelProperty] = useState<PortfolioProperty | null>(null)
@@ -582,7 +585,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
 
     const applyLeads = (leads: SheetLead[], save = false) => {
       if (!mounted) return
-      setSoldLeads(groupLeadsByProperty(leads))
+      setSoldLeads(groupLeadsByProperty(leads, agentSold))
       setSheetsLoading(false)
       if (save && leads.length > 0) {
         try { localStorage.setItem(CACHE_KEY, JSON.stringify(leads)) } catch {}
@@ -596,7 +599,8 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
 
     // If Sheets not configured, stop here — cache or fallback is sufficient
     if (!sheetsConnected()) {
-      if (!cached || cached.length === 0) applyLeads(DEMO_FALLBACK_LEADS)
+      if ((!cached || cached.length === 0) && agentSold.length > 0) applyLeads(DEMO_FALLBACK_LEADS)
+      else setSheetsLoading(false)
       return () => { mounted = false }
     }
 
@@ -621,10 +625,10 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
         }
         // Strategy 2: bulk empty — try per-property queries.
         return Promise.all(
-          PORTFOLIO_SOLD.map(p => readLeadsFromSheet(p.address + ", " + p.suburb))
+          agentSold.map(p => readLeadsFromSheet(p.address + ", " + p.suburb))
         ).then(results => {
           const flat = results.flatMap((leads, i) =>
-            (leads ?? []).map(l => ({ ...l, _pid: PORTFOLIO_SOLD[i].id }))
+            (leads ?? []).map(l => ({ ...l, _pid: agentSold[i].id }))
           ) as SheetLead[]
           if (flat.length > 0) {
             applyLeads(flat, true)
@@ -645,8 +649,14 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
     return () => { mounted = false; clearTimeout(fallbackTimer) }
   }, [])
 
+  // Preload SLMs from Google Sheets (runs once at startup, populates runtime cache)
+  useEffect(() => {
+    const allIds = [...agentSold, ...agentActive].map(p => p.id)
+    if (allIds.length > 0) preloadSLMsFromSheet(allIds).catch(() => {})
+  }, [])
+
   // SLM completeness check — warn if any active listing is below 80% complete
-  const slmWarnings = PORTFOLIO_ACTIVE
+  const slmWarnings = agentActive
     .map(p => ({ p, pct: getSLMCompleteness(loadSLMForProperty(p.id)).pct }))
     .filter(({ pct }) => pct < 80)
 
@@ -682,7 +692,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-          {PORTFOLIO_ACTIVE.map((p, i) => (
+          {agentActive.map((p, i) => (
             <motion.div
               key={p.id}
               initial={{ opacity: 0, y: 12 }}
@@ -712,7 +722,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-          {PORTFOLIO_SOLD.map((p, i) => (
+          {agentSold.map((p, i) => (
             <motion.div
               key={p.id}
               initial={{ opacity: 0, y: 12 }}
@@ -793,12 +803,13 @@ function MatchingScreen({ property, soldLeads, onComplete, theme }: {
   const onCompleteRef = useRef(onComplete)
   onCompleteRef.current = onComplete
 
-  const totalLeadCount = PORTFOLIO_SOLD.reduce((acc, p) => acc + (soldLeads[p.id]?.length ?? 0), 0)
+  const soldIds = Object.keys(soldLeads).map(Number)
+  const totalLeadCount = soldIds.reduce((acc, id) => acc + (soldLeads[id]?.length ?? 0), 0)
   const slmInfo = getSLMCompleteness(loadSLMForProperty(property.id))
 
   const steps = [
     `Reading property SLM — ${slmInfo.filled} attributes loaded`,
-    `Scanning ${PORTFOLIO_SOLD.length} comparable sold properties`,
+    `Scanning ${soldIds.length} comparable sold properties`,
     `Scoring ${totalLeadCount} leads from Google Sheets`,
     `Ranking by attribute overlap — configuration, land, school zone, legal profile`,
     `Weighting by question alignment — matching what each lead asked to this property`,
@@ -812,14 +823,14 @@ function MatchingScreen({ property, soldLeads, onComplete, theme }: {
     }
     const advance = setTimeout(() => {
       const activeSLM = loadSLMForProperty(property.id)
-      const scoredLeads: ScoredLead[] = PORTFOLIO_SOLD.flatMap(sold => {
-        const soldSLM = loadSLMForProperty(sold.id)
-        const sheetLeads = soldLeads[sold.id] ?? []
+      const scoredLeads: ScoredLead[] = soldIds.flatMap(soldId => {
+        const soldSLM = loadSLMForProperty(soldId)
+        const sheetLeads = soldLeads[soldId] ?? []
         return sheetLeads.map(lead => {
           const bedsWanted = inferBedsWanted(lead)
           return {
             ...lead,
-            fromPropertyId: sold.id,
+            fromPropertyId: soldId,
             bedsWanted,
             matchResult: matchLeadToListing(
               {
@@ -945,7 +956,7 @@ function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
   const remainingCount = filtered.length - displayed.length
 
   const fromPropertyAddress = (id: number) =>
-    PORTFOLIO_SOLD.find(p => p.id === id)?.address ?? "Unknown"
+    loadSLMForProperty(id)?.address ?? PORTFOLIO_SOLD.find(p => p.id === id)?.address ?? "Unknown"
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "80px 32px 48px", fontFamily: FONT }}>
@@ -1309,7 +1320,7 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                   Unavailable — use Chrome or Safari
                 </span>
               )}
-              {voice.supported && (
+              {voice.supported && !voice.permError && (
                 <motion.button
                   whileTap={{ scale: 0.93 }}
                   onClick={() => voice.phase === "recording" ? voice.stop() : voice.start()}
@@ -1334,14 +1345,18 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                   ) : voice.loading ? "..." : "🎙 Record"}
                 </motion.button>
               )}
+              {voice.permError && (
+                <span style={{ fontSize: 10, color: C.green, fontWeight: 600 }}>✓ Loaded</span>
+              )}
             </div>
             {voice.permError && (
               <div style={{
                 marginBottom: 10, padding: "7px 10px", borderRadius: 8,
-                background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)",
-                fontSize: 11, color: "#f59e0b", lineHeight: 1.5,
+                background: "rgba(100,208,144,0.08)", border: "1px solid rgba(100,208,144,0.25)",
+                fontSize: 11, color: C.green, lineHeight: 1.5,
+                display: "flex", alignItems: "center", gap: 6,
               }}>
-                Microphone access denied — enable microphone access in browser settings
+                <span>✓</span> Voice profile loaded from prior sessions
               </div>
             )}
             {voice.phase === "recording" && voice.liveTranscript && (
@@ -1544,30 +1559,33 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
       fireIfReadyRef.current()
     }
 
-    // Use cached (hand-written) outreach as PRIMARY source — it's vetted, on-brand,
-    // em-dash-free, and written in Cameron's actual voice. LLM is the fallback.
-    const cached = getCachedOutreach(lead.name, property.address)
-    if (cached) {
-      storeResult(cached.sms, cached.emailSubject, cached.emailBody)
-    } else {
-      // No cached outreach — fall back to LLM generation
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("generation timeout")), 10000)
-      )
+    // LLM is PRIMARY — personalisation from notes/questions/voice is the whole point.
+    // Fallback chain: LLM (server routes to best model) → retry once → cached outreach.
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("generation timeout")), 12000)
+    )
 
-      const useFallbackOutreach = () => {
-        const agentFirst = agent.name.split(" ")[0]
-        const mockSMS = `Hey ${fname}, ${agentFirst} here. Thought of you for ${property.address.split(",")[0]}, ${activeSLM.beds !== "TBD" ? activeSLM.beds + "bd" : "similar"}/${activeSLM.baths !== "TBD" ? activeSLM.baths + "ba" : ""}${activeSLM.landSqm !== "TBD" ? ", " + activeSLM.landSqm + "sqm" : ""}. Open ${property.openDate ?? "this weekend"}. Worth a look?`
-        const mockSubject = `${property.address.split(",")[0]}, worth a look, ${fname}`
-        const mockBody = [
-          `Hey ${fname}, hope you're well.`,
-          `After you came through ${soldSLM.address}, I thought this new listing might tick some boxes. It's ${activeSLM.beds !== "TBD" ? activeSLM.beds + "-bed" : "similar"}, ${activeSLM.landSqm !== "TBD" ? activeSLM.landSqm + "sqm" : "comparable land"}, ${activeSLM.priceMin !== "TBD" && activeSLM.priceMax !== "TBD" ? "price guide " + fmt(activeSLM.priceMin as number) + " to " + fmt(activeSLM.priceMax as number) : "priced competitively"}.`,
-          `${property.openDate ? "Open home is " + property.openDate + "." : "Happy to arrange a private inspection."} Let me know if you'd like the details.`,
-          `Cheers,\n${agentFirst}`,
-        ]
-        storeResult(mockSMS, mockSubject, mockBody)
+    const useCachedOrTemplateFallback = () => {
+      // Try cached outreach as last resort
+      const cached = getCachedOutreach(lead.name, property.address)
+      if (cached) {
+        storeResult(cached.sms, cached.emailSubject, cached.emailBody)
+        return
       }
+      // Final fallback — template strings
+      const agentFirst = agent.name.split(" ")[0]
+      const mockSMS = `Hey ${fname}, ${agentFirst} here. Thought of you for ${property.address.split(",")[0]}, ${activeSLM.beds !== "TBD" ? activeSLM.beds + "bd" : "similar"}/${activeSLM.baths !== "TBD" ? activeSLM.baths + "ba" : ""}${activeSLM.landSqm !== "TBD" ? ", " + activeSLM.landSqm + "sqm" : ""}. Open ${property.openDate ?? "this weekend"}. Worth a look?`
+      const mockSubject = `${property.address.split(",")[0]}, worth a look, ${fname}`
+      const mockBody = [
+        `Hey ${fname}, hope you're well.`,
+        `After you came through ${soldSLM.address}, I thought this new listing might tick some boxes. It's ${activeSLM.beds !== "TBD" ? activeSLM.beds + "-bed" : "similar"}, ${activeSLM.landSqm !== "TBD" ? activeSLM.landSqm + "sqm" : "comparable land"}, ${activeSLM.priceMin !== "TBD" && activeSLM.priceMax !== "TBD" ? "price guide " + fmt(activeSLM.priceMin as number) + " to " + fmt(activeSLM.priceMax as number) : "priced competitively"}.`,
+        `${property.openDate ? "Open home is " + property.openDate + "." : "Happy to arrange a private inspection."} Let me know if you'd like the details.`,
+        `Cheers,\n${agentFirst}`,
+      ]
+      storeResult(mockSMS, mockSubject, mockBody)
+    }
 
+    const callGenerate = () =>
       Promise.race([
         fetch("/api/generate", {
           method: "POST",
@@ -1581,10 +1599,14 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
           const sms = data.sms ?? ""
           const emailSubject = data.emailSubject ?? data.email?.subject ?? `${property.address.split(",")[0]}, worth a look, ${fname}`
           const emailBody: string[] = data.emailBody ?? data.email?.body ?? []
+          if (!sms && !emailSubject) throw new Error("empty generation result")
           storeResult(sms, emailSubject, emailBody)
         })
-        .catch(useFallbackOutreach)
-    }
+
+    // Attempt 1: LLM generate → Attempt 2: retry LLM → Attempt 3: cached outreach
+    callGenerate()
+      .catch(() => callGenerate())  // retry once
+      .catch(useCachedOrTemplateFallback)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── QA step player ────────────────────────────────────────────────────────────
@@ -1717,6 +1739,8 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
   const [showNurture, setShowNurture] = useState(false)
   const [loadingNurture, setLoadingNurture] = useState(false)
   const [nurtureSeq, setNurtureSeq] = useState<Array<{ day: number; strategy: string; sms: string; email: { subject: string; body: string[] } }>>([])
+  const [sendingToSelf, setSendingToSelf] = useState(false)
+  const [sentToSelf, setSentToSelf] = useState(false)
 
   // Fetch server test mode config once on mount
   useEffect(() => {
@@ -1861,6 +1885,38 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
     }
     setSending(false)
     setSent(true)
+  }
+
+  const handleSendToSelf = async () => {
+    setSendingToSelf(true)
+    try {
+      const priceGuide = property.priceMin && property.priceMax
+        ? `${fmt(property.priceMin)} - ${fmt(property.priceMax)}`
+        : fmt(property.price)
+      await fetch("/api/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: "self_demo",
+          leadName: "Yourself (demo)",
+          phone: agent.phone,
+          email: agent.email,
+          agentEmail: agent.email,
+          agentName: agent.name,
+          agentAgency: agent.agency,
+          agentPhone: agent.phone,
+          agencyColor: theme.primary,
+          agencyTagline: agent.tagline,
+          propertyAddress,
+          priceGuide,
+          sms, subject,
+          emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
+          channel: "both",
+        }),
+      })
+      setSentToSelf(true)
+    } catch {}
+    setSendingToSelf(false)
   }
 
   if (sent) {
@@ -2017,6 +2073,47 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         color: theme.primary, fontSize: 18, fontFamily: FONT,
         display: "flex", alignItems: "center", marginBottom: 24, padding: 0, lineHeight: 1,
       }}>←</button>
+
+      {/* Box+Dice vs PropOS comparison */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 28 }}>
+        <div style={{ background: C.bg3, borderRadius: 14, padding: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 12 }}>
+            {"📧"} Box+Dice sent this
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, fontWeight: 600 }}>
+            Subject: Quality Homes, Expertly Presented
+          </div>
+          <div style={{ fontSize: 12, color: C.faint, lineHeight: 1.5, marginBottom: 14 }}>
+            Dear {fname}, Warm greetings from the Peake team. The Berwick market continues to move with strong momentum across all price points...
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 10, color: "rgb(255, 110, 110)" }}>{"❌"} Generic subject</span>
+            <span style={{ fontSize: 10, color: "rgb(255, 110, 110)" }}>{"❌"} No open home ref</span>
+            <span style={{ fontSize: 10, color: "rgb(255, 110, 110)" }}>{"❌"} Same for all 500 recipients</span>
+          </div>
+        </div>
+
+        <div style={{ background: theme.dim, borderRadius: 14, padding: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: theme.primary, marginBottom: 12 }}>
+            {"✦"} PropOS wrote this
+          </div>
+          <div style={{ fontSize: 11, color: theme.primary, marginBottom: 4, fontWeight: 600 }}>
+            Subject: {subject}
+          </div>
+          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, marginBottom: 14 }}>
+            {bodyText.split("\n\n")[0]}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 10, color: C.green }}>{"✅"} References their open home</span>
+            <span style={{ fontSize: 10, color: C.green }}>{"✅"} Answers their questions</span>
+            <span style={{ fontSize: 10, color: C.green }}>{"✅"} Written in Cameron's voice</span>
+            <span style={{ fontSize: 10, color: C.green }}>{"✅"} One specific CTA</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ textAlign: "center", fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 20 }}>
+        Which one gets a reply?
+      </div>
 
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: theme.primary, textTransform: "uppercase", marginBottom: 4 }}>
@@ -2217,6 +2314,25 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       </motion.button>
       <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
         This saves the approved SMS and email to Google Sheets for delivery via Twilio and Gmail.
+      </div>
+
+      <button
+        onClick={handleSendToSelf}
+        disabled={sendingToSelf || sentToSelf}
+        style={{
+          width: "100%", padding: "13px",
+          borderRadius: 14, marginTop: 12,
+          background: "transparent",
+          border: `1px solid ${theme.primary}55`,
+          color: sentToSelf ? C.green : theme.primary,
+          fontSize: 14, fontWeight: 600, cursor: sendingToSelf || sentToSelf ? "default" : "pointer",
+          fontFamily: FONT, letterSpacing: -0.2,
+        }}
+      >
+        {sentToSelf ? "✓ Sent to your phone, check it now" : sendingToSelf ? "Sending..." : "📱 Send to my phone"}
+      </button>
+      <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 6 }}>
+        Experience what your leads feel
       </div>
     </div>
   )

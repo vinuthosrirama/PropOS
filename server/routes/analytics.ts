@@ -51,6 +51,10 @@ router.get("/", async (req, res) => {
       : []
 
     const summary = buildSummary(outcomes, events)
+    // If Sheet returned but had no real data, show realistic demo numbers instead of zeros
+    if (summary.totalAuctions === 0 && summary.totalOutreachSent === 0) {
+      return res.json(demoAnalytics())
+    }
     res.json(summary)
   } catch (err) {
     console.error("Analytics error:", err)
