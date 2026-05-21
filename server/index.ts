@@ -43,10 +43,7 @@ app.use("/api/boxdice",       boxdiceRouter)
 app.use("/api/conversations", conversationsRouter)
 app.use("/api/reply-agent",  replyAgentRouter)
 
-// Serve Vite production build from /dist so port 3001 serves both API + frontend
-const distPath = path.resolve(__dirname, "..", "dist")
-app.use(express.static(distPath))
-
+// Health check — must be before express.static so it's never shadowed by the SPA
 app.get("/api/health", (_req, res) => {
   const testPhone = process.env.TEST_RECIPIENT_PHONE?.trim() || null
   const testEmail = process.env.TEST_RECIPIENT_EMAIL?.trim() || null
@@ -63,6 +60,10 @@ app.get("/api/health", (_req, res) => {
     testEmail,
   })
 })
+
+// Serve Vite production build — must come after all API routes
+const distPath = path.resolve(__dirname, "..", "dist")
+app.use(express.static(distPath))
 
 // SPA catch-all — serve index.html for non-API routes (must be last)
 app.get("*", (_req, res) => {
