@@ -81,6 +81,8 @@
  * }
  */
 
+import { apiUrl } from "./api"
+
 const SHEET_URL: string = import.meta.env.VITE_SHEET_URL ?? ""
 
 export function sheetsConnected(): boolean {
@@ -377,7 +379,7 @@ export async function postAuctionOutcome(outcome: import("../data").AuctionOutco
 
 export async function readLeadsFromBoxdice(listingId: number, listingAddress: string): Promise<SheetLead[] | null> {
   try {
-    const res = await fetch(`/api/boxdice/leads?listingId=${listingId}&listingAddress=${encodeURIComponent(listingAddress)}`)
+    const res = await fetch(apiUrl(`/api/boxdice/leads?listingId=${listingId}&listingAddress=${encodeURIComponent(listingAddress)}`))
     if (!res.ok) return null
     const data = await res.json() as { ok?: boolean; leads?: SheetLead[] }
     return data.leads ?? null

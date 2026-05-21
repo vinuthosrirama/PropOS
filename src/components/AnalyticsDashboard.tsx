@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { C, FONT, type AgentProfile, type AgencyTheme } from "../data"
 import VendorPitchSlide from "./VendorPitchSlide"
+import { apiUrl } from "../lib/api"
 
 // ── GCI Impact Calculator ─────────────────────────────────────────────────────
 
@@ -148,7 +149,7 @@ export default function AnalyticsDashboard({ agent, theme }: { agent?: AgentProf
   const [showVendorSlide, setShowVendorSlide] = useState(false)
 
   useEffect(() => {
-    fetch("/api/analytics")
+    fetch(apiUrl("/api/analytics"))
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
