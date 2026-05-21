@@ -214,16 +214,27 @@ export default function Nav({
       {onLogout && (
         <button
           onClick={onLogout}
-          title="Switch profile"
+          title="Switch profile — go back to login"
           style={{
-            marginLeft: 12, flexShrink: 0,
-            padding: "3px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-            background: "transparent", color: C.faint,
+            marginLeft: 8, marginRight: 100, flexShrink: 0,
+            padding: "4px 10px", borderRadius: 8, border: `1px solid rgba(216,231,242,0.25)`,
+            background: "rgba(216,231,242,0.07)", color: C.muted,
             fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
-            transition: "color 0.15s, border-color 0.15s",
+            transition: "color 0.15s, border-color 0.15s, background 0.15s",
+            whiteSpace: "nowrap",
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.muted; (e.currentTarget as HTMLButtonElement).style.borderColor = C.muted }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.faint; (e.currentTarget as HTMLButtonElement).style.borderColor = C.border }}
+          onMouseEnter={e => {
+            const b = e.currentTarget as HTMLButtonElement
+            b.style.color = C.text
+            b.style.borderColor = "rgba(216,231,242,0.45)"
+            b.style.background = "rgba(216,231,242,0.12)"
+          }}
+          onMouseLeave={e => {
+            const b = e.currentTarget as HTMLButtonElement
+            b.style.color = C.muted
+            b.style.borderColor = "rgba(216,231,242,0.25)"
+            b.style.background = "rgba(216,231,242,0.07)"
+          }}
         >
           Switch Profile
         </button>
