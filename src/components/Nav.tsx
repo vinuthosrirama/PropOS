@@ -9,7 +9,7 @@ export const VIEWS: { id: ViewId; label: string; short: string }[] = [
 ]
 
 export default function Nav({
-  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout,
+  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack,
 }: {
   view: ViewId
   setView: (v: ViewId) => void
@@ -17,6 +17,7 @@ export default function Nav({
   sheetStatus?: "idle" | "loading" | "live" | "error"
   theme?: AgencyTheme
   onLogout?: () => void
+  onBack?: () => void
 }) {
   const bp = useBreakpoint()
   const [scrolled, setScrolled] = useState(false)
@@ -155,6 +156,17 @@ export default function Nav({
                   {i < currentIdx && <span style={{ marginLeft: "auto", color: C.green, fontSize: 12 }}>✓</span>}
                 </button>
               ))}
+              {onBack && (
+                <button onClick={() => { onBack(); setMenuOpen(false) }} style={{
+                  width: "100%", padding: "14px 20px",
+                  display: "flex", alignItems: "center",
+                  background: "transparent", border: "none", cursor: "pointer",
+                  fontFamily: FONT, borderLeft: `3px solid ${theme.primary}`,
+                  borderTop: `1px solid ${C.border}`, marginTop: 4,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: theme.primary }}>← Portfolio</div>
+                </button>
+              )}
               {onLogout && (
                 <button onClick={onLogout} style={{
                   width: "100%", padding: "14px 20px",
@@ -184,6 +196,18 @@ export default function Nav({
       borderBottom: `1px solid ${C.border}`,
     }}>
       <div style={{ marginRight: 20, flexShrink: 0 }}>{logoBlock}</div>
+
+      {onBack && (
+        <button onClick={onBack} style={{
+          marginRight: 10, flexShrink: 0,
+          padding: "4px 10px", borderRadius: 7, border: `1px solid ${C.border}`,
+          background: theme.dim, color: theme.primary,
+          fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+          whiteSpace: "nowrap",
+        }}>
+          ← Portfolio
+        </button>
+      )}
 
       <div style={{
         display: "flex", gap: 2, overflowX: "auto", flex: 1,
