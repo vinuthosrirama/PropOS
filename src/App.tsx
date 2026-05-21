@@ -17,6 +17,8 @@ export default function App() {
   const [agent, setAgent]             = useState(DEFAULT_AGENT)
   const [sheetStatus, setSheetStatus] = useState<"idle" | "loading" | "live" | "error">("idle")
   const [demoBack, setDemoBack] = useState<{ fn: () => void } | null>(null)
+  const [inboxOpen, setInboxOpen]   = useState(false)
+  const [inboxBadge, setInboxBadge] = useState(0)
 
   const handleLogin = (newAgent: AgentProfile, newTheme: AgencyTheme) => {
     setAgent(newAgent)
@@ -61,7 +63,8 @@ export default function App() {
       ["--accent-dim" as string]:  theme.dim,
       ["--accent-glow" as string]: theme.glow,
     }}>
-      <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn} />
+      <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn}
+           onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge} />
 
       <AnimatePresence mode="wait">
         <motion.div key={view}
@@ -70,7 +73,8 @@ export default function App() {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}>
 
-          {view === "demo"  && <DemoView agent={agent} theme={theme} onSettings={() => navigate("setup")} onRegisterBack={fn => setDemoBack(fn ? { fn } : null)} />}
+          {view === "demo"  && <DemoView agent={agent} theme={theme} onSettings={() => navigate("setup")} onRegisterBack={fn => setDemoBack(fn ? { fn } : null)}
+                                        showInbox={inboxOpen} onShowInboxChange={setInboxOpen} onBadgeChange={setInboxBadge} />}
           {view === "setup" && <SettingsView agent={agent} />}
         </motion.div>
       </AnimatePresence>

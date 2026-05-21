@@ -9,7 +9,7 @@ export const VIEWS: { id: ViewId; label: string; short: string }[] = [
 ]
 
 export default function Nav({
-  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack,
+  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0,
 }: {
   view: ViewId
   setView: (v: ViewId) => void
@@ -18,6 +18,8 @@ export default function Nav({
   theme?: AgencyTheme
   onLogout?: () => void
   onBack?: () => void
+  onInbox?: () => void
+  inboxBadge?: number
 }) {
   const bp = useBreakpoint()
   const [scrolled, setScrolled] = useState(false)
@@ -104,7 +106,7 @@ export default function Nav({
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {sheetChip}
             <div style={{
-              fontSize: 11, color: theme.primary, fontWeight: 600,
+              fontSize: 11, color: theme.gradient[0], fontWeight: 600,
               background: theme.dim, padding: "3px 8px", borderRadius: 12,
               transition: "color 0.4s, background 0.4s",
             }}>
@@ -144,11 +146,11 @@ export default function Nav({
                   display: "flex", alignItems: "center", gap: 14,
                   background: view === v.id ? theme.dim : "transparent",
                   border: "none", cursor: "pointer", fontFamily: FONT,
-                  borderLeft: `3px solid ${view === v.id ? theme.primary : "transparent"}`,
+                  borderLeft: `3px solid ${view === v.id ? theme.gradient[0] : "transparent"}`,
                   transition: "background 0.15s, border-color 0.15s",
                 }}>
                   <div style={{ textAlign: "left" }}>
-                    <div style={{ fontSize: 14, fontWeight: view === v.id ? 700 : 400, color: view === v.id ? theme.primary : C.text }}>
+                    <div style={{ fontSize: 14, fontWeight: view === v.id ? 700 : 400, color: view === v.id ? theme.gradient[0] : C.text }}>
                       {v.label}
                     </div>
                     <div style={{ fontSize: 10, color: C.faint }}>Step {i + 1} of {VIEWS.length}</div>
@@ -201,7 +203,7 @@ export default function Nav({
         <button onClick={onBack} style={{
           marginRight: 10, flexShrink: 0,
           padding: "4px 10px", borderRadius: 7, border: `1px solid ${C.border}`,
-          background: theme.dim, color: theme.primary,
+          background: theme.dim, color: theme.gradient[0],
           fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
           whiteSpace: "nowrap",
         }}>
@@ -213,6 +215,7 @@ export default function Nav({
         display: "flex", gap: 2, overflowX: "auto", flex: 1,
         scrollbarWidth: "none", msOverflowStyle: "none",
       }}>
+        {/* Nav items: Demo, Settings, Inbox */}
         {VIEWS.map((v, i) => {
           const active = v.id === view
           const past = i < currentIdx
@@ -224,40 +227,51 @@ export default function Nav({
               fontWeight: active ? 700 : 400,
               whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT,
               background: active ? theme.dim : "transparent",
-              color: active ? theme.primary : past ? C.muted : C.faint,
+              color: active ? theme.gradient[0] : past ? C.muted : C.faint,
               transition: "all 0.15s",
             }}>
               {bp === "tablet" ? v.short : v.label}
             </button>
           )
         })}
+
+        {/* Inbox button — inline with nav tabs */}
+        {onInbox && (
+          <button onClick={onInbox} style={{
+            position: "relative",
+            padding: bp === "tablet" ? "4px 8px" : "4px 11px",
+            borderRadius: 7, border: "none", cursor: "pointer",
+            fontSize: bp === "tablet" ? 10 : 11,
+            fontWeight: 400,
+            whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT,
+            background: "transparent",
+            color: C.faint,
+            transition: "all 0.15s",
+          }}>
+            Inbox
+            {inboxBadge > 0 && (
+              <span style={{
+                position: "absolute", top: 0, right: 0,
+                background: "#f59e0b", color: C.bg,
+                borderRadius: "50%", width: 14, height: 14,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 8, fontWeight: 800,
+              }}>{inboxBadge}</span>
+            )}
+          </button>
+        )}
       </div>
 
       {sheetChip && <div style={{ marginLeft: 12 }}>{sheetChip}</div>}
 
       {onLogout && (
-        <button
-          onClick={onLogout}
-          title="Switch profile — go back to login"
+        <button onClick={onLogout} title="Switch profile"
           style={{
-            marginLeft: 8, marginRight: 100, flexShrink: 0,
+            marginLeft: 8, flexShrink: 0,
             padding: "4px 10px", borderRadius: 8, border: `1px solid rgba(216,231,242,0.25)`,
             background: "rgba(216,231,242,0.07)", color: C.muted,
             fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
-            transition: "color 0.15s, border-color 0.15s, background 0.15s",
-            whiteSpace: "nowrap",
-          }}
-          onMouseEnter={e => {
-            const b = e.currentTarget as HTMLButtonElement
-            b.style.color = C.text
-            b.style.borderColor = "rgba(216,231,242,0.45)"
-            b.style.background = "rgba(216,231,242,0.12)"
-          }}
-          onMouseLeave={e => {
-            const b = e.currentTarget as HTMLButtonElement
-            b.style.color = C.muted
-            b.style.borderColor = "rgba(216,231,242,0.25)"
-            b.style.background = "rgba(216,231,242,0.07)"
+            transition: "color 0.15s", whiteSpace: "nowrap",
           }}
         >
           Switch Profile

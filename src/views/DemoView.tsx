@@ -13,7 +13,7 @@ import {
 import { matchLeadToListing, matchQuestionToSLM, type MatchResult } from "../lib/slmMatch"
 import {
   readLeadsFromSheet, readAllLeadsFromSheet, postEvent, sheetsConnected,
-  postLeadStatus, markAttended,
+  postLeadStatus, markAttended, writeAgentVoiceEntry,
   type SheetLead,
 } from "../lib/sheet"
 import AuctionOutcomePanel from "../components/AuctionOutcomePanel"
@@ -157,8 +157,8 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
             onClick={e => { e.stopPropagation(); onBuyerBrief(property) }}
             style={{
               marginTop: 8, padding: "5px 12px", borderRadius: 6, fontSize: 10, fontWeight: 700,
-              background: "rgba(63,2,120,0.08)", border: "1px solid rgba(63,2,120,0.2)",
-              color: "#3f0278", cursor: "pointer", fontFamily: FONT,
+              background: "#ffffff", border: `1px solid ${withAlpha(theme.primary, 0.28)}`,
+              color: theme.gradient[0], cursor: "pointer", fontFamily: FONT,
             }}
           >
             Buyer Brief
@@ -394,7 +394,18 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                   background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`,
                   padding: "16px 18px",
                   cursor: onSelectLead ? "pointer" : "default",
+                  transition: "border 0.15s, box-shadow 0.15s",
                 }}
+                onMouseEnter={onSelectLead ? (e => {
+                  const el = e.currentTarget as HTMLDivElement
+                  el.style.borderColor = theme.primary + "55"
+                  el.style.boxShadow = `0 0 20px ${theme.glow}`
+                }) : undefined}
+                onMouseLeave={onSelectLead ? (e => {
+                  const el = e.currentTarget as HTMLDivElement
+                  el.style.borderColor = C.border
+                  el.style.boxShadow = "none"
+                }) : undefined}
               >
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
                   {/* Main info — no initials avatar */}
@@ -1149,10 +1160,10 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
   const dirIcon = (d?: "up" | "down" | "same") =>
     d === "up" ? " ↑" : d === "down" ? " ↓" : ""
   const dirColor = (d?: "up" | "down" | "same", persona?: string) => {
-    if (!d || d === "same") return theme.primary
+    if (!d || d === "same") return theme.gradient[0]
     // "up" is good for upsizers/families (more land/beds) but neutral otherwise
-    if (d === "up") return persona?.toLowerCase().includes("invest") ? C.green : theme.primary
-    return "#f59e0b"
+    if (d === "up") return persona?.toLowerCase().includes("invest") ? C.green : theme.gradient[0]
+    return theme.gradient[0]
   }
 
   // Build Q&A for display — synchronous SLM keyword pass
@@ -1281,26 +1292,20 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                     border: `1px solid ${highlight ? theme.primary + "33" : C.border}`,
                     padding: "10px 12px",
                   }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: highlight ? theme.gradient[0] + "99" : C.faint, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
                       {cf.label}
                     </div>
                     <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>
-                      <span style={{ color: C.text, fontWeight: 600 }}>{cf.soldValue}</span>
+                      <span style={{ color: highlight ? "rgba(255,255,255,0.75)" : C.text, fontWeight: 600 }}>{cf.soldValue}</span>
                     </div>
                     <div style={{ fontSize: 11, color: C.muted }}>
                       <span style={{
-                        color: dirColor(cf.direction, lead.persona),
+                        color: highlight ? "#fff" : dirColor(cf.direction, lead.persona),
                         fontWeight: 600,
                       }}>
                         {cf.activeValue}{dirIcon(cf.direction)}
                       </span>
                     </div>
-                    <div style={{
-                      marginTop: 5, height: 2, borderRadius: 1,
-                      background: cf.match === "exact" ? C.green + "44"
-                        : cf.match === "close" ? "#f59e0b44"
-                        : C.border,
-                    }} />
                   </div>
                 )
               })}
@@ -1310,12 +1315,15 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
           {/* Q&A */}
           {(allQAPairs.length > 0 || unmatchedQs.length > 0) && (
             <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px", userSelect: "none" }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>
-                What {fname} asked at {soldSLM.address} — answered for {property.address}
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>
+                What {fname} asked at the open home
+              </div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 14 }}>
+                {soldSLM.address.split(",")[0]} → answered for {property.address.split(",")[0]}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {allQAPairs.map((qa, i) => (
-                  <div key={i} style={{ borderLeft: `2px solid ${theme.primary}33`, paddingLeft: 12 }}>
+                  <div key={i} style={{ borderLeft: `2px solid ${theme.gradient[0]}44`, paddingLeft: 12 }}>
                     <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>{qa.question}</div>
                     {qa.answer === "TBD" ? (
                       <div style={{
@@ -1328,25 +1336,6 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                     ) : (
                       <div style={{ fontSize: 13, color: C.text, lineHeight: 1.5 }}>{qa.answer}</div>
                     )}
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                      <div style={{
-                        display: "inline-block", fontSize: 9, padding: "1px 6px",
-                        borderRadius: 4, background: C.bg3, color: C.faint, fontWeight: 600,
-                        textTransform: "uppercase", letterSpacing: 0.4,
-                      }}>
-                        {qa.category}
-                      </div>
-                      {qa.source === "llm" && (
-                        <div style={{
-                          display: "inline-block", fontSize: 9, padding: "1px 6px",
-                          borderRadius: 4, background: "rgba(139,92,246,0.12)",
-                          border: "1px solid rgba(139,92,246,0.3)",
-                          color: "#8b5cf6", fontWeight: 600, letterSpacing: 0.4,
-                        }}>
-                          AI
-                        </div>
-                      )}
-                    </div>
                   </div>
                 ))}
                 {/* Show loading placeholders for questions still being fetched via LLM */}
@@ -1924,6 +1913,12 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
           timestamp: new Date().toISOString(),
         }),
       }).catch(() => {}) // non-fatal
+
+      // 4. Write approved outreach to VoiceCorpus tab as agent voice training data
+      const ts = new Date().toISOString()
+      writeAgentVoiceEntry({ text: sms, type: "sms", channel: "sms", ts }).catch(() => {})
+      writeAgentVoiceEntry({ text: subject, type: "email_subject", channel: "email", ts }).catch(() => {})
+      writeAgentVoiceEntry({ text: bodyText.split("\n\n")[0], type: "email_body", channel: "email", ts }).catch(() => {})
     } catch {
       // never fail the demo
     }
@@ -2128,7 +2123,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
             Subject: Quality Homes, Expertly Presented
           </div>
           <div style={{ fontSize: 12, color: C.faint, lineHeight: 1.5, marginBottom: 14 }}>
-            Dear {fname}, Warm greetings from the Peake team. The Berwick market continues to move with strong momentum across all price points...
+            Dear {fname}, Warm greetings from the {agent.agency} team. The {property.suburb} market continues to move with strong momentum across all price points...
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 10, color: "rgb(255, 110, 110)" }}>{"❌"} Generic subject</span>
@@ -2494,15 +2489,24 @@ export default function DemoView({
   theme = DEFAULT_THEME,
   onSettings,
   onRegisterBack,
+  showInbox: showInboxProp,
+  onShowInboxChange,
+  onBadgeChange,
 }: {
   agent: AgentProfile
   theme?: AgencyTheme
   onSettings?: () => void
   onRegisterBack?: (fn: (() => void) | null) => void
+  showInbox?: boolean
+  onShowInboxChange?: (v: boolean) => void
+  onBadgeChange?: (n: number) => void
 }) {
   const [stage, setStage] = useState<Stage>({ kind: "portfolio" })
-  const [unreadReplies, setUnreadReplies] = useState(0)
-  const [showInbox, setShowInbox] = useState(false)
+  const [, setUnreadRepliesInternal] = useState(0)
+  const setUnreadReplies = (n: number) => { setUnreadRepliesInternal(n); onBadgeChange?.(n) }
+  const [showInboxInternal, setShowInboxInternal] = useState(false)
+  const showInbox = showInboxProp ?? showInboxInternal
+  const setShowInbox = (v: boolean) => { setShowInboxInternal(v); onShowInboxChange?.(v) }
   const [inboxThreads, setInboxThreads] = useState<Array<{ leadId: string; leadName: string; phone: string; propertyAddress: string; email: string; lastReplyAt: string; messages: Array<{ role: string; body: string; ts: string }> }>>([])
   const [selectedThreadPhone, setSelectedThreadPhone] = useState<string | null>(null)
   const [replyDraft, setReplyDraft] = useState<{ draft: string; intent: string; reasoning: string } | null>(null)
@@ -2558,34 +2562,6 @@ export default function DemoView({
   return (
     <>
 
-      {/* Reply inbox badge — top-right, always visible so presenter can simulate a reply */}
-      {(
-        <motion.button
-          initial={{ opacity: 0, scale: 0.85 }}
-          animate={{ opacity: 1, scale: 1 }}
-          onClick={() => { setShowInbox(!showInbox); setSelectedThreadPhone(null); setReplyDraft(null) }}
-          style={{
-            position: "fixed", top: 68, right: 16, zIndex: 200,
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 12px", borderRadius: 8,
-            background: unreadReplies > 0 ? "rgba(245,158,11,0.15)" : C.bg2,
-            border: `1px solid ${unreadReplies > 0 ? "rgba(245,158,11,0.4)" : C.border}`,
-            color: unreadReplies > 0 ? "#f59e0b" : C.muted,
-            fontSize: 12, fontWeight: 700, fontFamily: FONT, cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-          }}
-        >
-          💬 Replies
-          {unreadReplies > 0 && (
-            <span style={{
-              background: "#f59e0b", color: C.bg,
-              borderRadius: "50%", width: 18, height: 18,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 10, fontWeight: 800,
-            }}>{unreadReplies}</span>
-          )}
-        </motion.button>
-      )}
 
       {/* Inbox drawer */}
       <AnimatePresence>
@@ -2851,7 +2827,7 @@ export default function DemoView({
 
     <AnimatePresence mode="wait">
       {stage.kind === "portfolio" && (
-        <motion.div key="portfolio" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div key="portfolio" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <PortfolioPage
             onSelectActive={(property, soldLeads) =>
               setStage({ kind: "matching", property, soldLeads })
@@ -2870,7 +2846,7 @@ export default function DemoView({
       )}
 
       {stage.kind === "soldLeads" && (
-        <motion.div key="soldLeads" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div key="soldLeads" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <SoldLeadsPage
             soldProperty={stage.soldProperty}
             leads={stage.leads}
@@ -2890,7 +2866,7 @@ export default function DemoView({
       )}
 
       {stage.kind === "matching" && (
-        <motion.div key="matching" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div key="matching" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <MatchingScreen
             property={stage.property}
             soldLeads={stage.soldLeads}
@@ -2903,7 +2879,7 @@ export default function DemoView({
       )}
 
       {stage.kind === "leads" && (
-        <motion.div key="leads" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div key="leads" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <LeadsPage
             property={stage.property}
             allLeads={stage.allLeads}
@@ -2923,7 +2899,7 @@ export default function DemoView({
       )}
 
       {stage.kind === "profile" && (
-        <motion.div key="profile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div key="profile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <ProfilePage
             property={stage.property}
             lead={stage.lead}
@@ -2961,7 +2937,7 @@ export default function DemoView({
       )}
 
       {stage.kind === "generating" && (
-        <motion.div key="generating" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div key="generating" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <GeneratingScreen
             property={stage.property}
             lead={stage.lead}
@@ -2987,7 +2963,7 @@ export default function DemoView({
       )}
 
       {stage.kind === "review" && (
-        <motion.div key="review" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div key="review" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <ReviewPanel
             property={stage.property}
             lead={stage.lead}
@@ -3003,7 +2979,7 @@ export default function DemoView({
         </motion.div>
       )}
       {stage.kind === "missedOut" && (
-        <motion.div key="missedOut" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <motion.div key="missedOut" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <MissedOutPage
             auctionProperty={stage.auctionProperty}
             leads={stage.leads}

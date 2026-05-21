@@ -78,9 +78,9 @@ STRATEGY: ${strategy}
 CHANNEL: ${channel}
 
 Write the message now. Rules:
-- SMS: Reference what they specifically asked or care about. Under 160 chars.
-- Email subject: Specific to this lead — mention the property and something relevant to them personally.
-- Email body: Para 1 — reference something they said/asked at the open home. Para 2 — answer their key question with data from the property context above. Para 3 — specific CTA.
+- SMS: MUST mention (1) the street name of the sold property they inspected (from slm context above), (2) one specific concern or question they had, (3) the street name of this new listing. Keep under 160 chars total. No marketing language.
+- Email subject: Natural, conversational. Start with "Hey [FirstName]," or similar. Do NOT use "[TEST", "New Listing", or generic subjects. Reference something personal to this lead or the specific property address.
+- Email body: Para 1 — reference something they said/asked at the old property (name it). Para 2 — answer their key question with a specific data point from the property context above. Para 3 — one concrete CTA (e.g. "Saturday 10am?").
 - NEVER write "I have a new listing that might interest you" or "let me know if you want more info" — be specific.
 Respond ONLY with valid JSON, no markdown:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]}}`
