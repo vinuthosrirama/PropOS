@@ -100,17 +100,6 @@ export default function BuyerPitchReport({ property, slm, agent, onClose }: Prop
   ]
 
   return (
-    <>
-    <style>{`
-      @media print {
-        body > * { display: none !important; }
-        #buyer-pitch-report { display: block !important; position: static !important;
-          width: 100% !important; max-height: none !important; overflow: visible !important;
-          box-shadow: none !important; border-radius: 0 !important; }
-        .no-print { display: none !important; }
-        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      }
-    `}</style>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -433,7 +422,6 @@ export default function BuyerPitchReport({ property, slm, agent, onClose }: Prop
         </div>
       </motion.div>
     </motion.div>
-    </>
   )
 }
 

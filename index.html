@@ -22,6 +22,14 @@
       ::-webkit-scrollbar-thumb { background: rgba(216, 231, 242, 0.15); border-radius: 3px; }
       input, textarea, select { font-family: inherit; }
       @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+      @media print {
+        body > *:not(#buyer-pitch-report) { display: none !important; }
+        #buyer-pitch-report { display: block !important; position: static !important;
+          width: 100% !important; max-height: none !important; overflow: visible !important;
+          box-shadow: none !important; border-radius: 0 !important; }
+        .no-print { display: none !important; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      }
     </style>
   </head>
   <body>
