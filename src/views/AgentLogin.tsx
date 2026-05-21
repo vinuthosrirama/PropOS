@@ -2,9 +2,10 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { C, FONT, getAgencyTheme, type AgentProfile, type AgencyTheme } from "../data"
 
-// Peake first (local Berwick agency), then alphabetical
+// Peake first (local Berwick agency), Area Specialist second (Pas), then alphabetical
 const AGENCIES = [
   "Peake",
+  "Area Specialist",
   "Barry Plant", "Biggin & Scott", "Buxton Real Estate", "Century 21",
   "First National Real Estate", "Fletchers Real Estate", "Harcourts",
   "Jellis Craig", "Kay & Burton", "LJ Hooker", "McGrath Estate Agents",
