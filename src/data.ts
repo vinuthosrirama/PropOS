@@ -56,7 +56,7 @@ export const AGENCY_THEMES: Record<string, AgencyTheme> = {
   "First National Real Estate":{ name: "First National Real Estate",primary:"#005CA9",            dim: "rgba(0,92,169,0.12)",       glow: "rgba(0,92,169,0.07)",       logo: "FN", gradient: ["#0078D4", "#005CA9"]                       },
   "Kay & Burton":             { name: "Kay & Burton",             primary: "#B0A090",             dim: "rgba(176,160,144,0.12)",    glow: "rgba(176,160,144,0.07)",    logo: "KB", gradient: ["#C0B0A0", "#786050"]                       },
   "Biggin & Scott":           { name: "Biggin & Scott",           primary: "#4C78CC",             dim: "rgba(76,120,204,0.12)",     glow: "rgba(76,120,204,0.07)",     logo: "BS", gradient: ["#6492E0", "#4C78CC"]                       },
-  "Area Specialist":          { name: "Area Specialist",          primary: "#d4d4d4",              dim: "rgba(212,212,212,0.08)",    glow: "rgba(212,212,212,0.04)",    logo: "AS", gradient: ["#484848", "#111111"]                       },
+  "Area Specialist":          { name: "Area Specialist",          primary: "#111111",              dim: "rgba(17,17,17,0.12)",       glow: "rgba(17,17,17,0.07)",       logo: "AS", gradient: ["#484848", "#111111"]                       },
   "Other":                    { name: "Other",                    primary: "rgb(166,218,255)",    dim: "rgba(166,218,255,0.12)",    glow: "rgba(166,218,255,0.06)",    logo: "AV", gradient: ["rgb(166,218,255)", "rgb(100,208,144)"]      },
 }
 
@@ -289,7 +289,7 @@ export const PAS_PORTFOLIO_SOLD: PortfolioProperty[] = [
     suburb: "Berwick", state: "VIC", postcode: "3806",
     price: 932000, beds: 4, baths: 2, cars: 2, land: 612,
     type: "House", status: "sold", soldDate: "14 May 2026",
-    image: "/58-broadway-street.jpg",
+    image: "/58-broadway-street.png",
     description: "Brand new 2025 Metricon build in established Berwick. 4-bed family home with double garage. Berwick Chase Primary catchment, close to Berwick Station.",
     leadCount: 16,
   },
@@ -336,7 +336,7 @@ export const PAS_PORTFOLIO_ACTIVE: PortfolioProperty[] = [
     beds: 2, baths: 1, cars: 1, land: 162,
     type: "Unit", status: "active",
     openDate: "Saturday 24 May 2026, 1:30pm",
-    image: "/8-belgrave-hallam-road.jpg",
+    image: "/8-59-61-belgrave-hallam-road.jpg",
     description: "2-bed townhouse in a boutique 2018 complex on Belgrave Hallam Road. Open plan living, private courtyard, single garage. 1.1km to Hallam Station. Excellent entry-level or investment.",
     leadCount: 0,
   },
