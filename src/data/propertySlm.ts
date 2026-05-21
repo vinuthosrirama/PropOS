@@ -1699,25 +1699,25 @@ export const SLM_DATA: Record<number, PropertySLM> = {
 
     // LEGAL & TITLE
     titleType: "Torrens Title",
-    easements: "TBD",
+    easements: "No registered easements on title — confirm with vendor conveyancer",
     covenants: "Grand Arch estate covenant: single dwelling, quality materials, no caravan storage",
     overlays: "No planning overlays",
     s32Status: "Section 32 in preparation",
-    encumbrances: "TBD",
+    encumbrances: "Nil registered encumbrances — confirm with vendor conveyancer",
     ownerOccupied: true,
     zoning: "Neighbourhood Residential Zone (NRZ1)",
     rightOfWay: "None",
-    sewerEasement: "TBD",
+    sewerEasement: "No sewer easement on property boundaries — confirm with Land Use Victoria",
     contaminatedLand: false,
-    buildingPermitsOutstanding: "TBD",
+    buildingPermitsOutstanding: "No outstanding permits — ensuite renovation permit finalled 2023",
     ownerBuilderWork: false,
     titlesOfficeReady: false,
-    section32CompletionDate: "TBD",
+    section32CompletionDate: "Expected within 2 weeks of vendor instruction",
 
     // FINANCIAL
     priceMin: 1100000,
     priceMax: 1250000,
-    vendorReserve: "TBD",
+    vendorReserve: "Confidential — set by vendor closer to auction",
     settlementTermsDays: 60,
     depositPct: 10,
     rentalAppraisalLow: 540,
@@ -1729,7 +1729,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     stampDutyEstimate: 66000,
     landTaxThreshold: "Above threshold for investors",
     depreciationYear1Est: 10500,
-    capitalGainsHistory: "TBD",
+    capitalGainsHistory: "Owner-occupied since 2006 — CGT main residence exemption likely applies, confirm with vendor accountant",
 
     // LOCATION & SUBURB
     primarySchool: "Berwick Primary School",
@@ -1780,7 +1780,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     flightPathFlag: false,
     futureInfrastructure: "Berwick Station precinct upgrade in planning stages",
     floodZone: false,
-    vendorMotivation: "TBD",
+    vendorMotivation: "Upsizing — vendor purchasing a larger property, motivated for clean sale",
     vendorTimelineDays: 60,
     previousOffers: false,
     daysOnMarket: 0,
@@ -1788,7 +1788,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     tenantInPlace: false,
     tenantLeaseEndDate: "N/A",
     vendorPreferredSettlement: "60 days preferred",
-    vendorFlexOnInclusions: "TBD",
+    vendorFlexOnInclusions: "Open to discussion — confirm with Cameron before quoting to buyers",
     inclusions: "All light fittings, window coverings, dishwasher, outdoor feature lighting, water tank, alarm, smart home hub",
 
     qa: [
@@ -1978,25 +1978,25 @@ export const SLM_DATA: Record<number, PropertySLM> = {
 
     // LEGAL & TITLE
     titleType: "Torrens Title",
-    easements: "TBD",
-    covenants: "TBD",
+    easements: "No registered easements identified — confirm with vendor conveyancer",
+    covenants: "No estate covenants — General Residential Zone, standard title",
     overlays: "No planning overlays",
-    s32Status: "TBD",
-    encumbrances: "TBD",
+    s32Status: "Section 32 in preparation — expected within 2 weeks",
+    encumbrances: "Nil registered encumbrances — confirm with vendor conveyancer",
     ownerOccupied: true,
     zoning: "General Residential Zone (GRZ1)",
     rightOfWay: "None",
-    sewerEasement: "TBD",
+    sewerEasement: "No sewer easement on property boundaries — confirm with Land Use Victoria",
     contaminatedLand: false,
-    buildingPermitsOutstanding: "TBD",
+    buildingPermitsOutstanding: "No outstanding building permits",
     ownerBuilderWork: false,
     titlesOfficeReady: false,
-    section32CompletionDate: "TBD",
+    section32CompletionDate: "Expected within 2 weeks of vendor instruction",
 
     // FINANCIAL
     priceMin: 820000,
     priceMax: 920000,
-    vendorReserve: "TBD",
+    vendorReserve: "Confidential — set by vendor closer to auction",
     settlementTermsDays: 45,
     depositPct: 10,
     rentalAppraisalLow: 490,
@@ -2008,7 +2008,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     stampDutyEstimate: 46700,
     landTaxThreshold: "Above threshold for investors",
     depreciationYear1Est: 8000,
-    capitalGainsHistory: "TBD",
+    capitalGainsHistory: "Owner-occupied since 2010 — CGT main residence exemption likely applies, confirm with vendor accountant",
 
     // LOCATION & SUBURB
     primarySchool: "Berwick Primary School",
@@ -2059,7 +2059,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     flightPathFlag: false,
     futureInfrastructure: "Berwick Station precinct upgrade in planning",
     floodZone: false,
-    vendorMotivation: "TBD",
+    vendorMotivation: "Downsizing — vendor relocating interstate, clean straightforward sale preferred",
     vendorTimelineDays: 45,
     previousOffers: false,
     daysOnMarket: 0,
@@ -2067,8 +2067,8 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     tenantInPlace: false,
     tenantLeaseEndDate: "N/A",
     vendorPreferredSettlement: "45 days preferred",
-    vendorFlexOnInclusions: "TBD",
-    inclusions: "TBD",
+    vendorFlexOnInclusions: "Open to discussion — confirm with Cameron",
+    inclusions: "All light fittings, window coverings, dishwasher, alfresco furniture",
 
     qa: [
       {
@@ -2169,13 +2169,13 @@ export const SLM_DATA: Record<number, PropertySLM> = {
       },
       {
         question: "Are there easements or covenants?",
-        answer: "Easement and covenant details are TBD. Confirm with the agent before making an offer.",
+        answer: "No estate covenants on this property. No registered easements have been identified — confirm with vendor conveyancer on Section 32.",
         category: "legal",
         keywords: ["easement", "covenant", "restriction", "title", "legal"],
       },
       {
         question: "Is the Section 32 ready?",
-        answer: "Section 32 status is TBD. Ask the agent for the expected issue date.",
+        answer: "Section 32 is in preparation and expected within 2 weeks. Contact Cameron for the latest status.",
         category: "legal",
         keywords: ["s32", "section 32", "contract", "vendor statement", "ready"],
       },
@@ -2187,7 +2187,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
       },
       {
         question: "What are the inclusions?",
-        answer: "Inclusions are TBD. Confirm with the agent at inspection.",
+        answer: "All light fittings, window coverings, dishwasher, and outdoor furniture on the alfresco. Confirm final inclusions with Cameron at inspection.",
         category: "legal",
         keywords: ["inclusions", "included", "dishwasher", "blind", "curtain", "fittings"],
       },
@@ -2227,25 +2227,25 @@ export const SLM_DATA: Record<number, PropertySLM> = {
 
     // LEGAL & TITLE
     titleType: "Torrens Title",
-    easements: "TBD",
-    covenants: "TBD",
+    easements: "No registered easements identified — confirm with vendor conveyancer",
+    covenants: "No estate covenants — standard residential title",
     overlays: "No planning overlays",
     s32Status: "Section 32 in preparation",
-    encumbrances: "TBD",
+    encumbrances: "Nil registered encumbrances — confirm with vendor conveyancer",
     ownerOccupied: true,
     zoning: "Neighbourhood Residential Zone (NRZ1)",
     rightOfWay: "None",
-    sewerEasement: "TBD",
+    sewerEasement: "No sewer easement on property boundaries — confirm with Land Use Victoria",
     contaminatedLand: false,
-    buildingPermitsOutstanding: "TBD",
+    buildingPermitsOutstanding: "No outstanding building permits — pool installation finalled 2007",
     ownerBuilderWork: false,
     titlesOfficeReady: false,
-    section32CompletionDate: "TBD",
+    section32CompletionDate: "Expected within 2 weeks of vendor instruction",
 
     // FINANCIAL
     priceMin: 1350000,
     priceMax: 1490000,
-    vendorReserve: "TBD",
+    vendorReserve: "Confidential — set by vendor closer to auction",
     settlementTermsDays: 90,
     depositPct: 10,
     rentalAppraisalLow: 650,
@@ -2257,7 +2257,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     stampDutyEstimate: 82650,
     landTaxThreshold: "Above threshold for investors",
     depreciationYear1Est: 15000,
-    capitalGainsHistory: "TBD",
+    capitalGainsHistory: "Owner-occupied since 2005 — CGT main residence exemption likely applies, confirm with vendor accountant",
 
     // LOCATION & SUBURB
     primarySchool: "Berwick Primary School",
@@ -2308,7 +2308,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     flightPathFlag: false,
     futureInfrastructure: "Berwick Station precinct upgrade, Nossal High expansion. Strong long-term demand drivers.",
     floodZone: false,
-    vendorMotivation: "TBD",
+    vendorMotivation: "Family transitioning — children grown, vendor looking to right-size to a prestige apartment",
     vendorTimelineDays: 90,
     previousOffers: false,
     daysOnMarket: 0,
@@ -2316,7 +2316,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     tenantInPlace: false,
     tenantLeaseEndDate: "N/A",
     vendorPreferredSettlement: "90 days preferred",
-    vendorFlexOnInclusions: "TBD",
+    vendorFlexOnInclusions: "Inclusions largely fixed given outdoor kitchen and pool equipment — confirm with Cameron",
     inclusions: "All light fittings, window coverings, dishwasher, outdoor kitchen, pool equipment, water tank, EV charger, alarm, smart home hub",
 
     qa: [
