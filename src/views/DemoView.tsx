@@ -562,6 +562,17 @@ function groupLeadsByProperty(allLeads: SheetLead[], soldProperties: PortfolioPr
   return map
 }
 
+/** Strip out test / placeholder rows that come back from the Sheet during development. */
+function isRealLead(lead: SheetLead): boolean {
+  const name = lead.name.trim().toLowerCase()
+  if (!name) return false
+  // Obvious test/seed row names
+  if (["test lead", "lead_status", "name", "test", "sample"].includes(name)) return false
+  // Seed rows that look like column headers or events (no space in name = likely a field name)
+  if (!name.includes(" ") && lead.budget === 0) return false
+  return true
+}
+
 // ── Stage 0 — Portfolio ───────────────────────────────────────────────────────
 
 function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSettings, agent, theme }: {
@@ -586,16 +597,26 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
 
     const applyLeads = (leads: SheetLead[], save = false) => {
       if (!mounted) return
-      setSoldLeads(groupLeadsByProperty(leads, agentSold))
+      const grouped = groupLeadsByProperty(leads, agentSold)
+      const total   = Object.values(grouped).reduce((a, l) => a + l.length, 0)
+      // If the sheet data has no leads for this agent's portfolio, use the
+      // hardcoded fallback (covers cross-agent cache pollution and empty sheets).
+      if (total === 0 && agentSold.length > 0) {
+        setSoldLeads(groupLeadsByProperty(DEMO_FALLBACK_LEADS, agentSold))
+        setSheetsLoading(false)
+        return
+      }
+      setSoldLeads(grouped)
       setSheetsLoading(false)
-      if (save && leads.length > 0) {
+      if (save && total > 0) {
         try { localStorage.setItem(CACHE_KEY, JSON.stringify(leads)) } catch {}
       }
     }
 
     // Load from localStorage cache immediately for instant display
     const cachedRaw = localStorage.getItem(CACHE_KEY)
-    const cached: SheetLead[] | null = cachedRaw ? (() => { try { return JSON.parse(cachedRaw) } catch { return null } })() : null
+    const cachedAll: SheetLead[] | null = cachedRaw ? (() => { try { return JSON.parse(cachedRaw) } catch { return null } })() : null
+    const cached = cachedAll ? cachedAll.filter(isRealLead) : null
     if (cached && cached.length > 0) applyLeads(cached)
 
     // If Sheets not configured, stop here — cache or fallback is sufficient
@@ -621,16 +642,17 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
         settled = true
         clearTimeout(fallbackTimer)
         if (allLeads && allLeads.length > 0) {
-          applyLeads(allLeads, true)
-          return
+          const real = allLeads.filter(isRealLead)
+          if (real.length > 0) { applyLeads(real, true); return }
+          // All rows were test/placeholder — fall through to per-property or fallback
         }
-        // Strategy 2: bulk empty — try per-property queries.
+        // Strategy 2: bulk empty or all-fake — try per-property queries.
         return Promise.all(
           agentSold.map(p => readLeadsFromSheet(p.address + ", " + p.suburb))
         ).then(results => {
           const flat = results.flatMap((leads, i) =>
             (leads ?? []).map(l => ({ ...l, _pid: agentSold[i].id }))
-          ) as SheetLead[]
+          ).filter(isRealLead) as SheetLead[]
           if (flat.length > 0) {
             applyLeads(flat, true)
           } else if (!cached || cached.length === 0) {
