@@ -150,7 +150,7 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
           <div style={{ marginTop: 6, fontSize: 10, color: C.muted }}>{property.openDate}</div>
         )}
         {property.auctionDate && (
-          <div style={{ marginTop: 2, fontSize: 10, color: theme.primary, fontWeight: 600 }}>Auction {property.auctionDate}</div>
+          <div style={{ marginTop: 2, fontSize: 10, color: theme.gradient[0], fontWeight: 600 }}>Auction {property.auctionDate}</div>
         )}
         {onBuyerBrief && (
           <button
@@ -171,13 +171,12 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
 
 // ── SoldCard ──────────────────────────────────────────────────────────────────
 
-function SoldCard({ property, leads, loading, theme, onClick, onRecordAuction }: {
+function SoldCard({ property, leads, loading, theme, onClick }: {
   property: PortfolioProperty
   leads: SheetLead[]
   loading: boolean
   theme: AgencyTheme
   onClick: () => void
-  onRecordAuction: (p: PortfolioProperty) => void
 }) {
   return (
     <div
@@ -236,20 +235,6 @@ function SoldCard({ property, leads, loading, theme, onClick, onRecordAuction }:
         </div>
       )}
 
-      {/* Auction result button — top left below sold badge */}
-      <button
-        onClick={e => { e.stopPropagation(); onRecordAuction(property) }}
-        style={{
-          position: "absolute", top: 38, left: 10,
-          padding: "3px 9px", borderRadius: 8,
-          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
-          border: `1px solid rgba(255,255,255,0.18)`,
-          color: "rgba(255,255,255,0.80)", fontSize: 9, fontWeight: 700,
-          cursor: "pointer", fontFamily: FONT, zIndex: 2,
-        }}
-      >
-        + Auction Result
-      </button>
 
       {/* Layer 3 — text block */}
       <div style={{ position: "absolute", bottom: 16, left: 14, right: 14 }}>
@@ -769,7 +754,6 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
                 loading={sheetsLoading}
                 theme={theme}
                 onClick={() => onSelectSold(p, soldLeads[p.id] ?? [])}
-                onRecordAuction={setAuctionPanelProperty}
               />
             </motion.div>
           ))}

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { C, FONT, getAgencyTheme, type AgentProfile, type AgencyTheme } from "../data"
+import { C, FONT, getAgencyTheme, isCamKnoll, isPasSunilchandra, type AgentProfile, type AgencyTheme } from "../data"
 
 // Peake first (local Berwick agency), Area Specialist second (Pas), then alphabetical
 const AGENCIES = [
@@ -207,18 +207,22 @@ export default function AgentLogin({ onLogin }: Props) {
     const digits = p.replace(/\D/g, "")
     if (digits.startsWith("61") && digits.length === 11) return `+${digits}`
     if (digits.startsWith("0") && digits.length === 10) return `+61${digits.slice(1)}`
-    return p || "04xx xxx xxx"
+    return p
   }
+
+  const toProperCase = (s: string) => s.trim().replace(/\b\w/g, c => c.toUpperCase())
 
   const handleSubmit = () => {
     if (!validate()) return
     setPhase("welcoming")
 
+    const firstName = toProperCase(form.firstName)
+    const lastName  = toProperCase(form.lastName)
     const t = getAgencyTheme(form.agency)
     const agent: AgentProfile = {
-      name:    `${form.firstName} ${form.lastName}`,
+      name:    `${firstName} ${lastName}`,
       agency:  form.agency,
-      email:   form.email || `${form.firstName.toLowerCase()}.${form.lastName.toLowerCase()}@${form.agency.toLowerCase().replace(/\s+/g, "")}.com.au`,
+      email:   form.email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${form.agency.toLowerCase().replace(/\s+/g, "")}.com.au`,
       phone:   normalisePhone(form.phone),
       suburb:  form.suburb,
       tagline: `${form.suburb} specialist.`,
@@ -230,6 +234,15 @@ export default function AgentLogin({ onLogin }: Props) {
         confidence: 0, detectedTraits: [],
       },
       trainingCorpus: [],
+    }
+
+    // Fill in known demo agent details if user left them blank
+    if (isCamKnoll(agent)) {
+      if (!form.phone) agent.phone = "0428 762 148"
+      if (!form.email) agent.email = "cameronk@peakere.com.au"
+    } else if (isPasSunilchandra(agent)) {
+      if (!form.phone) agent.phone = "0430 366 649"
+      if (!form.email) agent.email = "pass@areaspecialist.com.au"
     }
 
     setTimeout(() => onLogin(agent, t), 2800)
@@ -432,7 +445,7 @@ export default function AgentLogin({ onLogin }: Props) {
                 filter: theme ? `drop-shadow(0 0 20px ${theme!.glow})` : undefined,
                 lineHeight: 1,
               }}>
-                {form.firstName}
+                {toProperCase(form.firstName)}
               </span>
             </motion.div>
 
