@@ -535,6 +535,21 @@ function normaliseAddr(s: string): string {
     .replace(/\s+/g, " ").trim()
 }
 
+// Shorten address for SMS — "3 Thirlmere Court" → "Thirlmere Ct", "17 Grand Arch Way" → "Grand Arch Way"
+function shortAddr(address: string): string {
+  const typeAbbr: Record<string, string> = {
+    street: "St", road: "Rd", avenue: "Ave", drive: "Dr",
+    court: "Ct", place: "Pl", close: "Cl", grove: "Gr",
+    terrace: "Tce", crescent: "Cres", lane: "Ln", boulevard: "Blvd",
+    circuit: "Cct", parade: "Pde",
+  }
+  const withoutNum = address.replace(/^\d[\d/\-]*\s+/, "")
+  const words = withoutNum.split(" ")
+  const last = words[words.length - 1]?.toLowerCase()
+  if (last && typeAbbr[last]) words[words.length - 1] = typeAbbr[last]
+  return words.join(" ")
+}
+
 function leadBelongsToProperty(lead: SheetLead, property: PortfolioProperty): boolean {
   const haystack = normaliseAddr(lead.inspectedProperty)
   // Check if the street number + first word of street name appear together
@@ -1553,11 +1568,14 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
     const qaLines = matchedQA
       .map(q => `Q: ${q.question}\nA: ${q.answer}`)
       .join("\n")
+    const soldShortAddr  = shortAddr(soldSLM.address)
+    const activeShortAddr = shortAddr(property.address)
+
     const slmContext = [
-      `SOLD PROPERTY (what ${lead.name.split(" ")[0]} inspected): ${soldSLM.address}`,
+      `SOLD PROPERTY (what ${lead.name.split(" ")[0]} inspected): ${soldSLM.address} [SMS short form: "${soldShortAddr}"]`,
       `Attributes: ${soldSLMSummary}`,
       ``,
-      `ACTIVE LISTING (what you're pitching): ${property.address}, ${property.suburb}`,
+      `ACTIVE LISTING (what you're pitching): ${property.address}, ${property.suburb} [SMS short form: "${activeShortAddr}"]`,
       `Attributes: ${activeSLMSummary}`,
       ``,
       comparisonLines ? `PROPERTY COMPARISONS:\n${comparisonLines}` : "",
@@ -1570,6 +1588,8 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
       agentSuburb: property.suburb,
       voiceContext: voiceCtx,
       slmContext,
+      soldShortAddr,
+      activeShortAddr,
       strategy: "New Listing Match",
       channel: "both" as const,
       lead: {

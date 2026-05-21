@@ -45,12 +45,20 @@ export interface QAResult {
  * Receives the same GenerateParams as generateMessage() so it has full context.
  */
 export async function generateMessageClaude(params: GenerateParams): Promise<GenerateResult> {
-  const { agentName, agentAgency, agentSuburb, voiceContext, slmContext, lead, strategy } = params
+  const { agentName, agentAgency, agentSuburb, voiceContext, slmContext, soldShortAddr, activeShortAddr, lead, strategy } = params
 
-  const slmBlock = slmContext ? `${slmContext}\n\n` : ""
+  const agentFirst = agentName.split(" ")[0]
+
+  // Voice block first — strongest personalisation signal
   const voiceBlock = voiceContext
     ? voiceContext
     : "Communication style:\n- professional, warm, Australian-colloquial"
+
+  const slmBlock = slmContext ? `\n=== PROPERTY CONTEXT ===\n${slmContext}\n` : ""
+
+  const smsAddrGuide = soldShortAddr && activeShortAddr
+    ? `Use these exact short forms in the SMS: old property = "${soldShortAddr}", new property = "${activeShortAddr}".`
+    : ""
 
   const transcriptBlock = lead.transcript
     ? `\nVoice memo / field notes (use these specific details):\n"${lead.transcript}"`
@@ -58,12 +66,13 @@ export async function generateMessageClaude(params: GenerateParams): Promise<Gen
 
   const prompt = `You are ${agentName}, a real estate agent at ${agentAgency} in ${agentSuburb}.
 
-${slmBlock}${voiceBlock}
-
+${voiceBlock}
+${slmBlock}
 Hard rules:
 - Write in first person as ${agentName}
 - HARD CONSTRAINT: never use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma instead.
 - SMS must be under 160 characters, reads like a real text
+- VOICE MATCH: SMS sign-off MUST match closing style from training examples above. If examples show "Cheers" or "Cheers ${agentFirst}", use that exactly.
 - Email is 2-3 short paragraphs maximum
 - Use the lead's first name at least once
 - Include at least one specific detail from their notes or transcript. No generic templates.
@@ -77,10 +86,10 @@ Questions raised: ${lead.questions || "none"}${transcriptBlock}
 STRATEGY: ${strategy}
 
 Write personalised SMS and email outreach for ${lead.name}. Rules:
-- SMS: MUST mention (1) the street name of the property they inspected (from context above), (2) one specific concern or question they had, (3) the street name of this new listing. Under 160 chars total.
-- Email subject: Natural, conversational — start with "Hey [FirstName]," or similar. No "[TEST", "New Listing", or generic subjects. Reference something personal to this lead.
-- Email body: Para 1 reference something from the old property. Para 2 answer their key question with specific data. Para 3 one concrete CTA (e.g. "Saturday 10am?").
-- Never use generic phrases when you have real intel.
+- SMS: Under 160 chars. ${smsAddrGuide} Structure: greet by first name, reference seeing them at the old property (use short form), bridge with ONE specific thing they cared about from their notes/questions, introduce the new property (short form) with one matching fact, CTA, close with agent sign-off from training examples above. Example: "Hi [Name], saw you at [OldAddr] — given [their interest], [NewAddr] [matching fact]. [CTA]. Cheers [AgentFirst]!" Keep it natural.
+- Email subject: Conversational, specific. Reference the old property or their question. No "New Listing" or generic subjects.
+- Email body: Para 1 name the old property and one specific thing they asked/said. Para 2 answer their key question with a data point from the Q&A context (e.g. land size, school zone, price comparison). Para 3 open home date/CTA. Sign off with your name only.
+- Never write generic phrases when you have real intel.
 
 Respond ONLY with valid JSON, no markdown:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]}}`
@@ -205,10 +214,11 @@ Rules to check:
 6. No spam trigger words (FREE, URGENT, CLICK NOW etc.)
 7. Email body must not exceed 3 paragraphs
 8. Tone must be warm, Australian-colloquial, never corporate
-9. PERSONALISATION: the message must reference at least one specific detail from the lead's notes, transcript, or questions — generic phrases like "your property search" or "your situation" alone are not acceptable
-10. PERSONALISATION: if the context contains a sold property comparison, the email must reference something specific about what the lead saw vs this property
+9. PERSONALISATION: the SMS must name the old property (short street form, e.g. "Thirlmere Ct") AND the new property (short street form) with a specific buyer-interest bridge between them — generic phrases like "your property search" or "I thought of you" alone are not acceptable
+10. PERSONALISATION: the email Para 1 must name the old property address specifically. Para 2 must answer at least one of the lead's actual questions using a data point from the property context (a number, zone name, or specific fact — not a vague sentence)
+11. VOICE MATCH: the SMS sign-off must match the agent's closing style from the personalisation context. If the agent uses "Cheers [Name]" in examples, the SMS must end that way — not "Thanks" or "Regards"
 
-If personalisation fails rule 9 or 10, rewrite the SMS and full email body using the context above to make them genuinely specific.
+If any rule fails, rewrite the SMS and full email body using the context above to fix the issue.
 
 Return ONLY valid JSON (no markdown):
 {
