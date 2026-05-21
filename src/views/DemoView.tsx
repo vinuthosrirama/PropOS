@@ -589,7 +589,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
 
   useEffect(() => {
     let mounted = true
-    const CACHE_KEY = "propOS_leads_cache_v2"
+    const CACHE_KEY = "propOS_leads_cache_v3"
 
     const applyLeads = (leads: SheetLead[], save = false) => {
       if (!mounted) return
