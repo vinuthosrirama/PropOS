@@ -65,10 +65,25 @@ app.get("/api/health", (_req, res) => {
 
 // Serve Vite production build — must come after all API routes
 const distPath = path.resolve(__dirname, "..", "dist")
-app.use(express.static(distPath))
+// JS/CSS assets have content-hashed filenames — cache 1 year
+// index.html must never be cached so Cloudflare always fetches the latest build
+app.use(express.static(distPath, {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith("index.html")) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+      res.setHeader("Pragma", "no-cache")
+      res.setHeader("Expires", "0")
+      res.setHeader("Surrogate-Control", "no-store")
+    }
+  },
+}))
 
 // SPA catch-all — serve index.html for non-API routes (must be last)
 app.get("*", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
+  res.setHeader("Pragma", "no-cache")
+  res.setHeader("Expires", "0")
+  res.setHeader("Surrogate-Control", "no-store")
   res.sendFile(path.join(distPath, "index.html"))
 })
 
