@@ -16,6 +16,8 @@ export interface GenerateParams {
   voiceContext?: string       // compiled voice profile + training corpus (preferred)
   voiceTraits?: string[]      // fallback: simple trait list (legacy)
   slmContext?: string         // property knowledge from Property SLM (injected before voice)
+  soldShortAddr?: string      // e.g. "Thirlmere Ct" — for SMS old-property reference
+  activeShortAddr?: string    // e.g. "Grand Arch Way" — for SMS new-property reference
   lead: {
     name: string
     budget: string
@@ -35,38 +37,44 @@ export interface GenerateResult {
 }
 
 export async function generateMessage(params: GenerateParams): Promise<GenerateResult> {
-  const { agentName, agentAgency, agentSuburb, voiceContext, voiceTraits, slmContext, lead, strategy, channel } = params
+  const { agentName, agentAgency, agentSuburb, voiceContext, voiceTraits, slmContext, soldShortAddr, activeShortAddr, lead, strategy, channel } = params
 
-  // Property knowledge block — injected first so LLM can cite specific facts
-  const slmBlock = slmContext
-    ? `${slmContext}\n`
-    : ""
+  const agentFirst = agentName.split(" ")[0]
 
-  // Voice identity block — rich context wins over simple trait list
+  // Voice identity block comes FIRST — it is the most important signal
   const voiceBlock = voiceContext
     ? voiceContext
     : (voiceTraits ?? []).length > 0
       ? `Communication style:\n${(voiceTraits ?? []).map(t => `- ${t}`).join("\n")}`
       : "Communication style:\n- professional, warm, and direct"
 
+  // Property knowledge block — injected after voice so LLM stays in voice
+  const slmBlock = slmContext
+    ? `\n=== PROPERTY CONTEXT ===\n${slmContext}\n`
+    : ""
+
+  const smsAddrGuide = soldShortAddr && activeShortAddr
+    ? `Use these exact short forms in the SMS: old property = "${soldShortAddr}", new property = "${activeShortAddr}".`
+    : ""
+
   const system = `You are ${agentName}, a real estate agent at ${agentAgency} in ${agentSuburb}.
 
-${slmBlock}${voiceBlock}
-
+${voiceBlock}
+${slmBlock}
 Hard rules — never break these:
 - Write in first person as ${agentName}
 - HARD CONSTRAINT: never use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma, period, or "and" instead.
 - SMS must be under 160 characters and read like a real text message, not a marketing blast
+- VOICE MATCH: Your sign-off in the SMS MUST match the closing style from the training examples above. If examples show "Cheers" or "Cheers ${agentFirst}", use that. Do not default to "Thanks" or "Regards" if the training shows otherwise.
 - Email must be 2-3 short paragraphs maximum
 - Always use the lead's first name at least once
-- CRITICAL: You have detailed notes and questions below — use them. Reference what they specifically asked or observed at the open home. Do not write generic phrases like "you might be interested" or "let me know if you want more info" when you have real intel about what matters to them.
-- If the lead asked specific questions, answer at least one of them in the outreach (especially in the email).
+- CRITICAL: Use the detailed notes and questions below. Reference what they specifically asked or observed. No generic phrases.
+- If the lead asked specific questions, answer at least one of them with a real data point from the property context.
 - No spam words (FREE, URGENT, ACT NOW, LIMITED TIME etc.)
-- If training examples are provided above, match that exact tone and vocabulary. Do not revert to formal or generic language.`
+- Match the exact tone and vocabulary from training examples above.`
 
-  // Build lead context — transcript gets its own block because it's the richest signal
   const transcriptBlock = lead.transcript
-    ? `\nVoice memo / field notes (use these specific details — this is what the agent observed):\n"${lead.transcript}"`
+    ? `\nVoice memo / field notes (use these specific details):\n"${lead.transcript}"`
     : ""
 
   const user = `LEAD: ${lead.name}
@@ -77,11 +85,11 @@ Questions they raised at the open home: ${lead.questions || "none"}${transcriptB
 STRATEGY: ${strategy}
 CHANNEL: ${channel}
 
-Write the message now. Rules:
-- SMS: MUST mention (1) the street name of the sold property they inspected (from slm context above), (2) one specific concern or question they had, (3) the street name of this new listing. Keep under 160 chars total. No marketing language.
-- Email subject: Natural, conversational. Start with "Hey [FirstName]," or similar. Do NOT use "[TEST", "New Listing", or generic subjects. Reference something personal to this lead or the specific property address.
-- Email body: Para 1 — reference something they said/asked at the old property (name it). Para 2 — answer their key question with a specific data point from the property context above. Para 3 — one concrete CTA (e.g. "Saturday 10am?").
-- NEVER write "I have a new listing that might interest you" or "let me know if you want more info" — be specific.
+Write the message now:
+- SMS: Under 160 chars. ${smsAddrGuide} Structure: greet by first name, reference seeing them at the old property (use short form), bridge with ONE specific thing they cared about from their notes or questions, introduce the new property (short form) with one matching fact (land, school zone, beds), give a CTA (open home time or "worth a look?"), close with agent sign-off from training examples. Example rhythm: "Hi [Name], [saw you at OldAddr] — [their specific interest], [NewAddr] [matching fact]. [CTA]. [Sign-off]!" Keep it natural, not a fill-in-the-blank.
+- Email subject: Conversational, specific to this lead. Reference the old property address or their question. No "[TEST", "New Listing", or generic subjects.
+- Email body: Para 1 — name the old property and one specific thing they said/asked there. Para 2 — directly answer their key question using a data point from the Q&A context above (e.g. "land here is 650sqm vs the 612sqm at [old addr]"). Para 3 — open home date/time with a low-pressure CTA. Sign off with your name only.
+- NEVER write "I have a new listing that might interest you" or "let me know if you want more info".
 Respond ONLY with valid JSON, no markdown:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]}}`
 
