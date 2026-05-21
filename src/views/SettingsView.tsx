@@ -555,7 +555,7 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
   const [syncing, setSyncing] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [openSections, setOpenSections] = useState<Record<number, Set<number>>>({})
-  const [settingsTab, setSettingsTab] = useState<"slm" | "voice" | "analytics">("slm")
+  const [settingsTab, setSettingsTab] = useState<"slm" | "voice" | "analytics" | "integrations">("slm")
   const [corpus, setCorpus] = useState<TrainingEntry[]>(() => loadCorpus())
   const [stylePaste, setStylePaste] = useState("")
 
@@ -765,8 +765,8 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
         </div>
 
         {/* ── Top-level tab strip ── */}
-        <div style={{ display: "flex", gap: 2, marginBottom: 28 }}>
-          {(["slm", "voice", "analytics"] as const).map(tab => (
+        <div style={{ display: "flex", gap: 2, marginBottom: 28, flexWrap: "wrap" }}>
+          {(["slm", "voice", "analytics", "integrations"] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setSettingsTab(tab)}
@@ -782,12 +782,13 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
                 transition: "all 0.15s",
               }}
             >
-              {tab === "slm" ? "SLM Brain" : tab === "voice" ? "Writing Style" : "Analytics"}
+              {tab === "slm" ? "SLM Brain" : tab === "voice" ? "Writing Style" : tab === "analytics" ? "Analytics" : "Integrations"}
             </button>
           ))}
         </div>
 
         {settingsTab === "analytics" && <AnalyticsDashboard agent={agent} theme={getAgencyTheme(agent.agency)} />}
+        {settingsTab === "integrations" && <IntegrationsPanel />}
 
         {settingsTab === "voice" && (
           <VoiceStylePanel
@@ -1103,6 +1104,71 @@ interface VoiceStylePanelProps {
   onBulkAdd: (entries: Array<{ text: string; type: "email" | "paste" }>) => void
   onRemove: (id: string) => void
   onClearAll: () => void
+}
+
+// ── Integrations health panel ─────────────────────────────────────────────────
+type HealthStatus = { openai: boolean; anthropic: boolean; sheet: boolean; twilio: boolean; gmail: boolean }
+
+function IntegrationsPanel() {
+  const [health, setHealth] = useState<HealthStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch("/api/health")
+      .then(r => r.json())
+      .then(d => { setHealth(d); setLoading(false) })
+      .catch(() => { setError("Could not reach server"); setLoading(false) })
+  }, [])
+
+  const services: { key: keyof HealthStatus; label: string; description: string }[] = [
+    { key: "openai",    label: "OpenAI (GPT-4o)",  description: "Outreach generation engine" },
+    { key: "anthropic", label: "Anthropic Claude",  description: "Lead grading + QA review" },
+    { key: "sheet",     label: "Google Sheets",     description: "Lead data sync" },
+    { key: "twilio",    label: "Twilio SMS",        description: "SMS delivery" },
+    { key: "gmail",     label: "Gmail",             description: "Email delivery" },
+  ]
+
+  return (
+    <div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>Integrations</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Live status of all connected services</div>
+      {loading && <div style={{ color: C.muted, fontSize: 13 }}>Checking connections...</div>}
+      {error  && <div style={{ color: C.red,  fontSize: 13 }}>{error}</div>}
+      {health && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {services.map(({ key, label, description }) => {
+            const ok = health[key]
+            return (
+              <div key={key} style={{
+                display: "flex", alignItems: "center", gap: 14,
+                background: C.bg2, border: `1px solid ${ok ? C.green + "33" : C.red + "33"}`,
+                borderRadius: 12, padding: "14px 16px",
+              }}>
+                <div style={{
+                  width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
+                  background: ok ? C.green : C.red,
+                  boxShadow: `0 0 8px ${ok ? C.green : C.red}88`,
+                }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{label}</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{description}</div>
+                </div>
+                <div style={{
+                  fontSize: 11, fontWeight: 700,
+                  color: ok ? C.green : C.red,
+                  background: ok ? C.green + "18" : C.red + "18",
+                  borderRadius: 6, padding: "3px 8px",
+                }}>
+                  {ok ? "Connected" : "Offline"}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function VoiceStylePanel({ corpus, stylePaste, onPasteChange, onAdd, onBulkAdd, onRemove, onClearAll }: VoiceStylePanelProps) {
