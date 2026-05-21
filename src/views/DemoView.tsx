@@ -604,22 +604,8 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
         return
       }
 
-      // Supplement: for any property with 0 sheet leads, backfill from the
-      // hardcoded fallback so the demo always shows realistic attendee counts.
-      if (agentSold.length > 0) {
-        const fallbackGrouped = groupLeadsByProperty(DEMO_FALLBACK_LEADS, agentSold)
-        const supplemented = { ...grouped }
-        for (const key of Object.keys(supplemented).map(Number)) {
-          // Only supplement properties that have zero sheet leads — any real Sheets
-          // data (even 1 lead) is shown as-is so Sheet changes appear on reload.
-          if (supplemented[key].length === 0 && (fallbackGrouped[key]?.length ?? 0) > 0) {
-            supplemented[key] = fallbackGrouped[key]
-          }
-        }
-        setSoldLeads(supplemented)
-      } else {
-        setSoldLeads(grouped)
-      }
+      // Use GSheets data as-is — no fallback supplementation
+      setSoldLeads(grouped)
 
       setSheetsLoading(false)
       if (save && total > 0) {
