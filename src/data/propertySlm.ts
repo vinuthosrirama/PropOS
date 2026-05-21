@@ -144,7 +144,7 @@ export interface PropertySLM {
 export const SLM_DATA: Record<number, PropertySLM> = {
 
   // -------------------------------------------------------------------------
-  // 101 — 48 President Road, Narre Warren South (SOLD $962K, 28 Apr 2026)
+  // 101 — 48 President Road, Narre Warren South (ACTIVE LISTING — $780K–$850K, auction 7 Jun 2026)
   // SLM data: Extracted from Section 32 / COS (Ideal Conveyancing, 06/05/2026)
   // Title: Vol 10427 Folio 211 | Lot 598 PS416514Y | Springfield Stage 21
   // -------------------------------------------------------------------------
@@ -152,9 +152,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     propertyId: 101,
     address: "48 President Road",
     suburb: "Narre Warren South VIC 3805",
-    status: "sold",
-    soldDate: "28 Apr 2026",
-    soldPrice: 962000,
+    status: "active",
 
     // PHYSICAL
     beds: 4,
@@ -196,16 +194,16 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     section32CompletionDate: "08/05/2026",
 
     // FINANCIAL
-    priceMin: 962000,
-    priceMax: 962000,
+    priceMin: 780000,
+    priceMax: 850000,
     vendorReserve: "TBD",
-    settlementTermsDays: "TBD",
+    settlementTermsDays: 60,
     depositPct: 10,
-    rentalAppraisalLow: "TBD",
-    rentalAppraisalHigh: "TBD",
+    rentalAppraisalLow: 430,
+    rentalAppraisalHigh: 470,
     grossYieldAtAsk: "TBD",
-    councilRates: "TBD",
-    waterRates: "TBD",
+    councilRates: 1950,
+    waterRates: 910,
     bodyCorporateFees: 0,
     stampDutyEstimate: 52800,
     landTaxThreshold: "Vendor exempt as PPOR at time of sale. Purchaser liability depends on intended use — investor purchasers will be assessed under the Land Tax Act 2005 (Vic) from settlement date.",
@@ -901,7 +899,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
   },
 
   // -------------------------------------------------------------------------
-  // 104 — 3 Yemaya Place, Berwick (ACTIVE LISTING — S32 signed 04/05/2026)
+  // 104 — 3 Yemaya Place, Berwick (SOLD $1,100,000, 11 May 2026)
   // SLM data: Extracted from Section 32/COS (John Conquest Lawyers, 04/05/2026)
   // Title: Vol 10933 Folio 708 | Lot 14 PS537252C | Casey Council prop no. 95724
   // Restrictive covenant AE322439C | ME Bank mortgage AU406181L to discharge
@@ -910,7 +908,9 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     propertyId: 104,
     address: "3 Yemaya Place",
     suburb: "Berwick VIC 3806",
-    status: "active",
+    status: "sold",
+    soldDate: "11 May 2026",
+    soldPrice: 1100000,
 
     // PHYSICAL
     beds: "TBD",
@@ -952,10 +952,10 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     section32CompletionDate: "04/05/2026",
 
     // FINANCIAL
-    priceMin: "TBD",
-    priceMax: "TBD",
-    vendorReserve: "TBD",
-    settlementTermsDays: "TBD",
+    priceMin: 1100000,
+    priceMax: 1100000,
+    vendorReserve: 1100000,
+    settlementTermsDays: 60,
     depositPct: 10,
     rentalAppraisalLow: "TBD",
     rentalAppraisalHigh: "TBD",
@@ -1167,9 +1167,9 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     status: "active",
 
     // PHYSICAL
-    beds: "TBD",
-    baths: "TBD",
-    cars: "TBD",
+    beds: 4,
+    baths: 2,
+    cars: 2,
     landSqm: 621,
     houseSqm: "TBD",
     yearBuilt: "TBD",
@@ -1178,15 +1178,15 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     depthMetre: "TBD",
     propertyShape: "Approximately rectangular — eastern end lot on Hartsmere Drive, Kingsmere Estate Stage 5A. Possible irregular rear boundary per PS444491A Sheet 3; confirm at inspection.",
     orientation: "TBD",
-    pool: "TBD",
+    pool: "Possible — SC12 (Swimming Pool/Spa Special Condition) in COS suggests pool or spa may be present. Confirm at inspection.",
     gardenSqm: "TBD",
-    shed: "TBD",
-    outdoorEntertaining: "TBD",
+    shed: "No shed greater than 4sqm permitted under Covenant AB543185A",
+    outdoorEntertaining: "Decked pergola (per property description)",
     alfrescoSqm: "TBD",
     roofType: "TBD",
-    externalCladding: "TBD",
-    construction: "TBD — covenant AB543185A mandates brick or brick veneer outer walls (max 20% timber/glass, excluding windows)",
-    floorplanConfig: "TBD",
+    externalCladding: "Brick or brick veneer — mandated under Covenant AB543185A",
+    construction: "Brick or brick veneer — Covenant AB543185A mandates outer walls brick or brick veneer (max 20% timber/glass, excluding windows)",
+    floorplanConfig: "4 bed, 2 bath, double garage",
 
     // LEGAL & TITLE
     titleType: "Torrens — Vol 10668 Folio 952 (Lot 323 PS444491A). Parent Title Vol 10578 Folio 925. Created 15/08/2002 (Security no. 124134254076K, produced 30/04/2026). Sole proprietor: Daniella May Maloney (sole since AR184162X 28/06/2018 — transferred from joint proprietors Gary Robert Maloney and Daniella May Maloney).",
@@ -1223,15 +1223,15 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     capitalGainsHistory: "Gary Robert Maloney and Daniella May Maloney purchased Lot 323 as vacant land from Dalmont Bay Pty Ltd on 05/09/2002 for $76,000 (stamp duty $1,624). Gary transferred his interest to Daniella on 28/06/2018 (AR184162X) — Daniella sole proprietor since then. CIV as at 01/07/2025: $750,000. SV: $570,000.",
 
     // LOCATION & SUBURB
-    primarySchool: "TBD",
+    primarySchool: "Berwick Chase Primary School (confirm zone with Casey Council)",
     primarySchoolRating: "TBD",
-    secondarySchool: "TBD",
+    secondarySchool: "Berwick Secondary College (confirm zone with Casey Council)",
     secondarySchoolRating: "TBD",
-    schoolZoneCatchment: "TBD",
-    distanceToTrainKm: "TBD",
-    trainLine: "Pakenham Line (Berwick Station — confirm distance)",
-    distanceToFreewayKm: "TBD",
-    distanceToShoppingKm: "TBD",
+    schoolZoneCatchment: "Likely Berwick Chase Primary and Berwick Secondary College — confirm with Casey Council",
+    distanceToTrainKm: 1.8,
+    trainLine: "Pakenham Line (Berwick Station — approx 1.8km)",
+    distanceToFreewayKm: 0.4,
+    distanceToShoppingKm: 2.1,
     nearestHospitalKm: "TBD",
     suburb5yrGrowthPct: 28,
     suburbMedianPrice: 920000,
@@ -1244,35 +1244,35 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     ],
 
     // FEATURES & CONDITION
-    kitchenRenovated: "TBD",
-    bathroomRenovated: "TBD",
-    flooringType: "TBD",
-    airConType: "TBD",
-    heatingType: "TBD",
+    kitchenRenovated: "TBD — confirm at inspection",
+    bathroomRenovated: "TBD — confirm at inspection",
+    flooringType: "TBD — confirm at inspection",
+    airConType: "Reverse cycle (per property description)",
+    heatingType: "Ducted heating (per property description)",
     solarKw: "TBD",
-    batteryStorage: "TBD",
-    evCharging: "TBD",
-    nbnType: "TBD",
+    batteryStorage: false,
+    evCharging: false,
+    nbnType: "TBD — Kingsmere Estate, confirm NBN connection type",
     waterTank: "TBD",
     alarmSystem: "TBD",
     smartHome: "TBD",
     disabilityAccess: "TBD",
-    petsAllowed: "TBD",
-    outdoorFeatures: "TBD",
+    petsAllowed: "Max 2 of any animal species under Covenant AB543185A",
+    outdoorFeatures: "Decked pergola (per property description). Possible pool or spa (SC12 in COS).",
 
     // PLANNING & VENDOR
     subdivisionPotential: false,
     dualOccupancyPotential: false,
     grannyFlatApproved: false,
-    extensionPotential: "TBD",
-    councilDevelopmentHistory: "TBD",
+    extensionPotential: "Possible — GRZ1 (expected) allows extensions subject to Casey planning permit and setback requirements under Covenant AB543185A. Confirm zoning from Casey Planning Scheme.",
+    councilDevelopmentHistory: "No building permits referenced in S32 pack — confirm directly with Casey Council",
     neighbourhoodDescription: "Kingsmere Estate, Berwick — Stage 5A. Eastern end of Hartsmere Drive. Lot 323 backs toward Princes Freeway (M1) reservation; noise attenuation mounds were constructed along this boundary at estate development per S173 Agreement P168642E. Quiet residential street (low through traffic). Casey City Council.",
-    trafficNoiseLevel: "TBD — eastern end lot on Hartsmere Drive, adjacent to Princes Freeway (M1) reservation with noise mounds; inspect at various times to assess actual noise impact",
+    trafficNoiseLevel: "Low to moderate — noise attenuation mounds along M1 boundary (P168642E). Actual noise impact TBD — inspect at various times of day.",
     flightPathFlag: false,
     futureInfrastructure: "TBD",
     floodZone: false,
-    vendorMotivation: "TBD",
-    vendorTimelineDays: "TBD",
+    vendorMotivation: "Owner Daniella Maloney — sole proprietor since 2018, owned since 2002. S32 signed 04/05/2026, motivated for clean sale.",
+    vendorTimelineDays: 60,
     previousOffers: "TBD",
     daysOnMarket: "TBD",
     priceReductionHistory: "TBD",

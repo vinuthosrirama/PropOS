@@ -154,7 +154,10 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
             : fmt(property.price)}
         </div>
         {property.openDate && (
-          <div style={{ marginTop: 6, fontSize: 10, color: C.muted }}>{property.openDate}</div>
+          <div style={{ marginTop: 6, fontSize: 10, color: C.muted }}>🏠 {property.openDate}</div>
+        )}
+        {property.auctionDate && (
+          <div style={{ marginTop: 2, fontSize: 10, color: theme.primary, fontWeight: 600 }}>🔨 Auction {property.auctionDate}</div>
         )}
         {onBuyerBrief && (
           <button
