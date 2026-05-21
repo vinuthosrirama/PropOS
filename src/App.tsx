@@ -16,6 +16,7 @@ export default function App() {
   const [view, setView]               = useState<ViewId>("demo")
   const [agent, setAgent]             = useState(DEFAULT_AGENT)
   const [sheetStatus, setSheetStatus] = useState<"idle" | "loading" | "live" | "error">("idle")
+  const [demoBack, setDemoBack] = useState<{ fn: () => void } | null>(null)
 
   const handleLogin = (newAgent: AgentProfile, newTheme: AgencyTheme) => {
     setAgent(newAgent)
@@ -60,7 +61,7 @@ export default function App() {
       ["--accent-dim" as string]:  theme.dim,
       ["--accent-glow" as string]: theme.glow,
     }}>
-      <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} />
+      <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn} />
 
       <AnimatePresence mode="wait">
         <motion.div key={view}
@@ -69,7 +70,7 @@ export default function App() {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}>
 
-          {view === "demo"  && <DemoView agent={agent} theme={theme} onSettings={() => navigate("setup")} />}
+          {view === "demo"  && <DemoView agent={agent} theme={theme} onSettings={() => navigate("setup")} onRegisterBack={fn => setDemoBack(fn ? { fn } : null)} />}
           {view === "setup" && <SettingsView agent={agent} />}
         </motion.div>
       </AnimatePresence>

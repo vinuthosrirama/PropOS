@@ -753,7 +753,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
       {/* ── Sold listings ───────────────────────────────────────────────────── */}
       <div>
         <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 4 }}>
             Comparable Sales
           </div>
         </div>
@@ -2507,10 +2507,12 @@ export default function DemoView({
   agent,
   theme = DEFAULT_THEME,
   onSettings,
+  onRegisterBack,
 }: {
   agent: AgentProfile
   theme?: AgencyTheme
   onSettings?: () => void
+  onRegisterBack?: (fn: (() => void) | null) => void
 }) {
   const [stage, setStage] = useState<Stage>({ kind: "portfolio" })
   const [unreadReplies, setUnreadReplies] = useState(0)
@@ -2556,28 +2558,19 @@ export default function DemoView({
 
   const isPortfolio = stage.kind === "portfolio"
 
+  // Register/deregister the Portfolio back-button in the nav bar
+  useEffect(() => {
+    if (isPortfolio) {
+      onRegisterBack?.(null)
+    } else {
+      onRegisterBack?.(() => setStage({ kind: "portfolio" }))
+    }
+    return () => onRegisterBack?.(null)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPortfolio])
+
   return (
     <>
-      {/* Floating "← Portfolio" button — sits just below the nav bar */}
-      {!isPortfolio && (
-        <motion.button
-          initial={{ opacity: 0, x: -8 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0 }}
-          onClick={() => setStage({ kind: "portfolio" })}
-          style={{
-            position: "fixed", top: 68, left: 20, zIndex: 200,
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 12px", borderRadius: 8,
-            background: C.bg2, border: `1px solid ${C.border}`,
-            color: theme.primary, fontSize: 12, fontWeight: 700,
-            fontFamily: FONT, cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-          }}
-        >
-          ← Portfolio
-        </motion.button>
-      )}
 
       {/* Reply inbox badge — top-right, always visible so presenter can simulate a reply */}
       {(
