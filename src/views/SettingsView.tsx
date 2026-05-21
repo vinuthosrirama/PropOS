@@ -4,7 +4,7 @@ import {
   loadSLMForProperty, saveSLMForProperty, resetSLMForProperty,
   getSLMCompleteness, type PropertySLM, type PropertyQA
 } from "../data/propertySlm"
-import { readPropertySLMFromSheet, sheetsConnected } from "../lib/sheet"
+import { readPropertySLMFromSheet, writeSLMFieldToSheet, sheetsConnected } from "../lib/sheet"
 import AnalyticsDashboard from "../components/AnalyticsDashboard"
 import { loadCorpus, saveCorpus, type TrainingEntry } from "../lib/voiceContext"
 
@@ -631,6 +631,15 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
     if (!currentSLM) return
     setSaving(true)
     saveSLMForProperty(currentSLM)
+    // Push all changed fields to GSheets as the source-of-truth SLM store
+    if (sheetsConnected()) {
+      const entries = Object.entries(currentSLM) as [string, unknown][]
+      entries.forEach(([field, value]) => {
+        if (value !== "TBD" && value !== null && value !== undefined) {
+          writeSLMFieldToSheet(selectedPropId, field, value).catch(() => {})
+        }
+      })
+    }
     await new Promise((r) => setTimeout(r, 400))
     setSaving(false)
     setSavedFlash(true)

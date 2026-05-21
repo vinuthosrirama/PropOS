@@ -160,8 +160,8 @@ export interface VoiceProfile {
 export const PAS_DEFAULT_AGENT: AgentProfile = {
   name:    "Pas Sunilchandra",
   agency:  "Area Specialist",
-  email:   "pas.sunilchandra@areaspecialist.com.au",
-  phone:   "0400 000 000",
+  email:   "pass@areaspecialist.com.au",
+  phone:   "0430 366 649",
   suburb:  "Berwick",
   tagline: "SE Melbourne specialist. Results driven.",
   voiceProfile: {

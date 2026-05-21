@@ -76,10 +76,14 @@ Questions raised: ${lead.questions || "none"}${transcriptBlock}
 
 STRATEGY: ${strategy}
 
-Write personalised SMS and email outreach for ${lead.name}. Use the specific details above. Never use generic phrases when you have real intel.
+Write personalised SMS and email outreach for ${lead.name}. Rules:
+- SMS: MUST mention (1) the street name of the property they inspected (from context above), (2) one specific concern or question they had, (3) the street name of this new listing. Under 160 chars total.
+- Email subject: Natural, conversational — start with "Hey [FirstName]," or similar. No "[TEST", "New Listing", or generic subjects. Reference something personal to this lead.
+- Email body: Para 1 reference something from the old property. Para 2 answer their key question with specific data. Para 3 one concrete CTA (e.g. "Saturday 10am?").
+- Never use generic phrases when you have real intel.
 
 Respond ONLY with valid JSON, no markdown:
-{"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2"]}}`
+{"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]}}`
 
   const message = await getClient().messages.create({
     model: "claude-sonnet-4-5",

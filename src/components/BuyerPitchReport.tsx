@@ -100,6 +100,17 @@ export default function BuyerPitchReport({ property, slm, agent, onClose }: Prop
   ]
 
   return (
+    <>
+    <style>{`
+      @media print {
+        body > * { display: none !important; }
+        #buyer-pitch-report { display: block !important; position: static !important;
+          width: 100% !important; max-height: none !important; overflow: visible !important;
+          box-shadow: none !important; border-radius: 0 !important; }
+        .no-print { display: none !important; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      }
+    `}</style>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -140,13 +151,12 @@ export default function BuyerPitchReport({ property, slm, agent, onClose }: Prop
             borderBottom: "1px solid rgba(255,255,255,0.12)",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {/* Peake wordmark */}
               <div style={{
                 fontSize: 26, fontWeight: 800, color: "#fff",
                 letterSpacing: -1.5, lineHeight: 1,
                 fontFamily: "'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif",
               }}>
-                Peake
+                {agent.agency}
               </div>
               <div style={{
                 width: 1, height: 20, background: "rgba(255,255,255,0.25)", margin: "0 2px",
@@ -157,7 +167,7 @@ export default function BuyerPitchReport({ property, slm, agent, onClose }: Prop
             </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", letterSpacing: 0.5 }}>
-                We're at the heart of it all
+                Property Investment Brief
               </div>
             </div>
           </div>
@@ -357,14 +367,22 @@ export default function BuyerPitchReport({ property, slm, agent, onClose }: Prop
           {/* ── Key Features ─────────────────────────────────── */}
           <SectionHead>Key Features</SectionHead>
           <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0, marginBottom: 32,
+            display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 0, marginBottom: 32,
           }}>
-            <Row label="Solar"                 value={typeof slm.solarKw === "number" ? `${slm.solarKw}kW` : val(slm.solarKw)} />
-            <Row label="Pool"                  value={val(slm.pool)} />
-            <Row label="Air Conditioning"      value={val(slm.airConType)} />
-            <Row label="Subdivision Potential" value={val(slm.subdivisionPotential)} />
-            <Row label="Granny Flat Approved"  value={val(slm.grannyFlatApproved)} />
-            <Row label="Year Built"            value={val(slm.yearBuilt)} />
+            {/* Left column */}
+            <div>
+              <Row label="Solar"               value={typeof slm.solarKw === "number" ? `${slm.solarKw}kW` : val(slm.solarKw)} />
+              <Row label="Air Conditioning"    value={val(slm.airConType)} />
+              <Row label="Granny Flat Approved" value={val(slm.grannyFlatApproved)} />
+            </div>
+            {/* Vertical divider */}
+            <div style={{ background: P.rule, margin: "0 20px" }} />
+            {/* Right column */}
+            <div>
+              <Row label="Pool"                  value={val(slm.pool)} />
+              <Row label="Subdivision Potential" value={val(slm.subdivisionPotential)} />
+              <Row label="Year Built"            value={val(slm.yearBuilt)} />
+            </div>
           </div>
 
           {/* ── Agent Footer ─────────────────────────────────── */}
@@ -387,9 +405,9 @@ export default function BuyerPitchReport({ property, slm, agent, onClose }: Prop
                 fontSize: 24, fontWeight: 800, color: P.ink, letterSpacing: -1.2,
                 fontFamily: "'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif",
               }}>
-                Peake
+                {agent.agency}
               </div>
-              <div style={{ fontSize: 9, color: "#aaa", letterSpacing: 0.5 }}>peakere.com.au</div>
+              <div style={{ fontSize: 9, color: "#aaa", letterSpacing: 0.5 }}>{agent.agency.toLowerCase().replace(/\s+/g, "")}.com.au</div>
             </div>
           </div>
 
@@ -419,6 +437,7 @@ export default function BuyerPitchReport({ property, slm, agent, onClose }: Prop
         </div>
       </motion.div>
     </motion.div>
+    </>
   )
 }
 

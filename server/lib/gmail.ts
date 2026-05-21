@@ -46,7 +46,7 @@ export async function sendEmail(params: {
 }): Promise<{ messageId: string; testMode: boolean }> {
   const testEmail  = process.env.TEST_RECIPIENT_EMAIL?.trim()
   const actualTo   = testEmail ?? params.to
-  const actualSubj = testEmail ? `[TEST → ${params.to}] ${params.subject}` : params.subject
+  const actualSubj = params.subject
 
   const raw = makeRaw(
     `"${params.fromName}" <${process.env.GMAIL_USER}>`,

@@ -375,6 +375,58 @@ export async function postAuctionOutcome(outcome: import("../data").AuctionOutco
   } catch { /* fail silently */ }
 }
 
+// ── Agent Voice corpus — GSheets as source-of-truth for outreach examples ────
+// Apps Script must handle: action=getVoiceCorpus → {entries:[{text,type,channel,ts}]}
+// and POST type=voice_corpus_entry → appends to VoiceCorpus tab
+
+export interface VoiceCorpusEntry {
+  text: string
+  type: "sms" | "email_subject" | "email_body"
+  channel: "sms" | "email"
+  ts: string
+}
+
+export async function readAgentVoiceCorpus(): Promise<VoiceCorpusEntry[]> {
+  if (!SHEET_URL) return []
+  try {
+    const res = await fetch(`${SHEET_URL}?action=getVoiceCorpus`, { cache: "no-store" })
+    if (!res.ok) return []
+    const data = await res.json() as { entries?: VoiceCorpusEntry[] }
+    return data.entries ?? []
+  } catch { return [] }
+}
+
+export async function writeAgentVoiceEntry(entry: VoiceCorpusEntry): Promise<void> {
+  if (!SHEET_URL) return
+  try {
+    await fetch(SHEET_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ action: "voice_corpus_entry", entry }),
+    })
+  } catch { /* fail silently */ }
+}
+
+// ── SLM two-way sync — write SLM field changes back to GSheets ───────────────
+// Apps Script must handle POST type=slm_update with {propertyId, field, value}
+
+export async function writeSLMFieldToSheet(propertyId: number, field: string, value: unknown): Promise<void> {
+  if (!SHEET_URL) return
+  try {
+    await fetch(SHEET_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        type: "slm_update",
+        timestamp: new Date().toISOString(),
+        propertyId,
+        field,
+        value: String(value),
+      }),
+    })
+  } catch { /* fail silently */ }
+}
+
 // ── Read leads from Boxdice via server proxy (when configured) ───────────────
 
 export async function readLeadsFromBoxdice(listingId: number, listingAddress: string): Promise<SheetLead[] | null> {
