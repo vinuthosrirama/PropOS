@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { C, FONT, DEFAULT_THEME, type AgentProfile, type AgencyTheme, type ViewId } from "../data"
 import { useBreakpoint } from "../hooks/useBreakpoint"
@@ -20,12 +20,25 @@ export default function Nav({
   const bp = useBreakpoint()
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const navRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 10)
     window.addEventListener("scroll", h)
     return () => window.removeEventListener("scroll", h)
   }, [])
+
+  // Close mobile menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [menuOpen])
 
   const currentIdx = VIEWS.findIndex(v => v.id === view)
 
@@ -71,7 +84,14 @@ export default function Nav({
   if (bp === "mobile") {
     return (
       <>
-        <nav style={{
+        {/* Backdrop — closes menu on outside click */}
+        {menuOpen && (
+          <div
+            onClick={() => setMenuOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 98 }}
+          />
+        )}
+        <nav ref={navRef} style={{
           position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
           height: 52, padding: "0 16px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
