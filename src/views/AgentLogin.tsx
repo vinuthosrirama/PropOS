@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { C, FONT, getAgencyTheme, type AgentProfile, type AgencyTheme } from "../data"
 
@@ -21,6 +21,161 @@ const SUBURBS = [
   "Other",
 ]
 
+// ── Agency dropdown with colour swatches ─────────────────────────────────────
+function AgencyDropdown({
+  value, onChange, error, accentColor,
+}: { value: string; onChange: (v: string) => void; error?: string; accentColor?: string }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  const selectedTheme = value ? getAgencyTheme(value) : null
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: "100%", background: C.bg3,
+          border: `1px solid ${error ? C.red + "88" : accentColor ? accentColor + "55" : C.border}`,
+          borderRadius: 10, padding: "11px 14px",
+          color: value ? C.text : C.faint, fontSize: 14, fontFamily: FONT,
+          cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
+          transition: "border 0.15s",
+        }}
+      >
+        {value && selectedTheme && (
+          <span style={{
+            width: 10, height: 10, borderRadius: "50%",
+            background: selectedTheme.primary, flexShrink: 0,
+            boxShadow: `0 0 6px ${selectedTheme.primary}88`,
+          }} />
+        )}
+        <span style={{ flex: 1, textAlign: "left" }}>{value || "Select your agency..."}</span>
+        <span style={{ color: C.faint, fontSize: 10 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          background: C.bg3, border: `1px solid ${C.border}`,
+          borderRadius: 10, zIndex: 200, overflow: "hidden",
+          boxShadow: "0 12px 32px rgba(0,0,0,0.5)", maxHeight: 280, overflowY: "auto",
+        }}>
+          {AGENCIES.map(agency => {
+            const t = getAgencyTheme(agency)
+            return (
+              <div
+                key={agency}
+                onClick={() => { onChange(agency); setOpen(false) }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "10px 14px", cursor: "pointer",
+                  background: agency === value ? C.bg2 : "transparent",
+                  transition: "background 0.1s",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = C.bg2 }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = agency === value ? C.bg2 : "transparent" }}
+              >
+                <span style={{
+                  width: 10, height: 10, borderRadius: "50%",
+                  background: t.primary, flexShrink: 0,
+                  boxShadow: `0 0 5px ${t.primary}66`,
+                }} />
+                <span style={{ fontSize: 14, color: C.text }}>{agency}</span>
+                {agency === value && (
+                  <span style={{ marginLeft: "auto", color: t.primary, fontSize: 12, fontWeight: 700 }}>✓</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Suburb searchable autocomplete ────────────────────────────────────────────
+function SuburbAutocomplete({
+  value, onChange, error, accentColor,
+}: { value: string; onChange: (v: string) => void; error?: string; accentColor?: string }) {
+  const [query, setQuery] = useState(value)
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { setQuery(value) }, [value])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  const filtered = query
+    ? SUBURBS.filter(s => s.toLowerCase().includes(query.toLowerCase()))
+    : SUBURBS
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <input
+        type="text"
+        value={query}
+        placeholder="Type suburb name..."
+        onChange={e => { setQuery(e.target.value); onChange(""); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        style={{
+          width: "100%", background: C.bg3,
+          border: `1px solid ${error ? C.red + "88" : accentColor ? accentColor + "55" : C.border}`,
+          borderRadius: 10, padding: "11px 14px",
+          color: C.text, fontSize: 14, fontFamily: FONT,
+          outline: "none", boxSizing: "border-box", transition: "border 0.15s",
+        }}
+        onKeyDown={e => {
+          if (e.key === "Escape") setOpen(false)
+          if (e.key === "Enter" && filtered.length === 1) {
+            onChange(filtered[0]); setQuery(filtered[0]); setOpen(false)
+          }
+        }}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          background: C.bg3, border: `1px solid ${C.border}`,
+          borderRadius: 10, zIndex: 200, overflow: "hidden",
+          boxShadow: "0 12px 32px rgba(0,0,0,0.5)", maxHeight: 220, overflowY: "auto",
+        }}>
+          {filtered.map(suburb => (
+            <div
+              key={suburb}
+              onClick={() => { onChange(suburb); setQuery(suburb); setOpen(false) }}
+              style={{
+                padding: "10px 14px", cursor: "pointer", fontSize: 14, color: C.text,
+                background: suburb === value ? C.bg2 : "transparent", transition: "background 0.1s",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = C.bg2 }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = suburb === value ? C.bg2 : "transparent" }}
+            >
+              {suburb}
+              {suburb === value && <span style={{ float: "right", color: accentColor ?? C.blue, fontWeight: 700, fontSize: 12 }}>✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface Props {
   onLogin: (agent: AgentProfile, theme: AgencyTheme) => void
 }
@@ -42,8 +197,17 @@ export default function AgentLogin({ onLogin }: Props) {
     if (!form.lastName.trim())  e.lastName  = "Required"
     if (!form.agency)           e.agency    = "Required"
     if (!form.suburb)           e.suburb    = "Required"
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "Invalid email"
     setErrors(e)
     return Object.keys(e).length === 0
+  }
+
+  // Normalise Australian mobile to +61 format
+  const normalisePhone = (p: string): string => {
+    const digits = p.replace(/\D/g, "")
+    if (digits.startsWith("61") && digits.length === 11) return `+${digits}`
+    if (digits.startsWith("0") && digits.length === 10) return `+61${digits.slice(1)}`
+    return p || "04xx xxx xxx"
   }
 
   const handleSubmit = () => {
@@ -55,7 +219,7 @@ export default function AgentLogin({ onLogin }: Props) {
       name:    `${form.firstName} ${form.lastName}`,
       agency:  form.agency,
       email:   form.email || `${form.firstName.toLowerCase()}.${form.lastName.toLowerCase()}@${form.agency.toLowerCase().replace(/\s+/g, "")}.com.au`,
-      phone:   form.phone || "04xx xxx xxx",
+      phone:   normalisePhone(form.phone),
       suburb:  form.suburb,
       tagline: `${form.suburb} specialist.`,
       voiceProfile: {
@@ -163,24 +327,12 @@ export default function AgentLogin({ onLogin }: Props) {
                   <label style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>
                     Agency{errors.agency && <span style={{ color: C.red, marginLeft: 6, fontSize: 10 }}>{errors.agency}</span>}
                   </label>
-                  <div style={{ position: "relative" }}>
-                    <select
-                      value={form.agency}
-                      onChange={e => { setForm(f => ({ ...f, agency: e.target.value })); setErrors(er => ({ ...er, agency: "" })) }}
-                      style={{
-                        width: "100%", background: C.bg3,
-                        border: `1px solid ${errors.agency ? C.red + "88" : C.border}`,
-                        borderRadius: 10, padding: "11px 14px",
-                        color: form.agency ? C.text : C.faint,
-                        fontSize: 14, fontFamily: FONT, outline: "none",
-                        cursor: "pointer", appearance: "none", transition: "border 0.15s",
-                      }}
-                    >
-                      <option value="" disabled>Select your agency...</option>
-                      {AGENCIES.map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
-                    <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: C.faint, fontSize: 10 }}>▼</div>
-                  </div>
+                  <AgencyDropdown
+                    value={form.agency}
+                    onChange={v => { setForm(f => ({ ...f, agency: v })); setErrors(er => ({ ...er, agency: "" })) }}
+                    error={errors.agency}
+                    accentColor={theme?.primary}
+                  />
                 </div>
 
                 {/* Suburb */}
@@ -188,24 +340,12 @@ export default function AgentLogin({ onLogin }: Props) {
                   <label style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>
                     Suburb Specialty{errors.suburb && <span style={{ color: C.red, marginLeft: 6, fontSize: 10 }}>{errors.suburb}</span>}
                   </label>
-                  <div style={{ position: "relative" }}>
-                    <select
-                      value={form.suburb}
-                      onChange={e => { setForm(f => ({ ...f, suburb: e.target.value })); setErrors(er => ({ ...er, suburb: "" })) }}
-                      style={{
-                        width: "100%", background: C.bg3,
-                        border: `1px solid ${errors.suburb ? C.red + "88" : C.border}`,
-                        borderRadius: 10, padding: "11px 14px",
-                        color: form.suburb ? C.text : C.faint,
-                        fontSize: 14, fontFamily: FONT, outline: "none",
-                        cursor: "pointer", appearance: "none",
-                      }}
-                    >
-                      <option value="" disabled>Select suburb...</option>
-                      {SUBURBS.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: C.faint, fontSize: 10 }}>▼</div>
-                  </div>
+                  <SuburbAutocomplete
+                    value={form.suburb}
+                    onChange={v => { setForm(f => ({ ...f, suburb: v })); setErrors(er => ({ ...er, suburb: "" })) }}
+                    error={errors.suburb}
+                    accentColor={theme?.primary}
+                  />
                 </div>
 
                 {/* Email + Phone */}
