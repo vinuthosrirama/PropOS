@@ -219,6 +219,7 @@ export interface PortfolioProperty {
   status:      "active" | "sold" | "under_offer"
   soldDate?:   string
   openDate?:   string
+  auctionDate?: string
   image:       string
   description: string
   leadCount:   number          // expected attendees / known leads
@@ -248,16 +249,6 @@ export function getPortfolioForAgent(agent: AgentProfile): { sold: PortfolioProp
 // Sold comparable properties — leads come exclusively from Google Sheets (Leads tab, inspectedProperty column)
 export const PORTFOLIO_SOLD: PortfolioProperty[] = [
   {
-    id: 101,
-    address: "48 President Road",
-    suburb: "Narre Warren South", state: "VIC", postcode: "3805",
-    price: 962000, beds: 4, baths: 2, cars: 2, land: 640,
-    type: "House", status: "sold", soldDate: "28 Apr 2026",
-    image: "/48-president-road.jpg",
-    description: "4-bed family home in sought-after Narre Warren South. Ducted heating and cooling, alfresco, double garage on 640sqm.",
-    leadCount: 18,
-  },
-  {
     id: 102,
     address: "3 Thirlmere Court",
     suburb: "Berwick", state: "VIC", postcode: "3806",
@@ -281,21 +272,11 @@ export const PORTFOLIO_SOLD: PortfolioProperty[] = [
     id: 104,
     address: "3 Yemaya Place",
     suburb: "Berwick", state: "VIC", postcode: "3806",
-    price: 1095000, beds: 4, baths: 2, cars: 2, land: 600,
-    type: "House", status: "sold", soldDate: "15 Mar 2026",
+    price: 1100000, beds: 4, baths: 2, cars: 2, land: 806,
+    type: "House", status: "sold", soldDate: "11 May 2026",
     image: "/3-yemaya-place.jpg",
-    description: "Contemporary 4-bed family home in Berwick. Open plan living, modern kitchen, alfresco, double garage on 600sqm.",
+    description: "Contemporary 4-bed family home in Berwick. Open plan living, modern kitchen, alfresco, double garage on 806sqm cul-de-sac block.",
     leadCount: 15,
-  },
-  {
-    id: 105,
-    address: "34 Hartsmere Drive",
-    suburb: "Berwick", state: "VIC", postcode: "3806",
-    price: 865000, beds: 4, baths: 2, cars: 2, land: 621,
-    type: "House", status: "sold", soldDate: "08 Feb 2026",
-    image: "https://rimh2.domainstatic.com.au/vQZsuF67_udtR6syb8UOXkIBsD0=/660x440/filters:format(jpeg):quality(80)/2020596427_3_1_260211_032609-w2048-h1365",
-    description: "Kingsmere Estate 4-bed family home. Ducted heating, reverse cycle cooling, decked pergola, double garage on 621sqm.",
-    leadCount: 14,
   },
 ]
 
@@ -373,42 +354,32 @@ export const PAS_PORTFOLIO_ACTIVE: PortfolioProperty[] = [
   },
 ]
 
-// Active listings for cross-property demo
+// Active listings — Cameron Knoll / Peake
 export const PORTFOLIO_ACTIVE: PortfolioProperty[] = [
   {
-    id: 201,
-    address: "17 Grand Arch Way",
-    suburb: "Berwick", state: "VIC", postcode: "3806",
-    price: 1175000, priceMin: 1100000, priceMax: 1250000,
-    beds: 4, baths: 2, cars: 2, land: 680,
+    id: 101,
+    address: "48 President Road",
+    suburb: "Narre Warren South", state: "VIC", postcode: "3805",
+    price: 815000, priceMin: 780000, priceMax: 850000,
+    beds: 4, baths: 2, cars: 2, land: 630,
     type: "House", status: "active",
-    openDate: "Saturday 17 May 2026, 11:00am",
+    openDate: "Saturday 24 May 2026, 11:00am",
+    auctionDate: "Saturday 7 June 2026",
+    image: "/48-president-road.jpg",
+    description: "4-bed family home in sought-after Springfield Estate. Ducted heating and cooling, alfresco entertaining, double garage on 630sqm. Strathaird Primary 357m walk.",
+    leadCount: 0,
+  },
+  {
+    id: 105,
+    address: "34 Hartsmere Drive",
+    suburb: "Berwick", state: "VIC", postcode: "3806",
+    price: 860000, priceMin: 820000, priceMax: 900000,
+    beds: 4, baths: 2, cars: 2, land: 621,
+    type: "House", status: "active",
+    openDate: "Saturday 24 May 2026, 12:30pm",
+    auctionDate: "Saturday 7 June 2026",
     image: "https://rimh2.domainstatic.com.au/vQZsuF67_udtR6syb8UOXkIBsD0=/660x440/filters:format(jpeg):quality(80)/2020596427_3_1_260211_032609-w2048-h1365",
-    description: "Premium 4-bed in sought-after Grand Arch estate. Entertainers kitchen, theatre room, master ensuite. Walk to Berwick Grammar.",
-    leadCount: 0,
-  },
-  {
-    id: 202,
-    address: "12 Broadway Street",
-    suburb: "Berwick", state: "VIC", postcode: "3806",
-    price: 870000, priceMin: 820000, priceMax: 920000,
-    beds: 4, baths: 2, cars: 2, land: 601,
-    type: "House", status: "active",
-    openDate: "Saturday 17 May 2026, 12:30pm",
-    image: "https://rimh2.domainstatic.com.au/2C-NIOdYuv1qnTl1sa6RLkBWdaE=/660x440/filters:format(jpeg):quality(80)/2020772529_1_1_260417_073531-w1802-h1200",
-    description: "Charming 4-bed family home in Berwick village. Updated kitchen and bathrooms, private rear garden. Walk to station.",
-    leadCount: 0,
-  },
-  {
-    id: 203,
-    address: "5 Ashfield Drive",
-    suburb: "Berwick", state: "VIC", postcode: "3806",
-    price: 1420000, priceMin: 1350000, priceMax: 1490000,
-    beds: 5, baths: 3, cars: 2, land: 820,
-    type: "House", status: "active",
-    openDate: "Sunday 18 May 2026, 10:00am",
-    image: "https://rimh2.domainstatic.com.au/xbGSfQJZ87FeABRXj0BOifPdSd0=/660x440/filters:format(jpeg):quality(80)/2020678133_1_1_260312_090108-w2048-h1365",
-    description: "Grand 5-bed executive home. 820sqm, pool, alfresco, home theatre. Prestige Berwick address, top school zones.",
+    description: "Kingsmere Estate 4-bed family home. Ducted heating, reverse cycle cooling, decked pergola, double garage on 621sqm. Noise attenuation mounds along M1 boundary.",
     leadCount: 0,
   },
 ]

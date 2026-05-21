@@ -20,6 +20,8 @@ function ROICalculator({ auctions, baseGCI, avgBidders }: {
     : 0
 
   const bidderLift = Math.max(0, avgBidders - 2.8).toFixed(1)
+  const PROPOS_ANNUAL_COST = 6750
+  const roiMultiplier = scaledGCI > 0 ? (scaledGCI / PROPOS_ANNUAL_COST).toFixed(1) : "0"
 
   return (
     <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24 }}>
@@ -84,7 +86,10 @@ function ROICalculator({ auctions, baseGCI, avgBidders }: {
         <div style={{ fontSize: 38, fontWeight: 800, color: C.green, letterSpacing: -1, lineHeight: 1 }}>
           ${scaledGCI.toLocaleString()}
         </div>
-        <div style={{ fontSize: 11, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginTop: 10 }}>
+          That's <span style={{ color: C.green }}>{roiMultiplier}×</span> the cost of PropOS
+        </div>
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>
           Based on {auctions} auction{auctions !== 1 ? "s" : ""} tracked · {bidderLift} extra registered bidders per auction vs industry average
         </div>
       </div>
