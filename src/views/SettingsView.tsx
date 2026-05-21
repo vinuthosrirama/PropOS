@@ -1214,7 +1214,7 @@ function VoiceStylePanel({ corpus, stylePaste, onPasteChange, onAdd, onBulkAdd, 
         <textarea
           value={stylePaste}
           onChange={e => onPasteChange(e.target.value)}
-          placeholder={"Paste a real SMS or email you've sent to a lead...\n\nExample:\nHey Michelle, Simon here. Just heard back on the Toorak inspection - they loved it. Wanted to let you know first before it goes to contract. Worth a chat today?"}
+          placeholder={"Paste a real SMS or email you've sent to a lead...\n\nExample:\nHey Michelle, Cameron here. Just heard back on the Berwick inspection - they loved it. Wanted to let you know first before it goes to contract. Worth a chat today?"}
           style={{
             width: "100%",
             minHeight: 130,
