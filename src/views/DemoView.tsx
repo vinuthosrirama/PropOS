@@ -141,7 +141,7 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
             <span key={s} style={{ fontSize: 10, color: C.faint }}>{s}</span>
           ))}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "rgb(225, 205, 255)" }}>
           {property.priceMin && property.priceMax
             ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
             : fmt(property.price)}
@@ -2586,7 +2586,7 @@ export default function DemoView({
           animate={{ opacity: 1, scale: 1 }}
           onClick={() => { setShowInbox(!showInbox); setSelectedThreadPhone(null); setReplyDraft(null) }}
           style={{
-            position: "fixed", top: 16, right: 16, zIndex: 200,
+            position: "fixed", top: 68, right: 16, zIndex: 200,
             display: "flex", alignItems: "center", gap: 6,
             padding: "6px 12px", borderRadius: 8,
             background: unreadReplies > 0 ? "rgba(245,158,11,0.15)" : C.bg2,
