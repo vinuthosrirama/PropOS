@@ -44,11 +44,11 @@ function money(v: unknown): string {
 
 const Row = ({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) => (
   <div style={{
-    display: "flex", justifyContent: "space-between", alignItems: "baseline",
-    padding: "7px 0", borderBottom: `1px solid ${P.rule}`,
+    display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+    padding: "7px 0", borderBottom: `1px solid ${P.rule}`, gap: 12,
   }}>
-    <span style={{ fontSize: 12, color: "#555", fontWeight: 400 }}>{label}</span>
-    <span style={{ fontSize: 12, fontWeight: accent ? 700 : 500, color: accent ? P.ink : "#1a1a1a" }}>
+    <span style={{ fontSize: 12, color: "#555", fontWeight: 400, flexShrink: 0, minWidth: 110 }}>{label}</span>
+    <span style={{ fontSize: 12, fontWeight: accent ? 700 : 500, color: accent ? P.ink : "#1a1a1a", textAlign: "right" }}>
       {value}
     </span>
   </div>
@@ -366,19 +366,15 @@ export default function BuyerPitchReport({ property, slm, agent, onClose }: Prop
 
           {/* ── Key Features ─────────────────────────────────── */}
           <SectionHead>Key Features</SectionHead>
-          <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 0, marginBottom: 32,
-          }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0, marginBottom: 32 }}>
             {/* Left column */}
-            <div>
-              <Row label="Solar"               value={typeof slm.solarKw === "number" ? `${slm.solarKw}kW` : val(slm.solarKw)} />
-              <Row label="Air Conditioning"    value={val(slm.airConType)} />
-              <Row label="Granny Flat Approved" value={val(slm.grannyFlatApproved)} />
+            <div style={{ paddingRight: 24, borderRight: `1px solid ${P.rule}` }}>
+              <Row label="Solar"                value={typeof slm.solarKw === "number" ? `${slm.solarKw}kW` : val(slm.solarKw)} />
+              <Row label="Air Conditioning"     value={val(slm.airConType)} />
+              <Row label="Granny Flat"          value={val(slm.grannyFlatApproved)} />
             </div>
-            {/* Vertical divider */}
-            <div style={{ background: P.rule, margin: "0 20px" }} />
             {/* Right column */}
-            <div>
+            <div style={{ paddingLeft: 24 }}>
               <Row label="Pool"                  value={val(slm.pool)} />
               <Row label="Subdivision Potential" value={val(slm.subdivisionPotential)} />
               <Row label="Year Built"            value={val(slm.yearBuilt)} />
@@ -446,7 +442,7 @@ function SectionHead({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       fontSize: 9, fontWeight: 800, letterSpacing: 1.8, textTransform: "uppercase",
-      color: P.ink, borderBottom: `2px solid ${P.ink}`,
+      color: P.mid, borderBottom: `2px solid ${P.mid}`,
       paddingBottom: 5, marginBottom: 12, marginTop: 4,
     }}>
       {children}
