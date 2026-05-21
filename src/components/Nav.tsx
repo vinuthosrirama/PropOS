@@ -9,13 +9,14 @@ export const VIEWS: { id: ViewId; label: string; short: string }[] = [
 ]
 
 export default function Nav({
-  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME,
+  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout,
 }: {
   view: ViewId
   setView: (v: ViewId) => void
   agent: AgentProfile
   sheetStatus?: "idle" | "loading" | "live" | "error"
   theme?: AgencyTheme
+  onLogout?: () => void
 }) {
   const bp = useBreakpoint()
   const [scrolled, setScrolled] = useState(false)
@@ -154,6 +155,17 @@ export default function Nav({
                   {i < currentIdx && <span style={{ marginLeft: "auto", color: C.green, fontSize: 12 }}>✓</span>}
                 </button>
               ))}
+              {onLogout && (
+                <button onClick={onLogout} style={{
+                  width: "100%", padding: "14px 20px",
+                  display: "flex", alignItems: "center",
+                  background: "transparent", border: "none", cursor: "pointer",
+                  fontFamily: FONT, borderLeft: "3px solid transparent",
+                  borderTop: `1px solid ${C.border}`, marginTop: 4,
+                }}>
+                  <div style={{ fontSize: 13, color: C.muted }}>Switch Profile</div>
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -198,6 +210,24 @@ export default function Nav({
       </div>
 
       {sheetChip && <div style={{ marginLeft: 12 }}>{sheetChip}</div>}
+
+      {onLogout && (
+        <button
+          onClick={onLogout}
+          title="Switch profile"
+          style={{
+            marginLeft: 12, flexShrink: 0,
+            padding: "3px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+            background: "transparent", color: C.faint,
+            fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
+            transition: "color 0.15s, border-color 0.15s",
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = C.muted; (e.currentTarget as HTMLButtonElement).style.borderColor = C.muted }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = C.faint; (e.currentTarget as HTMLButtonElement).style.borderColor = C.border }}
+        >
+          Switch Profile
+        </button>
+      )}
     </nav>
   )
 }

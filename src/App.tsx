@@ -24,6 +24,11 @@ export default function App() {
     seedCorpusIfEmpty()
   }
 
+  const handleLogout = () => {
+    setLoggedIn(false)
+    setView("demo")
+  }
+
   // Ping Sheet URL on login to drive the Nav "Sheet live" indicator
   useEffect(() => {
     if (!loggedIn) return
@@ -55,7 +60,7 @@ export default function App() {
       ["--accent-dim" as string]:  theme.dim,
       ["--accent-glow" as string]: theme.glow,
     }}>
-      <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} />
+      <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} />
 
       <AnimatePresence mode="wait">
         <motion.div key={view}
