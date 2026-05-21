@@ -141,16 +141,16 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
             <span key={s} style={{ fontSize: 10, color: C.faint }}>{s}</span>
           ))}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: theme.gradient[0] }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>
           {property.priceMin && property.priceMax
             ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
             : fmt(property.price)}
         </div>
         {property.openDate && (
-          <div style={{ marginTop: 6, fontSize: 10, color: C.muted }}>🏠 {property.openDate}</div>
+          <div style={{ marginTop: 6, fontSize: 10, color: C.muted }}>{property.openDate}</div>
         )}
         {property.auctionDate && (
-          <div style={{ marginTop: 2, fontSize: 10, color: theme.primary, fontWeight: 600 }}>🔨 Auction {property.auctionDate}</div>
+          <div style={{ marginTop: 2, fontSize: 10, color: theme.primary, fontWeight: 600 }}>Auction {property.auctionDate}</div>
         )}
         {onBuyerBrief && (
           <button
@@ -218,7 +218,7 @@ function SoldCard({ property, leads, loading, theme, onClick, onRecordAuction }:
       <div style={{
         position: "absolute", top: 10, left: 10,
         padding: "3px 10px", borderRadius: 20,
-        background: withAlpha(theme.primary, 0.88), backdropFilter: "blur(6px)",
+        background: theme.primary,
         fontSize: 10, fontWeight: 800, color: "#fff", zIndex: 2,
       }}>
         Sold {fmt(property.price)}
@@ -323,7 +323,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
   })
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: "80px 28px 48px", fontFamily: FONT }}>
+    <div style={{ maxWidth: 860, margin: "0 auto", padding: "110px 28px 48px", fontFamily: FONT }}>
       <button onClick={onBack} style={{
         background: "transparent", border: "none", cursor: "pointer",
         color: theme.primary, fontSize: 18, fontFamily: FONT,
@@ -468,7 +468,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                         {/* Arc score circle */}
                         <div style={{ position: "relative", width: 48, height: 48 }}>
                           <svg width={48} height={48} style={{ transform: "rotate(-90deg)" }}>
-                            <circle cx={24} cy={24} r={r} fill="none" stroke={color + "22"} strokeWidth={3} />
+                            <circle cx={24} cy={24} r={r} fill="none" stroke={color + "44"} strokeWidth={3} />
                             <circle
                               cx={24} cy={24} r={r} fill="none"
                               stroke={color} strokeWidth={3}
@@ -996,7 +996,7 @@ function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
     loadSLMForProperty(id)?.address ?? PORTFOLIO_SOLD.find(p => p.id === id)?.address ?? "Unknown"
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: "80px 32px 48px", fontFamily: FONT }}>
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "110px 32px 48px", fontFamily: FONT }}>
       <button onClick={onBack} style={{
         background: "transparent", border: "none", cursor: "pointer",
         color: theme.primary, fontSize: 18, fontFamily: FONT,
@@ -1071,11 +1071,6 @@ function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
                 <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>
                   From {fromAddr} &middot; {fmt(lead.budget)} budget
                 </div>
-                {lead.matchResult.insight && (
-                  <div style={{ fontSize: 11, color: C.faint, fontStyle: "italic", marginBottom: 4 }}>
-                    {lead.matchResult.insight}
-                  </div>
-                )}
                 {topFactors.length > 0 && (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {topFactors.map(f => (
@@ -1100,7 +1095,7 @@ function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
                 return (
                   <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0 }}>
                     <svg width={52} height={52} style={{ transform: "rotate(-90deg)" }}>
-                      <circle cx={26} cy={26} r={r} fill="none" stroke={col + "22"} strokeWidth={3} />
+                      <circle cx={26} cy={26} r={r} fill="none" stroke={col + "44"} strokeWidth={3} />
                       <circle cx={26} cy={26} r={r} fill="none" stroke={col} strokeWidth={3}
                         strokeDasharray={`${dash} ${gap}`} strokeLinecap="round" />
                     </svg>
@@ -1220,7 +1215,7 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
   ]
 
   return (
-    <div style={{ maxWidth: 1060, margin: "0 auto", padding: "80px 32px 48px", fontFamily: FONT }}>
+    <div style={{ maxWidth: 1060, margin: "0 auto", padding: "110px 32px 48px", fontFamily: FONT }}>
       <button onClick={onBack} style={{
         background: "transparent", border: "none", cursor: "pointer",
         color: theme.primary, fontSize: 18, fontFamily: FONT,
@@ -1232,14 +1227,6 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
         <div style={{ flex: "0 0 60%", display: "flex", flexDirection: "column", gap: 20 }}>
           {/* Lead identity */}
           <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
-            {lead.matchResult.insight && (
-              <div style={{
-                fontSize: 12, color: C.muted, fontStyle: "italic",
-                paddingBottom: 12, marginBottom: 14, borderBottom: `1px solid ${C.border}`,
-              }}>
-                {lead.matchResult.insight}
-              </div>
-            )}
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
@@ -1261,7 +1248,7 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                 return (
                   <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0 }}>
                     <svg width={52} height={52} style={{ transform: "rotate(-90deg)" }}>
-                      <circle cx={26} cy={26} r={r} fill="none" stroke={col + "22"} strokeWidth={3} />
+                      <circle cx={26} cy={26} r={r} fill="none" stroke={col + "44"} strokeWidth={3} />
                       <circle cx={26} cy={26} r={r} fill="none" stroke={col} strokeWidth={3}
                         strokeDasharray={`${dash} ${gap}`} strokeLinecap="round" />
                     </svg>
