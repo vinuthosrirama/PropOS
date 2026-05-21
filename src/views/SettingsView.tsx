@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { C, FONT, PORTFOLIO_ACTIVE, PORTFOLIO_SOLD, getAgencyTheme, type AgentProfile } from "../data"
+import { C, FONT, PORTFOLIO_ACTIVE, PORTFOLIO_SOLD, PAS_PORTFOLIO_ACTIVE, PAS_PORTFOLIO_SOLD, getAgencyTheme, getPortfolioForAgent, type AgentProfile } from "../data"
 import {
   loadSLMForProperty, saveSLMForProperty, resetSLMForProperty,
   getSLMCompleteness, type PropertySLM, type PropertyQA
@@ -136,8 +136,10 @@ const SECTION_FIELDS: { label: string; fields: string[] }[] = [
   },
 ]
 
-// All property IDs (sold 101-104, active 201-203)
-const ALL_PROPERTY_IDS = [101, 102, 103, 104, 201, 202, 203]
+function getPropertyIdsForAgent(agent: AgentProfile): number[] {
+  const { sold, active } = getPortfolioForAgent(agent)
+  return [...sold.map(p => p.id), ...active.map(p => p.id)]
+}
 
 function getPropertyMeta(id: number): {
   address: string
@@ -147,7 +149,10 @@ function getPropertyMeta(id: number): {
   baths: number
   land: number
 } {
-  const sold = PORTFOLIO_SOLD.find(p => p.id === id)
+  // Check all known portfolios
+  const allSold = [...PORTFOLIO_SOLD, ...PAS_PORTFOLIO_SOLD]
+  const allActive = [...PORTFOLIO_ACTIVE, ...PAS_PORTFOLIO_ACTIVE]
+  const sold = allSold.find(p => p.id === id)
   if (sold) {
     return {
       address: sold.address,
@@ -158,7 +163,7 @@ function getPropertyMeta(id: number): {
       land: sold.land ?? 0,
     }
   }
-  const active = PORTFOLIO_ACTIVE.find(p => p.id === id)
+  const active = allActive.find(p => p.id === id)
   if (active) {
     return {
       address: active.address,
@@ -549,7 +554,8 @@ function QACard({
 // ---------------------------------------------------------------------------
 
 export default function SettingsView({ agent }: { agent: AgentProfile }) {
-  const [selectedPropId, setSelectedPropId] = useState<number>(201)
+  const agentPropertyIds = getPropertyIdsForAgent(agent)
+  const [selectedPropId, setSelectedPropId] = useState<number>(() => agentPropertyIds[0] ?? 201)
   const [editedSLMs, setEditedSLMs] = useState<Record<number, PropertySLM>>({})
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -562,14 +568,14 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
   // Load all SLMs on mount
   useEffect(() => {
     const loaded: Record<number, PropertySLM> = {}
-    for (const id of ALL_PROPERTY_IDS) {
+    for (const id of agentPropertyIds) {
       loaded[id] = loadSLMForProperty(id)
     }
     setEditedSLMs(loaded)
 
     // Default: first accordion open for each property
     const sections: Record<number, Set<number>> = {}
-    for (const id of ALL_PROPERTY_IDS) {
+    for (const id of agentPropertyIds) {
       sections[id] = new Set([0])
     }
     setOpenSections(sections)
@@ -857,7 +863,7 @@ export default function SettingsView({ agent }: { agent: AgentProfile }) {
             overflowX: "auto",
           }}
         >
-          {ALL_PROPERTY_IDS.map((id) => {
+          {agentPropertyIds.map((id) => {
             const active = id === selectedPropId
             return (
               <button
