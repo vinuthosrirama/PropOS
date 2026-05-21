@@ -36,6 +36,7 @@ router.post("/:phone/read", (req, res) => {
  * Uses TEST_RECIPIENT_PHONE if set, otherwise a fixed demo number.
  */
 router.post("/seed-demo", async (req, res) => {
+  try {
   // Seed multiple realistic demo threads to show a live inbox
 
   // Thread 1: James Whitfield — interested, asking questions
@@ -90,6 +91,10 @@ router.post("/seed-demo", async (req, res) => {
   )
 
   res.json({ ok: true, threads: 3 })
+  } catch (err) {
+    console.error("[seed-demo]", err)
+    res.status(500).json({ error: "Failed to seed demo threads" })
+  }
 })
 
 export default router

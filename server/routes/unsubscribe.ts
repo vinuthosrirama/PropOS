@@ -12,7 +12,12 @@ router.get("/", async (req, res) => {
   }
 
   const optOutType = (type === "sms" || type === "all") ? type : "email"
-  await addOptOut(token, optOutType, "link")
+  try {
+    await addOptOut(token, optOutType, "link")
+  } catch (err) {
+    console.error("[unsubscribe]", err)
+    return res.status(500).send(confirmationPage("Something went wrong. Please try again."))
+  }
 
   res.send(confirmationPage("You have been unsubscribed. You will no longer receive " +
     (optOutType === "all" ? "any communications" : `${optOutType} messages`) +

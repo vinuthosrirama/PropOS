@@ -12,7 +12,12 @@ router.post("/", async (req, res) => {
   const { type, name, agency, phone, action, lead, detail } = req.body as Record<string, string>
   if (!type) return res.status(400).json({ error: "type is required" })
 
-  await logAction({ type, name: name ?? "", agency: agency ?? "", phone: phone ?? "", action: action ?? "", lead: lead ?? "", detail: detail ?? "" })
+  try {
+    await logAction({ type, name: name ?? "", agency: agency ?? "", phone: phone ?? "", action: action ?? "", lead: lead ?? "", detail: detail ?? "" })
+  } catch (err) {
+    console.error("[sheet POST]", err)
+    // fail silently — logging should never block the client
+  }
   res.json({ ok: true })
 })
 
