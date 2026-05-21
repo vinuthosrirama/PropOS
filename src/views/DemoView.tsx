@@ -18,6 +18,7 @@ import {
 } from "../lib/sheet"
 import AuctionOutcomePanel from "../components/AuctionOutcomePanel"
 import BuyerPitchReport from "../components/BuyerPitchReport"
+import { apiUrl } from "../lib/api"
 import { buildVoiceContext, loadCorpus } from "../lib/voiceContext"
 import { DEMO_FALLBACK_LEADS } from "../lib/demoFallback"
 import { getCachedOutreach } from "../lib/cachedOutreach"
@@ -1587,7 +1588,7 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
 
     const callGenerate = () =>
       Promise.race([
-        fetch("/api/generate", {
+        fetch(apiUrl("/api/generate"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -1744,7 +1745,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
 
   // Fetch server test mode config once on mount
   useEffect(() => {
-    fetch("/api/health")
+    fetch(apiUrl("/api/health"))
       .then(r => r.json())
       .then((h: { testMode?: boolean; testPhone?: string | null; testEmail?: string | null }) => {
         if (h.testMode) setTestMode({ phone: h.testPhone ?? null, email: h.testEmail ?? null })
@@ -1756,7 +1757,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
     if (nurtureSeq.length > 0) { setShowNurture(true); return }
     setLoadingNurture(true)
     try {
-      const res = await fetch("/api/nurture", {
+      const res = await fetch(apiUrl("/api/nurture"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1823,7 +1824,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
         : fmt(property.price)
 
-      const deliveryRes = await fetch("/api/send", {
+      const deliveryRes = await fetch(apiUrl("/api/send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1865,7 +1866,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       })
 
       // 3. Upsert lead row with voice transcript + generated content
-      await fetch("/api/transcript", {
+      await fetch(apiUrl("/api/transcript"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1893,7 +1894,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       const priceGuide = property.priceMin && property.priceMax
         ? `${fmt(property.priceMin)} - ${fmt(property.priceMax)}`
         : fmt(property.price)
-      await fetch("/api/send", {
+      await fetch(apiUrl("/api/send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2468,7 +2469,7 @@ export default function DemoView({
   // Poll for unread SMS replies every 30 seconds
   useEffect(() => {
     const poll = () => {
-      fetch("/api/conversations")
+      fetch(apiUrl("/api/conversations"))
         .then(r => r.json())
         .then((d: { unread: number; threads: typeof inboxThreads }) => {
           setUnreadReplies(d.unread ?? 0)
@@ -2562,7 +2563,7 @@ export default function DemoView({
             setDraftingReply(true)
             setReplyDraft(null)
             try {
-              const res = await fetch("/api/reply-agent", {
+              const res = await fetch(apiUrl("/api/reply-agent"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -2590,7 +2591,7 @@ export default function DemoView({
             if (!selectedThread || !replyText.trim()) return
             setSendingReply(true)
             try {
-              await fetch("/api/send", {
+              await fetch(apiUrl("/api/send"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -2612,7 +2613,7 @@ export default function DemoView({
                 }),
               })
               // Refresh threads after sending
-              const updated = await fetch("/api/conversations").then(r => r.json())
+              const updated = await fetch(apiUrl("/api/conversations")).then(r => r.json())
               setInboxThreads(updated.threads ?? [])
               setUnreadReplies(updated.unread ?? 0)
               setReplyDraft(null)
@@ -2659,8 +2660,8 @@ export default function DemoView({
                     onClick={async () => {
                       setSeedingDemo(true)
                       try {
-                        await fetch("/api/conversations/seed-demo", { method: "POST" })
-                        const updated = await fetch("/api/conversations").then(r => r.json())
+                        await fetch(apiUrl("/api/conversations/seed-demo"), { method: "POST" })
+                        const updated = await fetch(apiUrl("/api/conversations")).then(r => r.json())
                         setInboxThreads(updated.threads ?? [])
                         setUnreadReplies(updated.unread ?? 0)
                       } finally { setSeedingDemo(false) }
@@ -2691,7 +2692,7 @@ export default function DemoView({
                       new Date(t.lastReplyAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)
                     return (
                       <div key={t.phone}
-                        onClick={() => { setSelectedThreadPhone(t.phone); setReplyDraft(null); setReplyText(""); fetch(`/api/conversations/${encodeURIComponent(t.phone)}/read`, { method: "POST" }) }}
+                        onClick={() => { setSelectedThreadPhone(t.phone); setReplyDraft(null); setReplyText(""); fetch(apiUrl(`/api/conversations/${encodeURIComponent(t.phone)}/read`), { method: "POST" }) }}
                         style={{
                           padding: "12px 14px", borderBottom: `1px solid ${C.border}`,
                           background: isUnread ? "rgba(245,158,11,0.05)" : "transparent",
