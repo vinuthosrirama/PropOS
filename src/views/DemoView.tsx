@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, PORTFOLIO_SOLD, PORTFOLIO_ACTIVE,
-  DEFAULT_THEME, getPortfolioForAgent,
+  DEFAULT_THEME, getPortfolioForAgent, isPasSunilchandra,
   type AgentProfile, type AgencyTheme, type PortfolioProperty,
   type LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_ORDER,
 } from "../data"
@@ -141,7 +141,7 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
             <span key={s} style={{ fontSize: 10, color: C.faint }}>{s}</span>
           ))}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "rgb(225, 205, 255)" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.9)" }}>
           {property.priceMin && property.priceMax
             ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
             : fmt(property.price)}
@@ -554,6 +554,24 @@ function groupLeadsByProperty(allLeads: SheetLead[], soldProperties: PortfolioPr
   return map
 }
 
+/**
+ * For Pas Sunilchandra: pull Cameron's "3 Thirlmere Court" leads (property 102)
+ * and alias them under Pas's "58 Broadway Street" (property 301).
+ * This lets the demo flow run without Pas needing his own Sheet leads.
+ * Has zero effect when any other agent is logged in.
+ */
+function addPasLeadAliases(
+  grouped: Record<number, SheetLead[]>,
+  allLeads: SheetLead[],
+  agent: AgentProfile
+): Record<number, SheetLead[]> {
+  if (!isPasSunilchandra(agent)) return grouped
+  const camGrouped = groupLeadsByProperty(allLeads, PORTFOLIO_SOLD)
+  const thirlmere = camGrouped[102] ?? []
+  if (!thirlmere.length) return grouped
+  return { ...grouped, 301: [...(grouped[301] ?? []), ...thirlmere] }
+}
+
 /** Strip out test / placeholder rows that come back from the Sheet during development. */
 function isRealLead(lead: SheetLead): boolean {
   const name = lead.name.trim().toLowerCase()
@@ -589,13 +607,13 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
 
     const applyLeads = (leads: SheetLead[], save = false) => {
       if (!mounted) return
-      const grouped = groupLeadsByProperty(leads, agentSold)
+      const grouped = addPasLeadAliases(groupLeadsByProperty(leads, agentSold), leads, agent)
       const total   = Object.values(grouped).reduce((a, l) => a + l.length, 0)
 
       if (total === 0 && agentSold.length > 0) {
         // No sheet leads at all for this agent — use full fallback
         // (covers cross-agent cache pollution and empty sheets)
-        setSoldLeads(groupLeadsByProperty(DEMO_FALLBACK_LEADS, agentSold))
+        setSoldLeads(addPasLeadAliases(groupLeadsByProperty(DEMO_FALLBACK_LEADS, agentSold), DEMO_FALLBACK_LEADS, agent))
         setSheetsLoading(false)
         return
       }
