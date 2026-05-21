@@ -2129,7 +2129,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 10, color: C.green }}>{"✅"} References their open home</span>
             <span style={{ fontSize: 10, color: C.green }}>{"✅"} Answers their questions</span>
-            <span style={{ fontSize: 10, color: C.green }}>{"✅"} Written in Cameron's voice</span>
+            <span style={{ fontSize: 10, color: C.green }}>{"✅"} Written in {agent.name.split(" ")[0]}'s voice</span>
             <span style={{ fontSize: 10, color: C.green }}>{"✅"} One specific CTA</span>
           </div>
         </div>
