@@ -599,14 +599,32 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
       if (!mounted) return
       const grouped = groupLeadsByProperty(leads, agentSold)
       const total   = Object.values(grouped).reduce((a, l) => a + l.length, 0)
-      // If the sheet data has no leads for this agent's portfolio, use the
-      // hardcoded fallback (covers cross-agent cache pollution and empty sheets).
+
       if (total === 0 && agentSold.length > 0) {
+        // No sheet leads at all for this agent — use full fallback
+        // (covers cross-agent cache pollution and empty sheets)
         setSoldLeads(groupLeadsByProperty(DEMO_FALLBACK_LEADS, agentSold))
         setSheetsLoading(false)
         return
       }
-      setSoldLeads(grouped)
+
+      // Supplement: for any property with 0 sheet leads, backfill from the
+      // hardcoded fallback so the demo always shows realistic attendee counts.
+      if (agentSold.length > 0) {
+        const fallbackGrouped = groupLeadsByProperty(DEMO_FALLBACK_LEADS, agentSold)
+        const supplemented = { ...grouped }
+        for (const key of Object.keys(supplemented).map(Number)) {
+          // Supplement any property with fewer than 3 sheet leads using the fallback.
+          // This covers both zero-lead properties AND sparse ones (e.g. Yemaya with 1).
+          if (supplemented[key].length < 3 && (fallbackGrouped[key]?.length ?? 0) > 0) {
+            supplemented[key] = fallbackGrouped[key]
+          }
+        }
+        setSoldLeads(supplemented)
+      } else {
+        setSoldLeads(grouped)
+      }
+
       setSheetsLoading(false)
       if (save && total > 0) {
         try { localStorage.setItem(CACHE_KEY, JSON.stringify(leads)) } catch {}
