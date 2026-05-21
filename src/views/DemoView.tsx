@@ -51,13 +51,6 @@ type Stage =
 const fmt = (n: number) =>
   n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : `$${(n / 1_000).toFixed(0)}K`
 
-function initials(name: string) {
-  const parts = name.split(" ")
-  return parts.length >= 2
-    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-    : name.slice(0, 2).toUpperCase()
-}
-
 function scoreColor(score: number): string {
   if (score >= 80) return C.green
   if (score >= 60) return C.blue
@@ -148,7 +141,7 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
             <span key={s} style={{ fontSize: 10, color: C.faint }}>{s}</span>
           ))}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: theme.primary }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: theme.gradient[0] }}>
           {property.priceMin && property.priceMax
             ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
             : fmt(property.price)}
@@ -168,7 +161,7 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
               color: "#3f0278", cursor: "pointer", fontFamily: FONT,
             }}
           >
-            📊 Buyer Brief
+            Buyer Brief
           </button>
         )}
       </div>
@@ -225,7 +218,7 @@ function SoldCard({ property, leads, loading, theme, onClick, onRecordAuction }:
       <div style={{
         position: "absolute", top: 10, left: 10,
         padding: "3px 10px", borderRadius: 20,
-        background: "rgba(0,0,0,0.50)", backdropFilter: "blur(6px)",
+        background: withAlpha(theme.primary, 0.88), backdropFilter: "blur(6px)",
         fontSize: 10, fontWeight: 800, color: "#fff", zIndex: 2,
       }}>
         Sold {fmt(property.price)}
@@ -617,9 +610,9 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
         const fallbackGrouped = groupLeadsByProperty(DEMO_FALLBACK_LEADS, agentSold)
         const supplemented = { ...grouped }
         for (const key of Object.keys(supplemented).map(Number)) {
-          // Supplement any property with fewer than 3 sheet leads using the fallback.
-          // This covers both zero-lead properties AND sparse ones (e.g. Yemaya with 1).
-          if (supplemented[key].length < 3 && (fallbackGrouped[key]?.length ?? 0) > 0) {
+          // Only supplement properties that have zero sheet leads — any real Sheets
+          // data (even 1 lead) is shown as-is so Sheet changes appear on reload.
+          if (supplemented[key].length === 0 && (fallbackGrouped[key]?.length ?? 0) > 0) {
             supplemented[key] = fallbackGrouped[key]
           }
         }
@@ -1025,7 +1018,7 @@ function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {displayed.map((lead, i) => {
           const fromAddr = fromPropertyAddress(lead.fromPropertyId)
-          const topFactors = lead.matchResult.matchedFactors.slice(0, 2)
+          const topFactors = lead.matchResult.matchedFactors.filter(f => f.tag !== "vector" && f.tag !== "questions").slice(0, 2)
           const isTopLead = i < 5
           return (
             <motion.div
@@ -1052,17 +1045,6 @@ function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
                 el.style.boxShadow = "none"
               }}
             >
-              {/* Avatar */}
-              <div style={{
-                width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
-                background: scoreColor(lead.matchResult.score) + "18",
-                border: `2px solid ${scoreColor(lead.matchResult.score)}44`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 13, fontWeight: 700, color: scoreColor(lead.matchResult.score),
-              }}>
-                {initials(lead.name)}
-              </div>
-
               {/* Left info */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
@@ -1109,18 +1091,29 @@ function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
                 )}
               </div>
 
-              {/* Score circle */}
-              <div style={{
-                width: 56, height: 56, borderRadius: "50%", flexShrink: 0,
-                border: `3px solid ${scoreColor(lead.matchResult.score)}44`,
-                background: scoreColor(lead.matchResult.score) + "11",
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: scoreColor(lead.matchResult.score), lineHeight: 1 }}>
-                  {lead.matchResult.score}
-                </div>
-                <div style={{ fontSize: 8, color: C.faint, fontWeight: 600 }}>MATCH</div>
-              </div>
+              {/* Score ring — filled arc proportional to score */}
+              {(() => {
+                const r = 22; const circ = 2 * Math.PI * r
+                const pct = Math.min(lead.matchResult.score, 99) / 100
+                const dash = circ * pct; const gap = circ - dash
+                const col = scoreColor(lead.matchResult.score)
+                return (
+                  <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0 }}>
+                    <svg width={52} height={52} style={{ transform: "rotate(-90deg)" }}>
+                      <circle cx={26} cy={26} r={r} fill="none" stroke={col + "22"} strokeWidth={3} />
+                      <circle cx={26} cy={26} r={r} fill="none" stroke={col} strokeWidth={3}
+                        strokeDasharray={`${dash} ${gap}`} strokeLinecap="round" />
+                    </svg>
+                    <div style={{
+                      position: "absolute", inset: 0,
+                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: col, lineHeight: 1 }}>{lead.matchResult.score}</span>
+                      <span style={{ fontSize: 7, color: C.faint, fontWeight: 600 }}>MATCH</span>
+                    </div>
+                  </div>
+                )
+              })()}
             </motion.div>
           )
         })}
@@ -1181,15 +1174,50 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
     return "#f59e0b"
   }
 
-  // Build Q&A for display
+  // Build Q&A for display — synchronous SLM keyword pass
   const qaPairs: Array<{ question: string; answer: string; category: string }> = []
+  const unmatchedQs: string[] = []
   for (const question of lead.questions ?? []) {
     const matched = matchQuestionToSLM(question, activeSLM, shownQs)
     if (matched) {
       shownQs.add(matched.question)
       qaPairs.push({ question, answer: matched.answer, category: matched.category })
+    } else {
+      unmatchedQs.push(question)
     }
   }
+
+  // LLM fallback — fetch answers from backend for questions the SLM didn't answer
+  const [llmAnswers, setLlmAnswers] = useState<Map<string, { answer: string; category: string }>>(new Map())
+  const questionsKey = (lead.questions ?? []).join("|")
+  useEffect(() => {
+    if (unmatchedQs.length === 0 || !activeSLM) return
+    let cancelled = false
+    unmatchedQs.forEach(async (q) => {
+      try {
+        const r = await fetch("/api/slm-answer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q, slm: activeSLM, propertyAddress: `${property.address}, ${property.suburb} ${property.state}` }),
+        })
+        if (!r.ok || cancelled) return
+        const d = await r.json()
+        if (d.answer) {
+          setLlmAnswers(prev => new Map(prev).set(q, { answer: d.answer, category: d.category ?? "llm" }))
+        }
+      } catch { /* silent — LLM is best-effort */ }
+    })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questionsKey, property.id])
+
+  // Merge SLM matches + LLM fallback answers
+  const allQAPairs: Array<{ question: string; answer: string; category: string; source?: "llm" }> = [
+    ...qaPairs,
+    ...unmatchedQs
+      .filter(q => llmAnswers.has(q))
+      .map(q => ({ ...llmAnswers.get(q)!, question: q, source: "llm" as const })),
+  ]
 
   return (
     <div style={{ maxWidth: 1060, margin: "0 auto", padding: "80px 32px 48px", fontFamily: FONT }}>
@@ -1213,15 +1241,6 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
               </div>
             )}
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: "50%", flexShrink: 0,
-                background: scoreColor(lead.matchResult.score) + "18",
-                border: `2px solid ${scoreColor(lead.matchResult.score)}44`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 22, fontWeight: 700, color: scoreColor(lead.matchResult.score),
-              }}>
-                {initials(lead.name)}
-              </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: C.text, letterSpacing: -0.5 }}>{lead.name}</div>
@@ -1233,17 +1252,29 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                   {lead.persona}
                 </div>
               </div>
-              <div style={{
-                width: 56, height: 56, borderRadius: "50%",
-                border: `3px solid ${scoreColor(lead.matchResult.score)}44`,
-                background: scoreColor(lead.matchResult.score) + "11",
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: scoreColor(lead.matchResult.score), lineHeight: 1 }}>
-                  {lead.matchResult.score}
-                </div>
-                <div style={{ fontSize: 8, color: C.faint, fontWeight: 600 }}>MATCH</div>
-              </div>
+              {/* Score ring — profile page */}
+              {(() => {
+                const r = 22; const circ = 2 * Math.PI * r
+                const pct = Math.min(lead.matchResult.score, 99) / 100
+                const dash = circ * pct; const gap = circ - dash
+                const col = scoreColor(lead.matchResult.score)
+                return (
+                  <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0 }}>
+                    <svg width={52} height={52} style={{ transform: "rotate(-90deg)" }}>
+                      <circle cx={26} cy={26} r={r} fill="none" stroke={col + "22"} strokeWidth={3} />
+                      <circle cx={26} cy={26} r={r} fill="none" stroke={col} strokeWidth={3}
+                        strokeDasharray={`${dash} ${gap}`} strokeLinecap="round" />
+                    </svg>
+                    <div style={{
+                      position: "absolute", inset: 0,
+                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: col, lineHeight: 1 }}>{lead.matchResult.score}</span>
+                      <span style={{ fontSize: 7, color: C.faint, fontWeight: 600 }}>MATCH</span>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
 
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
@@ -1304,13 +1335,13 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
           </div>
 
           {/* Q&A */}
-          {qaPairs.length > 0 && (
+          {(allQAPairs.length > 0 || unmatchedQs.length > 0) && (
             <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px", userSelect: "none" }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>
                 What {fname} asked at {soldSLM.address} — answered for {property.address}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {qaPairs.map((qa, i) => (
+                {allQAPairs.map((qa, i) => (
                   <div key={i} style={{ borderLeft: `2px solid ${theme.primary}33`, paddingLeft: 12 }}>
                     <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>{qa.question}</div>
                     {qa.answer === "TBD" ? (
@@ -1324,13 +1355,32 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                     ) : (
                       <div style={{ fontSize: 13, color: C.text, lineHeight: 1.5 }}>{qa.answer}</div>
                     )}
-                    <div style={{
-                      display: "inline-block", marginTop: 4, fontSize: 9, padding: "1px 6px",
-                      borderRadius: 4, background: C.bg3, color: C.faint, fontWeight: 600,
-                      textTransform: "uppercase", letterSpacing: 0.4,
-                    }}>
-                      {qa.category}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                      <div style={{
+                        display: "inline-block", fontSize: 9, padding: "1px 6px",
+                        borderRadius: 4, background: C.bg3, color: C.faint, fontWeight: 600,
+                        textTransform: "uppercase", letterSpacing: 0.4,
+                      }}>
+                        {qa.category}
+                      </div>
+                      {qa.source === "llm" && (
+                        <div style={{
+                          display: "inline-block", fontSize: 9, padding: "1px 6px",
+                          borderRadius: 4, background: "rgba(139,92,246,0.12)",
+                          border: "1px solid rgba(139,92,246,0.3)",
+                          color: "#8b5cf6", fontWeight: 600, letterSpacing: 0.4,
+                        }}>
+                          AI
+                        </div>
+                      )}
                     </div>
+                  </div>
+                ))}
+                {/* Show loading placeholders for questions still being fetched via LLM */}
+                {unmatchedQs.filter(q => !llmAnswers.has(q)).map((q, i) => (
+                  <div key={"loading-" + i} style={{ borderLeft: `2px solid ${theme.primary}22`, paddingLeft: 12 }}>
+                    <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>{q}</div>
+                    <div style={{ fontSize: 12, color: C.faint, fontStyle: "italic" }}>Querying property data...</div>
                   </div>
                 ))}
               </div>
@@ -1459,29 +1509,6 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
             Generate Outreach for {fname} →
           </motion.button>
 
-          {/* Match factors */}
-          {lead.matchResult.matchedFactors.length > 0 && (
-            <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 18px" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>
-                Why this lead matches
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {lead.matchResult.matchedFactors.map(f => (
-                  <div key={f.label} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                    <div style={{
-                      width: 5, height: 5, borderRadius: "50%", marginTop: 5, flexShrink: 0,
-                      background: f.tag === "yield" ? C.green
-                        : f.tag === "school" ? C.blue
-                        : f.tag === "budget" ? C.green
-                        : C.muted + "88",
-                    }} />
-                    <div style={{ flex: 1, fontSize: 12, color: C.muted, lineHeight: 1.4 }}>{f.label}</div>
-                    <div style={{ fontSize: 10, color: C.faint, flexShrink: 0 }}>{f.points}pt</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -2544,7 +2571,7 @@ export default function DemoView({
 
   return (
     <>
-      {/* Floating "← Portfolio" button — visible on all non-portfolio stages */}
+      {/* Floating "← Portfolio" button — sits just below the nav bar */}
       {!isPortfolio && (
         <motion.button
           initial={{ opacity: 0, x: -8 }}
@@ -2552,7 +2579,7 @@ export default function DemoView({
           exit={{ opacity: 0 }}
           onClick={() => setStage({ kind: "portfolio" })}
           style={{
-            position: "fixed", top: 16, left: 72, zIndex: 200,
+            position: "fixed", top: 68, left: 20, zIndex: 200,
             display: "flex", alignItems: "center", gap: 6,
             padding: "6px 12px", borderRadius: 8,
             background: C.bg2, border: `1px solid ${C.border}`,

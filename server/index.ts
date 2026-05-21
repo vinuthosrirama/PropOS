@@ -21,6 +21,7 @@ import { loadOptOuts } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
 import conversationsRouter from "./routes/conversations.js"
 import replyAgentRouter from "./routes/reply-agent.js"
+import slmAnswerRouter from "./routes/slm-answer.js"
 import { loadConversations } from "./lib/conversations.js"
 
 const app = express()
@@ -42,6 +43,7 @@ app.use("/api/analytics",   analyticsRouter)
 app.use("/api/boxdice",       boxdiceRouter)
 app.use("/api/conversations", conversationsRouter)
 app.use("/api/reply-agent",  replyAgentRouter)
+app.use("/api/slm-answer",  slmAnswerRouter)
 
 // Health check — must be before express.static so it's never shadowed by the SPA
 app.get("/api/health", (_req, res) => {

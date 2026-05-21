@@ -378,7 +378,7 @@ export const PORTFOLIO_ACTIVE: PortfolioProperty[] = [
     type: "House", status: "active",
     openDate: "Saturday 24 May 2026, 12:30pm",
     auctionDate: "Saturday 7 June 2026",
-    image: "https://rimh2.domainstatic.com.au/vQZsuF67_udtR6syb8UOXkIBsD0=/660x440/filters:format(jpeg):quality(80)/2020596427_3_1_260211_032609-w2048-h1365",
+    image: "/34-hartsmere-drive.jpg",
     description: "Kingsmere Estate 4-bed family home. Ducted heating, reverse cycle cooling, decked pergola, double garage on 621sqm. Noise attenuation mounds along M1 boundary.",
     leadCount: 0,
   },

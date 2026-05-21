@@ -87,6 +87,12 @@ export const KEYWORD_MAP: Record<string, string[]> = {
   bodyCorporateFees:          ["body corporate", "strata", "owners corp", "fees"],
   vacancyRate:                ["vacancy", "vacant", "vacancy rate", "tenant demand"],
   comparableSales:            ["comparable", "comps", "comparable sales", "recent sales", "sold nearby", "similar sales", "90 days"],
+  bathroomRenovated:          ["laundry", "bathroom", "ensuite", "wet area", "bath", "shower", "renovated bathroom"],
+  storageShed:                ["storage", "shed", "linen", "cupboard", "wardrobe"],
+  internetType:               ["internet", "nbn", "fibre", "broadband", "wifi", "speed"],
+  trafficNoiseLevel:          ["noise", "traffic", "quiet", "street noise", "freeway", "road noise"],
+  streetAppeal:               ["street appeal", "frontage", "facade", "curb appeal", "street presence"],
+  floodZone:                  ["flood", "flood zone", "flood prone", "water", "drainage"],
 }
 
 // ---------------------------------------------------------------------------
