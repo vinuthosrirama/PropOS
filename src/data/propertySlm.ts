@@ -1717,7 +1717,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     // FINANCIAL
     priceMin: 1100000,
     priceMax: 1250000,
-    vendorReserve: "Confidential — set by vendor closer to auction",
+    vendorReserve: "TBD",
     settlementTermsDays: 60,
     depositPct: 10,
     rentalAppraisalLow: 540,
@@ -1996,7 +1996,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     // FINANCIAL
     priceMin: 820000,
     priceMax: 920000,
-    vendorReserve: "Confidential — set by vendor closer to auction",
+    vendorReserve: "TBD",
     settlementTermsDays: 45,
     depositPct: 10,
     rentalAppraisalLow: 490,
@@ -2245,7 +2245,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     // FINANCIAL
     priceMin: 1350000,
     priceMax: 1490000,
-    vendorReserve: "Confidential — set by vendor closer to auction",
+    vendorReserve: "TBD",
     settlementTermsDays: 90,
     depositPct: 10,
     rentalAppraisalLow: 650,
