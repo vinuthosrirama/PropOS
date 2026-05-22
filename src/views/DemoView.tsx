@@ -2820,44 +2820,78 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
   const fname = buyer.name.split("&")[0].split(" ")[0].trim()
   const agentFirst = agent.name.split(" ")[0]
 
-  const handleGenerate = () => {
-    setGenerating(true)
-    const addr = shortAddr(buyer.purchaseAddress)
-    const equityStr = fmtDollar(fin.equityGain)
-    const estStr = fmtDollar(fin.currentEstimate)
-    const cgtStr = fin.cgtSavingsBy2027 > 0 ? ` The current 50% CGT discount saves you approximately ${fmtDollar(fin.cgtSavingsBy2027)} if you sell before July 2027.` : ""
-    const cocStr = fin.cashOnCashReturn ? `Your original deposit has turned into a ${fin.cashOnCashReturn}% return.` : ""
+  const stripDashes = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
 
-    // Pipeline-specific messaging
-    let opening = ""
-    let pitch = ""
-    if (segment.pipeline === "investor-to-seller" || segment.pipeline === "investor-to-rebalance") {
-      opening = `Hi ${fname}, ${agentFirst} here from ${agent.agency}. Quick market update on ${addr}`
-      pitch = `Your property at ${buyer.purchaseAddress} has grown significantly since you purchased in ${buyer.purchaseDate.slice(0, 4)}. Current estimate sits around ${estStr}, which is ${equityStr} in equity.${cgtStr} ${cocStr} Worth a quick conversation about your options?`
-    } else if (segment.pipeline === "owner-to-upsizer") {
-      opening = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Hope the family is well`
-      pitch = `I was reviewing the market around ${buyer.suburb} and your property at ${buyer.purchaseAddress} caught my eye. Since you bought in ${buyer.purchaseDate.slice(0, 4)}, it's appreciated to around ${estStr}, giving you ${equityStr} in equity. That kind of position opens up some really exciting upgrade options if you've been thinking about more space.`
-    } else if (segment.pipeline === "owner-to-downsizer") {
-      opening = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Hope you're keeping well`
-      pitch = `I wanted to share a quick update on the market around ${buyer.suburb}. Your property at ${buyer.purchaseAddress} is performing really well, currently sitting around ${estStr}. That's ${equityStr} in equity since you purchased. If you've been thinking about simplifying, that equity could set you up beautifully for the next chapter.`
-    } else {
-      opening = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Hope all is well`
-      pitch = `Quick update on the ${buyer.suburb} market. Your property at ${buyer.purchaseAddress} has appreciated to around ${estStr} since you purchased, that's ${equityStr} in equity growth.${cgtStr} If you've ever wondered what your options look like, happy to have a no-pressure chat.`
+  const handleGenerate = async () => {
+    setGenerating(true)
+
+    // Build financial context for the LLM
+    const financialContext = [
+      `Property: ${buyer.purchaseAddress}, ${buyer.suburb}.`,
+      `Purchased ${buyer.purchaseDate.slice(0, 4)} for ${fmtDollar(fin.purchasePrice)}.`,
+      `Current estimate: ${fmtDollar(fin.currentEstimate)} — ${fmtPct(fin.equityGainPct)} equity growth over ${fin.yearsHeld} years.`,
+      `Equity gain: ${fmtDollar(fin.equityGain)}.`,
+      fin.cashOnCashReturn ? `Cash-on-cash return on original deposit: ${fin.cashOnCashReturn}%.` : "",
+      fin.cgtSavingsBy2027 > 0 ? `Selling before July 2027 under current 50% CGT discount saves approximately ${fmtDollar(fin.cgtSavingsBy2027)} in tax.` : "",
+      `Estimated net proceeds after all costs: ${fmtDollar(fin.netProceeds)}.`,
+      segment.triggers.map(t => t.label).join(". "),
+    ].filter(Boolean).join(" ")
+
+    const payload = {
+      agentName: agent.name,
+      agentAgency: agent.agency,
+      agentSuburb: buyer.suburb,
+      voiceContext: "",
+      strategy: `Vendor Prospecting - ${pl.label}`,
+      channel: "both" as const,
+      lead: {
+        name: buyer.name,
+        budget: fmtDollar(fin.currentEstimate),
+        timeline: buyer.status === "investor" ? "investment property" : "flexible",
+        persona: pl.description,
+        notes: buyer.notes ?? "",
+        questions: "",
+        transcript: financialContext,
+      },
     }
 
-    const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${buyer.purchaseDate.slice(0, 4)}). Worth a quick chat? Cheers ${agentFirst}`
-    const sms = smsRaw.length > 160 ? smsRaw.slice(0, 157) + "..." : smsRaw
-    const emailSubject = `Market update on ${buyer.purchaseAddress}, ${fname}`
-    const emailBody = [
-      `${opening}.`,
-      pitch,
-      `I'd love to offer a complimentary, no-obligation appraisal if you're at all curious. Takes about 20 minutes, happy to come to you. No pressure, just a conversation.\n\n${buyer.status === "investor" ? "Kind regards" : "Cheers"},\n${agentFirst}`,
-    ]
-
-    setTimeout(() => {
+    // Template fallback
+    const templateFallback = () => {
+      const addr = shortAddr(buyer.purchaseAddress)
+      const estStr = fmtDollar(fin.currentEstimate)
+      const equityStr = fmtDollar(fin.equityGain)
+      const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${buyer.purchaseDate.slice(0, 4)}). Worth a quick chat? Cheers ${agentFirst}`
+      const sms = stripDashes(smsRaw.length > 160 ? smsRaw.slice(0, 157) + "..." : smsRaw)
+      const emailSubject = stripDashes(`Market update on ${buyer.purchaseAddress}, ${fname}`)
+      const cgtLine = fin.cgtSavingsBy2027 > 0 ? ` The current 50% CGT discount saves you approximately ${fmtDollar(fin.cgtSavingsBy2027)} if you sell before July 2027.` : ""
+      const emailBody = [
+        `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
+        `Your property at ${buyer.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${buyer.purchaseDate.slice(0, 4)}. That is ${equityStr} in equity.${cgtLine}`,
+        `I would love to offer a complimentary, no-obligation appraisal if you are curious. Takes about 20 minutes, happy to come to you. No pressure at all.\n\n${buyer.status === "investor" ? "Kind regards" : "Cheers"},\n${agentFirst}`,
+      ].map(stripDashes)
       setGenerating(false)
       onReview(sms, emailSubject, emailBody)
-    }, 1200)
+    }
+
+    try {
+      const res = await Promise.race([
+        fetch(apiUrl("/api/generate"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).then(r => r.json()),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 12000)),
+      ]) as { sms?: string; emailSubject?: string; email?: { subject?: string; body?: string[] }; emailBody?: string[] }
+
+      const sms = res.sms ?? ""
+      const emailSubject = res.emailSubject ?? res.email?.subject ?? ""
+      const emailBody: string[] = res.emailBody ?? res.email?.body ?? []
+      if (!sms && !emailSubject) throw new Error("empty")
+      setGenerating(false)
+      onReview(stripDashes(sms), stripDashes(emailSubject), emailBody.map(stripDashes))
+    } catch {
+      templateFallback()
+    }
   }
 
   const equityPct = Math.round((fin.equityGain / fin.purchasePrice) * 100)
@@ -3045,118 +3079,344 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
 
 // ── Vendor Review Panel ───────────────────────────────────────────────────────
 
-function VendorReviewPanel({ entry, theme, sms, emailSubject, emailBody, onBack }: {
+function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: initSubject, emailBody: initBody, onBack }: {
   entry: SegmentedBuyer
+  agent: AgentProfile
   theme: AgencyTheme
   sms: string
   emailSubject: string
   emailBody: string[]
   onBack: () => void
 }) {
-  const [smsCopied, setSmsCopied] = useState(false)
-  const [emailCopied, setEmailCopied] = useState(false)
+  const [sms, setSMS] = useState(initSMS)
+  const [subject, setSubject] = useState(initSubject)
+  const [bodyText, setBodyText] = useState(initBody.join("\n\n"))
+  const [editMode, setEditMode] = useState<"sms" | "email" | null>(null)
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [sendingToSelf, setSendingToSelf] = useState(false)
+  const [sentToSelf, setSentToSelf] = useState(false)
+  const [deliveryNote, setDeliveryNote] = useState("")
+
   const { buyer, financials: fin, segment } = entry
   const pl = PIPELINE_LABELS[segment.pipeline]
   const fname = buyer.name.split("&")[0].split(" ")[0].trim()
+  const bubbleColor = theme?.primary ?? "rgb(0,122,255)"
+  const avatarGrad = `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
 
-  const copyText = (text: string, cb: (v: boolean) => void) => {
-    navigator.clipboard.writeText(text).then(() => {
-      cb(true); setTimeout(() => cb(false), 1800)
-    })
+  const handleSend = async () => {
+    setSending(true)
+    try {
+      const deliveryRes = await fetch(apiUrl("/api/send"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: `vendor_${buyer.id}`,
+          leadName: buyer.name,
+          phone: buyer.phone,
+          email: buyer.email ?? "",
+          agentEmail: agent.email,
+          agentName: agent.name,
+          agentAgency: agent.agency,
+          agentPhone: agent.phone,
+          agencyColor: theme.primary,
+          agencyTagline: agent.tagline,
+          propertyAddress: `${buyer.purchaseAddress}, ${buyer.suburb}`,
+          priceGuide: fmtDollar(fin.currentEstimate),
+          sms, subject,
+          emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
+          channel: "both",
+        }),
+      }).then(r => r.json()).catch(() => null)
+      const delivered = deliveryRes?.ok === true
+      setDeliveryNote(delivered ? "Sent via Twilio + Gmail" : "Saved to Sheets (configure Twilio/Gmail for direct delivery)")
+    } catch {}
+    setSending(false)
+    setSent(true)
+  }
+
+  const handleSendToSelf = async () => {
+    setSendingToSelf(true)
+    try {
+      await fetch(apiUrl("/api/send"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: "self_demo",
+          leadName: "Yourself (demo)",
+          phone: agent.phone,
+          email: agent.email,
+          agentEmail: agent.email,
+          agentName: agent.name,
+          agentAgency: agent.agency,
+          agentPhone: agent.phone,
+          agencyColor: theme.primary,
+          agencyTagline: agent.tagline,
+          propertyAddress: `${buyer.purchaseAddress}, ${buyer.suburb}`,
+          priceGuide: fmtDollar(fin.currentEstimate),
+          sms, subject,
+          emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
+          channel: "both",
+        }),
+      })
+      setSentToSelf(true)
+    } catch {}
+    setSendingToSelf(false)
+  }
+
+  if (sent) {
+    return (
+      <div style={{
+        minHeight: "80vh", display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 24, fontFamily: FONT,
+      }}>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          style={{ textAlign: "center", maxWidth: 520 }}
+        >
+          <div style={{ fontSize: 56, marginBottom: 16 }}>✓</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5, marginBottom: 8 }}>
+            Vendor outreach approved for {fname}
+          </div>
+          {deliveryNote && (
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 24, padding: "6px 14px",
+              background: C.bg3, borderRadius: 8, display: "inline-block" }}>
+              {deliveryNote}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <button onClick={onBack} style={{
+              padding: "12px 28px", borderRadius: 12, border: "none",
+              background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+              color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+            }}>
+              Back to pipeline
+            </button>
+            <a href={`tel:${buyer.phone}`} style={{
+              padding: "12px 28px", borderRadius: 12, textDecoration: "none",
+              border: `1px solid ${theme.primary}44`,
+              color: theme.primary, fontSize: 14, fontWeight: 700, fontFamily: FONT,
+            }}>
+              📞 Call {fname} now
+            </a>
+          </div>
+        </motion.div>
+      </div>
+    )
   }
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
-      <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, marginBottom: 20, padding: 0 }}>←</button>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "80px 32px 48px", fontFamily: FONT }}>
+      <button onClick={onBack} style={{
+        background: "transparent", border: "none", cursor: "pointer",
+        color: theme.primary, fontSize: 18, fontFamily: FONT,
+        display: "flex", alignItems: "center", marginBottom: 24, padding: 0, lineHeight: 1,
+      }}>←</button>
 
+      {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: theme.primary, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Vendor Outreach Ready</div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>
-          Outreach for {buyer.name}
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: theme.primary, textTransform: "uppercase", marginBottom: 4 }}>
+          Review outreach
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.8 }}>
+          {fname}'s personalised vendor messages
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-          <div style={{ fontSize: 12, color: C.muted }}>
-            {buyer.purchaseAddress}, {buyer.suburb}
-          </div>
+          <div style={{ fontSize: 13, color: C.muted }}>{buyer.purchaseAddress}, {buyer.suburb}</div>
           <div style={{
             fontSize: 10, padding: "2px 8px", borderRadius: 6,
             background: pl.color + "18", color: pl.color, fontWeight: 700,
           }}>
             {pl.icon} {pl.shortLabel}
           </div>
-          <div style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>
-            {fmtDollar(fin.equityGain)} equity
-          </div>
+          <div style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>{fmtDollar(fin.equityGain)} equity</div>
+        </div>
+        <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+          Edit either message before approving. Clicking Send saves both to Google Sheets for delivery.
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        {/* SMS */}
-        <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 18 }}>💬</span>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>SMS</div>
-              <span style={{ fontSize: 10, color: sms.length > 160 ? (C.red ?? "#ef4444") : C.green, fontWeight: 600 }}>{sms.length}/160 chars</span>
-            </div>
-            <button onClick={() => copyText(sms, setSmsCopied)} style={{
-              padding: "5px 12px", borderRadius: 7, border: `1px solid ${C.border}`,
-              background: smsCopied ? C.greenDim : C.bg3, color: smsCopied ? C.green : C.muted,
-              fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
+        {/* SMS — iMessage style */}
+        <div>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 10,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>SMS</div>
+            <button onClick={() => setEditMode(editMode === "sms" ? null : "sms")} style={{
+              background: "transparent", border: "none", cursor: "pointer",
+              color: theme.primary, fontSize: 12, fontFamily: FONT, fontWeight: 600,
             }}>
-              {smsCopied ? "✓ Copied" : "Copy"}
+              {editMode === "sms" ? "Done" : "Edit"}
             </button>
           </div>
-          <div style={{
-            background: C.bg3, borderRadius: 10, padding: "14px 16px",
-            fontSize: 13, color: C.text, lineHeight: 1.6, whiteSpace: "pre-wrap",
-          }}>{sms}</div>
+          {editMode === "sms" ? (
+            <textarea
+              autoFocus
+              value={sms}
+              onChange={e => setSMS(e.target.value)}
+              maxLength={160}
+              style={{
+                width: "100%", minHeight: 120, background: C.bg3,
+                border: `1px solid ${theme.primary}44`, borderRadius: 12,
+                padding: "12px 14px", color: C.text, fontSize: 13,
+                fontFamily: FONT, lineHeight: 1.5, resize: "vertical", outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          ) : (
+            <div style={{ background: "rgb(24,24,24)", borderRadius: 20, padding: 16 }}>
+              <div style={{ textAlign: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>iMessage</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.9)" }}>{fname}</div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <div style={{
+                  maxWidth: "80%", padding: "9px 13px",
+                  borderRadius: "16px 16px 4px 16px",
+                  background: bubbleColor,
+                  fontSize: 13, color: "white", lineHeight: 1.45,
+                }}>
+                  {sms}
+                </div>
+                <div style={{
+                  width: 30, height: 30, borderRadius: "50%",
+                  background: avatarGrad,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: 700, color: "white", flexShrink: 0, alignSelf: "flex-end",
+                }}>
+                  {agent.name.charAt(0)}
+                </div>
+              </div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textAlign: "right", marginTop: 6 }}>
+                {sms.length}/160 chars
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Email */}
-        <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 18 }}>✉️</span>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Email</div>
-            </div>
-            <button onClick={() => copyText([`Subject: ${emailSubject}`, "", ...emailBody].join("\n\n"), setEmailCopied)} style={{
-              padding: "5px 12px", borderRadius: 7, border: `1px solid ${C.border}`,
-              background: emailCopied ? C.greenDim : C.bg3, color: emailCopied ? C.green : C.muted,
-              fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
+        {/* Email — Gmail style */}
+        <div>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 10,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>Email</div>
+            <button onClick={() => setEditMode(editMode === "email" ? null : "email")} style={{
+              background: "transparent", border: "none", cursor: "pointer",
+              color: theme.primary, fontSize: 12, fontFamily: FONT, fontWeight: 600,
             }}>
-              {emailCopied ? "✓ Copied" : "Copy"}
+              {editMode === "email" ? "Done" : "Edit"}
             </button>
           </div>
-          <div style={{
-            background: C.bg3, borderRadius: 10, padding: "14px 16px", fontSize: 13, color: C.text,
-          }}>
-            <div style={{ fontWeight: 700, marginBottom: 14, color: C.muted, fontSize: 11 }}>Subject: <span style={{ color: C.text }}>{emailSubject}</span></div>
-            {emailBody.map((para, i) => (
-              <div key={i} style={{ lineHeight: 1.6, marginBottom: i < emailBody.length - 1 ? 12 : 0, whiteSpace: "pre-wrap" }}>{para}</div>
-            ))}
-          </div>
+          {editMode === "email" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <input
+                value={subject}
+                onChange={e => setSubject(e.target.value)}
+                placeholder="Subject line..."
+                style={{
+                  background: C.bg3, border: `1px solid ${theme.primary}44`,
+                  borderRadius: 8, padding: "9px 12px", color: C.text,
+                  fontSize: 13, fontFamily: FONT, outline: "none",
+                }}
+              />
+              <textarea
+                value={bodyText}
+                onChange={e => setBodyText(e.target.value)}
+                placeholder="Email body..."
+                style={{
+                  background: C.bg3, border: `1px solid ${theme.primary}44`,
+                  borderRadius: 8, padding: "10px 12px", color: C.text,
+                  fontSize: 13, fontFamily: FONT, lineHeight: 1.5,
+                  resize: "vertical", minHeight: 160, outline: "none",
+                }}
+              />
+            </div>
+          ) : (
+            <div style={{
+              background: "white", borderRadius: 12, overflow: "hidden",
+              boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
+            }}>
+              <div style={{ background: "#f1f3f4", padding: "10px 16px", borderBottom: "1px solid #e0e0e0" }}>
+                <div style={{ fontSize: 11, color: "#666", marginBottom: 2 }}>
+                  <span style={{ fontWeight: 500, color: "#333" }}>From: </span>{agent.email}
+                </div>
+                <div style={{ fontSize: 11, color: "#666", marginBottom: 2 }}>
+                  <span style={{ fontWeight: 500, color: "#333" }}>To: </span>{buyer.email ?? `${fname.toLowerCase()}@email.com`}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#111", marginTop: 4 }}>{subject}</div>
+              </div>
+              <div style={{ padding: "16px 20px" }}>
+                {bodyText.split("\n\n").filter(p => p.trim()).map((p, i, arr) => (
+                  <p key={i} style={{ fontSize: 13, color: "#333", lineHeight: 1.6, marginBottom: i < arr.length - 1 ? 12 : 0 }}>{p}</p>
+                ))}
+                <div style={{
+                  marginTop: 20, paddingTop: 16, borderTop: `2px solid ${theme.primary}`,
+                  fontSize: 12, color: "#666",
+                  display: "flex", gap: 10, alignItems: "center",
+                }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                    background: avatarGrad,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 800, color: "white",
+                  }}>
+                    {theme.logo}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: "#111", fontSize: 13 }}>{agent.name}</div>
+                    <div style={{ color: theme.primary, fontWeight: 600 }}>{agent.agency}</div>
+                    <div style={{ color: "#888", fontSize: 11 }}>{agent.email}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
+      </div>
 
-        {/* Call to action chips */}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <a href={`tel:${buyer.phone}`} style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "10px 18px", borderRadius: 10, textDecoration: "none",
-            background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
-            color: "white", fontSize: 13, fontWeight: 700,
-          }}>
-            📞 Call {fname}
-          </a>
-          <a href={`sms:${buyer.phone}`} style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "10px 18px", borderRadius: 10, textDecoration: "none",
-            background: C.bg2, border: `1px solid ${theme.primary}44`,
-            color: theme.primary, fontSize: 13, fontWeight: 700,
-          }}>
-            💬 Open iMessage
-          </a>
-        </div>
+      {/* Approve and Send */}
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.97 }}
+        onClick={handleSend}
+        disabled={sending}
+        style={{
+          width: "100%", padding: "15px",
+          borderRadius: 14, border: "none",
+          background: sending ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+          color: sending ? C.muted : "white",
+          fontSize: 16, fontWeight: 700, cursor: sending ? "default" : "pointer",
+          fontFamily: FONT, letterSpacing: -0.3,
+          boxShadow: sending ? "none" : `0 6px 24px ${theme.glow}`,
+        }}
+      >
+        {sending ? "Saving to Sheet..." : "Approve and Send"}
+      </motion.button>
+      <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
+        Saves the approved SMS and email to Google Sheets for delivery via Twilio and Gmail.
+      </div>
+
+      <button
+        onClick={handleSendToSelf}
+        disabled={sendingToSelf || sentToSelf}
+        style={{
+          width: "100%", padding: "13px",
+          borderRadius: 14, marginTop: 12,
+          background: "transparent",
+          border: `1px solid ${theme.primary}55`,
+          color: sentToSelf ? C.green : theme.primary,
+          fontSize: 14, fontWeight: 600, cursor: sendingToSelf || sentToSelf ? "default" : "pointer",
+          fontFamily: FONT, letterSpacing: -0.2,
+        }}
+      >
+        {sentToSelf ? "✓ Sent to your phone, check it now" : sendingToSelf ? "Sending..." : "📱 Send to my phone"}
+      </button>
+      <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 6 }}>
+        Experience what your vendors feel
       </div>
     </div>
   )
@@ -3582,6 +3842,7 @@ export default function DemoView({
         <motion.div key="vendorReview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <VendorReviewPanel
             entry={stage.entry}
+            agent={agent}
             theme={theme}
             sms={stage.sms}
             emailSubject={stage.emailSubject}
