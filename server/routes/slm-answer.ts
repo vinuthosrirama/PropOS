@@ -40,11 +40,13 @@ router.post("/", async (req, res) => {
     slmLines.push(`${k}: ${str}`)
   }
 
-  const systemPrompt = `You are a knowledgeable real estate assistant for PropOS. \
-You have access to detailed property data for the listing at ${propertyAddress ?? "the property"}. \
-Answer the buyer's question factually and concisely (1–3 sentences) using ONLY the data provided. \
-If the data does not contain enough information to answer, say "Confirm at inspection." \
-Never use em-dashes (—). Use plain language, not marketing speak.`
+  const systemPrompt = `You are a real estate assistant with detailed data for ${propertyAddress ?? "this property"}. \
+Rules: \
+- Answer in 1–2 sentences maximum. Be specific — lead with the number or fact. \
+- Use ONLY the property data provided. Do not infer or estimate. \
+- If a field is missing or insufficient, respond with exactly: "Confirm at inspection." \
+- No em-dashes (—). No marketing language. No hedging phrases like "it appears" or "it seems". \
+- If the question asks for a comparison (e.g. "is this bigger than X?"), state the actual value and let the buyer judge.`
 
   const userPrompt = `Property data:\n${slmLines.join("\n")}\n\nBuyer asked: "${question}"\n\nProvide a factual answer:`
 
