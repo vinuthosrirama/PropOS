@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, DEFAULT_AGENT, DEFAULT_THEME,
-  type AgentProfile, type AgencyTheme, type ViewId,
+  type AgentProfile, type AgencyTheme, type ViewId, type DemoMode,
 } from "./data"
 import Nav from "./components/Nav"
 import AgentLogin from "./views/AgentLogin"
@@ -15,14 +15,16 @@ export default function App() {
   const [theme, setTheme]             = useState<AgencyTheme>(DEFAULT_THEME)
   const [view, setView]               = useState<ViewId>("demo")
   const [agent, setAgent]             = useState(DEFAULT_AGENT)
+  const [mode, setMode]               = useState<DemoMode>("buyer")
   const [sheetStatus, setSheetStatus] = useState<"idle" | "loading" | "live" | "error">("idle")
   const [demoBack, setDemoBack] = useState<{ fn: () => void } | null>(null)
   const [inboxOpen, setInboxOpen]   = useState(false)
   const [inboxBadge, setInboxBadge] = useState(0)
 
-  const handleLogin = (newAgent: AgentProfile, newTheme: AgencyTheme) => {
+  const handleLogin = (newAgent: AgentProfile, newTheme: AgencyTheme, newMode: DemoMode) => {
     setAgent(newAgent)
     setTheme(newTheme)
+    setMode(newMode)
     setLoggedIn(true)
     seedCorpusIfEmpty()
   }
@@ -73,7 +75,7 @@ export default function App() {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}>
 
-          {view === "demo"  && <DemoView agent={agent} theme={theme} onSettings={() => navigate("setup")} onRegisterBack={fn => setDemoBack(fn ? { fn } : null)}
+          {view === "demo"  && <DemoView agent={agent} theme={theme} mode={mode} onSettings={() => navigate("setup")} onRegisterBack={fn => setDemoBack(fn ? { fn } : null)}
                                         showInbox={inboxOpen} onShowInboxChange={setInboxOpen} onBadgeChange={setInboxBadge} />}
           {view === "setup" && <SettingsView agent={agent} />}
         </motion.div>

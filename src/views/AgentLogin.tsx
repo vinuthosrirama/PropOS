@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { C, FONT, getAgencyTheme, isCamKnoll, isPasSunilchandra, type AgentProfile, type AgencyTheme } from "../data"
+import { C, FONT, getAgencyTheme, isCamKnoll, isPasSunilchandra, type AgentProfile, type AgencyTheme, type DemoMode } from "../data"
 
 // Returns true if the hex colour is perceptually dark (luminance < 128)
 function isDarkHex(hex: string): boolean {
@@ -186,13 +186,14 @@ function SuburbAutocomplete({
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
-  onLogin: (agent: AgentProfile, theme: AgencyTheme) => void
+  onLogin: (agent: AgentProfile, theme: AgencyTheme, mode: DemoMode) => void
 }
 
 type Phase = "form" | "welcoming" | "done"
 
 export default function AgentLogin({ onLogin }: Props) {
   const [phase, setPhase] = useState<Phase>("form")
+  const [mode, setMode] = useState<DemoMode>("buyer")
   const [form, setForm] = useState({
     firstName: "", lastName: "", agency: "", suburb: "", email: "", phone: "",
   })
@@ -254,7 +255,7 @@ export default function AgentLogin({ onLogin }: Props) {
       if (!form.email) agent.email = "pass@areaspecialist.com.au"
     }
 
-    setTimeout(() => onLogin(agent, t), 2800)
+    setTimeout(() => onLogin(agent, t, mode), 2800)
   }
 
   const field = (
@@ -333,6 +334,40 @@ export default function AgentLogin({ onLogin }: Props) {
               boxShadow: theme ? `0 0 40px ${theme.glow}` : undefined,
               transition: "border 0.4s, box-shadow 0.4s",
             }}>
+              {/* Mode toggle */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.5, marginBottom: 8 }}>
+                  What do you want to do today?
+                </div>
+                <div style={{
+                  display: "flex", background: C.bg3,
+                  borderRadius: 10, padding: 3, gap: 0,
+                  border: `1px solid ${C.border}`,
+                }}>
+                  {(["buyer", "vendor"] as DemoMode[]).map(m => {
+                    const active = mode === m
+                    const label = m === "buyer" ? "Buyer Outreach" : "Vendor Prospecting"
+                    const desc  = m === "buyer" ? "Re-engage open home leads for new listings" : "Turn sold results into new vendor listings"
+                    return (
+                      <button key={m} onClick={() => setMode(m)} type="button" style={{
+                        flex: 1, padding: "10px 12px", borderRadius: 8, border: "none",
+                        cursor: "pointer", fontFamily: FONT, textAlign: "left",
+                        background: active
+                          ? (theme ? `linear-gradient(135deg, ${theme.gradient[0]}22, ${theme.gradient[1]}18)` : "rgba(166,218,255,0.1)")
+                          : "transparent",
+                        outline: active ? `1px solid ${theme?.primary ?? C.blue}44` : "none",
+                        transition: "all 0.15s",
+                      }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: active ? (theme?.primary ?? C.blue) : C.muted, marginBottom: 2 }}>
+                          {m === "buyer" ? "🏘" : "🏡"} {label}
+                        </div>
+                        <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.3 }}>{desc}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 20 }}>
                 Agent Details
               </div>

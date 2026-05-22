@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, PORTFOLIO_SOLD, PORTFOLIO_ACTIVE,
   DEFAULT_THEME, getPortfolioForAgent, isPasSunilchandra,
+  VENDOR_PROSPECTS,
   type AgentProfile, type AgencyTheme, type PortfolioProperty,
   type LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_ORDER,
+  type DemoMode, type VendorProspect,
 } from "../data"
 import {
   loadSLMForProperty, getSLMCompleteness, preloadSLMsFromSheet,
@@ -45,6 +47,11 @@ type Stage =
   | { kind: "generating"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; transcript: string; allLeads: ScoredLead[] }
   | { kind: "review"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; transcript: string; sms: string; emailSubject: string; emailBody: string[]; allLeads: ScoredLead[] }
   | { kind: "missedOut"; auctionProperty: PortfolioProperty; leads: SheetLead[] }
+  // ── Vendor prospecting stages ──────────────────────────────────────────
+  | { kind: "vendorPortfolio" }
+  | { kind: "vendorProspects"; soldProperty: PortfolioProperty; prospects: VendorProspect[] }
+  | { kind: "vendorProfile"; prospect: VendorProspect; soldProperty: PortfolioProperty; soldSLM: PropertySLM }
+  | { kind: "vendorReview"; prospect: VendorProspect; soldProperty: PortfolioProperty; soldSLM: PropertySLM; sms: string; emailSubject: string; emailBody: string[] }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -2504,11 +2511,556 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
   )
 }
 
+// ── Vendor Prospecting: Portfolio ────────────────────────────────────────────
+
+function VendorPortfolioPage({ agent, theme, onSelectProperty }: {
+  agent: AgentProfile
+  theme: AgencyTheme
+  onSelectProperty: (soldProperty: PortfolioProperty, prospects: VendorProspect[]) => void
+}) {
+  const { sold } = getPortfolioForAgent(agent)
+  const fmtVal = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : `$${(n / 1_000).toFixed(0)}K`
+
+  return (
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
+      {/* Header */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 8 }}>
+          Vendor Prospecting
+        </div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: C.text, letterSpacing: -0.6, marginBottom: 8 }}>
+          Turn your sold results into new listings
+        </div>
+        <div style={{ fontSize: 13, color: C.muted, maxWidth: 520 }}>
+          Every property you've sold is proof of performance in that street. PropOS has identified homeowners nearby who are likely to sell — reach out while your result is still fresh.
+        </div>
+      </div>
+
+      {/* Sold property cards with prospect counts */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
+        {sold.map(property => {
+          const prospects = VENDOR_PROSPECTS.filter(p => p.linkedPropertyId === property.id)
+          return (
+            <motion.div
+              key={property.id}
+              whileHover={{ y: -3 }}
+              onClick={() => prospects.length > 0 && onSelectProperty(property, prospects)}
+              style={{
+                background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`,
+                overflow: "hidden", cursor: prospects.length > 0 ? "pointer" : "default",
+                transition: "border 0.15s, box-shadow 0.15s",
+              }}
+              onMouseEnter={e => {
+                if (prospects.length === 0) return
+                const el = e.currentTarget as HTMLDivElement
+                el.style.borderColor = theme.primary + "55"
+                el.style.boxShadow = `0 0 24px ${theme.glow}`
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget as HTMLDivElement
+                el.style.borderColor = C.border
+                el.style.boxShadow = "none"
+              }}
+            >
+              {/* Property image */}
+              <div style={{ position: "relative", height: 160, overflow: "hidden" }}>
+                <img src={property.image} alt={property.address}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+                />
+                <div style={{
+                  position: "absolute", inset: 0,
+                  background: "linear-gradient(to top, rgba(4,7,13,0.85) 0%, transparent 60%)",
+                }} />
+                <div style={{ position: "absolute", bottom: 12, left: 14, right: 14 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{property.address}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{property.suburb} · Sold {fmtVal(property.price)}</div>
+                </div>
+                {/* Prospect badge */}
+                <div style={{
+                  position: "absolute", top: 10, right: 10,
+                  background: prospects.length > 0 ? theme.primary : C.bg3,
+                  borderRadius: 20, padding: "4px 10px",
+                  fontSize: 11, fontWeight: 700, color: prospects.length > 0 ? "#fff" : C.faint,
+                }}>
+                  {prospects.length} prospect{prospects.length !== 1 ? "s" : ""}
+                </div>
+              </div>
+
+              {/* Stats row */}
+              <div style={{ padding: "14px 16px" }}>
+                <div style={{ display: "flex", gap: 16, marginBottom: 10 }}>
+                  {[`${property.beds}bd`, `${property.baths}ba`, property.land ? `${property.land}sqm` : ""].filter(Boolean).map(s => (
+                    <span key={s} style={{ fontSize: 11, color: C.muted }}>{s}</span>
+                  ))}
+                  <span style={{ fontSize: 11, color: C.muted }}>Sold {property.soldDate}</span>
+                </div>
+
+                {prospects.length > 0 ? (
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    background: theme.dim, borderRadius: 8, padding: "8px 12px",
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: theme.primary, marginBottom: 2 }}>
+                        {prospects.length} vendor prospect{prospects.length !== 1 ? "s" : ""} nearby
+                      </div>
+                      <div style={{ fontSize: 10, color: C.faint }}>
+                        Est. total value: {fmtVal(prospects.reduce((s, p) => s + p.estimatedValue, 0))}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 18, color: theme.primary }}>→</div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11, color: C.faint, fontStyle: "italic" }}>No prospects linked yet</div>
+                )}
+              </div>
+            </motion.div>
+          )
+        })}
+      </div>
+
+      {/* Pitch callout */}
+      <div style={{
+        marginTop: 32, background: C.bg2, borderRadius: 14,
+        border: `1px solid ${theme.primary}22`, padding: "18px 22px",
+        display: "flex", alignItems: "flex-start", gap: 14,
+      }}>
+        <div style={{ fontSize: 22 }}>💡</div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>Why this works</div>
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+            Homeowners who see a neighbour sell are 3× more likely to consider listing in the next 90 days. Reaching out <em>now</em> — while your result is still the most recent comparable — is the strongest possible listing pitch. Every message PropOS generates references your actual sold price as the anchor.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Vendor Prospecting: Prospects List ───────────────────────────────────────
+
+function VendorProspectsPage({ soldProperty, prospects, onBack, onSelectProspect, theme }: {
+  soldProperty: PortfolioProperty
+  prospects: VendorProspect[]
+  onBack: () => void
+  onSelectProspect: (prospect: VendorProspect) => void
+  theme: AgencyTheme
+}) {
+  const fmtVal = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : `$${(n / 1_000).toFixed(0)}K`
+  const urgencyColor = (trigger: string) => {
+    if (/relocat|urgent|fast|christmas|deadline/i.test(trigger)) return C.red
+    if (/motivated|confirmed|ready|booked/i.test(trigger)) return C.green
+    return C.orange
+  }
+
+  return (
+    <div style={{ maxWidth: 860, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
+      <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, marginBottom: 20, padding: 0 }}>←</button>
+
+      {/* Proof-of-performance header */}
+      <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${theme.primary}22`, padding: "18px 22px", marginBottom: 28, display: "flex", gap: 18, alignItems: "center" }}>
+        <img src={soldProperty.image} alt="" style={{ width: 72, height: 72, borderRadius: 10, objectFit: "cover", flexShrink: 0 }}
+          onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none" }} />
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: theme.primary, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 4 }}>
+            Your proof of performance
+          </div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>{soldProperty.address}, {soldProperty.suburb}</div>
+          <div style={{ fontSize: 13, color: C.muted }}>
+            Sold {fmtVal(soldProperty.price)} · {soldProperty.soldDate} · {soldProperty.beds}bd {soldProperty.baths}ba{soldProperty.land ? ` · ${soldProperty.land}sqm` : ""}
+          </div>
+        </div>
+        <div style={{ marginLeft: "auto", textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontSize: 24, fontWeight: 800, color: theme.primary }}>{prospects.length}</div>
+          <div style={{ fontSize: 10, color: C.faint }}>prospects nearby</div>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16 }}>
+        Homeowners who might be ready to sell
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {prospects.map(prospect => {
+          const fname = prospect.name.split(" ")[0]
+          const uColor = urgencyColor(prospect.triggerEvent)
+          return (
+            <motion.div
+              key={prospect.id}
+              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+              onClick={() => onSelectProspect(prospect)}
+              style={{
+                background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`,
+                padding: "18px 20px", cursor: "pointer", display: "flex", gap: 16, alignItems: "flex-start",
+                transition: "border 0.15s, box-shadow 0.15s",
+              }}
+              onMouseEnter={e => {
+                const el = e.currentTarget as HTMLDivElement
+                el.style.borderColor = theme.primary + "44"
+                el.style.boxShadow = `0 0 20px ${theme.glow}`
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget as HTMLDivElement
+                el.style.borderColor = C.border
+                el.style.boxShadow = "none"
+              }}
+            >
+              {/* Avatar */}
+              <div style={{
+                width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                background: `linear-gradient(135deg, ${theme.gradient[0]}33, ${theme.gradient[1]}22)`,
+                border: `1px solid ${theme.primary}33`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 15, fontWeight: 700, color: theme.primary,
+              }}>
+                {fname[0]}
+              </div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{prospect.name}</div>
+                  <div style={{ fontSize: 10, color: C.faint, background: C.bg3, padding: "2px 7px", borderRadius: 6 }}>
+                    {prospect.address}
+                  </div>
+                  <div style={{ fontSize: 10, color: C.faint }}>{prospect.yearsOwned} yrs owned</div>
+                </div>
+                <div style={{
+                  fontSize: 11, padding: "3px 8px", borderRadius: 6, display: "inline-block", marginBottom: 6,
+                  background: uColor + "18", border: `1px solid ${uColor}33`, color: uColor, fontWeight: 600,
+                }}>
+                  {prospect.triggerEvent}
+                </div>
+                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>{prospect.notes}</div>
+              </div>
+
+              <div style={{ flexShrink: 0, textAlign: "right" }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{fmtVal(prospect.estimatedValue)}</div>
+                <div style={{ fontSize: 9, color: C.faint, marginBottom: 8 }}>est. value</div>
+                <button style={{
+                  padding: "6px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                  background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                  color: "white", fontSize: 11, fontWeight: 700, fontFamily: FONT,
+                }}>
+                  Reach out →
+                </button>
+              </div>
+            </motion.div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Vendor Prospecting: Profile + Outreach ────────────────────────────────────
+
+function VendorProfilePage({ prospect, soldProperty, soldSLM, agent, theme, onBack, onReview }: {
+  prospect: VendorProspect
+  soldProperty: PortfolioProperty
+  soldSLM: PropertySLM
+  agent: AgentProfile
+  theme: AgencyTheme
+  onBack: () => void
+  onReview: (sms: string, emailSubject: string, emailBody: string[]) => void
+}) {
+  const [generating, setGenerating] = useState(false)
+  const fmtVal = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : `$${(n / 1_000).toFixed(0)}K`
+  const fname = prospect.name.split(" ")[0]
+  const agentFirst = agent.name.split(" ")[0]
+
+  const handleGenerate = () => {
+    setGenerating(true)
+    // Build outreach using sold property as proof anchor
+    const soldShort = shortAddr(soldProperty.address)
+    const prospectShort = shortAddr(prospect.address)
+    const soldPriceFmt = fmtVal(soldProperty.price)
+    const estValueFmt = fmtVal(prospect.estimatedValue)
+    const growthStr = soldSLM?.suburb5yrGrowthPct && soldSLM.suburb5yrGrowthPct !== "TBD"
+      ? `${soldSLM.suburb5yrGrowthPct}% 5-year growth in ${prospect.suburb}`
+      : `strong market conditions in ${prospect.suburb}`
+    const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${soldShort} just sold for ${soldPriceFmt} — curious what ${prospectShort} might achieve? Happy to share thoughts. Cheers ${agentFirst}`
+    const sms = smsRaw.length > 160 ? smsRaw.slice(0, 157) + "..." : smsRaw
+    const emailSubject = `Your street just had a result, ${fname} — worth knowing`
+    const emailBody = [
+      `Hi ${fname}, I'm ${agent.name} from ${agent.agency}. I recently sold ${soldProperty.address} in ${soldProperty.suburb} for ${soldPriceFmt}, which is very close to your property at ${prospect.address}. Given the result, I wanted to reach out personally and share what the market is doing.`,
+      `${prospect.suburb} is seeing ${growthStr}, and ${prospect.beds}-bedroom properties like yours are achieving excellent results right now. Based on what I know about comparable homes in your area, I'd estimate your property is sitting somewhere in the ${fmtVal(Math.round(prospect.estimatedValue * 0.93 / 5000) * 5000)}–${estValueFmt} range — though a proper appraisal would give you a more accurate number.`,
+      `If you've been curious about what your place could achieve in this market, I'd love to offer a complimentary, no-obligation appraisal — takes around 20 minutes, happy to come to you. No pressure at all, just a conversation. Worth a quick chat? Cheers, ${agentFirst}`,
+    ]
+    setTimeout(() => {
+      setGenerating(false)
+      onReview(sms, emailSubject, emailBody)
+    }, 1200)
+  }
+
+  const growthPct = soldSLM?.suburb5yrGrowthPct && soldSLM.suburb5yrGrowthPct !== "TBD"
+    ? `${soldSLM.suburb5yrGrowthPct}%` : "TBD"
+  const medianPrice = soldSLM?.priceMax && soldSLM.priceMax !== "TBD"
+    ? fmtVal(soldSLM.priceMax as number) : null
+
+  return (
+    <div style={{ maxWidth: 1020, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
+      <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, marginBottom: 20, padding: 0 }}>←</button>
+
+      <div style={{ display: "flex", gap: 28 }}>
+        {/* LEFT — Prospect details + comparables */}
+        <div style={{ flex: "0 0 58%", display: "flex", flexDirection: "column", gap: 18 }}>
+
+          {/* Identity card */}
+          <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5, marginBottom: 4 }}>{prospect.name}</div>
+            <div style={{ fontSize: 13, color: theme.primary, fontWeight: 600, marginBottom: 12 }}>{prospect.address}, {prospect.suburb}</div>
+            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 14 }}>
+              {[
+                { label: "Years owned", value: `${prospect.yearsOwned} yrs` },
+                { label: "Beds / Baths", value: `${prospect.beds}bd · ${prospect.baths}ba` },
+                prospect.land ? { label: "Land", value: `${prospect.land}sqm` } : null,
+                { label: "Est. value", value: fmtVal(prospect.estimatedValue) },
+              ].filter(Boolean).map(item => (
+                <div key={item!.label}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>{item!.label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{item!.value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{
+              background: C.orange + "15", border: `1px solid ${C.orange}30`,
+              borderRadius: 8, padding: "8px 12px", fontSize: 12, color: C.orange, fontWeight: 600,
+            }}>
+              📍 {prospect.triggerEvent}
+            </div>
+          </div>
+
+          {/* Notes */}
+          {prospect.notes && (
+            <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 18px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Agent Notes</div>
+              <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.55 }}>{prospect.notes}</div>
+            </div>
+          )}
+
+          {/* Comparison: proof property vs their property */}
+          <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 14 }}>
+              {soldProperty.address} → {prospect.address}
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {[
+                { label: "Bedrooms", sold: `${soldProperty.beds} bed`, prospect: `${prospect.beds} bed` },
+                { label: "Land size", sold: soldProperty.land ? `${soldProperty.land}sqm` : "TBD", prospect: prospect.land ? `${prospect.land}sqm` : "TBD" },
+                { label: "Price", sold: fmtVal(soldProperty.price), prospect: fmtVal(prospect.estimatedValue) },
+              ].map(row => (
+                <div key={row.label} style={{
+                  flex: "1 1 100px", background: C.bg3, borderRadius: 10, padding: "10px 12px",
+                  border: `1px solid ${C.border}`,
+                }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", marginBottom: 6 }}>{row.label}</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>
+                    <span style={{ color: C.text, fontWeight: 600 }}>{row.sold}</span>
+                  </div>
+                  <div style={{ fontSize: 11 }}>
+                    <span style={{ color: theme.primary, fontWeight: 700 }}>{row.prospect}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Suburb stats from SLM */}
+          <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 14 }}>
+              {prospect.suburb} market data
+            </div>
+            <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>5yr growth</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>{growthPct}</div>
+              </div>
+              {medianPrice && (
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>Comparable ask</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{medianPrice}</div>
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>Your sold result</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: theme.primary }}>{fmtVal(soldProperty.price)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT — Pitch angles + generate */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Pitch angles */}
+          <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 14 }}>
+              Pitch angles for {fname}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { icon: "🏡", angle: `You just sold ${shortAddr(soldProperty.address)} for ${fmtVal(soldProperty.price)} on their street` },
+                { icon: "📈", angle: `Market timing is strong — ${growthPct} suburb growth creates urgency` },
+                { icon: "🎯", angle: `Trigger: ${prospect.triggerEvent.split("—")[0].trim()}` },
+                { icon: "📞", angle: `Offer a free appraisal — low pressure, high conversion` },
+              ].map(({ icon, angle }) => (
+                <div key={angle} style={{
+                  display: "flex", gap: 10, padding: "10px 12px", borderRadius: 10,
+                  background: C.bg3, border: `1px solid ${C.border}`,
+                }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span>
+                  <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>{angle}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Contact info */}
+          <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "16px 20px" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Contact</div>
+            <a href={`tel:${prospect.phone}`} style={{ fontSize: 14, color: theme.primary, fontWeight: 600, textDecoration: "none", display: "block", marginBottom: 6 }}>{prospect.phone}</a>
+            {prospect.email && <a href={`mailto:${prospect.email}`} style={{ fontSize: 13, color: theme.primary, fontWeight: 600, textDecoration: "none" }}>{prospect.email}</a>}
+          </div>
+
+          {/* Generate button */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleGenerate}
+            disabled={generating}
+            style={{
+              width: "100%", padding: "16px",
+              borderRadius: 14, border: "none",
+              background: generating ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+              color: generating ? C.muted : "white",
+              fontSize: 15, fontWeight: 700, cursor: generating ? "default" : "pointer",
+              fontFamily: FONT, letterSpacing: -0.3,
+              boxShadow: generating ? "none" : `0 4px 20px ${theme.glow}`,
+            }}
+          >
+            {generating ? "Building outreach…" : `✦ Generate vendor outreach for ${fname}`}
+          </motion.button>
+
+          <div style={{ textAlign: "center", fontSize: 11, color: C.faint }}>
+            SMS + email referencing your {fmtVal(soldProperty.price)} result
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Vendor Review Panel ───────────────────────────────────────────────────────
+
+function VendorReviewPanel({ prospect, soldProperty, theme, sms, emailSubject, emailBody, onBack }: {
+  prospect: VendorProspect
+  soldProperty: PortfolioProperty
+  theme: AgencyTheme
+  sms: string
+  emailSubject: string
+  emailBody: string[]
+  onBack: () => void
+}) {
+  const [smsCopied, setSmsCopied] = useState(false)
+  const [emailCopied, setEmailCopied] = useState(false)
+  const fname = prospect.name.split(" ")[0]
+
+  const copyText = (text: string, cb: (v: boolean) => void) => {
+    navigator.clipboard.writeText(text).then(() => {
+      cb(true); setTimeout(() => cb(false), 1800)
+    })
+  }
+
+  return (
+    <div style={{ maxWidth: 860, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
+      <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, marginBottom: 20, padding: 0 }}>←</button>
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: theme.primary, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Vendor Outreach Ready</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>
+          Outreach for {prospect.name}
+        </div>
+        <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>{prospect.address} · based on your {fmt(soldProperty.price)} result at {shortAddr(soldProperty.address)}</div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* SMS */}
+        <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 18 }}>💬</span>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>SMS</div>
+              <span style={{ fontSize: 10, color: sms.length > 160 ? C.red : C.green, fontWeight: 600 }}>{sms.length}/160 chars</span>
+            </div>
+            <button onClick={() => copyText(sms, setSmsCopied)} style={{
+              padding: "5px 12px", borderRadius: 7, border: `1px solid ${C.border}`,
+              background: smsCopied ? C.greenDim : C.bg3, color: smsCopied ? C.green : C.muted,
+              fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
+            }}>
+              {smsCopied ? "✓ Copied" : "Copy"}
+            </button>
+          </div>
+          <div style={{
+            background: C.bg3, borderRadius: 10, padding: "14px 16px",
+            fontSize: 13, color: C.text, lineHeight: 1.6, whiteSpace: "pre-wrap",
+          }}>{sms}</div>
+        </div>
+
+        {/* Email */}
+        <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 18 }}>✉️</span>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Email</div>
+            </div>
+            <button onClick={() => copyText([`Subject: ${emailSubject}`, "", ...emailBody].join("\n\n"), setEmailCopied)} style={{
+              padding: "5px 12px", borderRadius: 7, border: `1px solid ${C.border}`,
+              background: emailCopied ? C.greenDim : C.bg3, color: emailCopied ? C.green : C.muted,
+              fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
+            }}>
+              {emailCopied ? "✓ Copied" : "Copy"}
+            </button>
+          </div>
+          <div style={{
+            background: C.bg3, borderRadius: 10, padding: "14px 16px", fontSize: 13, color: C.text,
+          }}>
+            <div style={{ fontWeight: 700, marginBottom: 14, color: C.muted, fontSize: 11 }}>Subject: <span style={{ color: C.text }}>{emailSubject}</span></div>
+            {emailBody.map((para, i) => (
+              <div key={i} style={{ lineHeight: 1.6, marginBottom: i < emailBody.length - 1 ? 12 : 0 }}>{para}</div>
+            ))}
+          </div>
+        </div>
+
+        {/* Call to action chips */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <a href={`tel:${prospect.phone}`} style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "10px 18px", borderRadius: 10, textDecoration: "none",
+            background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+            color: "white", fontSize: 13, fontWeight: 700,
+          }}>
+            📞 Call {fname}
+          </a>
+          <a href={`sms:${prospect.phone}`} style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "10px 18px", borderRadius: 10, textDecoration: "none",
+            background: C.bg2, border: `1px solid ${theme.primary}44`,
+            color: theme.primary, fontSize: 13, fontWeight: 700,
+          }}>
+            💬 Open iMessage
+          </a>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main DemoView ─────────────────────────────────────────────────────────────
 
 export default function DemoView({
   agent,
   theme = DEFAULT_THEME,
+  mode = "buyer",
   onSettings,
   onRegisterBack,
   showInbox: showInboxProp,
@@ -2517,13 +3069,15 @@ export default function DemoView({
 }: {
   agent: AgentProfile
   theme?: AgencyTheme
+  mode?: DemoMode
   onSettings?: () => void
   onRegisterBack?: (fn: (() => void) | null) => void
   showInbox?: boolean
   onShowInboxChange?: (v: boolean) => void
   onBadgeChange?: (n: number) => void
 }) {
-  const [stage, setStage] = useState<Stage>({ kind: "portfolio" })
+  const homeStage: Stage = mode === "vendor" ? { kind: "vendorPortfolio" } : { kind: "portfolio" }
+  const [stage, setStage] = useState<Stage>(homeStage)
   const [, setUnreadRepliesInternal] = useState(0)
   const setUnreadReplies = (n: number) => { setUnreadRepliesInternal(n); onBadgeChange?.(n) }
   const [showInboxInternal, setShowInboxInternal] = useState(false)
@@ -2561,21 +3115,21 @@ export default function DemoView({
         ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "R")
       if (isReset) {
         e.preventDefault()
-        setStage({ kind: "portfolio" })
+        setStage(homeStage)
       }
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
   }, [])
 
-  const isPortfolio = stage.kind === "portfolio"
+  const isPortfolio = stage.kind === "portfolio" || stage.kind === "vendorPortfolio"
 
   // Register/deregister the Portfolio back-button in the nav bar
   useEffect(() => {
     if (isPortfolio) {
       onRegisterBack?.(null)
     } else {
-      onRegisterBack?.(() => setStage({ kind: "portfolio" }))
+      onRegisterBack?.(() => setStage(homeStage))
     }
     return () => onRegisterBack?.(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2863,6 +3417,68 @@ export default function DemoView({
             onSettings={onSettings}
             agent={agent}
             theme={theme}
+          />
+        </motion.div>
+      )}
+
+      {/* ── Vendor Prospecting Stages ─────────────────────────────────────── */}
+      {stage.kind === "vendorPortfolio" && (
+        <motion.div key="vendorPortfolio" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
+          <VendorPortfolioPage
+            agent={agent}
+            theme={theme}
+            onSelectProperty={(soldProperty, prospects) =>
+              setStage({ kind: "vendorProspects", soldProperty, prospects })
+            }
+          />
+        </motion.div>
+      )}
+
+      {stage.kind === "vendorProspects" && (
+        <motion.div key="vendorProspects" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
+          <VendorProspectsPage
+            soldProperty={stage.soldProperty}
+            prospects={stage.prospects}
+            onBack={() => setStage({ kind: "vendorPortfolio" })}
+            theme={theme}
+            onSelectProspect={prospect =>
+              setStage({
+                kind: "vendorProfile",
+                prospect,
+                soldProperty: stage.soldProperty,
+                soldSLM: loadSLMForProperty(stage.soldProperty.id),
+              })
+            }
+          />
+        </motion.div>
+      )}
+
+      {stage.kind === "vendorProfile" && (
+        <motion.div key="vendorProfile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
+          <VendorProfilePage
+            prospect={stage.prospect}
+            soldProperty={stage.soldProperty}
+            soldSLM={stage.soldSLM}
+            agent={agent}
+            theme={theme}
+            onBack={() => setStage({ kind: "vendorProspects", soldProperty: stage.soldProperty, prospects: VENDOR_PROSPECTS.filter(p => p.linkedPropertyId === stage.soldProperty.id) })}
+            onReview={(sms, emailSubject, emailBody) =>
+              setStage({ kind: "vendorReview", prospect: stage.prospect, soldProperty: stage.soldProperty, soldSLM: stage.soldSLM, sms, emailSubject, emailBody })
+            }
+          />
+        </motion.div>
+      )}
+
+      {stage.kind === "vendorReview" && (
+        <motion.div key="vendorReview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
+          <VendorReviewPanel
+            prospect={stage.prospect}
+            soldProperty={stage.soldProperty}
+            theme={theme}
+            sms={stage.sms}
+            emailSubject={stage.emailSubject}
+            emailBody={stage.emailBody}
+            onBack={() => setStage({ kind: "vendorProfile", prospect: stage.prospect, soldProperty: stage.soldProperty, soldSLM: stage.soldSLM })}
           />
         </motion.div>
       )}

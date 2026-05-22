@@ -354,6 +354,105 @@ export const PAS_PORTFOLIO_ACTIVE: PortfolioProperty[] = [
   },
 ]
 
+// ─── DEMO MODE ────────────────────────────────────────────────────────────────
+export type DemoMode = "buyer" | "vendor"
+
+// ─── VENDOR PROSPECTS ─────────────────────────────────────────────────────────
+export interface VendorProspect {
+  id: number
+  name: string
+  address: string
+  suburb: string
+  yearsOwned: number
+  estimatedValue: number   // asking-price estimate $
+  triggerEvent: string     // "Neighbour sold", "Empty nester", etc.
+  notes: string
+  phone: string
+  email?: string
+  propertyType: "House" | "Unit" | "Townhouse"
+  beds: number
+  baths: number
+  land?: number            // sqm
+  linkedPropertyId: number // which sold property is the proof-of-performance
+}
+
+export const VENDOR_PROSPECTS: VendorProspect[] = [
+  // ── Cameron Knoll / Peake — Berwick prospects ────────────────────────────
+  {
+    id: 1001, linkedPropertyId: 102,
+    name: "David & Karen Hollis", address: "8 Thirlmere Court", suburb: "Berwick",
+    yearsOwned: 9, estimatedValue: 880000, phone: "0418 234 567",
+    triggerEvent: "Neighbours sold — saw Cameron's result on their street",
+    notes: "Two kids still at school. Karen mentioned they've been thinking about upsizing for a while. Very receptive when the subject came up.",
+    propertyType: "House", beds: 4, baths: 2, land: 610,
+  },
+  {
+    id: 1002, linkedPropertyId: 102,
+    name: "Michael Chen", address: "14 Whitecliffe Way", suburb: "Berwick",
+    yearsOwned: 11, estimatedValue: 950000, phone: "0411 567 890",
+    triggerEvent: "Both kids grown up — looking to rightsize",
+    notes: "He asked a neighbour who sold 3 Thirlmere Ct. Very engaged and researching the right timing. Not in a hurry but motivated.",
+    propertyType: "House", beds: 5, baths: 3, land: 718,
+  },
+  {
+    id: 1003, linkedPropertyId: 102,
+    name: "Sandra Moore", address: "22 Birchwood Drive", suburb: "Berwick",
+    yearsOwned: 6, estimatedValue: 820000, phone: "0422 891 234",
+    triggerEvent: "Growing family — needs a 5th bedroom urgently",
+    notes: "Third baby due August. Wants to be on the market by end of year. Timeline is firm.",
+    propertyType: "House", beds: 4, baths: 2, land: 592,
+  },
+  {
+    id: 1004, linkedPropertyId: 103,
+    name: "James & Lisa Thompson", address: "18 Ascot Rise", suburb: "Berwick",
+    yearsOwned: 8, estimatedValue: 910000, phone: "0404 123 456",
+    triggerEvent: "Downsizing — both kids have left home",
+    notes: "Lisa is the decision maker. Wants to move closer to Narre Warren South. Flexible on timing but keen to understand current market value.",
+    propertyType: "House", beds: 4, baths: 2, land: 648,
+  },
+  {
+    id: 1005, linkedPropertyId: 103,
+    name: "Robert Patel", address: "7 Heritage Court", suburb: "Berwick",
+    yearsOwned: 7, estimatedValue: 870000, phone: "0431 678 901",
+    triggerEvent: "Job relocation to Brisbane — needs to move fast",
+    notes: "Highly motivated. Needs to be out within 60 days. Will consider a strong offer quickly.",
+    propertyType: "House", beds: 4, baths: 2, land: 601,
+  },
+  {
+    id: 1006, linkedPropertyId: 104,
+    name: "Paul & Michelle Grant", address: "11 Yemaya Place", suburb: "Berwick",
+    yearsOwned: 5, estimatedValue: 790000, phone: "0415 345 678",
+    triggerEvent: "Saw 3 Yemaya Place sell — surprised by the result",
+    notes: "Paul had no idea the market was this strong. Wants a market update. Low-pressure initial conversation — just curious at this stage.",
+    propertyType: "House", beds: 4, baths: 2, land: 560,
+  },
+  // ── Pas Sunilchandra / Area Specialist — SE Melbourne prospects ──────────
+  {
+    id: 2001, linkedPropertyId: 301,
+    name: "Thomas Nguyen", address: "71 Broadway Street", suburb: "Hampton Park",
+    yearsOwned: 8, estimatedValue: 610000, phone: "0427 456 789",
+    triggerEvent: "Saw 58 Broadway sell — rang the office for an appraisal",
+    notes: "Thomas saw the sold sticker go up and called Pas directly. Very engaged — wants numbers within the week.",
+    propertyType: "House", beds: 3, baths: 1, land: 528,
+  },
+  {
+    id: 2002, linkedPropertyId: 301,
+    name: "Anna & Steve Kowalski", address: "15 Chelmsford Drive", suburb: "Hampton Park",
+    yearsOwned: 6, estimatedValue: 650000, phone: "0438 901 234",
+    triggerEvent: "Moving to Melbourne CBD — need to sell by Christmas",
+    notes: "Anna is the decision maker, Steve is supportive. Timeline is firm — must be on market by October at latest.",
+    propertyType: "House", beds: 4, baths: 2, land: 577,
+  },
+  {
+    id: 2003, linkedPropertyId: 302,
+    name: "Chris Wilson", address: "45 Seattle Crescent", suburb: "Hallam",
+    yearsOwned: 10, estimatedValue: 680000, phone: "0419 012 345",
+    triggerEvent: "Retiring — looking to downsize to a unit nearby",
+    notes: "Chris met Pas at the 32 Seattle Crescent open home and was very impressed with her presentation. Has been considering this for 2 years.",
+    propertyType: "House", beds: 4, baths: 2, land: 603,
+  },
+]
+
 // Active listings — Cameron Knoll / Peake
 export const PORTFOLIO_ACTIVE: PortfolioProperty[] = [
   {
