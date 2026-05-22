@@ -3,11 +3,16 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, PORTFOLIO_SOLD, PORTFOLIO_ACTIVE,
   DEFAULT_THEME, getPortfolioForAgent, isPasSunilchandra,
-  VENDOR_PROSPECTS,
   type AgentProfile, type AgencyTheme, type PortfolioProperty,
   type LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_ORDER,
-  type DemoMode, type VendorProspect,
+  type DemoMode,
 } from "../data"
+import { getPastBuyersForAgent, CURRENT_VALUE_ESTIMATES } from "../data/pastBuyers"
+import { calculateFinancials, fmtDollar, fmtPct, type FinancialSnapshot } from "../lib/vendorFinancials"
+import {
+  batchSegment, PIPELINE_LABELS,
+  type SegmentedBuyer, type Pipeline,
+} from "../lib/vendorPipeline"
 import {
   loadSLMForProperty, getSLMCompleteness, preloadSLMsFromSheet,
   type PropertySLM,
@@ -49,9 +54,9 @@ type Stage =
   | { kind: "missedOut"; auctionProperty: PortfolioProperty; leads: SheetLead[] }
   // ── Vendor prospecting stages ──────────────────────────────────────────
   | { kind: "vendorPortfolio" }
-  | { kind: "vendorProspects"; soldProperty: PortfolioProperty; prospects: VendorProspect[] }
-  | { kind: "vendorProfile"; prospect: VendorProspect; soldProperty: PortfolioProperty; soldSLM: PropertySLM }
-  | { kind: "vendorReview"; prospect: VendorProspect; soldProperty: PortfolioProperty; soldSLM: PropertySLM; sms: string; emailSubject: string; emailBody: string[] }
+  | { kind: "vendorDashboard"; segmented: SegmentedBuyer[] }
+  | { kind: "vendorProfile"; entry: SegmentedBuyer }
+  | { kind: "vendorReview"; entry: SegmentedBuyer; sms: string; emailSubject: string; emailBody: string[] }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -2511,15 +2516,31 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
   )
 }
 
-// ── Vendor Prospecting: Portfolio ────────────────────────────────────────────
+// ── Vendor Prospecting: Portfolio (CRM Dashboard) ────────────────────────────
 
-function VendorPortfolioPage({ agent, theme, onSelectProperty }: {
+function VendorPortfolioPage({ agent, theme, onAnalyse }: {
   agent: AgentProfile
   theme: AgencyTheme
-  onSelectProperty: (soldProperty: PortfolioProperty, prospects: VendorProspect[]) => void
+  onAnalyse: (segmented: SegmentedBuyer[]) => void
 }) {
-  const { sold } = getPortfolioForAgent(agent)
-  const fmtVal = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : `$${(n / 1_000).toFixed(0)}K`
+  const buyers = getPastBuyersForAgent(agent)
+  const [analysing, setAnalysing] = useState(false)
+
+  const investors = buyers.filter(b => b.status === "investor")
+  const owners = buyers.filter(b => b.status === "owner-occupier")
+  const totalEstValue = buyers.reduce((s, b) => s + (CURRENT_VALUE_ESTIMATES[b.id] ?? 0), 0)
+
+  const handleAnalyse = () => {
+    setAnalysing(true)
+    const financialsMap = new Map<number, FinancialSnapshot>()
+    for (const b of buyers) {
+      const est = CURRENT_VALUE_ESTIMATES[b.id]
+      if (!est) continue
+      financialsMap.set(b.id, calculateFinancials(b.purchasePrice, b.purchaseDate, est, b.deposit))
+    }
+    const segmented = batchSegment(buyers, financialsMap)
+    setTimeout(() => onAnalyse(segmented), 1200)
+  }
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
@@ -2529,108 +2550,105 @@ function VendorPortfolioPage({ agent, theme, onSelectProperty }: {
           Vendor Prospecting
         </div>
         <div style={{ fontSize: 26, fontWeight: 800, color: C.text, letterSpacing: -0.6, marginBottom: 8 }}>
-          Turn your sold results into new listings
+          Turn past buyers into new listings
         </div>
-        <div style={{ fontSize: 13, color: C.muted, maxWidth: 520 }}>
-          Every property you've sold is proof of performance in that street. PropOS has identified homeowners nearby who are likely to sell — reach out while your result is still fresh.
+        <div style={{ fontSize: 13, color: C.muted, maxWidth: 560 }}>
+          PropOS analyses your CRM database to find past buyers who are ready to sell. We calculate their equity, CGT position, and life-stage triggers, then generate hyper-personalised outreach in your voice.
         </div>
       </div>
 
-      {/* Sold property cards with prospect counts */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
-        {sold.map(property => {
-          const prospects = VENDOR_PROSPECTS.filter(p => p.linkedPropertyId === property.id)
-          return (
-            <motion.div
-              key={property.id}
-              whileHover={{ y: -3 }}
-              onClick={() => prospects.length > 0 && onSelectProperty(property, prospects)}
-              style={{
-                background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`,
-                overflow: "hidden", cursor: prospects.length > 0 ? "pointer" : "default",
-                transition: "border 0.15s, box-shadow 0.15s",
-              }}
-              onMouseEnter={e => {
-                if (prospects.length === 0) return
-                const el = e.currentTarget as HTMLDivElement
-                el.style.borderColor = theme.primary + "55"
-                el.style.boxShadow = `0 0 24px ${theme.glow}`
-              }}
-              onMouseLeave={e => {
-                const el = e.currentTarget as HTMLDivElement
-                el.style.borderColor = C.border
-                el.style.boxShadow = "none"
-              }}
-            >
-              {/* Property image */}
-              <div style={{ position: "relative", height: 160, overflow: "hidden" }}>
-                <img src={property.image} alt={property.address}
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
-                />
+      {/* CRM Summary Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
+        {[
+          { label: "Total contacts", value: `${buyers.length}`, icon: "👥" },
+          { label: "Owner-occupiers", value: `${owners.length}`, icon: "🏠" },
+          { label: "Investors", value: `${investors.length}`, icon: "💰" },
+          { label: "Est. portfolio value", value: fmtDollar(totalEstValue), icon: "📊" },
+        ].map(stat => (
+          <div key={stat.label} style={{
+            background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`,
+            padding: "16px 18px", textAlign: "center",
+          }}>
+            <div style={{ fontSize: 20, marginBottom: 6 }}>{stat.icon}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 2 }}>{stat.value}</div>
+            <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Recent contacts preview */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>Your CRM database</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {buyers.slice(0, 5).map(buyer => {
+            const est = CURRENT_VALUE_ESTIMATES[buyer.id] ?? 0
+            const equity = est - buyer.purchasePrice
+            return (
+              <div key={buyer.id} style={{
+                background: C.bg2, borderRadius: 12, border: `1px solid ${C.border}`,
+                padding: "12px 16px", display: "flex", alignItems: "center", gap: 14,
+              }}>
                 <div style={{
-                  position: "absolute", inset: 0,
-                  background: "linear-gradient(to top, rgba(4,7,13,0.85) 0%, transparent 60%)",
-                }} />
-                <div style={{ position: "absolute", bottom: 12, left: 14, right: 14 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{property.address}</div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>{property.suburb} · Sold {fmtVal(property.price)}</div>
-                </div>
-                {/* Prospect badge */}
-                <div style={{
-                  position: "absolute", top: 10, right: 10,
-                  background: prospects.length > 0 ? theme.primary : C.bg3,
-                  borderRadius: 20, padding: "4px 10px",
-                  fontSize: 11, fontWeight: 700, color: prospects.length > 0 ? "#fff" : C.faint,
+                  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                  background: `linear-gradient(135deg, ${theme.gradient[0]}33, ${theme.gradient[1]}22)`,
+                  border: `1px solid ${theme.primary}33`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 13, fontWeight: 700, color: theme.primary,
                 }}>
-                  {prospects.length} prospect{prospects.length !== 1 ? "s" : ""}
+                  {buyer.name.charAt(0)}
                 </div>
-              </div>
-
-              {/* Stats row */}
-              <div style={{ padding: "14px 16px" }}>
-                <div style={{ display: "flex", gap: 16, marginBottom: 10 }}>
-                  {[`${property.beds}bd`, `${property.baths}ba`, property.land ? `${property.land}sqm` : ""].filter(Boolean).map(s => (
-                    <span key={s} style={{ fontSize: 11, color: C.muted }}>{s}</span>
-                  ))}
-                  <span style={{ fontSize: 11, color: C.muted }}>Sold {property.soldDate}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{buyer.name}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{buyer.purchaseAddress}, {buyer.suburb}</div>
                 </div>
-
-                {prospects.length > 0 ? (
-                  <div style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    background: theme.dim, borderRadius: 8, padding: "8px 12px",
-                  }}>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: theme.primary, marginBottom: 2 }}>
-                        {prospects.length} vendor prospect{prospects.length !== 1 ? "s" : ""} nearby
-                      </div>
-                      <div style={{ fontSize: 10, color: C.faint }}>
-                        Est. total value: {fmtVal(prospects.reduce((s, p) => s + p.estimatedValue, 0))}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 18, color: theme.primary }}>→</div>
+                <div style={{ flexShrink: 0, textAlign: "right" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{fmtDollar(equity)} equity</div>
+                  <div style={{ fontSize: 10, color: C.faint }}>
+                    {buyer.status === "investor" ? "Investor" : "Owner-occupier"}
                   </div>
-                ) : (
-                  <div style={{ fontSize: 11, color: C.faint, fontStyle: "italic" }}>No prospects linked yet</div>
-                )}
+                </div>
               </div>
-            </motion.div>
-          )
-        })}
+            )
+          })}
+          {buyers.length > 5 && (
+            <div style={{ fontSize: 11, color: C.faint, textAlign: "center", padding: "8px 0" }}>
+              + {buyers.length - 5} more contacts
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Analyse button */}
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={handleAnalyse}
+        disabled={analysing}
+        style={{
+          width: "100%", padding: "18px",
+          borderRadius: 14, border: "none",
+          background: analysing ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+          color: analysing ? C.muted : "white",
+          fontSize: 16, fontWeight: 700, cursor: analysing ? "default" : "pointer",
+          fontFamily: FONT, letterSpacing: -0.3,
+          boxShadow: analysing ? "none" : `0 4px 24px ${theme.glow}`,
+          marginBottom: 12,
+        }}
+      >
+        {analysing ? "Analysing your database..." : `✦ Analyse ${buyers.length} contacts for vendor opportunities`}
+      </motion.button>
 
       {/* Pitch callout */}
       <div style={{
-        marginTop: 32, background: C.bg2, borderRadius: 14,
+        marginTop: 20, background: C.bg2, borderRadius: 14,
         border: `1px solid ${theme.primary}22`, padding: "18px 22px",
         display: "flex", alignItems: "flex-start", gap: 14,
       }}>
         <div style={{ fontSize: 22 }}>💡</div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>Why this works</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>How it works</div>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-            Homeowners who see a neighbour sell are 3× more likely to consider listing in the next 90 days. Reaching out <em>now</em> — while your result is still the most recent comparable — is the strongest possible listing pitch. Every message PropOS generates references your actual sold price as the anchor.
+            PropOS scans your past buyers and segments them into actionable pipelines: investors ready to take profit, families outgrowing their home, empty-nesters ready to downsize. Each contact gets a financial snapshot (equity gain, CGT savings, cash-on-cash return) and personalised outreach in your voice.
           </div>
         </div>
       </div>
@@ -2638,112 +2656,146 @@ function VendorPortfolioPage({ agent, theme, onSelectProperty }: {
   )
 }
 
-// ── Vendor Prospecting: Prospects List ───────────────────────────────────────
+// ── Vendor Prospecting: Pipeline Dashboard ──────────────────────────────────
 
-function VendorProspectsPage({ soldProperty, prospects, onBack, onSelectProspect, theme }: {
-  soldProperty: PortfolioProperty
-  prospects: VendorProspect[]
+function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme }: {
+  segmented: SegmentedBuyer[]
   onBack: () => void
-  onSelectProspect: (prospect: VendorProspect) => void
+  onSelectEntry: (entry: SegmentedBuyer) => void
   theme: AgencyTheme
 }) {
-  const fmtVal = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : `$${(n / 1_000).toFixed(0)}K`
-  const urgencyColor = (trigger: string) => {
-    if (/relocat|urgent|fast|christmas|deadline/i.test(trigger)) return C.red
-    if (/motivated|confirmed|ready|booked/i.test(trigger)) return C.green
-    return C.orange
-  }
+  const [filterPipeline, setFilterPipeline] = useState<Pipeline | "all">("all")
+  const filtered = filterPipeline === "all" ? segmented : segmented.filter(s => s.segment.pipeline === filterPipeline)
+  const pipelines = [...new Set(segmented.map(s => s.segment.pipeline))]
+  const totalEquity = segmented.reduce((s, e) => s + e.financials.equityGain, 0)
+  const urgencyColor = (u: "high" | "medium" | "low") =>
+    u === "high" ? (C.red ?? "#ef4444") : u === "medium" ? C.orange : C.faint
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
       <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, marginBottom: 20, padding: 0 }}>←</button>
 
-      {/* Proof-of-performance header */}
-      <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${theme.primary}22`, padding: "18px 22px", marginBottom: 28, display: "flex", gap: 18, alignItems: "center" }}>
-        <img src={soldProperty.image} alt="" style={{ width: 72, height: 72, borderRadius: 10, objectFit: "cover", flexShrink: 0 }}
-          onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none" }} />
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: theme.primary, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 4 }}>
-            Your proof of performance
-          </div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>{soldProperty.address}, {soldProperty.suburb}</div>
-          <div style={{ fontSize: 13, color: C.muted }}>
-            Sold {fmtVal(soldProperty.price)} · {soldProperty.soldDate} · {soldProperty.beds}bd {soldProperty.baths}ba{soldProperty.land ? ` · ${soldProperty.land}sqm` : ""}
-          </div>
+      {/* Header with summary */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 8 }}>
+          Pipeline Dashboard
         </div>
-        <div style={{ marginLeft: "auto", textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: 24, fontWeight: 800, color: theme.primary }}>{prospects.length}</div>
-          <div style={{ fontSize: 10, color: C.faint }}>prospects nearby</div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5, marginBottom: 6 }}>
+          {segmented.length} contacts segmented into {pipelines.length} pipelines
+        </div>
+        <div style={{ fontSize: 13, color: C.muted }}>
+          Combined equity: <span style={{ color: C.green, fontWeight: 700 }}>{fmtDollar(totalEquity)}</span> across your database
         </div>
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16 }}>
-        Homeowners who might be ready to sell
+      {/* Pipeline filter chips */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+        <button onClick={() => setFilterPipeline("all")} style={{
+          padding: "6px 14px", borderRadius: 20, border: `1px solid ${filterPipeline === "all" ? theme.primary : C.border}`,
+          background: filterPipeline === "all" ? theme.primary : C.bg2,
+          color: filterPipeline === "all" ? "#fff" : C.muted,
+          fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+        }}>
+          All ({segmented.length})
+        </button>
+        {pipelines.map(p => {
+          const pl = PIPELINE_LABELS[p]
+          const count = segmented.filter(s => s.segment.pipeline === p).length
+          return (
+            <button key={p} onClick={() => setFilterPipeline(p)} style={{
+              padding: "6px 14px", borderRadius: 20, border: `1px solid ${filterPipeline === p ? pl.color : C.border}`,
+              background: filterPipeline === p ? pl.color + "22" : C.bg2,
+              color: filterPipeline === p ? pl.color : C.muted,
+              fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+            }}>
+              {pl.icon} {pl.shortLabel} ({count})
+            </button>
+          )
+        })}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {prospects.map(prospect => {
-          const fname = prospect.name.split(" ")[0]
-          const uColor = urgencyColor(prospect.triggerEvent)
+      {/* Contact cards */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {filtered.map((entry, i) => {
+          const { buyer, financials: fin, segment } = entry
+          const pl = PIPELINE_LABELS[segment.pipeline]
+          const fname = buyer.name.split(" ")[0]
+          const topTrigger = segment.triggers[0]
           return (
             <motion.div
-              key={prospect.id}
+              key={buyer.id}
               initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-              onClick={() => onSelectProspect(prospect)}
+              transition={{ delay: i * 0.03 }}
+              onClick={() => onSelectEntry(entry)}
               style={{
                 background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`,
-                padding: "18px 20px", cursor: "pointer", display: "flex", gap: 16, alignItems: "flex-start",
+                padding: "16px 20px", cursor: "pointer", display: "flex", gap: 14, alignItems: "center",
                 transition: "border 0.15s, box-shadow 0.15s",
               }}
               onMouseEnter={e => {
                 const el = e.currentTarget as HTMLDivElement
-                el.style.borderColor = theme.primary + "44"
-                el.style.boxShadow = `0 0 20px ${theme.glow}`
+                el.style.borderColor = pl.color + "55"
+                el.style.boxShadow = `0 0 20px ${pl.color}15`
               }}
               onMouseLeave={e => {
                 const el = e.currentTarget as HTMLDivElement
-                el.style.borderColor = C.border
-                el.style.boxShadow = "none"
+                el.style.borderColor = C.border; el.style.boxShadow = "none"
               }}
             >
               {/* Avatar */}
               <div style={{
                 width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-                background: `linear-gradient(135deg, ${theme.gradient[0]}33, ${theme.gradient[1]}22)`,
-                border: `1px solid ${theme.primary}33`,
+                background: pl.color + "18", border: `1px solid ${pl.color}33`,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 15, fontWeight: 700, color: theme.primary,
+                fontSize: 14, fontWeight: 700, color: pl.color,
               }}>
-                {fname[0]}
+                {fname.charAt(0)}
               </div>
 
+              {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{prospect.name}</div>
-                  <div style={{ fontSize: 10, color: C.faint, background: C.bg3, padding: "2px 7px", borderRadius: 6 }}>
-                    {prospect.address}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{buyer.name}</div>
+                  <div style={{
+                    fontSize: 10, padding: "2px 8px", borderRadius: 6,
+                    background: pl.color + "18", color: pl.color, fontWeight: 700,
+                  }}>
+                    {pl.icon} {pl.shortLabel}
                   </div>
-                  <div style={{ fontSize: 10, color: C.faint }}>{prospect.yearsOwned} yrs owned</div>
+                  <div style={{ fontSize: 10, color: C.faint }}>{fin.yearsHeld}yr hold</div>
                 </div>
-                <div style={{
-                  fontSize: 11, padding: "3px 8px", borderRadius: 6, display: "inline-block", marginBottom: 6,
-                  background: uColor + "18", border: `1px solid ${uColor}33`, color: uColor, fontWeight: 600,
-                }}>
-                  {prospect.triggerEvent}
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>
+                  {buyer.purchaseAddress}, {buyer.suburb}
                 </div>
-                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>{prospect.notes}</div>
+                {topTrigger && (
+                  <div style={{
+                    fontSize: 10, padding: "2px 8px", borderRadius: 5, display: "inline-block",
+                    background: urgencyColor(topTrigger.urgency) + "15",
+                    border: `1px solid ${urgencyColor(topTrigger.urgency)}30`,
+                    color: urgencyColor(topTrigger.urgency), fontWeight: 600,
+                  }}>
+                    {topTrigger.label}
+                  </div>
+                )}
               </div>
 
+              {/* Financial summary */}
               <div style={{ flexShrink: 0, textAlign: "right" }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{fmtVal(prospect.estimatedValue)}</div>
-                <div style={{ fontSize: 9, color: C.faint, marginBottom: 8 }}>est. value</div>
-                <button style={{
-                  padding: "6px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-                  background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
-                  color: "white", fontSize: 11, fontWeight: 700, fontFamily: FONT,
-                }}>
-                  Reach out →
-                </button>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.green }}>{fmtDollar(fin.equityGain)}</div>
+                <div style={{ fontSize: 9, color: C.faint, marginBottom: 4 }}>equity gain</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.text }}>{fmtDollar(fin.currentEstimate)}</div>
+                <div style={{ fontSize: 9, color: C.faint }}>est. value</div>
+              </div>
+
+              {/* Priority score */}
+              <div style={{
+                width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+                background: scoreColor(entry.priority) + "18",
+                border: `1px solid ${scoreColor(entry.priority)}33`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, fontWeight: 800, color: scoreColor(entry.priority),
+              }}>
+                {entry.priority}
               </div>
             </motion.div>
           )
@@ -2753,69 +2805,94 @@ function VendorProspectsPage({ soldProperty, prospects, onBack, onSelectProspect
   )
 }
 
-// ── Vendor Prospecting: Profile + Outreach ────────────────────────────────────
+// ── Vendor Prospecting: Contact Profile + Financial Snapshot ─────────────────
 
-function VendorProfilePage({ prospect, soldProperty, soldSLM, agent, theme, onBack, onReview }: {
-  prospect: VendorProspect
-  soldProperty: PortfolioProperty
-  soldSLM: PropertySLM
+function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
+  entry: SegmentedBuyer
   agent: AgentProfile
   theme: AgencyTheme
   onBack: () => void
   onReview: (sms: string, emailSubject: string, emailBody: string[]) => void
 }) {
   const [generating, setGenerating] = useState(false)
-  const fmtVal = (n: number) => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(2)}M` : `$${(n / 1_000).toFixed(0)}K`
-  const fname = prospect.name.split(" ")[0]
+  const { buyer, financials: fin, segment } = entry
+  const pl = PIPELINE_LABELS[segment.pipeline]
+  const fname = buyer.name.split("&")[0].split(" ")[0].trim()
   const agentFirst = agent.name.split(" ")[0]
 
   const handleGenerate = () => {
     setGenerating(true)
-    // Build outreach using sold property as proof anchor
-    const soldShort = shortAddr(soldProperty.address)
-    const prospectShort = shortAddr(prospect.address)
-    const soldPriceFmt = fmtVal(soldProperty.price)
-    const estValueFmt = fmtVal(prospect.estimatedValue)
-    const growthStr = soldSLM?.suburb5yrGrowthPct && soldSLM.suburb5yrGrowthPct !== "TBD"
-      ? `${soldSLM.suburb5yrGrowthPct}% 5-year growth in ${prospect.suburb}`
-      : `strong market conditions in ${prospect.suburb}`
-    const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${soldShort} just sold for ${soldPriceFmt} — curious what ${prospectShort} might achieve? Happy to share thoughts. Cheers ${agentFirst}`
+    const addr = shortAddr(buyer.purchaseAddress)
+    const equityStr = fmtDollar(fin.equityGain)
+    const estStr = fmtDollar(fin.currentEstimate)
+    const cgtStr = fin.cgtSavingsBy2027 > 0 ? ` The current 50% CGT discount saves you approximately ${fmtDollar(fin.cgtSavingsBy2027)} if you sell before July 2027.` : ""
+    const cocStr = fin.cashOnCashReturn ? `Your original deposit has turned into a ${fin.cashOnCashReturn}% return.` : ""
+
+    // Pipeline-specific messaging
+    let opening = ""
+    let pitch = ""
+    if (segment.pipeline === "investor-to-seller" || segment.pipeline === "investor-to-rebalance") {
+      opening = `Hi ${fname}, ${agentFirst} here from ${agent.agency}. Quick market update on ${addr}`
+      pitch = `Your property at ${buyer.purchaseAddress} has grown significantly since you purchased in ${buyer.purchaseDate.slice(0, 4)}. Current estimate sits around ${estStr}, which is ${equityStr} in equity.${cgtStr} ${cocStr} Worth a quick conversation about your options?`
+    } else if (segment.pipeline === "owner-to-upsizer") {
+      opening = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Hope the family is well`
+      pitch = `I was reviewing the market around ${buyer.suburb} and your property at ${buyer.purchaseAddress} caught my eye. Since you bought in ${buyer.purchaseDate.slice(0, 4)}, it's appreciated to around ${estStr}, giving you ${equityStr} in equity. That kind of position opens up some really exciting upgrade options if you've been thinking about more space.`
+    } else if (segment.pipeline === "owner-to-downsizer") {
+      opening = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Hope you're keeping well`
+      pitch = `I wanted to share a quick update on the market around ${buyer.suburb}. Your property at ${buyer.purchaseAddress} is performing really well, currently sitting around ${estStr}. That's ${equityStr} in equity since you purchased. If you've been thinking about simplifying, that equity could set you up beautifully for the next chapter.`
+    } else {
+      opening = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Hope all is well`
+      pitch = `Quick update on the ${buyer.suburb} market. Your property at ${buyer.purchaseAddress} has appreciated to around ${estStr} since you purchased, that's ${equityStr} in equity growth.${cgtStr} If you've ever wondered what your options look like, happy to have a no-pressure chat.`
+    }
+
+    const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${buyer.purchaseDate.slice(0, 4)}). Worth a quick chat? Cheers ${agentFirst}`
     const sms = smsRaw.length > 160 ? smsRaw.slice(0, 157) + "..." : smsRaw
-    const emailSubject = `Your street just had a result, ${fname} — worth knowing`
+    const emailSubject = `Market update on ${buyer.purchaseAddress}, ${fname}`
     const emailBody = [
-      `Hi ${fname}, I'm ${agent.name} from ${agent.agency}. I recently sold ${soldProperty.address} in ${soldProperty.suburb} for ${soldPriceFmt}, which is very close to your property at ${prospect.address}. Given the result, I wanted to reach out personally and share what the market is doing.`,
-      `${prospect.suburb} is seeing ${growthStr}, and ${prospect.beds}-bedroom properties like yours are achieving excellent results right now. Based on what I know about comparable homes in your area, I'd estimate your property is sitting somewhere in the ${fmtVal(Math.round(prospect.estimatedValue * 0.93 / 5000) * 5000)}–${estValueFmt} range — though a proper appraisal would give you a more accurate number.`,
-      `If you've been curious about what your place could achieve in this market, I'd love to offer a complimentary, no-obligation appraisal — takes around 20 minutes, happy to come to you. No pressure at all, just a conversation. Worth a quick chat? Cheers, ${agentFirst}`,
+      `${opening}.`,
+      pitch,
+      `I'd love to offer a complimentary, no-obligation appraisal if you're at all curious. Takes about 20 minutes, happy to come to you. No pressure, just a conversation.\n\n${buyer.status === "investor" ? "Kind regards" : "Cheers"},\n${agentFirst}`,
     ]
+
     setTimeout(() => {
       setGenerating(false)
       onReview(sms, emailSubject, emailBody)
     }, 1200)
   }
 
-  const growthPct = soldSLM?.suburb5yrGrowthPct && soldSLM.suburb5yrGrowthPct !== "TBD"
-    ? `${soldSLM.suburb5yrGrowthPct}%` : "TBD"
-  const medianPrice = soldSLM?.priceMax && soldSLM.priceMax !== "TBD"
-    ? fmtVal(soldSLM.priceMax as number) : null
+  const equityPct = Math.round((fin.equityGain / fin.purchasePrice) * 100)
+  const equityBarWidth = Math.min(equityPct, 100)
 
   return (
     <div style={{ maxWidth: 1020, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
       <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, marginBottom: 20, padding: 0 }}>←</button>
 
       <div style={{ display: "flex", gap: 28 }}>
-        {/* LEFT — Prospect details + comparables */}
+        {/* LEFT — Contact details + financial snapshot */}
         <div style={{ flex: "0 0 58%", display: "flex", flexDirection: "column", gap: 18 }}>
 
           {/* Identity card */}
           <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5, marginBottom: 4 }}>{prospect.name}</div>
-            <div style={{ fontSize: 13, color: theme.primary, fontWeight: 600, marginBottom: 12 }}>{prospect.address}, {prospect.suburb}</div>
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>{buyer.name}</div>
+              <div style={{
+                fontSize: 10, padding: "3px 10px", borderRadius: 8,
+                background: pl.color + "18", color: pl.color, fontWeight: 700,
+              }}>
+                {pl.icon} {pl.label}
+              </div>
+            </div>
+            <div style={{ fontSize: 13, color: theme.primary, fontWeight: 600, marginBottom: 14 }}>
+              {buyer.purchaseAddress}, {buyer.suburb}
+            </div>
+            <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
               {[
-                { label: "Years owned", value: `${prospect.yearsOwned} yrs` },
-                { label: "Beds / Baths", value: `${prospect.beds}bd · ${prospect.baths}ba` },
-                prospect.land ? { label: "Land", value: `${prospect.land}sqm` } : null,
-                { label: "Est. value", value: fmtVal(prospect.estimatedValue) },
+                { label: "Purchased", value: buyer.purchaseDate.slice(0, 4) },
+                { label: "Purchase price", value: fmtDollar(buyer.purchasePrice) },
+                { label: "Hold period", value: `${fin.yearsHeld} yrs` },
+                { label: "Type", value: `${buyer.beds}bd ${buyer.baths}ba ${buyer.propertyType}` },
+                buyer.land ? { label: "Land", value: `${buyer.land}sqm` } : null,
+                { label: "Status", value: buyer.status === "investor" ? "Investor" : "Owner-occupier" },
               ].filter(Boolean).map(item => (
                 <div key={item!.label}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>{item!.label}</div>
@@ -2823,103 +2900,119 @@ function VendorProfilePage({ prospect, soldProperty, soldSLM, agent, theme, onBa
                 </div>
               ))}
             </div>
-            <div style={{
-              background: C.orange + "15", border: `1px solid ${C.orange}30`,
-              borderRadius: 8, padding: "8px 12px", fontSize: 12, color: C.orange, fontWeight: 600,
-            }}>
-              📍 {prospect.triggerEvent}
-            </div>
           </div>
 
-          {/* Notes */}
-          {prospect.notes && (
-            <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 18px" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Agent Notes</div>
-              <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.55 }}>{prospect.notes}</div>
-            </div>
-          )}
-
-          {/* Comparison: proof property vs their property */}
+          {/* Financial Snapshot */}
           <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 14 }}>
-              {soldProperty.address} → {prospect.address}
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 16 }}>
+              Financial snapshot
             </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+
+            {/* Equity bar */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: C.muted }}>Purchased {fmtDollar(fin.purchasePrice)}</span>
+                <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>Now {fmtDollar(fin.currentEstimate)}</span>
+              </div>
+              <div style={{ height: 10, background: C.bg3, borderRadius: 6, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%", borderRadius: 6, width: `${equityBarWidth}%`,
+                  background: `linear-gradient(90deg, ${theme.gradient[0]}, ${C.green})`,
+                  transition: "width 0.8s ease",
+                }} />
+              </div>
+              <div style={{ fontSize: 11, color: C.faint, marginTop: 4, textAlign: "right" }}>
+                {fmtPct(fin.equityGainPct)} equity growth ({fmtPct(fin.annualAppreciation)} p.a.)
+              </div>
+            </div>
+
+            {/* Key metrics grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
               {[
-                { label: "Bedrooms", sold: `${soldProperty.beds} bed`, prospect: `${prospect.beds} bed` },
-                { label: "Land size", sold: soldProperty.land ? `${soldProperty.land}sqm` : "TBD", prospect: prospect.land ? `${prospect.land}sqm` : "TBD" },
-                { label: "Price", sold: fmtVal(soldProperty.price), prospect: fmtVal(prospect.estimatedValue) },
-              ].map(row => (
-                <div key={row.label} style={{
-                  flex: "1 1 100px", background: C.bg3, borderRadius: 10, padding: "10px 12px",
+                { label: "Equity gain", value: fmtDollar(fin.equityGain), color: C.green },
+                { label: "Est. current value", value: fmtDollar(fin.currentEstimate), color: C.text },
+                { label: "Annual growth", value: fmtPct(fin.annualAppreciation), color: C.blue },
+                fin.cashOnCashReturn ? { label: "Cash-on-cash return", value: `${fin.cashOnCashReturn}%`, color: C.green } : null,
+                fin.cgtDiscount ? { label: "Est. CGT (50% disc.)", value: fmtDollar(fin.estimatedCGT), color: C.orange } : null,
+                fin.cgtSavingsBy2027 > 0 ? { label: "CGT savings by Jul 2027", value: fmtDollar(fin.cgtSavingsBy2027), color: C.red ?? "#ef4444" } : null,
+                { label: "Selling costs (est.)", value: fmtDollar(fin.sellingCosts), color: C.muted },
+                { label: "Net proceeds (est.)", value: fmtDollar(fin.netProceeds), color: C.green },
+              ].filter(Boolean).map(m => (
+                <div key={m!.label} style={{
+                  background: C.bg3, borderRadius: 10, padding: "10px 12px",
                   border: `1px solid ${C.border}`,
                 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", marginBottom: 6 }}>{row.label}</div>
-                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>
-                    <span style={{ color: C.text, fontWeight: 600 }}>{row.sold}</span>
-                  </div>
-                  <div style={{ fontSize: 11 }}>
-                    <span style={{ color: theme.primary, fontWeight: 700 }}>{row.prospect}</span>
-                  </div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>{m!.label}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: m!.color }}>{m!.value}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Suburb stats from SLM */}
-          <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 14 }}>
-              {prospect.suburb} market data
+          {/* Agent Notes */}
+          {buyer.notes && (
+            <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 18px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>CRM Notes</div>
+              <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.55 }}>{buyer.notes}</div>
             </div>
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-              <div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>5yr growth</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: C.green }}>{growthPct}</div>
-              </div>
-              {medianPrice && (
-                <div>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>Comparable ask</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{medianPrice}</div>
-                </div>
-              )}
-              <div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>Your sold result</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: theme.primary }}>{fmtVal(soldProperty.price)}</div>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* RIGHT — Pitch angles + generate */}
+        {/* RIGHT — Triggers + pitch angles + generate */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Pitch angles */}
+
+          {/* Trigger events */}
           <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 14 }}>
-              Pitch angles for {fname}
+              Trigger events
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {[
-                { icon: "🏡", angle: `You just sold ${shortAddr(soldProperty.address)} for ${fmtVal(soldProperty.price)} on their street` },
-                { icon: "📈", angle: `Market timing is strong — ${growthPct} suburb growth creates urgency` },
-                { icon: "🎯", angle: `Trigger: ${prospect.triggerEvent.split("—")[0].trim()}` },
-                { icon: "📞", angle: `Offer a free appraisal — low pressure, high conversion` },
-              ].map(({ icon, angle }) => (
-                <div key={angle} style={{
-                  display: "flex", gap: 10, padding: "10px 12px", borderRadius: 10,
-                  background: C.bg3, border: `1px solid ${C.border}`,
-                }}>
-                  <span style={{ fontSize: 16, flexShrink: 0 }}>{icon}</span>
-                  <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>{angle}</span>
-                </div>
-              ))}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {segment.triggers.map((t, i) => {
+                const uColor = t.urgency === "high" ? (C.red ?? "#ef4444") : t.urgency === "medium" ? C.orange : C.faint
+                return (
+                  <div key={i} style={{
+                    display: "flex", gap: 10, padding: "10px 12px", borderRadius: 10,
+                    background: uColor + "10", border: `1px solid ${uColor}25`,
+                  }}>
+                    <span style={{
+                      fontSize: 8, fontWeight: 800, color: uColor, textTransform: "uppercase",
+                      background: uColor + "20", padding: "2px 6px", borderRadius: 4, alignSelf: "flex-start",
+                    }}>{t.urgency}</span>
+                    <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>{t.label}</span>
+                  </div>
+                )
+              })}
             </div>
           </div>
+
+          {/* AI pitch angles */}
+          {segment.pitchAngles.length > 0 && (
+            <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 14 }}>
+                Pitch angles for {fname}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {segment.pitchAngles.map((angle, i) => (
+                  <div key={i} style={{
+                    display: "flex", gap: 10, padding: "10px 12px", borderRadius: 10,
+                    background: C.bg3, border: `1px solid ${C.border}`,
+                  }}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>💡</span>
+                    <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>{angle}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Contact info */}
           <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "16px 20px" }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Contact</div>
-            <a href={`tel:${prospect.phone}`} style={{ fontSize: 14, color: theme.primary, fontWeight: 600, textDecoration: "none", display: "block", marginBottom: 6 }}>{prospect.phone}</a>
-            {prospect.email && <a href={`mailto:${prospect.email}`} style={{ fontSize: 13, color: theme.primary, fontWeight: 600, textDecoration: "none" }}>{prospect.email}</a>}
+            <a href={`tel:${buyer.phone}`} style={{ fontSize: 14, color: theme.primary, fontWeight: 600, textDecoration: "none", display: "block", marginBottom: 6 }}>{buyer.phone}</a>
+            {buyer.email && <a href={`mailto:${buyer.email}`} style={{ fontSize: 13, color: theme.primary, fontWeight: 600, textDecoration: "none" }}>{buyer.email}</a>}
+            {buyer.lastContactDate && (
+              <div style={{ fontSize: 10, color: C.faint, marginTop: 8 }}>Last contacted: {buyer.lastContactDate}</div>
+            )}
           </div>
 
           {/* Generate button */}
@@ -2938,11 +3031,11 @@ function VendorProfilePage({ prospect, soldProperty, soldSLM, agent, theme, onBa
               boxShadow: generating ? "none" : `0 4px 20px ${theme.glow}`,
             }}
           >
-            {generating ? "Building outreach…" : `✦ Generate vendor outreach for ${fname}`}
+            {generating ? "Building outreach..." : `✦ Generate vendor outreach for ${fname}`}
           </motion.button>
 
           <div style={{ textAlign: "center", fontSize: 11, color: C.faint }}>
-            SMS + email referencing your {fmtVal(soldProperty.price)} result
+            SMS + email with financial incentives in your voice
           </div>
         </div>
       </div>
@@ -2952,9 +3045,8 @@ function VendorProfilePage({ prospect, soldProperty, soldSLM, agent, theme, onBa
 
 // ── Vendor Review Panel ───────────────────────────────────────────────────────
 
-function VendorReviewPanel({ prospect, soldProperty, theme, sms, emailSubject, emailBody, onBack }: {
-  prospect: VendorProspect
-  soldProperty: PortfolioProperty
+function VendorReviewPanel({ entry, theme, sms, emailSubject, emailBody, onBack }: {
+  entry: SegmentedBuyer
   theme: AgencyTheme
   sms: string
   emailSubject: string
@@ -2963,7 +3055,9 @@ function VendorReviewPanel({ prospect, soldProperty, theme, sms, emailSubject, e
 }) {
   const [smsCopied, setSmsCopied] = useState(false)
   const [emailCopied, setEmailCopied] = useState(false)
-  const fname = prospect.name.split(" ")[0]
+  const { buyer, financials: fin, segment } = entry
+  const pl = PIPELINE_LABELS[segment.pipeline]
+  const fname = buyer.name.split("&")[0].split(" ")[0].trim()
 
   const copyText = (text: string, cb: (v: boolean) => void) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -2978,9 +3072,22 @@ function VendorReviewPanel({ prospect, soldProperty, theme, sms, emailSubject, e
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: theme.primary, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Vendor Outreach Ready</div>
         <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>
-          Outreach for {prospect.name}
+          Outreach for {buyer.name}
         </div>
-        <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>{prospect.address} · based on your {fmt(soldProperty.price)} result at {shortAddr(soldProperty.address)}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+          <div style={{ fontSize: 12, color: C.muted }}>
+            {buyer.purchaseAddress}, {buyer.suburb}
+          </div>
+          <div style={{
+            fontSize: 10, padding: "2px 8px", borderRadius: 6,
+            background: pl.color + "18", color: pl.color, fontWeight: 700,
+          }}>
+            {pl.icon} {pl.shortLabel}
+          </div>
+          <div style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>
+            {fmtDollar(fin.equityGain)} equity
+          </div>
+        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -2990,7 +3097,7 @@ function VendorReviewPanel({ prospect, soldProperty, theme, sms, emailSubject, e
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 18 }}>💬</span>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>SMS</div>
-              <span style={{ fontSize: 10, color: sms.length > 160 ? C.red : C.green, fontWeight: 600 }}>{sms.length}/160 chars</span>
+              <span style={{ fontSize: 10, color: sms.length > 160 ? (C.red ?? "#ef4444") : C.green, fontWeight: 600 }}>{sms.length}/160 chars</span>
             </div>
             <button onClick={() => copyText(sms, setSmsCopied)} style={{
               padding: "5px 12px", borderRadius: 7, border: `1px solid ${C.border}`,
@@ -3026,14 +3133,14 @@ function VendorReviewPanel({ prospect, soldProperty, theme, sms, emailSubject, e
           }}>
             <div style={{ fontWeight: 700, marginBottom: 14, color: C.muted, fontSize: 11 }}>Subject: <span style={{ color: C.text }}>{emailSubject}</span></div>
             {emailBody.map((para, i) => (
-              <div key={i} style={{ lineHeight: 1.6, marginBottom: i < emailBody.length - 1 ? 12 : 0 }}>{para}</div>
+              <div key={i} style={{ lineHeight: 1.6, marginBottom: i < emailBody.length - 1 ? 12 : 0, whiteSpace: "pre-wrap" }}>{para}</div>
             ))}
           </div>
         </div>
 
         {/* Call to action chips */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <a href={`tel:${prospect.phone}`} style={{
+          <a href={`tel:${buyer.phone}`} style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             padding: "10px 18px", borderRadius: 10, textDecoration: "none",
             background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
@@ -3041,7 +3148,7 @@ function VendorReviewPanel({ prospect, soldProperty, theme, sms, emailSubject, e
           }}>
             📞 Call {fname}
           </a>
-          <a href={`sms:${prospect.phone}`} style={{
+          <a href={`sms:${buyer.phone}`} style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             padding: "10px 18px", borderRadius: 10, textDecoration: "none",
             background: C.bg2, border: `1px solid ${theme.primary}44`,
@@ -3427,27 +3534,21 @@ export default function DemoView({
           <VendorPortfolioPage
             agent={agent}
             theme={theme}
-            onSelectProperty={(soldProperty, prospects) =>
-              setStage({ kind: "vendorProspects", soldProperty, prospects })
+            onAnalyse={segmented =>
+              setStage({ kind: "vendorDashboard", segmented })
             }
           />
         </motion.div>
       )}
 
-      {stage.kind === "vendorProspects" && (
-        <motion.div key="vendorProspects" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
-          <VendorProspectsPage
-            soldProperty={stage.soldProperty}
-            prospects={stage.prospects}
+      {stage.kind === "vendorDashboard" && (
+        <motion.div key="vendorDashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
+          <VendorDashboardPage
+            segmented={stage.segmented}
             onBack={() => setStage({ kind: "vendorPortfolio" })}
             theme={theme}
-            onSelectProspect={prospect =>
-              setStage({
-                kind: "vendorProfile",
-                prospect,
-                soldProperty: stage.soldProperty,
-                soldSLM: loadSLMForProperty(stage.soldProperty.id),
-              })
+            onSelectEntry={entry =>
+              setStage({ kind: "vendorProfile", entry })
             }
           />
         </motion.div>
@@ -3456,14 +3557,22 @@ export default function DemoView({
       {stage.kind === "vendorProfile" && (
         <motion.div key="vendorProfile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <VendorProfilePage
-            prospect={stage.prospect}
-            soldProperty={stage.soldProperty}
-            soldSLM={stage.soldSLM}
+            entry={stage.entry}
             agent={agent}
             theme={theme}
-            onBack={() => setStage({ kind: "vendorProspects", soldProperty: stage.soldProperty, prospects: VENDOR_PROSPECTS.filter(p => p.linkedPropertyId === stage.soldProperty.id) })}
+            onBack={() => {
+              // Re-run segmentation to go back to dashboard
+              const buyers = getPastBuyersForAgent(agent)
+              const financialsMap = new Map<number, FinancialSnapshot>()
+              for (const b of buyers) {
+                const est = CURRENT_VALUE_ESTIMATES[b.id]
+                if (!est) continue
+                financialsMap.set(b.id, calculateFinancials(b.purchasePrice, b.purchaseDate, est, b.deposit))
+              }
+              setStage({ kind: "vendorDashboard", segmented: batchSegment(buyers, financialsMap) })
+            }}
             onReview={(sms, emailSubject, emailBody) =>
-              setStage({ kind: "vendorReview", prospect: stage.prospect, soldProperty: stage.soldProperty, soldSLM: stage.soldSLM, sms, emailSubject, emailBody })
+              setStage({ kind: "vendorReview", entry: stage.entry, sms, emailSubject, emailBody })
             }
           />
         </motion.div>
@@ -3472,13 +3581,12 @@ export default function DemoView({
       {stage.kind === "vendorReview" && (
         <motion.div key="vendorReview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <VendorReviewPanel
-            prospect={stage.prospect}
-            soldProperty={stage.soldProperty}
+            entry={stage.entry}
             theme={theme}
             sms={stage.sms}
             emailSubject={stage.emailSubject}
             emailBody={stage.emailBody}
-            onBack={() => setStage({ kind: "vendorProfile", prospect: stage.prospect, soldProperty: stage.soldProperty, soldSLM: stage.soldSLM })}
+            onBack={() => setStage({ kind: "vendorProfile", entry: stage.entry })}
           />
         </motion.div>
       )}
