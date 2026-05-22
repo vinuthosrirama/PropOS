@@ -422,7 +422,7 @@ function buildQuestionDeltaScore(
 
   const pctCovered = covered / questions.length
   // Higher weight: explicit concern RESOLVED → big boost; concern NOT resolved → heavy penalty
-  const deltaBonus = deltaStrengths.length * 6 - deltaWeaknesses.length * 4
+  const deltaBonus = deltaStrengths.length * 12 - deltaWeaknesses.length * 8
   const score = Math.max(0, Math.min(25, Math.round(pctCovered * 20 + deltaBonus)))
 
   return { score, covered, total: questions.length, deltaStrengths, deltaWeaknesses }
@@ -652,7 +652,7 @@ export function matchLeadToListing(
   const rawBeforePenalty = vectorResult.score + questionDelta.score
   const rawAfterPenalty = Math.max(0, rawBeforePenalty - dealBreaker.penalty)
   // Severe red flags (penalty ≥ 50) hard-cap at 5 — clearly not the right property
-  const score = dealBreaker.penalty >= 50
+  const score = dealBreaker.penalty >= 35
     ? 5
     : Math.min(Math.round(rawAfterPenalty * confidence), 99)
 

@@ -227,7 +227,7 @@ export default function Nav({
               fontWeight: active ? 700 : 400,
               whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT,
               background: active ? theme.dim : "transparent",
-              color: active ? theme.gradient[0] : past ? C.muted : C.faint,
+              color: active ? theme.gradient[0] : past ? C.muted : "rgba(200,160,255,0.55)",
               transition: "all 0.15s",
             }}>
               {bp === "tablet" ? v.short : v.label}

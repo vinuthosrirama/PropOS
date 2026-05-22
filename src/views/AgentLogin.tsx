@@ -2,6 +2,15 @@ import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { C, FONT, getAgencyTheme, isCamKnoll, isPasSunilchandra, type AgentProfile, type AgencyTheme } from "../data"
 
+// Returns true if the hex colour is perceptually dark (luminance < 128)
+function isDarkHex(hex: string): boolean {
+  if (!hex.startsWith("#") || hex.length !== 7) return false
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return 0.299 * r + 0.587 * g + 0.114 * b < 128
+}
+
 // Peake first (local Berwick agency), Area Specialist second (Pas), then alphabetical
 const AGENCIES = [
   "Peake",
@@ -378,7 +387,7 @@ export default function AgentLogin({ onLogin }: Props) {
                     background: theme
                       ? `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
                       : "linear-gradient(135deg, rgb(166,218,255), rgb(100,208,144))",
-                    color: C.bg, fontSize: 15, fontWeight: 700,
+                    color: theme && isDarkHex(theme.gradient[0]) ? "#fff" : C.bg, fontSize: 15, fontWeight: 700,
                     cursor: "pointer", fontFamily: FONT,
                     marginTop: 4, letterSpacing: -0.3,
                     boxShadow: theme ? `0 4px 20px ${theme.glow}` : undefined,

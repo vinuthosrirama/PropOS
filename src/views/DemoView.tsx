@@ -1075,8 +1075,8 @@ function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
                   {lead.matchResult.budgetFlag === "stretch" && (
                     <div style={{
                       fontSize: 10, padding: "2px 7px", borderRadius: 6,
-                      background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
-                      color: "#f59e0b", fontWeight: 600,
+                      background: C.bg3, border: `1px solid ${C.border}`,
+                      color: C.muted, fontWeight: 600,
                     }}>
                       stretch match
                     </div>
@@ -1309,7 +1309,7 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                     border: `1px solid ${highlight ? theme.primary + "33" : C.border}`,
                     padding: "10px 12px",
                   }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: highlight ? theme.gradient[0] + "99" : C.faint, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: highlight ? "rgba(255,255,255,0.5)" : C.faint, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
                       {cf.label}
                     </div>
                     <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>
@@ -1345,8 +1345,8 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                     {qa.answer === "TBD" ? (
                       <div style={{
                         display: "inline-block", padding: "2px 8px", borderRadius: 6,
-                        background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
-                        fontSize: 11, color: "#f59e0b", fontWeight: 600,
+                        background: C.bg3, border: `1px solid ${C.border}`,
+                        fontSize: 11, color: C.muted, fontWeight: 600,
                       }}>
                         TBD — add in Settings
                       </div>
@@ -1385,7 +1385,7 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
           {/* Voice memo */}
           <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase" }}>
                 Voice Note
               </div>
               {!voice.supported && (
@@ -1630,7 +1630,7 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
       // Final fallback — template strings
       const agentFirst = agent.name.split(" ")[0]
       const mockSMS = `Hey ${fname}, ${agentFirst} here. Thought of you for ${property.address.split(",")[0]}, ${activeSLM.beds !== "TBD" ? activeSLM.beds + "bd" : "similar"}/${activeSLM.baths !== "TBD" ? activeSLM.baths + "ba" : ""}${activeSLM.landSqm !== "TBD" ? ", " + activeSLM.landSqm + "sqm" : ""}. Open ${property.openDate ?? "this weekend"}. Worth a look?`
-      const mockSubject = `${property.address.split(",")[0]}, worth a look, ${fname}`
+      const mockSubject = `Hey ${fname}, thought of you for ${property.address.split(",")[0]}`
       const mockBody = [
         `Hey ${fname}, hope you're well.`,
         `After you came through ${soldSLM.address}, I thought this new listing might tick some boxes. It's ${activeSLM.beds !== "TBD" ? activeSLM.beds + "-bed" : "similar"}, ${activeSLM.landSqm !== "TBD" ? activeSLM.landSqm + "sqm" : "comparable land"}, ${activeSLM.priceMin !== "TBD" && activeSLM.priceMax !== "TBD" ? "price guide " + fmt(activeSLM.priceMin as number) + " to " + fmt(activeSLM.priceMax as number) : "priced competitively"}.`,
@@ -1652,7 +1652,7 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
         .then(res => (res as Response).json())
         .then(data => {
           const sms = data.sms ?? ""
-          const emailSubject = data.emailSubject ?? data.email?.subject ?? `${property.address.split(",")[0]}, worth a look, ${fname}`
+          const emailSubject = data.emailSubject ?? data.email?.subject ?? `Hey ${fname}, thought of you for ${property.address.split(",")[0]}`
           const emailBody: string[] = data.emailBody ?? data.email?.body ?? []
           if (!sms && !emailSubject) throw new Error("empty generation result")
           storeResult(sms, emailSubject, emailBody)
@@ -1675,8 +1675,8 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
     { icon: "✓",  col: C.green,  text: `Reading ${lead.name}'s profile — graded ${grade}, ${timeline} timeline` },
     { icon: "✓",  col: C.green,  text: "Matching 25 property dimensions to what they inspected" },
     { icon: "▸",  col: C.muted,  text: "Generating first draft..." },
-    { icon: "→",  col: C.orange, text: "No open home reference detected. Rewriting..." },
-    { icon: "→",  col: C.orange, text: "SMS 183 characters (limit 160). Trimming..." },
+    { icon: "→",  col: C.blue, text: "No open home reference detected. Rewriting..." },
+    { icon: "→",  col: C.blue, text: "SMS 183 characters (limit 160). Trimming..." },
     { icon: "✅", col: C.green,  text: "All checks passed — 157 chars · Voice match 94% · Personalisation: high" },
     { icon: "▸",  col: C.muted,  text: "Handing to agent for review..." },
   ]
