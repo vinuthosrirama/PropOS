@@ -12,4 +12,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Animation library — large, changes rarely
+          "vendor-framer": ["framer-motion"],
+          // React core — split from app code
+          "vendor-react": ["react", "react-dom"],
+        },
+      },
+    },
+  },
 })

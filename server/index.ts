@@ -8,7 +8,9 @@ dotenv.config({ path: path.resolve(__dirname, ".env") })
 
 import express from "express"
 import cors from "cors"
+import compression from "compression"
 import generateRouter from "./routes/generate.js"
+import vendorGenerateRouter from "./routes/vendor-generate.js"
 import sheetRouter from "./routes/sheet.js"
 import transcriptRouter from "./routes/transcript.js"
 import sendRouter from "./routes/send.js"
@@ -22,18 +24,21 @@ import { gmailConfigured } from "./lib/gmail.js"
 import conversationsRouter from "./routes/conversations.js"
 import replyAgentRouter from "./routes/reply-agent.js"
 import slmAnswerRouter from "./routes/slm-answer.js"
+import slmAnswerBatchRouter from "./routes/slm-answer-batch.js"
 import { loadConversations } from "./lib/conversations.js"
 
 const app = express()
 const PORT = process.env.PORT ?? 3001
 
 app.use(cors({ origin: ["http://localhost:3001", "http://localhost:3003", "http://localhost:5173", "https://propos.addvantage.site", process.env.BASE_URL].filter(Boolean) as string[] }))
+app.use(compression())
 app.use(express.json())
 // Twilio webhook sends URL-encoded body
 app.use("/api/webhook/sms", express.urlencoded({ extended: false }))
 
-app.use("/api/generate",    generateRouter)
-app.use("/api/sheet",       sheetRouter)
+app.use("/api/generate",         generateRouter)
+app.use("/api/vendor-generate",  vendorGenerateRouter)
+app.use("/api/sheet",            sheetRouter)
 app.use("/api/transcript",  transcriptRouter)
 app.use("/api/send",        sendRouter)
 app.use("/api/webhook",     webhookRouter)
@@ -43,7 +48,8 @@ app.use("/api/analytics",   analyticsRouter)
 app.use("/api/boxdice",       boxdiceRouter)
 app.use("/api/conversations", conversationsRouter)
 app.use("/api/reply-agent",  replyAgentRouter)
-app.use("/api/slm-answer",  slmAnswerRouter)
+app.use("/api/slm-answer",        slmAnswerRouter)
+app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
 
 // Health check — must be before express.static so it's never shadowed by the SPA
 app.get("/api/health", (_req, res) => {
@@ -65,9 +71,16 @@ app.get("/api/health", (_req, res) => {
 
 // Serve Vite production build — must come after all API routes
 const distPath = path.resolve(__dirname, "..", "dist")
-// JS/CSS assets have content-hashed filenames — cache 1 year
-// index.html must never be cached so Cloudflare always fetches the latest build
+
+// Hashed JS/CSS/image assets — immutable, cache 1 year
+app.use("/assets", express.static(path.join(distPath, "assets"), {
+  maxAge: "1y",
+  immutable: true,
+}))
+
+// All other static files — cache 1 week, except index.html (never cached)
 app.use(express.static(distPath, {
+  maxAge: "7d",
   setHeaders(res, filePath) {
     if (filePath.endsWith("index.html")) {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate")
