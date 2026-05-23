@@ -1,14 +1,28 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, lazy, Suspense } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, DEFAULT_AGENT, DEFAULT_THEME,
   type AgentProfile, type AgencyTheme, type ViewId, type DemoMode,
 } from "./data"
 import Nav from "./components/Nav"
-import AgentLogin from "./views/AgentLogin"
-import DemoView from "./views/DemoView"
-import SettingsView from "./views/SettingsView"
 import { seedCorpusIfEmpty } from "./lib/voiceContext"
+
+// Code-split heavy views — only loaded when needed
+const AgentLogin   = lazy(() => import("./views/AgentLogin"))
+const DemoView     = lazy(() => import("./views/DemoView"))
+const SettingsView = lazy(() => import("./views/SettingsView"))
+
+function LoadingSpinner() {
+  return (
+    <div style={{
+      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      background: C.bg,
+    }}>
+      <div style={{ width: 32, height: 32, borderRadius: "50%", border: `3px solid rgba(255,255,255,0.1)`, borderTopColor: "rgba(255,255,255,0.6)", animation: "spin 0.7s linear infinite" }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
+}
 
 export default function App() {
   const [loggedIn, setLoggedIn]       = useState(false)
@@ -52,9 +66,11 @@ export default function App() {
 
   if (!loggedIn) {
     return (
-      <AnimatePresence mode="wait">
-        <AgentLogin onLogin={handleLogin} />
-      </AnimatePresence>
+      <Suspense fallback={<LoadingSpinner />}>
+        <AnimatePresence mode="wait">
+          <AgentLogin onLogin={handleLogin} />
+        </AnimatePresence>
+      </Suspense>
     )
   }
 
@@ -68,18 +84,20 @@ export default function App() {
       <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn}
            onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge} />
 
-      <AnimatePresence mode="wait">
-        <motion.div key={view}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}>
+      <Suspense fallback={<LoadingSpinner />}>
+        <AnimatePresence mode="wait">
+          <motion.div key={view}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}>
 
-          {view === "demo"  && <DemoView agent={agent} theme={theme} mode={mode} onSettings={() => navigate("setup")} onRegisterBack={fn => setDemoBack(fn ? { fn } : null)}
-                                        showInbox={inboxOpen} onShowInboxChange={setInboxOpen} onBadgeChange={setInboxBadge} />}
-          {view === "setup" && <SettingsView agent={agent} />}
-        </motion.div>
-      </AnimatePresence>
+            {view === "demo"  && <DemoView agent={agent} theme={theme} mode={mode} onSettings={() => navigate("setup")} onRegisterBack={fn => setDemoBack(fn ? { fn } : null)}
+                                          showInbox={inboxOpen} onShowInboxChange={setInboxOpen} onBadgeChange={setInboxBadge} />}
+            {view === "setup" && <SettingsView agent={agent} />}
+          </motion.div>
+        </AnimatePresence>
+      </Suspense>
     </div>
   )
 }

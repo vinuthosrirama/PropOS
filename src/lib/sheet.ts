@@ -427,6 +427,104 @@ export async function writeSLMFieldToSheet(propertyId: number, field: string, va
   } catch { /* fail silently */ }
 }
 
+// ── Past Buyers tab — vendor prospecting CRM ─────────────────────────────────
+//
+// Apps Script must handle:
+//   GET  ?action=getPastBuyers          → { buyers: PastBuyerRow[] }
+//   POST type=update_past_buyer_contact → { id: number, lastContactDate: string }
+//
+// "Past Buyers" tab column order:
+//   id | name | phone | email | purchaseAddress | suburb | purchaseDate |
+//   purchasePrice | deposit | propertyType | beds | baths | land |
+//   status | notes | lastContactDate | contractTerms
+
+export interface PastBuyerRow {
+  id: number
+  name: string
+  phone: string
+  email?: string
+  purchaseAddress: string
+  suburb: string
+  purchaseDate: string
+  purchasePrice: number
+  deposit?: number
+  propertyType: "House" | "Unit" | "Townhouse"
+  beds: number
+  baths: number
+  land?: number
+  status: "owner-occupier" | "investor" | "renter" | "unknown"
+  notes: string
+  lastContactDate?: string
+  contractTerms?: string
+}
+
+function mapPastBuyerRow(row: Record<string, unknown>): PastBuyerRow {
+  return {
+    id:              Number(row.id ?? 0),
+    name:            String(row.name ?? ""),
+    phone:           String(row.phone ?? ""),
+    email:           row.email ? String(row.email) : undefined,
+    purchaseAddress: String(row.purchaseAddress ?? ""),
+    suburb:          String(row.suburb ?? ""),
+    purchaseDate:    String(row.purchaseDate ?? ""),
+    purchasePrice:   Number(row.purchasePrice ?? 0),
+    deposit:         row.deposit ? Number(row.deposit) : undefined,
+    propertyType:    (["House", "Unit", "Townhouse"].includes(String(row.propertyType))
+                       ? String(row.propertyType) : "House") as PastBuyerRow["propertyType"],
+    beds:            Number(row.beds ?? 0),
+    baths:           Number(row.baths ?? 0),
+    land:            row.land ? Number(row.land) : undefined,
+    status:          (["owner-occupier", "investor", "renter", "unknown"].includes(String(row.status))
+                       ? String(row.status) : "unknown") as PastBuyerRow["status"],
+    notes:           String(row.notes ?? ""),
+    lastContactDate: row.lastContactDate ? String(row.lastContactDate) : undefined,
+    contractTerms:   row.contractTerms ? String(row.contractTerms) : undefined,
+  }
+}
+
+/**
+ * Read all rows from the "Past Buyers" sheet tab.
+ * Returns null on network error, [] if the tab exists but has no data.
+ */
+export async function readPastBuyersFromSheet(): Promise<PastBuyerRow[] | null> {
+  if (!SHEET_URL) return null
+  const url = `${SHEET_URL}?action=getPastBuyers`
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { cache: "no-store" })
+      if (!res.ok) { if (attempt === 0) continue; return null }
+      const data = await res.json() as { buyers?: Record<string, unknown>[]; error?: string }
+      if (data.error) return null
+      if (!data.buyers || !Array.isArray(data.buyers)) { if (attempt === 0) continue; return null }
+      return data.buyers.map(mapPastBuyerRow)
+    } catch {
+      if (attempt === 0) continue
+      return null
+    }
+  }
+  return null
+}
+
+/**
+ * Write today's date back to the lastContactDate column for a past buyer.
+ * Uses POST type=update_past_buyer_contact.
+ */
+export async function updateLastContactDate(buyerId: number, date?: string): Promise<void> {
+  if (!SHEET_URL) return
+  const lastContactDate = date ?? new Date().toISOString().slice(0, 10)
+  try {
+    await fetch(SHEET_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({
+        type: "update_past_buyer_contact",
+        id: buyerId,
+        lastContactDate,
+      }),
+    })
+  } catch { /* fail silently */ }
+}
+
 // ── Read leads from Boxdice via server proxy (when configured) ───────────────
 
 export async function readLeadsFromBoxdice(listingId: number, listingAddress: string): Promise<SheetLead[] | null> {

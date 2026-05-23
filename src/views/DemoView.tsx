@@ -13,6 +13,7 @@ import {
   batchSegment, PIPELINE_LABELS,
   type SegmentedBuyer, type Pipeline,
 } from "../lib/vendorPipeline"
+import { batchEstimateValues } from "../lib/comparableSales"
 import {
   loadSLMForProperty, getSLMCompleteness, preloadSLMsFromSheet,
   type PropertySLM,
@@ -21,6 +22,7 @@ import { matchLeadToListing, matchQuestionToSLM, type MatchResult } from "../lib
 import {
   readLeadsFromSheet, readAllLeadsFromSheet, postEvent, sheetsConnected,
   postLeadStatus, markAttended, writeAgentVoiceEntry,
+  readPastBuyersFromSheet, updateLastContactDate,
   type SheetLead,
 } from "../lib/sheet"
 import AuctionOutcomePanel from "../components/AuctionOutcomePanel"
@@ -123,6 +125,7 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
         <img
           src={property.image}
           alt={property.address}
+          loading="lazy"
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
         {completeness && (
@@ -216,6 +219,7 @@ function SoldCard({ property, leads, loading, theme, onClick }: {
       <img
         src={property.image}
         alt={property.address}
+        loading="lazy"
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
       />
 
@@ -330,7 +334,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
       {/* Header — property info */}
       <div style={{ display: "flex", gap: 20, marginBottom: 12, alignItems: "flex-start" }}>
         <div style={{ width: 80, height: 60, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
-          <img src={soldProperty.image} alt={soldProperty.address} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={soldProperty.image} alt={soldProperty.address} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: C.text, letterSpacing: -0.6, marginBottom: 2 }}>
@@ -1208,26 +1212,32 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
     }
   }
 
-  // LLM fallback — fetch answers from backend for questions the SLM didn't answer
+  // LLM fallback — batch all unmatched questions in a single request
   const [llmAnswers, setLlmAnswers] = useState<Map<string, { answer: string; category: string }>>(new Map())
   const questionsKey = (lead.questions ?? []).join("|")
   useEffect(() => {
     if (unmatchedQs.length === 0 || !activeSLM) return
     let cancelled = false
-    unmatchedQs.forEach(async (q) => {
+    ;(async () => {
       try {
-        const r = await fetch("/api/slm-answer", {
+        const propertyAddress = `${property.address}, ${property.suburb} ${property.state}`
+        const r = await fetch(apiUrl("/api/slm-answer-batch"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: q, slm: activeSLM, propertyAddress: `${property.address}, ${property.suburb} ${property.state}` }),
+          body: JSON.stringify({ questions: unmatchedQs, slm: activeSLM, propertyAddress }),
         })
         if (!r.ok || cancelled) return
-        const d = await r.json()
-        if (d.answer) {
-          setLlmAnswers(prev => new Map(prev).set(q, { answer: d.answer, category: d.category ?? "llm" }))
-        }
+        const d = await r.json() as { answers?: Array<{ question: string; answer: string | null; category: string }> }
+        if (!d.answers) return
+        setLlmAnswers(prev => {
+          const next = new Map(prev)
+          for (const item of d.answers!) {
+            if (item.answer) next.set(item.question, { answer: item.answer, category: item.category ?? "llm" })
+          }
+          return next
+        })
       } catch { /* silent — LLM is best-effort */ }
-    })
+    })()
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [questionsKey, property.id])
@@ -2523,18 +2533,38 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
   theme: AgencyTheme
   onAnalyse: (segmented: SegmentedBuyer[]) => void
 }) {
-  const buyers = getPastBuyersForAgent(agent)
+  const hardcodedBuyers = getPastBuyersForAgent(agent)
+  const [buyers, setBuyers] = useState(hardcodedBuyers)
+  const [sheetLoading, setSheetLoading] = useState(false)
+  const [sheetSource, setSheetSource] = useState<"demo" | "sheet">("demo")
   const [analysing, setAnalysing] = useState(false)
+
+  // Try loading real past buyers from the Google Sheet on mount
+  useEffect(() => {
+    setSheetLoading(true)
+    readPastBuyersFromSheet().then(rows => {
+      if (rows && rows.length > 0) {
+        // Cast PastBuyerRow to PastBuyer — same shape, compatible types
+        setBuyers(rows as typeof hardcodedBuyers)
+        setSheetSource("sheet")
+      }
+      setSheetLoading(false)
+    }).catch(() => setSheetLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const investors = buyers.filter(b => b.status === "investor")
   const owners = buyers.filter(b => b.status === "owner-occupier")
-  const totalEstValue = buyers.reduce((s, b) => s + (CURRENT_VALUE_ESTIMATES[b.id] ?? 0), 0)
+
+  // Use comparable sales estimates (blended with any hardcoded overrides)
+  const estimatedValues = batchEstimateValues(buyers, CURRENT_VALUE_ESTIMATES)
+  const totalEstValue = buyers.reduce((s, b) => s + (estimatedValues.get(b.id) ?? 0), 0)
 
   const handleAnalyse = () => {
     setAnalysing(true)
     const financialsMap = new Map<number, FinancialSnapshot>()
     for (const b of buyers) {
-      const est = CURRENT_VALUE_ESTIMATES[b.id]
+      const est = estimatedValues.get(b.id)
       if (!est) continue
       financialsMap.set(b.id, calculateFinancials(b.purchasePrice, b.purchaseDate, est, b.deposit))
     }
@@ -2578,10 +2608,19 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
 
       {/* Recent contacts preview */}
       <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>Your CRM database</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Your CRM database</div>
+          {sheetLoading && <div style={{ fontSize: 10, color: C.faint }}>Loading from sheet...</div>}
+          {sheetSource === "sheet" && !sheetLoading && (
+            <div style={{ fontSize: 10, color: C.green, fontWeight: 600, padding: "2px 8px", background: C.green + "18", borderRadius: 6 }}>Live from sheet</div>
+          )}
+          {sheetSource === "demo" && !sheetLoading && (
+            <div style={{ fontSize: 10, color: C.faint, padding: "2px 8px", background: C.bg3, borderRadius: 6 }}>Demo data</div>
+          )}
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {buyers.slice(0, 5).map(buyer => {
-            const est = CURRENT_VALUE_ESTIMATES[buyer.id] ?? 0
+            const est = estimatedValues.get(buyer.id) ?? 0
             const equity = est - buyer.purchasePrice
             return (
               <div key={buyer.id} style={{
@@ -2635,7 +2674,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
           marginBottom: 12,
         }}
       >
-        {analysing ? "Analysing your database..." : `✦ Analyse ${buyers.length} contacts for vendor opportunities`}
+        {analysing ? "Analysing your database..." : sheetLoading ? "Loading CRM..." : `✦ Analyse ${buyers.length} contacts for vendor opportunities`}
       </motion.button>
 
       {/* Pitch callout */}
@@ -2815,44 +2854,60 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
   onReview: (sms: string, emailSubject: string, emailBody: string[]) => void
 }) {
   const [generating, setGenerating] = useState(false)
-  const { buyer, financials: fin, segment } = entry
+  const [overrideValue, setOverrideValue] = useState<number | null>(null)
+  const [editingValue, setEditingValue] = useState(false)
+  const [editValueInput, setEditValueInput] = useState("")
+
+  const { buyer, segment } = entry
   const pl = PIPELINE_LABELS[segment.pipeline]
   const fname = buyer.name.split("&")[0].split(" ")[0].trim()
   const agentFirst = agent.name.split(" ")[0]
 
+  // Recalculate financials if user has overridden the value estimate
+  const fin = overrideValue !== null
+    ? calculateFinancials(buyer.purchasePrice, buyer.purchaseDate, overrideValue, buyer.deposit)
+    : entry.financials
+
   const stripDashes = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
+
+  const startEditValue = () => {
+    setEditValueInput(String(fin.currentEstimate))
+    setEditingValue(true)
+  }
+  const commitEditValue = () => {
+    const n = parseInt(editValueInput.replace(/\D/g, ""), 10)
+    if (!isNaN(n) && n > 0) setOverrideValue(n)
+    setEditingValue(false)
+  }
 
   const handleGenerate = async () => {
     setGenerating(true)
 
-    // Build financial context for the LLM
-    const financialContext = [
-      `Property: ${buyer.purchaseAddress}, ${buyer.suburb}.`,
-      `Purchased ${buyer.purchaseDate.slice(0, 4)} for ${fmtDollar(fin.purchasePrice)}.`,
-      `Current estimate: ${fmtDollar(fin.currentEstimate)} — ${fmtPct(fin.equityGainPct)} equity growth over ${fin.yearsHeld} years.`,
-      `Equity gain: ${fmtDollar(fin.equityGain)}.`,
-      fin.cashOnCashReturn ? `Cash-on-cash return on original deposit: ${fin.cashOnCashReturn}%.` : "",
-      fin.cgtSavingsBy2027 > 0 ? `Selling before July 2027 under current 50% CGT discount saves approximately ${fmtDollar(fin.cgtSavingsBy2027)} in tax.` : "",
-      `Estimated net proceeds after all costs: ${fmtDollar(fin.netProceeds)}.`,
-      segment.triggers.map(t => t.label).join(". "),
-    ].filter(Boolean).join(" ")
+    const triggerSummary = segment.triggers.map(t => t.label).join("; ")
 
     const payload = {
       agentName: agent.name,
       agentAgency: agent.agency,
-      agentSuburb: buyer.suburb,
+      agentPhone: agent.phone,
       voiceContext: "",
-      strategy: `Vendor Prospecting - ${pl.label}`,
-      channel: "both" as const,
-      lead: {
-        name: buyer.name,
-        budget: fmtDollar(fin.currentEstimate),
-        timeline: buyer.status === "investor" ? "investment property" : "flexible",
-        persona: pl.description,
-        notes: buyer.notes ?? "",
-        questions: "",
-        transcript: financialContext,
-      },
+      buyerName: buyer.name,
+      buyerPhone: buyer.phone,
+      buyerStatus: buyer.status,
+      purchaseAddress: buyer.purchaseAddress,
+      suburb: buyer.suburb,
+      purchaseYear: buyer.purchaseDate.slice(0, 4),
+      purchasePrice: fin.purchasePrice,
+      currentEstimate: fin.currentEstimate,
+      equityGain: fin.equityGain,
+      equityGainPct: fin.equityGainPct,
+      yearsHeld: fin.yearsHeld,
+      annualAppreciation: fin.annualAppreciation,
+      cashOnCashReturn: fin.cashOnCashReturn,
+      cgtSavingsBy2027: fin.cgtSavingsBy2027,
+      netProceeds: fin.netProceeds,
+      pipelineLabel: pl.label,
+      triggerSummary,
+      crmNotes: buyer.notes ?? "",
     }
 
     // Template fallback
@@ -2860,14 +2915,15 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
       const addr = shortAddr(buyer.purchaseAddress)
       const estStr = fmtDollar(fin.currentEstimate)
       const equityStr = fmtDollar(fin.equityGain)
-      const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${buyer.purchaseDate.slice(0, 4)}). Worth a quick chat? Cheers ${agentFirst}`
+      const signoff = buyer.status === "investor" ? "Kind regards" : "Cheers"
+      const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${payload.purchaseYear}). Worth a quick chat? ${signoff}, ${agentFirst}`
       const sms = stripDashes(smsRaw.length > 160 ? smsRaw.slice(0, 157) + "..." : smsRaw)
       const emailSubject = stripDashes(`Market update on ${buyer.purchaseAddress}, ${fname}`)
       const cgtLine = fin.cgtSavingsBy2027 > 0 ? ` The current 50% CGT discount saves you approximately ${fmtDollar(fin.cgtSavingsBy2027)} if you sell before July 2027.` : ""
       const emailBody = [
         `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
-        `Your property at ${buyer.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${buyer.purchaseDate.slice(0, 4)}. That is ${equityStr} in equity.${cgtLine}`,
-        `I would love to offer a complimentary, no-obligation appraisal if you are curious. Takes about 20 minutes, happy to come to you. No pressure at all.\n\n${buyer.status === "investor" ? "Kind regards" : "Cheers"},\n${agentFirst}`,
+        `Your property at ${buyer.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${payload.purchaseYear}. That is ${equityStr} in equity.${cgtLine}`,
+        `I would love to offer a complimentary, no-obligation appraisal if you are curious. Takes about 20 minutes, happy to come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
       ].map(stripDashes)
       setGenerating(false)
       onReview(sms, emailSubject, emailBody)
@@ -2875,17 +2931,17 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
 
     try {
       const res = await Promise.race([
-        fetch(apiUrl("/api/generate"), {
+        fetch(apiUrl("/api/vendor-generate"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }).then(r => r.json()),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 12000)),
-      ]) as { sms?: string; emailSubject?: string; email?: { subject?: string; body?: string[] }; emailBody?: string[] }
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 14000)),
+      ]) as { sms?: string; email?: { subject?: string; body?: string[] } }
 
       const sms = res.sms ?? ""
-      const emailSubject = res.emailSubject ?? res.email?.subject ?? ""
-      const emailBody: string[] = res.emailBody ?? res.email?.body ?? []
+      const emailSubject = res.email?.subject ?? ""
+      const emailBody: string[] = res.email?.body ?? []
       if (!sms && !emailSubject) throw new Error("empty")
       setGenerating(false)
       onReview(stripDashes(sms), stripDashes(emailSubject), emailBody.map(stripDashes))
@@ -2944,9 +3000,36 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
 
             {/* Equity bar */}
             <div style={{ marginBottom: 20 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <span style={{ fontSize: 12, color: C.muted }}>Purchased {fmtDollar(fin.purchasePrice)}</span>
-                <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>Now {fmtDollar(fin.currentEstimate)}</span>
+                {editingValue ? (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input
+                      autoFocus
+                      value={editValueInput}
+                      onChange={e => setEditValueInput(e.target.value)}
+                      onBlur={commitEditValue}
+                      onKeyDown={e => { if (e.key === "Enter") commitEditValue(); if (e.key === "Escape") setEditingValue(false) }}
+                      style={{
+                        width: 110, padding: "3px 8px", background: C.bg3, border: `1px solid ${theme.primary}`,
+                        borderRadius: 6, color: C.text, fontSize: 12, fontFamily: FONT,
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    onClick={startEditValue}
+                    title="Click to override estimate"
+                    style={{
+                      background: "transparent", border: "none", cursor: "pointer", padding: 0,
+                      display: "flex", alignItems: "center", gap: 4,
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>Now {fmtDollar(fin.currentEstimate)}</span>
+                    {overrideValue && <span style={{ fontSize: 9, color: theme.primary, background: theme.primary + "18", padding: "1px 5px", borderRadius: 4 }}>custom</span>}
+                    <span style={{ fontSize: 9, color: C.faint }}>✏️</span>
+                  </button>
+                )}
               </div>
               <div style={{ height: 10, background: C.bg3, borderRadius: 6, overflow: "hidden" }}>
                 <div style={{
@@ -3130,6 +3213,9 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       }).then(r => r.json()).catch(() => null)
       const delivered = deliveryRes?.ok === true
       setDeliveryNote(delivered ? "Sent via Twilio + Gmail" : "Saved to Sheets (configure Twilio/Gmail for direct delivery)")
+
+      // Write today's date back to the Past Buyers sheet tab
+      await updateLastContactDate(buyer.id)
     } catch {}
     setSending(false)
     setSent(true)
