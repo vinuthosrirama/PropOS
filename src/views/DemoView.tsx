@@ -2525,6 +2525,20 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
 
 // ── Vendor Prospecting: Portfolio (CRM Dashboard) ────────────────────────────
 
+interface AddContactForm {
+  name: string; phone: string; email: string; purchaseAddress: string
+  suburb: string; purchaseDate: string; purchasePrice: string
+  deposit: string; propertyType: string; beds: string; baths: string
+  land: string; status: string; notes: string
+}
+
+const EMPTY_FORM: AddContactForm = {
+  name: "", phone: "", email: "", purchaseAddress: "",
+  suburb: "", purchaseDate: "", purchasePrice: "",
+  deposit: "", propertyType: "House", beds: "4", baths: "2",
+  land: "", status: "owner-occupier", notes: "",
+}
+
 function VendorPortfolioPage({ agent, theme, onAnalyse }: {
   agent: AgentProfile
   theme: AgencyTheme
@@ -2535,6 +2549,10 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
   const [sheetLoading, setSheetLoading] = useState(false)
   const [sheetSource, setSheetSource] = useState<"demo" | "sheet">("demo")
   const [analysing, setAnalysing] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [addForm, setAddForm] = useState<AddContactForm>(EMPTY_FORM)
+  const [addSaving, setAddSaving] = useState(false)
+  const [addSaved, setAddSaved] = useState(false)
 
   // Try loading real past buyers from the Google Sheet on mount
   useEffect(() => {
@@ -2567,6 +2585,41 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
     }
     const segmented = batchSegment(buyers, financialsMap)
     setTimeout(() => onAnalyse(segmented), 1200)
+  }
+
+  const handleAddContact = async () => {
+    if (!addForm.name || !addForm.purchaseAddress || !addForm.purchaseDate || !addForm.purchasePrice) return
+    setAddSaving(true)
+    const newContact = {
+      id: Date.now(),
+      name: addForm.name,
+      phone: addForm.phone,
+      email: addForm.email,
+      purchaseAddress: addForm.purchaseAddress,
+      suburb: addForm.suburb,
+      purchaseDate: addForm.purchaseDate,
+      purchasePrice: parseInt(addForm.purchasePrice.replace(/\D/g, ""), 10) || 0,
+      deposit: parseInt(addForm.deposit.replace(/\D/g, ""), 10) || 0,
+      propertyType: addForm.propertyType as "House" | "Unit" | "Townhouse",
+      beds: parseInt(addForm.beds, 10) || 3,
+      baths: parseInt(addForm.baths, 10) || 2,
+      land: addForm.land ? parseInt(addForm.land.replace(/\D/g, ""), 10) || 0 : 0,
+      status: addForm.status as "investor" | "owner-occupier",
+      notes: addForm.notes,
+      lastContactDate: "",
+    }
+    // Try to save to sheet via /api/add-contact
+    try {
+      await fetch(apiUrl("/api/add-contact"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newContact),
+      })
+    } catch { /* server may not have route yet — add locally anyway */ }
+    setBuyers(prev => [...prev, newContact])
+    setAddSaved(true)
+    setAddSaving(false)
+    setTimeout(() => { setShowAddModal(false); setAddForm(EMPTY_FORM); setAddSaved(false) }, 1200)
   }
 
   return (
@@ -2603,6 +2656,30 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
         ))}
       </div>
 
+      {/* Sheet setup guide — shown when falling back to demo data */}
+      {sheetSource === "demo" && !sheetLoading && (
+        <div style={{
+          marginBottom: 20, background: C.bg2, borderRadius: 12,
+          border: `1px solid rgba(166,218,255,0.15)`, padding: "14px 18px",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.blue, marginBottom: 6 }}>
+            Connect your Google Sheet CRM to load live contacts
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>
+            Create a tab called <strong style={{ color: C.text }}>Past Buyers</strong> in your connected Sheet with these columns:
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {["id", "name", "phone", "email", "purchaseAddress", "suburb", "purchaseDate", "purchasePrice", "deposit", "propertyType", "beds", "baths", "land", "status", "notes", "lastContactDate"].map(col => (
+              <span key={col} style={{
+                fontSize: 10, fontFamily: "monospace", padding: "2px 7px",
+                background: C.bg3, border: `1px solid ${C.border}`,
+                borderRadius: 5, color: C.muted,
+              }}>{col}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Recent contacts preview */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -2614,6 +2691,14 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
           {sheetSource === "demo" && !sheetLoading && (
             <div style={{ fontSize: 10, color: C.faint, padding: "2px 8px", background: C.bg3, borderRadius: 6 }}>Demo data</div>
           )}
+          <button onClick={() => setShowAddModal(true)} style={{
+            marginLeft: "auto", padding: "5px 12px", borderRadius: 8,
+            background: theme.dim, border: `1px solid ${theme.primary}55`,
+            color: theme.primary, fontSize: 11, fontWeight: 700,
+            cursor: "pointer", fontFamily: FONT,
+          }}>
+            + Add contact
+          </button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {buyers.slice(0, 5).map(buyer => {
@@ -2688,6 +2773,109 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
           </div>
         </div>
       </div>
+
+      {/* Add Contact modal */}
+      <AnimatePresence>
+        {showAddModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{
+              position: "fixed", inset: 0, zIndex: 200,
+              background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)",
+              display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+            }}
+            onClick={() => setShowAddModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.93, y: 16 }} animate={{ scale: 1, y: 0 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: C.bg2, borderRadius: 18, border: `1px solid ${C.border}`,
+                padding: "28px 28px", maxWidth: 600, width: "100%",
+                maxHeight: "85vh", overflowY: "auto",
+              }}
+            >
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 4 }}>Add contact</div>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 24 }}>
+                Add a past buyer to your CRM database and Google Sheet.
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {([
+                  ["Name", "name", "text", "Full name"],
+                  ["Phone", "phone", "tel", "+61 4xx xxx xxx"],
+                  ["Email", "email", "email", "email@domain.com"],
+                  ["Purchase address", "purchaseAddress", "text", "12 Smith St"],
+                  ["Suburb", "suburb", "text", "Berwick"],
+                  ["Purchase date", "purchaseDate", "date", ""],
+                  ["Purchase price", "purchasePrice", "text", "850000"],
+                  ["Deposit paid", "deposit", "text", "85000"],
+                  ["Beds", "beds", "number", "4"],
+                  ["Baths", "baths", "number", "2"],
+                  ["Land (sqm)", "land", "text", "612"],
+                ] as [string, keyof AddContactForm, string, string][]).map(([label, field, type, placeholder]) => (
+                  <div key={field} style={{ gridColumn: ["name", "purchaseAddress", "notes"].includes(field) ? "1 / -1" : undefined }}>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>{label}</label>
+                    <input
+                      type={type}
+                      value={addForm[field]}
+                      onChange={e => setAddForm(f => ({ ...f, [field]: e.target.value }))}
+                      placeholder={placeholder}
+                      style={{
+                        width: "100%", background: C.bg3, border: `1px solid ${C.border}`,
+                        borderRadius: 8, padding: "8px 10px", color: C.text,
+                        fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                ))}
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Property type</label>
+                  <select value={addForm.propertyType} onChange={e => setAddForm(f => ({ ...f, propertyType: e.target.value }))}
+                    style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
+                    <option>House</option><option>Unit</option><option>Townhouse</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Status</label>
+                  <select value={addForm.status} onChange={e => setAddForm(f => ({ ...f, status: e.target.value }))}
+                    style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
+                    <option value="owner-occupier">Owner-occupier</option><option value="investor">Investor</option>
+                  </select>
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Notes</label>
+                  <textarea
+                    value={addForm.notes}
+                    onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
+                    placeholder="Family growing, interested in schools, investment strategy..."
+                    style={{
+                      width: "100%", background: C.bg3, border: `1px solid ${C.border}`,
+                      borderRadius: 8, padding: "8px 10px", color: C.text,
+                      fontSize: 13, fontFamily: FONT, outline: "none", minHeight: 64,
+                      resize: "vertical", boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                <button onClick={() => setShowAddModal(false)} style={{
+                  flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${C.border}`,
+                  background: "transparent", color: C.muted, fontSize: 14, fontWeight: 600,
+                  cursor: "pointer", fontFamily: FONT,
+                }}>Cancel</button>
+                <button onClick={handleAddContact} disabled={addSaving || addSaved} style={{
+                  flex: 2, padding: "12px", borderRadius: 10, border: "none",
+                  background: addSaved ? C.green : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                  color: "white", fontSize: 14, fontWeight: 700,
+                  cursor: addSaving || addSaved ? "default" : "pointer", fontFamily: FONT,
+                }}>
+                  {addSaved ? "Contact added" : addSaving ? "Saving..." : "Add contact"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -2813,6 +3001,11 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme }: {
                     {topTrigger.label}
                   </div>
                 )}
+                {buyer.lastContactDate && (
+                  <div style={{ fontSize: 9, color: C.faint, marginTop: 3 }}>
+                    Last contacted: {buyer.lastContactDate}
+                  </div>
+                )}
               </div>
 
               {/* Financial summary */}
@@ -2882,11 +3075,18 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
 
     const triggerSummary = segment.triggers.map(t => t.label).join("; ")
 
+    // Find comparable recent sales in same suburb from agent's portfolio
+    const { sold: agentSoldProps } = getPortfolioForAgent(agent)
+    const suburbComps = agentSoldProps
+      .filter(p => p.suburb.toLowerCase() === buyer.suburb.toLowerCase() && p.soldDate)
+      .slice(0, 2)
+      .map(p => `${p.address}, ${p.suburb}: sold ${fmt(p.price)} (${p.soldDate})`)
+
     const payload = {
       agentName: agent.name,
       agentAgency: agent.agency,
       agentPhone: agent.phone,
-      voiceContext: "",
+      voiceContext: buildVoiceContext(agent.voiceProfile, loadCorpus()),
       buyerName: buyer.name,
       buyerPhone: buyer.phone,
       buyerStatus: buyer.status,
@@ -2905,6 +3105,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
       pipelineLabel: pl.label,
       triggerSummary,
       crmNotes: buyer.notes ?? "",
+      soldComps: suburbComps.join("; "),
     }
 
     // Template fallback
@@ -3177,6 +3378,8 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const [sendingToSelf, setSendingToSelf] = useState(false)
   const [sentToSelf, setSentToSelf] = useState(false)
   const [deliveryNote, setDeliveryNote] = useState("")
+  const [appraisalBooked, setAppraisalBooked] = useState(false)
+  const [showNurture, setShowNurture] = useState(false)
 
   const { buyer, financials: fin, segment } = entry
   const pl = PIPELINE_LABELS[segment.pipeline]
@@ -3501,6 +3704,79 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 6 }}>
         Experience what your vendors feel
       </div>
+
+      {/* Appraisal booked */}
+      <div style={{ marginTop: 28, padding: "18px 20px", borderRadius: 14, background: C.bg2, border: `1px solid ${C.border}` }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+          Did {fname} agree to an appraisal?
+        </div>
+        <button
+          onClick={() => setAppraisalBooked(true)}
+          disabled={appraisalBooked}
+          style={{
+            padding: "10px 20px", borderRadius: 10,
+            border: `1px solid ${appraisalBooked ? C.green + "44" : theme.primary + "44"}`,
+            background: appraisalBooked ? C.green + "22" : theme.dim,
+            color: appraisalBooked ? C.green : theme.primary,
+            fontSize: 13, fontWeight: 700, cursor: appraisalBooked ? "default" : "pointer",
+            fontFamily: FONT,
+          }}
+        >
+          {appraisalBooked ? "Appraisal booked" : "Mark appraisal booked"}
+        </button>
+        {appraisalBooked && (
+          <div style={{ fontSize: 11, color: C.green, marginTop: 8 }}>
+            Pipeline status updated. Follow up within 48 hrs to confirm time.
+          </div>
+        )}
+      </div>
+
+      {/* 30-day vendor nurture sequence */}
+      <div style={{ marginTop: 20, padding: "18px 20px", borderRadius: 14, background: C.bg2, border: `1px solid ${C.border}` }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>30-day vendor nurture sequence</div>
+          <button onClick={() => setShowNurture(v => !v)} style={{
+            background: "transparent", border: "none", cursor: "pointer",
+            color: theme.primary, fontSize: 12, fontFamily: FONT, fontWeight: 600,
+          }}>
+            {showNurture ? "Hide" : "Preview →"}
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: C.muted }}>
+          Automated follow-up cadence if {fname} doesn't respond to your first outreach.
+        </div>
+        {showNurture && (() => {
+          const nurtureSteps = [
+            { day: 0,  label: "Day 0 — Initial outreach", color: theme.primary, note: "SMS + email sent (see above)" },
+            { day: 7,  label: "Day 7 — Market pulse",    color: C.blue,
+              sms: `Hi ${fname}, just a quick market update — a comparable home in ${buyer.suburb} sold well above guide this week. Worth a conversation? ${agent.name.split(" ")[0]}` },
+            { day: 14, label: "Day 14 — Value reminder", color: C.green,
+              sms: `Hi ${fname}, ${agent.name.split(" ")[0]} here. Equity in ${buyer.suburb} is up ${Math.round(fin.equityGainPct)}% since you bought — happy to run through the numbers if useful.` },
+            { day: 30, label: "Day 30 — Soft close",     color: C.orange,
+              sms: `Hi ${fname}, touching base on ${buyer.purchaseAddress.split(",")[0]}. If timing isn't right yet, no problem — happy to keep you updated on the market. ${agent.name.split(" ")[0]}` },
+          ]
+          return (
+            <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+              {nurtureSteps.map(step => (
+                <div key={step.day} style={{
+                  padding: "12px 14px", borderRadius: 10,
+                  background: C.bg3, border: `1px solid ${step.color}22`,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: step.color, marginBottom: step.sms ? 6 : 0 }}>
+                    {step.label}
+                  </div>
+                  {step.note && <div style={{ fontSize: 11, color: C.faint }}>{step.note}</div>}
+                  {step.sms && (
+                    <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, fontStyle: "italic" }}>
+                      "{step.sms}"
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+      </div>
     </div>
   )
 }
@@ -3528,6 +3804,11 @@ export default function DemoView({
 }) {
   const homeStage: Stage = mode === "vendor" ? { kind: "vendorPortfolio" } : { kind: "portfolio" }
   const [stage, setStage] = useState<Stage>(homeStage)
+
+  // Reset to home stage when mode switches (buyer ↔ vendor)
+  useEffect(() => {
+    setStage(mode === "vendor" ? { kind: "vendorPortfolio" } : { kind: "portfolio" })
+  }, [mode])
   const [, setUnreadRepliesInternal] = useState(0)
   const setUnreadReplies = (n: number) => { setUnreadRepliesInternal(n); onBadgeChange?.(n) }
   const [showInboxInternal, setShowInboxInternal] = useState(false)

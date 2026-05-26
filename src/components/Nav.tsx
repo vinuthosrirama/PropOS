@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { C, FONT, DEFAULT_THEME, type AgentProfile, type AgencyTheme, type ViewId } from "../data"
+import { C, FONT, DEFAULT_THEME, type AgentProfile, type AgencyTheme, type ViewId, type DemoMode } from "../data"
 import { useBreakpoint } from "../hooks/useBreakpoint"
 
 export const VIEWS: { id: ViewId; label: string; short: string }[] = [
@@ -9,7 +9,7 @@ export const VIEWS: { id: ViewId; label: string; short: string }[] = [
 ]
 
 export default function Nav({
-  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0,
+  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0, mode, onSwitchMode,
 }: {
   view: ViewId
   setView: (v: ViewId) => void
@@ -20,6 +20,8 @@ export default function Nav({
   onBack?: () => void
   onInbox?: () => void
   inboxBadge?: number
+  mode?: DemoMode
+  onSwitchMode?: (m: DemoMode) => void
 }) {
   const bp = useBreakpoint()
   const [scrolled, setScrolled] = useState(false)
@@ -158,6 +160,19 @@ export default function Nav({
                   {i < currentIdx && <span style={{ marginLeft: "auto", color: C.green, fontSize: 12 }}>✓</span>}
                 </button>
               ))}
+              {onSwitchMode && mode && (
+                <button onClick={() => { onSwitchMode(mode === "buyer" ? "vendor" : "buyer"); setMenuOpen(false) }} style={{
+                  width: "100%", padding: "14px 20px",
+                  display: "flex", alignItems: "center",
+                  background: mode === "vendor" ? theme.dim : "rgba(100,208,144,0.06)", border: "none", cursor: "pointer",
+                  fontFamily: FONT, borderLeft: `3px solid ${mode === "vendor" ? theme.primary : C.green}`,
+                  borderTop: `1px solid ${C.border}`, marginTop: 4,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: mode === "vendor" ? "rgb(225,205,255)" : C.green }}>
+                    {mode === "buyer" ? "Switch to Vendor mode" : "Switch to Buyer mode"}
+                  </div>
+                </button>
+              )}
               {onBack && (
                 <button onClick={() => { onBack(); setMenuOpen(false) }} style={{
                   width: "100%", padding: "14px 20px",
@@ -234,6 +249,21 @@ export default function Nav({
             </button>
           )
         })}
+
+        {/* Mode toggle — Buyer / Vendor */}
+        {onSwitchMode && mode && (
+          <button onClick={() => onSwitchMode(mode === "buyer" ? "vendor" : "buyer")} style={{
+            padding: bp === "tablet" ? "4px 8px" : "4px 11px",
+            borderRadius: 7, border: `1px solid ${mode === "vendor" ? theme.primary + "55" : "rgba(100,208,144,0.3)"}`,
+            background: mode === "vendor" ? theme.dim : "rgba(100,208,144,0.08)",
+            color: mode === "vendor" ? "rgb(225, 205, 255)" : C.green,
+            fontSize: bp === "tablet" ? 10 : 11,
+            fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT, cursor: "pointer",
+            transition: "all 0.2s",
+          }}>
+            {mode === "buyer" ? "Buyer" : "Vendor"}
+          </button>
+        )}
 
         {/* Inbox button — inline with nav tabs */}
         {onInbox && (
