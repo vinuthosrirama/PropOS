@@ -15,7 +15,7 @@ function isDarkHex(hex: string): boolean {
 const AGENCIES = [
   "Peake",
   "Area Specialist",
-  "Barry Plant", "Biggin & Scott", "Buxton Real Estate", "Century 21",
+  "Barry Plant", "Barry Plant Berwick", "Biggin & Scott", "Buxton Real Estate", "Century 21",
   "First National Real Estate", "Fletchers Real Estate", "Harcourts",
   "Jellis Craig", "Kay & Burton", "LJ Hooker", "McGrath Estate Agents",
   "Nelson Alexander", "Raine & Horne", "Ray White", "Other",

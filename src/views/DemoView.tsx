@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, PORTFOLIO_SOLD, PORTFOLIO_ACTIVE,
-  DEFAULT_THEME, getPortfolioForAgent, isPasSunilchandra,
+  DEFAULT_THEME, getPortfolioForAgent, isPasSunilchandra, isManpreetSingh,
+  MANPREET_PORTFOLIO_SOLD,
   type AgentProfile, type AgencyTheme, type PortfolioProperty,
   type LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_ORDER,
   type DemoMode,
@@ -596,11 +597,21 @@ function addPasLeadAliases(
   allLeads: SheetLead[],
   agent: AgentProfile
 ): Record<number, SheetLead[]> {
-  if (!isPasSunilchandra(agent)) return grouped
-  const camGrouped = groupLeadsByProperty(allLeads, PORTFOLIO_SOLD)
-  const thirlmere = camGrouped[102] ?? []
-  if (!thirlmere.length) return grouped
-  return { ...grouped, 301: [...(grouped[301] ?? []), ...thirlmere] }
+  // Pas Sunilchandra — alias Cameron's Thirlmere leads to Broadway St (301)
+  if (isPasSunilchandra(agent)) {
+    const camGrouped = groupLeadsByProperty(allLeads, PORTFOLIO_SOLD)
+    const thirlmere = camGrouped[102] ?? []
+    if (!thirlmere.length) return grouped
+    return { ...grouped, 301: [...(grouped[301] ?? []), ...thirlmere] }
+  }
+  // Manpreet Singh — alias Cameron's Thirlmere leads to 40 Jack William Way (501)
+  if (isManpreetSingh(agent)) {
+    const camGrouped = groupLeadsByProperty(allLeads, PORTFOLIO_SOLD)
+    const thirlmere = camGrouped[102] ?? []
+    if (!thirlmere.length) return grouped
+    return { ...grouped, 501: [...(grouped[501] ?? []), ...thirlmere] }
+  }
+  return grouped
 }
 
 /** Strip out test / placeholder rows that come back from the Sheet during development. */
