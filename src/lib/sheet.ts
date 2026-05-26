@@ -187,6 +187,11 @@ export interface SheetLead {
   inspectedProperty: string
   lastContact: string
   questions: string[]
+  // Outreach history — written back by patch_lead_outreach, read by getAllLeads
+  generatedSMS?: string
+  generatedEmail?: string
+  emailSubject?: string
+  lastContactDate?: string  // ISO date of last outreach send
 }
 
 // Fallback questions for known demo leads — used when Sheet data is corrupted
@@ -222,6 +227,10 @@ function mapLeadRow(row: Record<string, unknown>): SheetLead {
     notes:             String(row.notes ?? ""),
     inspectedProperty: String(row.inspectedProperty ?? ""),
     lastContact:       String(row.lastContact ?? ""),
+    generatedSMS:      row.generatedSMS  ? String(row.generatedSMS)  : undefined,
+    generatedEmail:    row.generatedEmail ? String(row.generatedEmail) : undefined,
+    emailSubject:      row.emailSubject  ? String(row.emailSubject)  : undefined,
+    lastContactDate:   row.lastContactDate ? String(row.lastContactDate) : undefined,
     questions:         (() => {
       const raw = String(row.questions ?? "")
       // Guard: if the questions field is suspiciously long (>200 chars), it's likely
@@ -455,6 +464,7 @@ export interface PastBuyerRow {
   status: "owner-occupier" | "investor" | "renter" | "unknown"
   notes: string
   lastContactDate?: string
+  lastMessage?: string       // last outreach SMS/email snippet written back to sheet (col Q)
   contractTerms?: string
 }
 
@@ -478,6 +488,7 @@ function mapPastBuyerRow(row: Record<string, unknown>): PastBuyerRow {
                        ? String(row.status) : "unknown") as PastBuyerRow["status"],
     notes:           String(row.notes ?? ""),
     lastContactDate: row.lastContactDate ? String(row.lastContactDate) : undefined,
+    lastMessage:     row.lastMessage ? String(row.lastMessage) : undefined,
     contractTerms:   row.contractTerms ? String(row.contractTerms) : undefined,
   }
 }
@@ -506,10 +517,15 @@ export async function readPastBuyersFromSheet(): Promise<PastBuyerRow[] | null> 
 }
 
 /**
- * Write today's date back to the lastContactDate column for a past buyer.
- * Uses POST type=update_past_buyer_contact.
+ * Write the last contact date and (optionally) the last sent message back to
+ * the Past Buyers sheet tab.  Uses POST type=update_past_buyer_contact.
+ * Apps Script must handle columns P (lastContactDate) and Q (lastMessage).
  */
-export async function updateLastContactDate(buyerId: number, date?: string): Promise<void> {
+export async function updateLastContactDate(
+  buyerId: number,
+  date?: string,
+  lastMessage?: string,
+): Promise<void> {
   if (!SHEET_URL) return
   const lastContactDate = date ?? new Date().toISOString().slice(0, 10)
   try {
@@ -520,6 +536,7 @@ export async function updateLastContactDate(buyerId: number, date?: string): Pro
         type: "update_past_buyer_contact",
         id: buyerId,
         lastContactDate,
+        ...(lastMessage ? { lastMessage: lastMessage.slice(0, 500) } : {}),
       }),
     })
   } catch { /* fail silently */ }

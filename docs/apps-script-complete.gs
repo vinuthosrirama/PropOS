@@ -48,6 +48,7 @@ var PB_COL_LAND            = 13  // M
 var PB_COL_STATUS          = 14  // N
 var PB_COL_NOTES           = 15  // O
 var PB_COL_LAST_CONTACT    = 16  // P
+var PB_COL_LAST_MESSAGE    = 17  // Q — last outreach message sent to this contact
 
 var PB_SHEET_NAME = "Past Buyers"
 
@@ -264,7 +265,8 @@ function getPastBuyersResponse_(ss) {
   var lastRow = sheet.getLastRow()
   if (lastRow < 2) return json({ buyers: [] })
 
-  var rows = sheet.getRange(2, 1, lastRow - 1, PB_COL_LAST_CONTACT).getValues()
+  var numCols = Math.min(sheet.getLastColumn(), PB_COL_LAST_MESSAGE)
+  var rows = sheet.getRange(2, 1, lastRow - 1, numCols).getValues()
   var buyers = rows
     .filter(function(r) { return r[0] || r[1] })
     .map(function(r) {
@@ -284,7 +286,8 @@ function getPastBuyersResponse_(ss) {
         land:            Number(r[PB_COL_LAND - 1])    || 0,
         status:          r[PB_COL_STATUS - 1]          || "owner-occupier",
         notes:           r[PB_COL_NOTES - 1]           || "",
-        lastContactDate: formatDate_(r[PB_COL_LAST_CONTACT - 1])
+        lastContactDate: formatDate_(r[PB_COL_LAST_CONTACT - 1]),
+        lastMessage:     r[PB_COL_LAST_MESSAGE - 1] ? String(r[PB_COL_LAST_MESSAGE - 1]) : ""
       }
     })
 
@@ -317,7 +320,8 @@ function addPastBuyer(ss, data) {
     data.land            || 0,
     data.status          || "owner-occupier",
     data.notes           || "",
-    data.lastContactDate || ""
+    data.lastContactDate || "",
+    data.lastMessage     || ""
   ])
 
   return json({ ok: true, row: sheet.getLastRow() })
@@ -332,6 +336,12 @@ function updatePastBuyerContact(ss, data) {
 
   var date = data.lastContactDate || new Date().toISOString().slice(0, 10)
   sheet.getRange(row, PB_COL_LAST_CONTACT).setValue(date)
+
+  // Write last message if provided (column Q)
+  if (data.lastMessage) {
+    sheet.getRange(row, PB_COL_LAST_MESSAGE).setValue(String(data.lastMessage).slice(0, 500))
+  }
+
   return json({ ok: true })
 }
 
