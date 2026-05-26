@@ -50,6 +50,7 @@ export interface VendorGenerateParams {
   // CRM personalisation
   crmNotes?: string
   parsedPersonalisation?: string   // from hyper-personalisation engine
+  soldComps?: string               // comparable recent sales in same suburb
 }
 
 /**
@@ -138,6 +139,10 @@ Return ONLY the sentence or empty string, no JSON, no labels.`
       ? `\nPersonal detail from CRM: ${personalisationHook}`
       : ""
 
+    const compsBlock = params.soldComps
+      ? `\nRecent comparable sales in ${params.suburb} (use as social proof — mention one in the email if relevant):\n${params.soldComps}`
+      : ""
+
     const sonnetPrompt = `You are ${params.agentName}, a real estate agent at ${params.agentAgency}.
 ${vocBlock}
 Hard rules:
@@ -163,7 +168,7 @@ Annual growth: ${params.annualAppreciation.toFixed(1)}% p.a.${params.cashOnCashR
 Net proceeds estimate (after all costs): ${fmtK(params.netProceeds)}
 Pipeline: ${params.pipelineLabel}
 Triggers: ${params.triggerSummary}
-Owner type: ${isInvestor ? "Investor (investment property)" : "Owner-occupier"}
+Owner type: ${isInvestor ? "Investor (investment property)" : "Owner-occupier"}${compsBlock}
 
 Write personalised SMS and email vendor outreach for ${fname}.
 

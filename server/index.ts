@@ -25,6 +25,7 @@ import conversationsRouter from "./routes/conversations.js"
 import replyAgentRouter from "./routes/reply-agent.js"
 import slmAnswerRouter from "./routes/slm-answer.js"
 import slmAnswerBatchRouter from "./routes/slm-answer-batch.js"
+import addContactRouter from "./routes/add-contact.js"
 import { loadConversations } from "./lib/conversations.js"
 
 const app = express()
@@ -50,6 +51,7 @@ app.use("/api/conversations", conversationsRouter)
 app.use("/api/reply-agent",  replyAgentRouter)
 app.use("/api/slm-answer",        slmAnswerRouter)
 app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
+app.use("/api/add-contact",       addContactRouter)
 
 // Health check — must be before express.static so it's never shadowed by the SPA
 app.get("/api/health", (_req, res) => {

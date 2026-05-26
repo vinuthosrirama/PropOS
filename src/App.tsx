@@ -82,7 +82,8 @@ export default function App() {
       ["--accent-glow" as string]: theme.glow,
     }}>
       <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn}
-           onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge} />
+           onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge}
+           mode={mode} onSwitchMode={setMode} />
 
       <Suspense fallback={<LoadingSpinner />}>
         <AnimatePresence mode="wait">
