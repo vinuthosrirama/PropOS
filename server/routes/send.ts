@@ -5,6 +5,7 @@ import { sendEmail, gmailConfigured } from "../lib/gmail.js"
 import { buildEmailHTML } from "../lib/emailTemplate.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"
 import { logOutreach } from "../lib/db.js"
+import { queueNurtureSequence } from "../lib/scheduler.js"
 
 const router = Router()
 
@@ -39,6 +40,8 @@ interface SendRequest {
   subject:          string
   emailBody:        string   // \n\n-separated plain-text paragraphs
   channel:          "sms" | "email" | "both"
+  pipeline?:        string                      // vendor pipeline id — triggers nurture scheduling
+  nurtureContext?:  Record<string, unknown>      // extra context passed to nurture LLM
 }
 
 /**
@@ -136,10 +139,12 @@ router.post("/", async (req, res) => {
 
   const delivered = !!(results.sms || results.email)
 
+  // Always thread the outbound message so inbox works in demo mode too
+  if (phone && sms) {
+    await addAgentMessageToThread(phone, sms, { leadId, leadName, email, propertyAddress: propertyAddr })
+  }
+
   if (delivered) {
-    if (phone && sms) {
-      await addAgentMessageToThread(phone, sms, { leadId, leadName, email })
-    }
     // Log to database for analytics
     await logOutreach({
       contactPhone:    phone,
@@ -152,6 +157,25 @@ router.post("/", async (req, res) => {
       status:          results.errors.length > 0 ? "sent" : "sent",
       propertyAddress: propertyAddr,
     }).catch(() => { /* non-fatal */ })
+  }
+
+  // Queue Day 7/14/30 nurture follow-ups for vendor pipeline contacts
+  if (body.pipeline && phone) {
+    await queueNurtureSequence({
+      contactPhone:    phone,
+      contactName:     leadName,
+      contactEmail:    email ?? "",
+      propertyAddress: propertyAddr,
+      pipeline:        body.pipeline,
+      context: body.nurtureContext ?? {
+        agentName:    agentName,
+        agentAgency:  agentAgency,
+        agentEmail:   agentEmail,
+        agentPhone:   agentPhone,
+        agencyColor:  agencyColor,
+        agencyTagline: agencyTagline,
+      },
+    }).catch(() => { /* non-fatal — no DB in demo mode */ })
   }
 
   const testMode = !!(process.env.TEST_RECIPIENT_PHONE || process.env.TEST_RECIPIENT_EMAIL)

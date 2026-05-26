@@ -3409,6 +3409,16 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           sms, subject,
           emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
           channel: "both",
+          pipeline: segment.pipeline,
+          nurtureContext: {
+            agentName: agent.name,
+            agentAgency: agent.agency,
+            agentEmail: agent.email,
+            agentPhone: agent.phone,
+            agencyColor: theme.primary,
+            agencyTagline: agent.tagline,
+            pipeline: segment.pipeline,
+          },
         }),
       }).then(r => r.json()).catch(() => null)
       const delivered = deliveryRes?.ok === true
@@ -4019,8 +4029,11 @@ export default function DemoView({
                         }}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: isUnread ? "#f59e0b" : C.text }}>
-                            {isUnread && <span style={{ marginRight: 5 }}>●</span>}{t.leadName}
+                          <div style={{ fontSize: 13, fontWeight: 700, color: isUnread ? "#f59e0b" : C.text, display: "flex", alignItems: "center", gap: 5 }}>
+                            {isUnread && <span style={{ marginRight: 2 }}>●</span>}{t.leadName}
+                            {t.leadId?.startsWith("vendor_") && (
+                              <span style={{ fontSize: 9, color: theme.primary, fontWeight: 700, background: theme.dim, padding: "1px 5px", borderRadius: 4, letterSpacing: 0.3 }}>VENDOR</span>
+                            )}
                           </div>
                           <div style={{ fontSize: 10, color: C.faint }}>
                             {new Date(t.lastReplyAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
