@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "server": "cd server && npm run dev",
-    "build": "vite build",
+    "build": "vite build && node scripts/patch-html.cjs",
     "preview": "vite preview"
   },
   "dependencies": {
