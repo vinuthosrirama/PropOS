@@ -41,7 +41,8 @@ export const AGENCY_THEMES: Record<string, AgencyTheme> = {
   // ── Verified ──────────────────────────────────────────────────────────────
   "Peake":                    { name: "Peake",                    primary: "#3f0278",             dim: "rgba(63,2,120,0.12)",       glow: "rgba(63,2,120,0.07)",       logo: "PK", gradient: ["#7B35BE", "#3f0278"]                       },
   "Ray White":                { name: "Ray White",                primary: "#FFD200",             dim: "rgba(255,210,0,0.12)",      glow: "rgba(255,210,0,0.07)",      logo: "RW", gradient: ["#FFD200", "#E8A800"]                       },
-  "Barry Plant":              { name: "Barry Plant",              primary: "#001FB9",             dim: "rgba(0,31,185,0.12)",       glow: "rgba(0,31,185,0.07)",       logo: "BP", gradient: ["#4c96ff", "#001FB9"]                       },
+  "Barry Plant":              { name: "Barry Plant",              primary: "#021fb9",             dim: "rgba(2,31,185,0.12)",       glow: "rgba(2,31,185,0.07)",       logo: "BP", gradient: ["#4c96ff", "#021fb9"]                       },
+  "Barry Plant Berwick":      { name: "Barry Plant Berwick",      primary: "#021fb9",             dim: "rgba(2,31,185,0.12)",       glow: "rgba(2,31,185,0.07)",       logo: "BP", gradient: ["#021fb9", "#f91f45"]                       },
   "Jellis Craig":             { name: "Jellis Craig",             primary: "#8EC6B5",             dim: "rgba(142,198,181,0.12)",    glow: "rgba(142,198,181,0.07)",    logo: "JC", gradient: ["#8EC6B5", "#4A9B88"]                       },
   // ── Well-documented ───────────────────────────────────────────────────────
   "Harcourts":                { name: "Harcourts",                primary: "#C8102E",             dim: "rgba(200,16,46,0.12)",      glow: "rgba(200,16,46,0.07)",      logo: "HC", gradient: ["#E8384F", "#C8102E"]                       },
@@ -179,6 +180,28 @@ export const PAS_DEFAULT_AGENT: AgentProfile = {
   trainingCorpus: [],
 }
 
+export const MANPREET_DEFAULT_AGENT: AgentProfile = {
+  name:    "Manpreet Singh",
+  agency:  "Barry Plant Berwick",
+  email:   "manpreet.singh@barryplant.com.au",
+  phone:   "0452 275 013",
+  suburb:  "Berwick",
+  tagline: "Berwick specialist. Trusted results.",
+  voiceProfile: {
+    greeting:       "Hi",
+    closing:        "Kind regards",
+    lengthStyle:    "short",
+    formalityScore: 3,
+    aussieIndex:    2,
+    specificity:    4,
+    emojiUsage:     "none",
+    examplesCount:  0,
+    confidence:     50,
+    detectedTraits: ["professional", "data-driven", "approachable"],
+  },
+  trainingCorpus: [],
+}
+
 export const DEFAULT_AGENT: AgentProfile = {
   name:    "Cameron Knoll",
   agency:  "Peake",
@@ -239,9 +262,16 @@ export function isPasSunilchandra(agent: AgentProfile): boolean {
   return (name.startsWith("pas") && name.includes("sunilchandra")) && agency.includes("area specialist")
 }
 
+export function isManpreetSingh(agent: AgentProfile): boolean {
+  const name = agent.name.toLowerCase().trim()
+  const agency = agent.agency.toLowerCase().trim()
+  return name.includes("manpreet") && agency.includes("barry plant")
+}
+
 export function getPortfolioForAgent(agent: AgentProfile): { sold: PortfolioProperty[]; active: PortfolioProperty[] } {
   if (isCamKnoll(agent)) return { sold: PORTFOLIO_SOLD, active: PORTFOLIO_ACTIVE }
   if (isPasSunilchandra(agent)) return { sold: PAS_PORTFOLIO_SOLD, active: PAS_PORTFOLIO_ACTIVE }
+  if (isManpreetSingh(agent)) return { sold: MANPREET_PORTFOLIO_SOLD, active: MANPREET_PORTFOLIO_ACTIVE }
   // Other agents see empty portfolio
   return { sold: [], active: [] }
 }
@@ -354,6 +384,33 @@ export const PAS_PORTFOLIO_ACTIVE: PortfolioProperty[] = [
   },
 ]
 
+// ── Manpreet Singh / Barry Plant Berwick — portfolio ─────────────────────────
+
+export const MANPREET_PORTFOLIO_SOLD: PortfolioProperty[] = [
+  {
+    id: 501,
+    address: "40 Jack William Way",
+    suburb: "Berwick", state: "VIC", postcode: "3806",
+    price: 805000, beds: 3, baths: 2, cars: 2,
+    type: "House", status: "sold", soldDate: "25 May 2026",
+    image: "/40-jack-william-way.jpg",
+    description: "Well-presented 3-bed family home in the heart of Berwick. Open plan kitchen and living, ducted heating, double lock-up garage. Quiet streetscape close to Berwick Station and Berwick Village.",
+    leadCount: 0,
+  },
+  {
+    id: 502,
+    address: "15 Hartsmere Drive",
+    suburb: "Berwick", state: "VIC", postcode: "3806",
+    price: 845000, beds: 3, baths: 2, cars: 2,
+    type: "House", status: "sold", soldDate: "02 May 2026",
+    image: "/15-hartsmere-drive.jpg",
+    description: "Immaculate 3-bed home with striking rendered façade. Stylish open plan living, stone kitchen benchtops, alfresco entertaining area, double garage. Steps to Berwick Primary and Timbarra shopping.",
+    leadCount: 0,
+  },
+]
+
+export const MANPREET_PORTFOLIO_ACTIVE: PortfolioProperty[] = []
+
 // ─── DEMO MODE ────────────────────────────────────────────────────────────────
 export type DemoMode = "buyer" | "vendor"
 
@@ -426,6 +483,44 @@ export const VENDOR_PROSPECTS: VendorProspect[] = [
     notes: "Paul had no idea the market was this strong. Wants a market update. Low-pressure initial conversation — just curious at this stage.",
     propertyType: "House", beds: 4, baths: 2, land: 560,
   },
+  // ── Manpreet Singh / Barry Plant Berwick — Berwick prospects ────────────
+  {
+    id: 3001, linkedPropertyId: 501,
+    name: "Gary & Sue Holden", address: "34 Jack William Way", suburb: "Berwick",
+    yearsOwned: 9, estimatedValue: 820000, phone: "0418 441 892",
+    email: "sholden@gmail.com",
+    triggerEvent: "Watched 40 Jack William Way sell — rang Manpreet next day",
+    notes: "Gary is a sparky, Sue works part-time at the school. Three kids, youngest finishing Year 12 this year. They mentioned the backyard is bigger than they need now and they've been thinking about something a bit more manageable. Very warm — Gary knew the sellers and was impressed with how smooth the campaign ran.",
+    propertyType: "House", beds: 3, baths: 2, land: 548,
+  },
+  {
+    id: 3002, linkedPropertyId: 501,
+    name: "Priya & Raj Mehta", address: "12 Jack William Way", suburb: "Berwick",
+    yearsOwned: 7, estimatedValue: 810000, phone: "0431 667 234",
+    email: "priya.mehta.property@gmail.com",
+    triggerEvent: "Number 40 sold — noticed the Barry Plant board went up and came down fast",
+    notes: "Priya is a pharmacist, Raj is in IT. Two young kids. They bought in 2019 and have good equity. Raj mentioned at the street party that they'd been talking about upsizing to a 4-bed but aren't sure if it's the right time. Priya follows the market closely and would want a detailed CMA.",
+    propertyType: "House", beds: 3, baths: 2, land: 512,
+  },
+  {
+    id: 3003, linkedPropertyId: 502,
+    name: "Marco & Lisa Ferretti", address: "9 Hartsmere Drive", suburb: "Berwick",
+    yearsOwned: 11, estimatedValue: 860000, phone: "0422 773 105",
+    email: "mferretti@hotmail.com",
+    triggerEvent: "Neighbour's sale at No. 15 — asked Manpreet for an appraisal on the spot",
+    notes: "Marco is a concreter, Lisa is a dental nurse. Their two kids have grown up and moved out — one in the city, one in Geelong. Marco mentioned the house is way too big for just the two of them now and the garden takes up every weekend. He's ready to move; Lisa wants to find the right place to downsize to first.",
+    propertyType: "House", beds: 3, baths: 2, land: 561,
+  },
+  {
+    id: 3004, linkedPropertyId: 502,
+    name: "Anh Nguyen", address: "28 Hartsmere Drive", suburb: "Berwick",
+    yearsOwned: 6, estimatedValue: 830000, phone: "0411 298 543",
+    email: "anh.nguyen.berwick@gmail.com",
+    triggerEvent: "15 Hartsmere result surprised her — owns a similar spec home on same street",
+    notes: "Anh bought as an investment in 2019, currently self-managing since the property manager retired. She's been thinking about selling to free up capital for a duplex site in Cranbourne. Mentioned she's been watching the Hartsmere corridor closely. Respond well to yield and capital growth comparisons.",
+    propertyType: "House", beds: 3, baths: 2, land: 498,
+  },
+
   // ── Pas Sunilchandra / Area Specialist — SE Melbourne prospects ──────────
   {
     id: 2001, linkedPropertyId: 301,
