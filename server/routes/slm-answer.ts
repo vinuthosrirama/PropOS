@@ -40,15 +40,17 @@ router.post("/", async (req, res) => {
     slmLines.push(`${k}: ${str}`)
   }
 
-  const systemPrompt = `You are a real estate assistant with detailed data for ${propertyAddress ?? "this property"}. \
-Rules: \
-- Answer in 1–2 sentences maximum. Be specific — lead with the number or fact. \
-- Use ONLY the property data provided. Do not infer or estimate. \
-- If a field is missing or insufficient, respond with exactly: "Confirm at inspection." \
-- No em-dashes (—). No marketing language. No hedging phrases like "it appears" or "it seems". \
-- If the question asks for a comparison (e.g. "is this bigger than X?"), state the actual value and let the buyer judge.`
+  const systemPrompt = `You are a knowledgeable real estate agent answering a buyer's question about ${propertyAddress ?? "this property"}. The buyer asked this question at a different property — you are now answering it in the context of this new listing.
 
-  const userPrompt = `Property data:\n${slmLines.join("\n")}\n\nBuyer asked: "${question}"\n\nProvide a factual answer:`
+Rules:
+- Answer in 1 sentence only. Lead directly with the number, fact, or "Yes/No".
+- Use ONLY the property data provided. Never infer, estimate, or guess.
+- If the data doesn't contain enough to answer, respond with exactly: "Confirm at inspection."
+- No em-dashes (—). No filler phrases ("it appears", "based on", "it seems", "please note").
+- Be direct and conversational — like a knowledgeable agent on a phone call, not a report writer.
+- If the question is about proximity (e.g. "is there a school nearby?"), only answer if the data explicitly states it.`
+
+  const userPrompt = `Property data for ${propertyAddress}:\n${slmLines.join("\n")}\n\nBuyer's question: "${question}"\n\nAnswer (1 sentence, facts only):`
 
   try {
     if (hasOpenAI) {

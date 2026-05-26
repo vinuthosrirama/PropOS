@@ -4,8 +4,23 @@ import { sendSMS, twilioConfigured } from "../lib/twilio.js"
 import { sendEmail, gmailConfigured } from "../lib/gmail.js"
 import { buildEmailHTML } from "../lib/emailTemplate.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"
+import { logOutreach } from "../lib/db.js"
 
 const router = Router()
+
+/** Retry an async fn up to `maxAttempts` times with exponential backoff */
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastErr: unknown
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (i < maxAttempts - 1) await new Promise(r => setTimeout(r, 500 * Math.pow(2, i)))
+    }
+  }
+  throw lastErr
+}
 
 interface SendRequest {
   leadId:           string
@@ -67,7 +82,7 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "leadId and leadName are required" })
   }
 
-  const compliance = checkCompliance(phone ?? "", email ?? "")
+  const compliance = await checkCompliance(phone ?? "", email ?? "")
   if (!compliance.smsOk && !compliance.emailOk) {
     return res.status(200).json({ ok: false, blocked: true, reason: compliance.reason })
   }
@@ -82,7 +97,7 @@ router.post("/", async (req, res) => {
       results.errors.push("SMS skipped: TWILIO_* env vars not configured")
     } else {
       try {
-        results.sms = await sendSMS(phone, sms)
+        results.sms = await withRetry(() => sendSMS(phone, sms))
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         results.errors.push(`SMS failed: ${msg}`)
@@ -111,7 +126,7 @@ router.post("/", async (req, res) => {
         leadId,
       })
       try {
-        results.email = await sendEmail({ to: email, fromName: agentName, subject, htmlBody: html })
+        results.email = await withRetry(() => sendEmail({ to: email, fromName: agentName, subject, htmlBody: html }))
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         results.errors.push(`Email failed: ${msg}`)
@@ -121,8 +136,22 @@ router.post("/", async (req, res) => {
 
   const delivered = !!(results.sms || results.email)
 
-  if (delivered && phone && sms) {
-    await addAgentMessageToThread(phone, sms, { leadId, leadName, email })
+  if (delivered) {
+    if (phone && sms) {
+      await addAgentMessageToThread(phone, sms, { leadId, leadName, email })
+    }
+    // Log to database for analytics
+    await logOutreach({
+      contactPhone:    phone,
+      contactEmail:    email,
+      contactName:     leadName,
+      channel,
+      smsBody:         sms,
+      emailSubject:    subject,
+      emailBody:       emailBody,
+      status:          results.errors.length > 0 ? "sent" : "sent",
+      propertyAddress: propertyAddr,
+    }).catch(() => { /* non-fatal */ })
   }
 
   const testMode = !!(process.env.TEST_RECIPIENT_PHONE || process.env.TEST_RECIPIENT_EMAIL)

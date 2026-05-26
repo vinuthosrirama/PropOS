@@ -1192,11 +1192,8 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
 
   const dirIcon = (d?: "up" | "down" | "same") =>
     d === "up" ? " ↑" : d === "down" ? " ↓" : ""
-  const dirColor = (d?: "up" | "down" | "same", persona?: string) => {
-    if (!d || d === "same") return theme.gradient[0]
-    // "up" is good for upsizers/families (more land/beds) but neutral otherwise
-    if (d === "up") return persona?.toLowerCase().includes("invest") ? C.green : theme.gradient[0]
-    return theme.gradient[0]
+  const dirColor = (_d?: "up" | "down" | "same", _persona?: string) => {
+    return "rgb(225, 205, 255)"
   }
 
   // Build Q&A for display — synchronous SLM keyword pass

@@ -1,8 +1,10 @@
 /**
  * SPAM Act 2003 (AU) compliance layer.
- * Manages opt-out registry in memory (backed by Sheets "OptOut" tab).
- * All outbound delivery must call checkCompliance() before sending.
+ * Uses PostgreSQL when DATABASE_URL is set, otherwise in-memory + Sheets.
+ * All outbound delivery MUST call checkCompliance() before sending.
  */
+
+import { isDbConnected, query, execute } from "./db.js"
 
 export interface OptOutEntry {
   identifier: string   // phone or email
@@ -11,16 +13,22 @@ export interface OptOutEntry {
   source: "reply" | "link" | "manual"
 }
 
-// In-memory opt-out registry — loaded from Sheets on startup
+// In-memory fallback
 const optOutRegistry = new Map<string, OptOutEntry>()
 
-/** Normalise phone/email to a consistent key */
 function normalise(identifier: string): string {
   return identifier.trim().toLowerCase().replace(/\s+/g, "")
 }
 
-/** Load opt-outs from the Sheets "OptOut" tab on server start */
+/** Load opt-outs from DB or Sheets on server start */
 export async function loadOptOuts(): Promise<void> {
+  if (isDbConnected()) {
+    const rows = await query<{ count: string }>(`SELECT COUNT(*) as count FROM opt_outs`)
+    const count = parseInt(rows[0]?.count ?? "0", 10)
+    console.log(`  Compliance: ${count} opt-out entries in database`)
+    return
+  }
+
   const sheetUrl = process.env.SHEET_URL
   if (!sheetUrl) return
   try {
@@ -32,23 +40,32 @@ export async function loadOptOuts(): Promise<void> {
     }
     console.log(`  Compliance: loaded ${optOutRegistry.size} opt-out entries`)
   } catch {
-    // Non-fatal — opt-out sheet may not exist yet
+    // Non-fatal
   }
 }
 
-/** Add an identifier to the opt-out registry and persist to Sheets */
+/** Add an identifier to the opt-out registry and persist */
 export async function addOptOut(
   identifier: string,
   type: OptOutEntry["type"],
-  source: OptOutEntry["source"]
+  source: OptOutEntry["source"],
 ): Promise<void> {
-  const entry: OptOutEntry = {
-    identifier: normalise(identifier),
-    type,
-    source,
-    timestamp: new Date().toISOString(),
+  const key = normalise(identifier)
+  const timestamp = new Date().toISOString()
+
+  if (isDbConnected()) {
+    await execute(
+      `INSERT INTO opt_outs (identifier, type, source, timestamp)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (identifier) DO UPDATE SET type = $2, source = $3, timestamp = $4`,
+      [key, type, source, timestamp],
+    )
+    return
   }
-  optOutRegistry.set(normalise(identifier), entry)
+
+  // In-memory + Sheets fallback
+  const entry: OptOutEntry = { identifier: key, type, source, timestamp }
+  optOutRegistry.set(key, entry)
 
   const sheetUrl = process.env.SHEET_URL
   if (!sheetUrl) return
@@ -56,34 +73,44 @@ export async function addOptOut(
     await fetch(sheetUrl, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        type: "opt_out",
-        identifier: entry.identifier,
-        optOutType: entry.type,
-        source: entry.source,
-        timestamp: entry.timestamp,
-      }),
+      body: JSON.stringify({ type: "opt_out", identifier: key, optOutType: type, source, timestamp }),
     })
   } catch {
     console.warn("Could not persist opt-out to Sheets")
   }
 }
 
-/** Check whether a lead can receive a message on each channel */
-export function checkCompliance(phone: string, email: string): {
+/** Check whether a contact can receive messages on each channel */
+export async function checkCompliance(phone: string, email: string): Promise<{
   smsOk: boolean
   emailOk: boolean
   reason?: string
-} {
+}> {
   const phoneKey = normalise(phone)
   const emailKey = normalise(email)
 
+  if (isDbConnected()) {
+    const rows = await query<OptOutEntry>(
+      `SELECT identifier, type FROM opt_outs WHERE identifier = ANY($1)`,
+      [[phoneKey, emailKey]],
+    )
+    const phoneEntry = rows.find(r => r.identifier === phoneKey)
+    const emailEntry = rows.find(r => r.identifier === emailKey)
+    return buildResult(phoneEntry, emailEntry)
+  }
+
+  // In-memory fallback
   const phoneEntry = optOutRegistry.get(phoneKey)
   const emailEntry = optOutRegistry.get(emailKey)
+  return buildResult(phoneEntry, emailEntry)
+}
 
+function buildResult(
+  phoneEntry: Pick<OptOutEntry, "type"> | undefined,
+  emailEntry: Pick<OptOutEntry, "type"> | undefined,
+): { smsOk: boolean; emailOk: boolean; reason?: string } {
   const smsBlocked = phoneEntry && (phoneEntry.type === "sms" || phoneEntry.type === "all")
   const emailBlocked = emailEntry && (emailEntry.type === "email" || emailEntry.type === "all")
-
   return {
     smsOk: !smsBlocked,
     emailOk: !emailBlocked,
@@ -97,7 +124,7 @@ export function checkCompliance(phone: string, email: string): {
   }
 }
 
-/** Unsubscribe footer text to append to every email body */
+/** Unsubscribe footer for emails */
 export function unsubscribeFooter(leadId: string): string {
   const base = process.env.BASE_URL ?? "https://propos.addvantage.site"
   return `<br/><br/><hr style="border:none;border-top:1px solid #ccc;"/><p style="font-size:11px;color:#888;">To unsubscribe from future emails, <a href="${base}/unsubscribe?token=${encodeURIComponent(leadId)}">click here</a>.</p>`

@@ -106,7 +106,7 @@ export default function Nav({
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {sheetChip}
             <div style={{
-              fontSize: 11, color: theme.gradient[0], fontWeight: 600,
+              fontSize: 11, color: "rgb(225, 205, 255)", fontWeight: 600,
               background: theme.dim, padding: "3px 8px", borderRadius: 12,
               transition: "color 0.4s, background 0.4s",
             }}>
@@ -146,11 +146,11 @@ export default function Nav({
                   display: "flex", alignItems: "center", gap: 14,
                   background: view === v.id ? theme.dim : "transparent",
                   border: "none", cursor: "pointer", fontFamily: FONT,
-                  borderLeft: `3px solid ${view === v.id ? theme.gradient[0] : "transparent"}`,
+                  borderLeft: `3px solid ${view === v.id ? "rgb(225, 205, 255)" : "transparent"}`,
                   transition: "background 0.15s, border-color 0.15s",
                 }}>
                   <div style={{ textAlign: "left" }}>
-                    <div style={{ fontSize: 14, fontWeight: view === v.id ? 700 : 400, color: view === v.id ? theme.gradient[0] : C.text }}>
+                    <div style={{ fontSize: 14, fontWeight: view === v.id ? 700 : 400, color: view === v.id ? "rgb(225, 205, 255)" : C.text }}>
                       {v.label}
                     </div>
                     <div style={{ fontSize: 10, color: C.faint }}>Step {i + 1} of {VIEWS.length}</div>
@@ -227,7 +227,7 @@ export default function Nav({
               fontWeight: active ? 700 : 400,
               whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT,
               background: active ? theme.dim : "transparent",
-              color: active ? theme.gradient[0] : past ? C.muted : "rgba(200,160,255,0.55)",
+              color: active ? "rgb(225, 205, 255)" : past ? C.muted : "rgba(200,160,255,0.45)",
               transition: "all 0.15s",
             }}>
               {bp === "tablet" ? v.short : v.label}
