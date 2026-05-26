@@ -265,7 +265,8 @@ export function isPasSunilchandra(agent: AgentProfile): boolean {
 export function isManpreetSingh(agent: AgentProfile): boolean {
   const name = agent.name.toLowerCase().trim()
   const agency = agent.agency.toLowerCase().trim()
-  return name.includes("manpreet") && agency.includes("barry plant")
+  const nameMatch = name.includes("manpreet") || (name.includes("manny") && name.includes("singh"))
+  return nameMatch && agency.includes("barry plant")
 }
 
 export function getPortfolioForAgent(agent: AgentProfile): { sold: PortfolioProperty[]; active: PortfolioProperty[] } {

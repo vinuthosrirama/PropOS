@@ -3015,6 +3015,11 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme }: {
                 {buyer.lastContactDate && (
                   <div style={{ fontSize: 9, color: C.faint, marginTop: 3 }}>
                     Last contacted: {buyer.lastContactDate}
+                    {buyer.lastMessage && (
+                      <span style={{ marginLeft: 6, color: C.faint, fontStyle: "italic" }}>
+                        · "{buyer.lastMessage.slice(0, 60)}{buyer.lastMessage.length > 60 ? "…" : ""}"
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -3337,7 +3342,14 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
             <a href={`tel:${buyer.phone}`} style={{ fontSize: 14, color: theme.primary, fontWeight: 600, textDecoration: "none", display: "block", marginBottom: 6 }}>{buyer.phone}</a>
             {buyer.email && <a href={`mailto:${buyer.email}`} style={{ fontSize: 13, color: theme.primary, fontWeight: 600, textDecoration: "none" }}>{buyer.email}</a>}
             {buyer.lastContactDate && (
-              <div style={{ fontSize: 10, color: C.faint, marginTop: 8 }}>Last contacted: {buyer.lastContactDate}</div>
+              <div style={{ fontSize: 10, color: C.faint, marginTop: 8 }}>
+                Last contacted: {buyer.lastContactDate}
+              </div>
+            )}
+            {buyer.lastMessage && (
+              <div style={{ fontSize: 10, color: C.faint, marginTop: 4, fontStyle: "italic", lineHeight: 1.4 }}>
+                "{buyer.lastMessage.slice(0, 120)}{buyer.lastMessage.length > 120 ? "…" : ""}"
+              </div>
             )}
           </div>
 
@@ -3435,8 +3447,8 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       const delivered = deliveryRes?.ok === true
       setDeliveryNote(delivered ? "Sent via Twilio + Gmail" : "Saved to Sheets (configure Twilio/Gmail for direct delivery)")
 
-      // Write today's date back to the Past Buyers sheet tab
-      await updateLastContactDate(buyer.id)
+      // Write today's date + last message back to the Past Buyers sheet tab
+      await updateLastContactDate(buyer.id, undefined, sms || bodyText.split("\n\n")[0]?.slice(0, 200))
     } catch {}
     setSending(false)
     setSent(true)
