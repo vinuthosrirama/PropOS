@@ -226,7 +226,7 @@ async function persistThread(thread: ConversationThread): Promise<void> {
 export async function loadConversations(): Promise<void> {
   if (isDbConnected()) {
     const rows = await query<DbRow>(`SELECT COUNT(*) as count FROM conversations`)
-    const count = parseInt((rows[0] as Record<string, string>)?.count ?? "0", 10)
+    const count = parseInt((rows[0] as unknown as Record<string, string>)?.count ?? "0", 10)
     console.log(`  Conversations: ${count} thread(s) in database`)
     return
   }

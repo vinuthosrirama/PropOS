@@ -341,6 +341,7 @@ async function generateNurtureMessage(
         voiceContext: String(ctx.voiceContext ?? ""),
         slmContext:   "",
         strategy:     step?.strategyLabel ?? "Check-In",
+        channel:      "sms",
         lead: {
           name:      job.contact_name,
           budget:    "",
