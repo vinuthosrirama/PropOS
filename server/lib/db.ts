@@ -1,0 +1,258 @@
+/**
+ * PropOS Database Layer
+ *
+ * PostgreSQL via `pg` when DATABASE_URL is set.
+ * Graceful in-memory fallback when it's not (demo/dev mode).
+ *
+ * Tables:
+ *   conversations  — SMS thread history (replaces in-memory Map)
+ *   opt_outs        — SPAM Act 2003 opt-out registry
+ *   outreach_log    — every SMS/email sent (for analytics + audit)
+ *   nurture_queue   — scheduled follow-up jobs
+ *   contacts        — past buyer records (CRM mirror)
+ */
+
+import pg from "pg"
+
+const { Pool } = pg
+
+// ── Connection ──────────────────────────────────────────────────────────────
+
+let pool: pg.Pool | null = null
+
+export function getPool(): pg.Pool | null {
+  return pool
+}
+
+export function isDbConnected(): boolean {
+  return pool !== null
+}
+
+/**
+ * Initialise database connection and run migrations.
+ * Call once at server startup. If DATABASE_URL is missing, silently skips
+ * and the app falls back to in-memory + Sheets persistence.
+ */
+export async function initDb(): Promise<void> {
+  const url = process.env.DATABASE_URL
+  if (!url) {
+    console.log("  Database: not configured (in-memory mode)")
+    return
+  }
+
+  try {
+    pool = new Pool({
+      connectionString: url,
+      ssl: url.includes("localhost") ? false : { rejectUnauthorized: false },
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+    })
+
+    // Verify connection
+    const client = await pool.connect()
+    client.release()
+
+    // Run migrations
+    await migrate()
+
+    console.log("  Database: connected (PostgreSQL)")
+  } catch (err) {
+    console.warn("  Database: connection failed, falling back to in-memory", (err as Error).message)
+    pool = null
+  }
+}
+
+// ── Schema Migration ────────────────────────────────────────────────────────
+
+async function migrate(): Promise<void> {
+  if (!pool) return
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      phone           TEXT PRIMARY KEY,
+      lead_id         TEXT NOT NULL DEFAULT '',
+      lead_name       TEXT NOT NULL DEFAULT '',
+      property_address TEXT NOT NULL DEFAULT '',
+      email           TEXT NOT NULL DEFAULT '',
+      messages        JSONB NOT NULL DEFAULT '[]',
+      last_reply_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      unread          BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS opt_outs (
+      identifier      TEXT PRIMARY KEY,
+      type            TEXT NOT NULL CHECK (type IN ('sms', 'email', 'all')),
+      source          TEXT NOT NULL CHECK (source IN ('reply', 'link', 'manual')),
+      timestamp       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS outreach_log (
+      id              SERIAL PRIMARY KEY,
+      agent_id        TEXT NOT NULL DEFAULT 'default',
+      contact_phone   TEXT,
+      contact_email   TEXT,
+      contact_name    TEXT NOT NULL DEFAULT '',
+      channel         TEXT NOT NULL CHECK (channel IN ('sms', 'email', 'both')),
+      sms_body        TEXT,
+      email_subject   TEXT,
+      email_body      TEXT,
+      status          TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'delivered', 'failed', 'opened', 'clicked', 'replied')),
+      pipeline        TEXT,
+      property_address TEXT,
+      sent_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      opened_at       TIMESTAMPTZ,
+      replied_at      TIMESTAMPTZ,
+      metadata        JSONB DEFAULT '{}'
+    );
+
+    CREATE TABLE IF NOT EXISTS nurture_queue (
+      id              SERIAL PRIMARY KEY,
+      agent_id        TEXT NOT NULL DEFAULT 'default',
+      contact_phone   TEXT NOT NULL,
+      contact_name    TEXT NOT NULL DEFAULT '',
+      contact_email   TEXT NOT NULL DEFAULT '',
+      property_address TEXT NOT NULL DEFAULT '',
+      pipeline        TEXT,
+      step            INTEGER NOT NULL DEFAULT 0,
+      scheduled_at    TIMESTAMPTZ NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'cancelled', 'failed')),
+      attempts        INTEGER NOT NULL DEFAULT 0,
+      last_error      TEXT,
+      context         JSONB DEFAULT '{}',
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS contacts (
+      id              SERIAL PRIMARY KEY,
+      agent_id        TEXT NOT NULL DEFAULT 'default',
+      name            TEXT NOT NULL,
+      phone           TEXT,
+      email           TEXT,
+      purchase_address TEXT,
+      purchase_date   DATE,
+      purchase_price  NUMERIC,
+      deposit         NUMERIC,
+      property_type   TEXT,
+      beds            INTEGER,
+      baths           INTEGER,
+      land            NUMERIC,
+      status          TEXT DEFAULT 'unknown',
+      notes           TEXT,
+      last_contact_date DATE,
+      pipeline        TEXT,
+      priority_score  INTEGER,
+      current_estimate NUMERIC,
+      source          TEXT DEFAULT 'manual',
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Indexes for common queries
+    CREATE INDEX IF NOT EXISTS idx_outreach_agent    ON outreach_log(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_outreach_phone    ON outreach_log(contact_phone);
+    CREATE INDEX IF NOT EXISTS idx_outreach_sent_at  ON outreach_log(sent_at);
+    CREATE INDEX IF NOT EXISTS idx_nurture_status    ON nurture_queue(status, scheduled_at);
+    CREATE INDEX IF NOT EXISTS idx_nurture_phone     ON nurture_queue(contact_phone);
+    CREATE INDEX IF NOT EXISTS idx_contacts_agent    ON contacts(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_contacts_pipeline ON contacts(agent_id, pipeline);
+  `)
+}
+
+// ── Query helpers ───────────────────────────────────────────────────────────
+
+/** Run a parameterised query. Returns rows or empty array if DB not connected. */
+export async function query<T = Record<string, unknown>>(
+  sql: string,
+  params?: unknown[],
+): Promise<T[]> {
+  if (!pool) return []
+  const result = await pool.query(sql, params)
+  return result.rows as T[]
+}
+
+/** Run a parameterised query and return the first row, or null. */
+export async function queryOne<T = Record<string, unknown>>(
+  sql: string,
+  params?: unknown[],
+): Promise<T | null> {
+  const rows = await query<T>(sql, params)
+  return rows[0] ?? null
+}
+
+/** Run an INSERT/UPDATE/DELETE and return the number of affected rows. */
+export async function execute(sql: string, params?: unknown[]): Promise<number> {
+  if (!pool) return 0
+  const result = await pool.query(sql, params)
+  return result.rowCount ?? 0
+}
+
+// ── Outreach logging ────────────────────────────────────────────────────────
+
+export interface OutreachLogEntry {
+  agentId?: string
+  contactPhone?: string
+  contactEmail?: string
+  contactName: string
+  channel: "sms" | "email" | "both"
+  smsBody?: string
+  emailSubject?: string
+  emailBody?: string
+  status?: string
+  pipeline?: string
+  propertyAddress?: string
+  metadata?: Record<string, unknown>
+}
+
+export async function logOutreach(entry: OutreachLogEntry): Promise<number> {
+  if (!pool) return 0
+  const rows = await query<{ id: number }>(
+    `INSERT INTO outreach_log (agent_id, contact_phone, contact_email, contact_name, channel, sms_body, email_subject, email_body, status, pipeline, property_address, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING id`,
+    [
+      entry.agentId ?? "default",
+      entry.contactPhone,
+      entry.contactEmail,
+      entry.contactName,
+      entry.channel,
+      entry.smsBody,
+      entry.emailSubject,
+      entry.emailBody,
+      entry.status ?? "sent",
+      entry.pipeline,
+      entry.propertyAddress,
+      JSON.stringify(entry.metadata ?? {}),
+    ],
+  )
+  return rows[0]?.id ?? 0
+}
+
+export async function updateOutreachStatus(
+  id: number,
+  status: string,
+  timestamp?: string,
+): Promise<void> {
+  if (!pool) return
+  const col = status === "opened" ? "opened_at" : status === "replied" ? "replied_at" : null
+  if (col) {
+    await execute(
+      `UPDATE outreach_log SET status = $1, ${col} = $2 WHERE id = $3`,
+      [status, timestamp ?? new Date().toISOString(), id],
+    )
+  } else {
+    await execute(`UPDATE outreach_log SET status = $1 WHERE id = $2`, [status, id])
+  }
+}
+
+// ── Cleanup ─────────────────────────────────────────────────────────────────
+
+export async function closeDb(): Promise<void> {
+  if (pool) {
+    await pool.end()
+    pool = null
+  }
+}
