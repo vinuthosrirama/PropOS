@@ -1,8 +1,24 @@
 import { Router } from "express"
 import { generateMessage, type GenerateParams } from "../lib/openai.js"
 import { generateMessageClaude, generateMessageHaiku } from "../lib/claude.js"
+import { queueNurtureSequence, type QueueNurtureParams } from "../lib/scheduler.js"
 
 const router = Router()
+
+/**
+ * POST /api/nurture/queue
+ * Schedule Day 7, 14, 30 follow-up jobs for a contact.
+ * Called automatically by /api/send after a successful vendor or buyer outreach.
+ * Can also be called manually to enrol a contact into a nurture sequence.
+ */
+router.post("/queue", async (req, res) => {
+  const params = req.body as QueueNurtureParams
+  if (!params.contactPhone || !params.contactName) {
+    return res.status(400).json({ error: "contactPhone and contactName are required" })
+  }
+  await queueNurtureSequence(params)
+  res.json({ ok: true, scheduled: 3, note: "Day 7, 14, 30 follow-ups queued" })
+})
 
 const NURTURE_STRATEGIES: Array<{ day: number; strategy: string; anchor: string }> = [
   { day: 0,  strategy: "New Listing Match",     anchor: "Reference the open home they attended and introduce the new listing directly." },

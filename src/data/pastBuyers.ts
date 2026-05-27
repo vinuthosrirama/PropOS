@@ -33,6 +33,11 @@ export interface PastBuyer {
   // Optional
   lastContactDate?: string    // when agent last spoke to them
   contractTerms?: string      // "60 day settlement, 10% deposit"
+
+  // Sheet-sourced enrichment (populated when live sheet is connected)
+  personalisationHook?: string      // col R — pre-written 1-line hook for outreach (bypasses AI extraction)
+  currentEstimateOverride?: number  // col S — agent-entered current market value; overrides auto-estimate
+  lastMessage?: string              // col Q — last outreach SMS/email snippet written back to sheet
 }
 
 // ---------------------------------------------------------------------------
@@ -51,6 +56,7 @@ export const CAMERON_PAST_BUYERS: PastBuyer[] = [
     notes: "Lovely family. Two kids at Berwick Primary — Ella (yr 5) and Oscar (yr 3). Karen volunteers at the school canteen. David works in the city, catches the 6:42am train. They love the court position and the park across from Thirlmere. Karen mentioned wanting a bigger kitchen when they had everyone over at Christmas. Solid community people.",
     lastContactDate: "2024-11-20",
     contractTerms: "60 day settlement, 20% deposit",
+    personalisationHook: "Karen mentioned wanting a bigger kitchen when they had everyone over at Christmas — 7 years on, Ella and Oscar are outgrowing Thirlmere Court.",
   },
   {
     id: 5002,
@@ -203,6 +209,74 @@ export const PAS_PAST_BUYERS: PastBuyer[] = [
 ]
 
 // ---------------------------------------------------------------------------
+// Demo data — Manpreet Singh / Barry Plant Berwick
+// Anchor property: 40 Jack William Way, Berwick (sold $805K — property 501)
+// ---------------------------------------------------------------------------
+
+export const MANPREET_PAST_BUYERS: PastBuyer[] = [
+  {
+    id: 7001,
+    name: "Kevin & Amita Sharma",
+    phone: "0432 881 207", email: "amita.sharma@gmail.com",
+    purchaseAddress: "6 Creekwood Rise", suburb: "Berwick",
+    purchaseDate: "2020-08-14", purchasePrice: 645000, deposit: 64500,
+    propertyType: "House", beds: 3, baths: 2, land: 498,
+    status: "owner-occupier",
+    notes: "Kevin teaches at Berwick Secondary, Amita is in healthcare admin at Casey Hospital. Two kids — Aryan (4) and Kavya (2). Baby number three due January 2027. The 3-bed is already feeling cramped — Amita mentioned the kids are sharing a room and it is getting harder. They want a 4-bed with a proper study. Very motivated but nervous about the market. Kevin follows the Jack William Way sales closely — was really impressed with what Manpreet got for No. 40.",
+    lastContactDate: "2025-04-22",
+    contractTerms: "60 day settlement, 10% deposit",
+  },
+  {
+    id: 7002,
+    name: "Jason Nakamura",
+    phone: "0418 556 334", email: "jason.nakamura.invest@gmail.com",
+    purchaseAddress: "17 Windward Crescent", suburb: "Berwick",
+    purchaseDate: "2017-06-10", purchasePrice: 590000, deposit: 118000,
+    propertyType: "House", beds: 4, baths: 2, land: 622,
+    status: "investor",
+    notes: "Jason lives in Toorak. This is one of three IPs. Tenant lease on Windward Cres expires June 2026. He is very numbers-focused and tracks property values obsessively — sent Manpreet a message after the 40 Jack William Way sale asking if the Berwick market had peaked. Jason has read about the CGT discount changes and mentioned he might want to sell before 2027 to lock in the discount. Responds to data, not emotion.",
+    lastContactDate: "2025-05-02",
+    contractTerms: "30 day settlement, 20% deposit",
+    personalisationHook: "Jason, your Windward Cres tenant just moved out and the CGT clock is ticking — selling now locks in your 50% discount before the July 2027 deadline.",
+  },
+  {
+    id: 7003,
+    name: "Bill & Heather McCormack",
+    phone: "0411 223 744", email: "hmc.berwick@bigpond.com",
+    purchaseAddress: "42 Delfin Drive", suburb: "Berwick",
+    purchaseDate: "2016-03-22", purchasePrice: 570000, deposit: 114000,
+    propertyType: "House", beds: 4, baths: 2, land: 635,
+    status: "owner-occupier",
+    notes: "Lovely couple. Bill is a retired school principal, Heather still does bookkeeping a couple days a week. Both kids have flown the nest — son in Sydney, daughter in London. Four-bed house on Delfin is way too much for the two of them now. Bill told Manpreet at the school fete that he is ready when Heather is. Heather is getting closer — she has started looking at ground-floor apartments in Berwick Village. Garden maintenance is becoming a real issue for Bill's back.",
+    lastContactDate: "2025-03-15",
+    contractTerms: "90 day settlement, 20% deposit",
+  },
+  {
+    id: 7004,
+    name: "Thanh & Lily Vo",
+    phone: "0403 119 865", email: "thanh.vo.property@gmail.com",
+    purchaseAddress: "54 Jack William Way", suburb: "Berwick",
+    purchaseDate: "2021-04-19", purchasePrice: 755000, deposit: 75500,
+    propertyType: "House", beds: 4, baths: 2, land: 502,
+    status: "owner-occupier",
+    notes: "Thanh is in logistics management, Lily is a dental hygienist. No kids yet but mentioned they want to start a family in the next year or two. They bought 54 Jack William Way just before the top of the market. Thanh was a bit worried for a while but the sale at No. 40 for $805K made him feel much better. He messaged Manpreet the day after settlement to ask what 54 would be worth. Not rushing, but definitely thinking about it.",
+    lastContactDate: "2025-05-26",
+  },
+  {
+    id: 7005,
+    name: "Dan & Carly Crosbie",
+    phone: "0427 490 612", email: "dancrosbie@hotmail.com",
+    purchaseAddress: "21 Hartsmere Drive", suburb: "Berwick",
+    purchaseDate: "2018-09-03", purchasePrice: 695000, deposit: 139000,
+    propertyType: "House", beds: 4, baths: 2, land: 610,
+    status: "investor",
+    notes: "Dan is a builder, Carly is a teacher at Kambrya College. Investment property — they live in Officer. Currently rented at $520/wk. Dan mentioned after the 15 Hartsmere sale that he is thinking about selling to fund a duplex development in Pakenham. He has the skills to build it himself. Very pragmatic — he will move when the numbers make sense. Carly is supportive but wants to understand the tax position first.",
+    lastContactDate: "2025-02-10",
+    contractTerms: "60 day settlement, 20% deposit",
+  },
+]
+
+// ---------------------------------------------------------------------------
 // Current market value estimates (hardcoded for demo — would come from
 // comparable sales engine in production)
 // ---------------------------------------------------------------------------
@@ -223,16 +297,23 @@ export const CURRENT_VALUE_ESTIMATES: Record<number, number> = {
   6001: 610000,   // 71 Broadway St — bought $480K in 2018
   6002: 650000,   // 15 Chelmsford Dr — bought $540K in 2020
   6003: 680000,   // 45 Seattle Cres — bought $460K in 2016
+  // Manpreet's buyers
+  7001: 820000,   // 6 Creekwood Rise — bought $645K in 2020
+  7002: 855000,   // 17 Windward Cres — bought $590K in 2017 (investor)
+  7003: 870000,   // 42 Delfin Drive — bought $570K in 2016
+  7004: 815000,   // 54 Jack William Way — bought $755K in 2021
+  7005: 862000,   // 21 Hartsmere Drive — bought $695K in 2018 (investor)
 }
 
 // ---------------------------------------------------------------------------
 // Helper to get buyers for an agent
 // ---------------------------------------------------------------------------
 
-import { isCamKnoll, isPasSunilchandra, type AgentProfile } from "../data"
+import { isCamKnoll, isPasSunilchandra, isManpreetSingh, type AgentProfile } from "../data"
 
 export function getPastBuyersForAgent(agent: AgentProfile): PastBuyer[] {
   if (isCamKnoll(agent)) return CAMERON_PAST_BUYERS
   if (isPasSunilchandra(agent)) return PAS_PAST_BUYERS
+  if (isManpreetSingh(agent)) return MANPREET_PAST_BUYERS
   return []
 }

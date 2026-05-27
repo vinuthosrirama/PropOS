@@ -1,6 +1,7 @@
 import { Router } from "express"
 import { addOptOut } from "../lib/compliance.js"
 import { addReplyToThread } from "../lib/conversations.js"
+import { cancelNurtureJobs } from "../lib/scheduler.js"
 
 const router = Router()
 
@@ -43,6 +44,8 @@ router.post("/sms", async (req, res) => {
     // Track in conversation thread store + update Sheets lead status
     await addReplyToThread(from, body)
     await updateLeadStatusInSheets({ phone: from, status: "sms_replied", detail: body.slice(0, 200) })
+    // Cancel any pending nurture jobs — they replied, no need to keep following up
+    await cancelNurtureJobs(from)
   }
 
   // Must return TwiML — empty response means "no auto-reply"

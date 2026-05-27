@@ -1,6 +1,126 @@
 import { Router } from "express"
+import { isDbConnected, query } from "../lib/db.js"
 
 const router = Router()
+
+// ── Vendor prospecting analytics ──────────────────────────────────────────────
+
+/**
+ * GET /api/analytics/vendor
+ * Full funnel for vendor prospecting:
+ *   Contacts analysed → Outreach sent → Opened → Replied → Appraisals → Listings → GCI
+ *
+ * Returns demo numbers when no database is connected.
+ */
+router.get("/vendor", async (req, res) => {
+  if (!isDbConnected()) {
+    return res.json(demoVendorAnalytics())
+  }
+
+  try {
+    const agentId = (req.query.agentId as string) ?? "default"
+
+    // Core funnel from outreach_log
+    const [funnelRows, pipelineRows, recentRows] = await Promise.all([
+      query<{ status: string; count: string; channel: string }>(
+        `SELECT status, channel, COUNT(*) as count
+         FROM outreach_log
+         WHERE agent_id = $1
+           AND pipeline IS NOT NULL   -- vendor outreach only
+         GROUP BY status, channel`,
+        [agentId],
+      ),
+      query<{ pipeline: string; count: string }>(
+        `SELECT pipeline, COUNT(*) as count
+         FROM outreach_log
+         WHERE agent_id = $1 AND pipeline IS NOT NULL
+         GROUP BY pipeline
+         ORDER BY count DESC`,
+        [agentId],
+      ),
+      query<{ contact_name: string; contact_phone: string; pipeline: string; sent_at: string; status: string }>(
+        `SELECT contact_name, contact_phone, pipeline, sent_at, status
+         FROM outreach_log
+         WHERE agent_id = $1 AND pipeline IS NOT NULL
+         ORDER BY sent_at DESC
+         LIMIT 10`,
+        [agentId],
+      ),
+    ])
+
+    const sent     = funnelRows.reduce((s, r) => s + parseInt(r.count, 10), 0)
+    const opened   = funnelRows.filter(r => r.status === "opened" || r.status === "clicked").reduce((s, r) => s + parseInt(r.count, 10), 0)
+    const replied  = funnelRows.filter(r => r.status === "replied").reduce((s, r) => s + parseInt(r.count, 10), 0)
+
+    // Nurture queue stats
+    const nurtureRows = await query<{ status: string; count: string }>(
+      `SELECT status, COUNT(*) as count FROM nurture_queue WHERE agent_id = $1 GROUP BY status`,
+      [agentId],
+    )
+    const nurturePending = nurtureRows.find(r => r.status === "pending")
+    const nurtureSent    = nurtureRows.find(r => r.status === "sent")
+
+    const byPipeline: Record<string, number> = {}
+    for (const r of pipelineRows) {
+      byPipeline[r.pipeline] = parseInt(r.count, 10)
+    }
+
+    res.json({
+      funnel: {
+        outreachSent:       sent,
+        emailOpened:        opened,
+        replied:            replied,
+        appraisalsBooked:   0,   // manual tracking — future feature
+        listingsWon:        0,   // manual tracking — future feature
+        estimatedGCI:       0,   // listings * avg commission — future feature
+      },
+      nurture: {
+        pending: parseInt(nurturePending?.count ?? "0", 10),
+        sent:    parseInt(nurtureSent?.count    ?? "0", 10),
+      },
+      byPipeline,
+      recentOutreach: recentRows,
+      // ROI calculation (placeholder until listings are tracked)
+      roi: {
+        monthlySubscription: 399,
+        listingsAttributed:  0,
+        revenueGenerated:    0,
+        roiMultiple:         0,
+      },
+    })
+  } catch (err) {
+    console.error("[analytics/vendor]", err)
+    res.json(demoVendorAnalytics())
+  }
+})
+
+function demoVendorAnalytics() {
+  return {
+    funnel: {
+      outreachSent:     47,
+      emailOpened:      31,
+      replied:          9,
+      appraisalsBooked: 3,
+      listingsWon:      1,
+      estimatedGCI:     17000,
+    },
+    nurture: { pending: 18, sent: 22 },
+    byPipeline: {
+      "investor-to-seller": 12,
+      "owner-to-upsizer":   14,
+      "owner-to-seller":    10,
+      "owner-to-downsizer":  7,
+      "investor-to-rebalance": 4,
+    },
+    recentOutreach: [],
+    roi: {
+      monthlySubscription: 399,
+      listingsAttributed:  1,
+      revenueGenerated:    17000,
+      roiMultiple:         42.6,
+    },
+  }
+}
 
 interface AuctionOutcome {
   propertyAddress: string

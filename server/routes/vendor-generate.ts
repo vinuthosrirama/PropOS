@@ -1,13 +1,24 @@
 import { Router } from "express"
 import Anthropic from "@anthropic-ai/sdk"
+import OpenAI from "openai"
+import { inferLifeStage, renderLifeStageBlock } from "../lib/lifeStageInference.js"
+import { getSuburbContext } from "../lib/suburbContext.js"
+import { getTimingTriggers, renderTimingBlock } from "../lib/timingTriggers.js"
 
 const router = Router()
 
-// Lazy Anthropic client
+// Lazy Anthropic client (for Sonnet generation — step 2)
 let _client: Anthropic | null = null
 function getClient(): Anthropic {
   if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   return _client
+}
+
+// Lazy OpenAI client (for personalisation extraction — step 1)
+let _openai: OpenAI | null = null
+function getOpenAI(): OpenAI {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "not-set" })
+  return _openai
 }
 
 function clampSMS(s: string): string {
@@ -51,6 +62,11 @@ export interface VendorGenerateParams {
   crmNotes?: string
   parsedPersonalisation?: string   // from hyper-personalisation engine
   soldComps?: string               // comparable recent sales in same suburb
+
+  // New layer inputs
+  beds?: number
+  propertyType?: string
+  purchaseDate?: string   // ISO date — for timing triggers
 }
 
 /**
@@ -102,25 +118,79 @@ router.post("/", async (req, res) => {
   }
 
   try {
+    // ── Layers 2-4: Run enrichment in parallel ───────────────────────────────
+    const [lifeStageProfile, suburbCtx, timingTriggers] = await Promise.all([
+      // Layer 2: Life-stage inference from CRM notes
+      (params.crmNotes || params.parsedPersonalisation)
+        ? inferLifeStage({
+            notes:           params.crmNotes ?? "",
+            buyerName:       params.buyerName,
+            purchaseAddress: params.purchaseAddress,
+            purchaseYear:    params.purchaseYear,
+            beds:            params.beds ?? 3,
+            propertyType:    params.propertyType ?? "House",
+          })
+        : Promise.resolve(null),
+
+      // Layer 3: Suburb market context
+      Promise.resolve(getSuburbContext(params.suburb)),
+
+      // Layer 4: Timing triggers
+      Promise.resolve(getTimingTriggers({
+        purchaseDate:     params.purchaseDate ?? `${params.purchaseYear}-01-01`,
+        cgtSavingsBy2027: params.cgtSavingsBy2027,
+        hasChildren:      false, // will be overridden once lifeStage resolves
+        pipeline:         params.pipelineLabel.toLowerCase().replace(/ /g, "-"),
+      })),
+    ])
+
+    // Re-run timing with hasChildren from life-stage result
+    const hasChildren = (lifeStageProfile?.children?.length ?? 0) > 0
+    const refinedTimingTriggers = hasChildren
+      ? getTimingTriggers({
+          purchaseDate:     params.purchaseDate ?? `${params.purchaseYear}-01-01`,
+          cgtSavingsBy2027: params.cgtSavingsBy2027,
+          hasChildren:      true,
+          pipeline:         params.pipelineLabel.toLowerCase().replace(/ /g, "-"),
+        })
+      : timingTriggers
+
+    const lifeStageBlock  = renderLifeStageBlock(lifeStageProfile)
+    const timingBlock     = renderTimingBlock(refinedTimingTriggers)
+    const suburbBlock     = suburbCtx?.promptBlock ?? ""
+
     // ── Step 1: Extract personalisation hook from CRM notes (Haiku) ─────────
     let personalisationHook = params.parsedPersonalisation ?? ""
 
     if (!personalisationHook && params.crmNotes && params.crmNotes.trim()) {
       try {
-        const haikuPrompt = `Extract the single most personal, specific detail from these CRM notes that an agent could reference in a warm outreach message. This is for ${params.buyerName}, who purchased ${params.purchaseAddress} in ${params.purchaseYear}.
+        // Step 1 uses OpenAI GPT-4o-mini for fast, cheap extraction
+        const extractPrompt = `Extract the single most personal, specific detail from these CRM notes that an agent could reference in a warm outreach message. This is for ${params.buyerName}, who purchased ${params.purchaseAddress} in ${params.purchaseYear}.
 
 CRM notes: "${params.crmNotes}"
 
-Return ONE sentence (max 20 words) that captures a real personal detail (family, lifestyle, future plans, local connection). Do not make up facts. If there is nothing specific, return empty string.
-Return ONLY the sentence or empty string, no JSON, no labels.`
+Return ONE sentence (max 20 words) capturing a real personal detail (family, lifestyle, future plans, local connection). Do not invent facts. If nothing specific exists, return an empty string.
+Return ONLY the sentence or empty string — no JSON, no labels.`
 
-        const msg = await getClient().messages.create({
-          model: "claude-haiku-4-5",
-          max_tokens: 80,
-          messages: [{ role: "user", content: haikuPrompt }],
-        })
-        const raw = msg.content[0]?.type === "text" ? msg.content[0].text.trim() : ""
-        if (raw && raw.length < 150) personalisationHook = raw
+        if (process.env.OPENAI_API_KEY) {
+          const completion = await getOpenAI().chat.completions.create({
+            model: "gpt-4o-mini",
+            max_tokens: 80,
+            temperature: 0.4,
+            messages: [{ role: "user", content: extractPrompt }],
+          })
+          const raw = completion.choices[0]?.message?.content?.trim() ?? ""
+          if (raw && raw.length < 150) personalisationHook = raw
+        } else if (process.env.ANTHROPIC_API_KEY) {
+          // Fallback: use Haiku if no OpenAI key
+          const msg = await getClient().messages.create({
+            model: "claude-haiku-4-5",
+            max_tokens: 80,
+            messages: [{ role: "user", content: extractPrompt }],
+          })
+          const raw = msg.content[0]?.type === "text" ? msg.content[0].text.trim() : ""
+          if (raw && raw.length < 150) personalisationHook = raw
+        }
       } catch {
         // continue without personalisation
       }
@@ -143,6 +213,11 @@ Return ONLY the sentence or empty string, no JSON, no labels.`
       ? `\nRecent comparable sales in ${params.suburb} (use as social proof — mention one in the email if relevant):\n${params.soldComps}`
       : ""
 
+    // Assemble enrichment blocks — only include non-empty ones
+    const enrichmentBlocks = [lifeStageBlock, suburbBlock, timingBlock, compsBlock]
+      .filter(Boolean)
+      .join("\n\n")
+
     const sonnetPrompt = `You are ${params.agentName}, a real estate agent at ${params.agentAgency}.
 ${vocBlock}
 Hard rules:
@@ -156,9 +231,12 @@ Hard rules:
 - Include at least one specific financial number (equity gain or estimated value)
 - Offer a complimentary, no-obligation appraisal — never pressured
 - Warm, empathetic, Australian-colloquial tone. Sounds like a caring check-in, not a pitch.
+- If life-stage intelligence is provided, weave it in naturally (don't quote it verbatim — feel it)
+- If timing triggers are provided, choose the most natural one to reference in the email (never force both)
+- If suburb data is provided, reference one concrete local fact — makes the message feel informed
 ${personalisationBlock}
 
-VENDOR DETAILS:
+${enrichmentBlocks ? enrichmentBlocks + "\n" : ""}VENDOR DETAILS:
 Name: ${params.buyerName}
 Property: ${params.purchaseAddress}, ${params.suburb}
 Purchased: ${params.purchaseYear} for ${fmtK(params.purchasePrice)}

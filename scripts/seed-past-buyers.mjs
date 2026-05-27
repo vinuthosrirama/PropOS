@@ -274,6 +274,264 @@ const BUYERS = [
     lastContactDate: "2025-03-28"
   },
 
+  // ── Buyer → Landlord (upsizing, want to keep current home as IP) ─────────
+  {
+    id: 5026, name: "Darren & Kylie Holt", phone: "0408 112 334",
+    email: "dkyholt@gmail.com",
+    purchaseAddress: "6 Ramsay Court, Berwick", suburb: "Berwick",
+    purchaseDate: "2019-07-20", purchasePrice: 680000, deposit: 68000,
+    propertyType: "House", beds: 3, baths: 2, land: 450,
+    status: "buyer→landlord",
+    notes: "Darren and Kylie have outgrown their 3-bed since having a third kid. They've been seriously looking at 4-5 bed homes in Berwick or Narre Warren South. Kylie is keen to KEEP the Ramsay Court house and rent it out — she said 'it's basically paid itself off.' Darren is on the fence but warming to the idea. They need to understand the rental yield and whether the bank will allow them to hold both. Great relationship — very open to advice.",
+    lastContactDate: "2025-02-10"
+  },
+  {
+    id: 5027, name: "Tim & Alicia Nguyen", phone: "0421 445 667",
+    email: "timalivianguyen@gmail.com",
+    purchaseAddress: "23 Huntington Drive, Officer", suburb: "Officer",
+    purchaseDate: "2018-11-14", purchasePrice: 650000, deposit: 65000,
+    propertyType: "House", beds: 4, baths: 2, land: 510,
+    status: "buyer→landlord",
+    notes: "Tim is a civil engineer, Alicia is a pharmacist. No kids yet but they're actively trying. They've built up solid equity and Tim mentioned at a BBQ that he wants to buy a new place and keep this one — he calls it 'building a passive income portfolio one house at a time.' Very financially savvy. Alicia is more conservative and wants to clear the mortgage on the current place first. The conversation is ongoing.",
+    lastContactDate: "2025-01-05"
+  },
+  {
+    id: 5028, name: "Mark Stellios", phone: "0414 778 990",
+    email: "mark.stellios@outlook.com",
+    purchaseAddress: "48 Junction Road, Narre Warren South", suburb: "Narre Warren South",
+    purchaseDate: "2016-04-08", purchasePrice: 590000, deposit: 118000,
+    propertyType: "House", beds: 4, baths: 2, land: 572,
+    status: "buyer→landlord",
+    notes: "Mark is divorced, kids are every second week. He wants to upsize to a 5-bed for when he has the kids (his partner Amy moves in part-time). His plan is to keep the current 4-bed as a rental — his brother offered to manage it informally. He's got strong equity and the bank pre-approval looks likely. Mark is decisive when he's ready to move. Needs a property with a guest room and double garage.",
+    lastContactDate: "2024-12-20"
+  },
+  {
+    id: 5029, name: "Sophie & Aaron Walsh", phone: "0433 223 445",
+    email: "soph.walsh.au@gmail.com",
+    purchaseAddress: "12 Crescent Drive, Berwick", suburb: "Berwick",
+    purchaseDate: "2020-09-11", purchasePrice: 745000, deposit: 74500,
+    propertyType: "House", beds: 4, baths: 2, land: 495,
+    status: "buyer→landlord",
+    notes: "Sophie and Aaron both work in healthcare — Sophie is a midwife, Aaron is a paramedic. No kids. They're high-income earners and want to use their equity to start a property portfolio. They attended one of Cameron's open homes in Pakenham out of curiosity and asked lots of smart questions. Their plan is to buy a second property and eventually have two IPs. Need guidance on which strategy makes more sense: sell vs hold.",
+    lastContactDate: "2025-03-15"
+  },
+  {
+    id: 5030, name: "Greg & Denise Hoffman", phone: "0405 334 556",
+    email: "greghoffman58@bigpond.com",
+    purchaseAddress: "35 Ferndale Close, Berwick", suburb: "Berwick",
+    purchaseDate: "2017-02-28", purchasePrice: 710000, deposit: 142000,
+    propertyType: "House", beds: 4, baths: 2, land: 620,
+    status: "buyer→landlord",
+    notes: "Greg and Denise are empty nesters. Youngest finished Year 12 last year. Denise's mother recently moved to a retirement village which has freed up a lot of their emotional bandwidth. They're considering a sea change to Inverloch or Wonthaggi — Greg's dream is to retire to the coast by 60 (he's 57). Plan is to keep the Berwick house as a rental and buy something smaller on the coast. Very open to a full strategy conversation.",
+    lastContactDate: "2025-04-05"
+  },
+  {
+    id: 5031, name: "Chloe & James Parker", phone: "0425 889 001",
+    email: "chloe.jamesparker@gmail.com",
+    purchaseAddress: "9 Westmore Way, Clyde North", suburb: "Clyde North",
+    purchaseDate: "2021-02-17", purchasePrice: 820000, deposit: 82000,
+    propertyType: "House", beds: 4, baths: 2, land: 448,
+    status: "buyer→landlord",
+    notes: "Chloe and James are both in their early 30s — Chloe is a UX designer, James is a software developer at Seek. They bought new in Clyde North's Eliston estate. They've been talking about moving to Berwick or Narre Warren South for better school zoning for their daughter (starting school in 2027). Their preference is to keep Clyde North as an IP and buy the family home. Mortgage broker is already on board. Just need to find the right property.",
+    lastContactDate: "2025-05-01"
+  },
+
+  // ── Buyer → Seller (previously bought, now actively ready to list) ────────
+  {
+    id: 5032, name: "Ian & Cheryl Broadbent", phone: "0416 001 223",
+    email: "ianbroadbent.berwick@gmail.com",
+    purchaseAddress: "19 Silkwood Rise, Berwick", suburb: "Berwick",
+    purchaseDate: "2015-06-12", purchasePrice: 645000, deposit: 129000,
+    propertyType: "House", beds: 4, baths: 2, land: 598,
+    status: "buyer→seller",
+    notes: "Ian and Cheryl bought through Cameron in 2015. Both kids are now at uni interstate. They've been watching the market for about 18 months. Ian called last month and said 'we're ready when you are.' Cheryl wants to sell before winter and move into a low-maintenance villa in Berwick. Ian is fully on board. They are one of Cameron's warmest listings — just needs the call to confirm appraisal date.",
+    lastContactDate: "2025-05-10"
+  },
+  {
+    id: 5033, name: "Raj & Priya Sharma", phone: "0413 667 889",
+    email: "rajpriya.sharma@gmail.com",
+    purchaseAddress: "67 Outlook Drive, Narre Warren South", suburb: "Narre Warren South",
+    purchaseDate: "2016-08-30", purchasePrice: 720000, deposit: 144000,
+    propertyType: "House", beds: 5, baths: 3, land: 670,
+    status: "buyer→seller",
+    notes: "Raj is a pharmacist, Priya runs a childcare centre. Both born in India, highly community-oriented. Their three kids are grown up now. Priya messaged two months ago asking for a market appraisal — she said 'we've been here long enough, time to let someone else enjoy it.' They want to move to a townhouse in the Berwick Village precinct. Raj wants to understand CGT implications first. Very motivated to act in the next 3 months.",
+    lastContactDate: "2025-04-15"
+  },
+  {
+    id: 5034, name: "Nicole Harrison", phone: "0402 556 778",
+    email: "nicole.harrison.au@gmail.com",
+    purchaseAddress: "53 Cedar Creek Road, Harkaway", suburb: "Harkaway",
+    purchaseDate: "2018-03-22", purchasePrice: 950000, deposit: 190000,
+    propertyType: "Acreage", beds: 4, baths: 2, land: 4200,
+    status: "buyer→seller",
+    notes: "Nicole is a senior account manager at ANZ, recently separated. She bought the Harkaway acreage with her ex — managing 4,200m² alone has become too much. She's emotionally done with the property and wants a clean start. Looking at a townhouse or modern home in Berwick or Officer. She's given herself a firm deadline of end of 2026. Very organised, will want clear process steps. Handle with sensitivity — separation is recent.",
+    lastContactDate: "2025-03-05"
+  },
+  {
+    id: 5035, name: "Brendan & Jo Ellis", phone: "0417 334 556",
+    email: "brendanjoellis@hotmail.com",
+    purchaseAddress: "8 Wentworth Boulevard, Officer", suburb: "Officer",
+    purchaseDate: "2019-04-15", purchasePrice: 760000, deposit: 76000,
+    propertyType: "House", beds: 4, baths: 2, land: 530,
+    status: "buyer→seller",
+    notes: "Brendan drives trucks interstate, Jo is a teacher's aide at Berwick College. Their youngest just got a full footy scholarship in WA and is moving in July. Jo mentioned she cried about it but also said 'time to sell the big house.' They want to move to a low-maintenance 3-bed in Pakenham closer to Jo's mum. Brendan is away a lot so Jo handles the house stuff. Very genuine and warm — good relationship from when they bought.",
+    lastContactDate: "2025-04-28"
+  },
+  {
+    id: 5036, name: "Andrew Kim", phone: "0488 112 334",
+    email: "andrew.kim.au@gmail.com",
+    purchaseAddress: "14 Beauchamp Road, Berwick", suburb: "Berwick",
+    purchaseDate: "2020-07-01", purchasePrice: 815000, deposit: 163000,
+    propertyType: "House", beds: 4, baths: 2, land: 540,
+    status: "buyer→seller",
+    notes: "Andrew is a data scientist at Telstra. He bought this property when he was in a serious relationship — that didn't work out. He's been living here alone for the past 2 years and has now made the call to sell and move closer to the CBD. He's very analytical — expects a full comp analysis before listing. He'll move fast once he's satisfied with the data. Has already spoken to a mortgage broker about buying in Fitzroy North.",
+    lastContactDate: "2025-05-15"
+  },
+  {
+    id: 5037, name: "Mick & Tracey O'Sullivan", phone: "0403 778 990",
+    email: "osullivanberwick@gmail.com",
+    purchaseAddress: "26 Sandalwood Grove, Berwick", suburb: "Berwick",
+    purchaseDate: "2014-09-16", purchasePrice: 540000, deposit: 108000,
+    propertyType: "House", beds: 4, baths: 2, land: 635,
+    status: "buyer→seller",
+    notes: "Mick runs an electrical contracting business, Tracey is a dental receptionist. They've owned this 11 years and renovated the kitchen and bathrooms beautifully. Tracey called last week to say they're 'definitely listing this year.' They want to buy in Somerville or Mornington to be near Tracey's parents. Mick wants to make sure they get top dollar — he's proud of what they've done to the place. Appraisal conversation is overdue.",
+    lastContactDate: "2025-05-18"
+  },
+  {
+    id: 5038, name: "Yuki & David Tanaka", phone: "0431 223 445",
+    email: "yukitanaka.melb@gmail.com",
+    purchaseAddress: "4 Stonybrook Close, Narre Warren", suburb: "Narre Warren",
+    purchaseDate: "2017-05-30", purchasePrice: 685000, deposit: 137000,
+    propertyType: "House", beds: 4, baths: 2, land: 560,
+    status: "buyer→seller",
+    notes: "Yuki is a nurse manager, David works in IT security. They have two high-school kids. David got offered a 2-year secondment at Microsoft in Sydney, which they're taking. They want to sell the Narre Warren house before they go — too much risk leaving it vacant or dealing with tenants from interstate. Very organised, want a smooth sale process. Yuki is the main point of contact. Target departure is August/September.",
+    lastContactDate: "2025-04-12"
+  },
+
+  // ── Renter → Buyer (previously renting, now ready / able to purchase) ─────
+  {
+    id: 5039, name: "Josh & Amber Reid", phone: "0407 556 778",
+    email: "joshamber.reid@gmail.com",
+    purchaseAddress: "Renting — 15 Fairway Drive, Berwick", suburb: "Berwick",
+    purchaseDate: "2025-01-01", purchasePrice: 0, deposit: 60000,
+    propertyType: "House", beds: 0, baths: 0, land: 0,
+    status: "renter→buyer",
+    notes: "Josh and Amber are renting in Berwick at $570/wk. Josh is a carpenter, Amber is a bookkeeper. They've been saving for 4 years and now have a $60k deposit plus FHOG. They attended Cameron's open home on Somerfield Circuit earlier this year and were well-researched. Pre-approval in progress through their broker. Amber has a Domain alert set for every new listing. They're very close to buying — budget around $680k-$720k, want at least 450m² land.",
+    lastContactDate: "2025-05-02"
+  },
+  {
+    id: 5040, name: "Priya Nair", phone: "0422 889 001",
+    email: "priyanair.melb@gmail.com",
+    purchaseAddress: "Renting — 8 Rosewood Drive, Narre Warren South", suburb: "Narre Warren South",
+    purchaseDate: "2025-01-01", purchasePrice: 0, deposit: 80000,
+    propertyType: "Unit", beds: 0, baths: 0, land: 0,
+    status: "renter→buyer",
+    notes: "Priya is a solicitor who moved to Berwick for work 3 years ago and has been renting. She's single but wants to buy her own place — 'tired of paying someone else's mortgage,' she said. She has $80k saved and solid income. Looking for a 3-bed townhouse or standalone 3-bed in Berwick, Narre Warren South, or Officer. Maximum budget $750k. She attended two of Cameron's open homes and follows the market keenly. Will be a decisive buyer when she finds the right fit.",
+    lastContactDate: "2025-03-20"
+  },
+  {
+    id: 5041, name: "Sam & Ella Kovacs", phone: "0415 334 556",
+    email: "samella.kovacs@gmail.com",
+    purchaseAddress: "Renting — 42 McMahon Road, Berwick", suburb: "Berwick",
+    purchaseDate: "2025-01-01", purchasePrice: 0, deposit: 55000,
+    propertyType: "House", beds: 0, baths: 0, land: 0,
+    status: "renter→buyer",
+    notes: "Sam is a mechanic, Ella is a nurse at Casey Hospital. They have a 3-year-old daughter. Both 28 years old, renting for 5 years. They missed out on a property in Cranbourne North last year (outbid by $25k) and were devastated — that actually pushed them to get really serious. Pre-approval is confirmed at $650k. They want to stay in Berwick school zone. Ella is very emotionally invested in the process. Sam wants something with a double garage.",
+    lastContactDate: "2025-04-22"
+  },
+  {
+    id: 5042, name: "Tom & Grace Osei", phone: "0402 667 889",
+    email: "tgosei@gmail.com",
+    purchaseAddress: "Renting — 77 Princes Highway, Berwick", suburb: "Berwick",
+    purchaseDate: "2025-01-01", purchasePrice: 0, deposit: 95000,
+    propertyType: "House", beds: 0, baths: 0, land: 0,
+    status: "renter→buyer",
+    notes: "Tom is a project manager at a civil engineering firm, Grace is a speech therapist. Originally from Ghana, been in Australia 6 years. They're citizens now and fully ready to buy. $95k deposit, pre-approved to $820k. They attended an open home in Berwick and were extremely polite and thorough — asked great questions about school catchments and public transport. Want a 4-bed with room for Grace's parents to visit. In no rush but will move quickly for the right property.",
+    lastContactDate: "2025-05-08"
+  },
+  {
+    id: 5043, name: "Connor Byrne", phone: "0430 001 223",
+    email: "connorbyrne.au@gmail.com",
+    purchaseAddress: "Renting — 31 Fairview Boulevard, Officer", suburb: "Officer",
+    purchaseDate: "2025-01-01", purchasePrice: 0, deposit: 45000,
+    propertyType: "Unit", beds: 0, baths: 0, land: 0,
+    status: "renter→buyer",
+    notes: "Connor is 26, works as a diesel mechanic at a transport depot in Dandenong. Single, no kids. His dad encouraged him to get into property and he's taken it seriously. He's been renting for 3 years and has just hit the $45k mark. Eligible for FHOG and First Home Guarantee (5% deposit). He's very motivated but a little nervous — first-time buyer, first in family. Wants a modest 3-bed in Officer or Pakenham around $580k-$620k. Will need hand-holding through the process.",
+    lastContactDate: "2025-03-30"
+  },
+  {
+    id: 5044, name: "Vikram & Lena Bhat", phone: "0412 778 990",
+    email: "v.bhat.melb@gmail.com",
+    purchaseAddress: "Renting — 18 Parkside Court, Berwick", suburb: "Berwick",
+    purchaseDate: "2025-01-01", purchasePrice: 0, deposit: 120000,
+    propertyType: "House", beds: 0, baths: 0, land: 0,
+    status: "renter→buyer",
+    notes: "Vikram is an anaesthetist at Monash, Lena is a GP. Dual high income, been renting by choice while establishing their careers. They now have $120k saved and are ready to buy a quality family home. Budget $950k–$1.1m. Looking for something in a premium Berwick street — Maranatha Estate or similar. They are particular about fit and finish and will take their time. They want Cameron's honest suburb-level advice, not a sales pitch. Treat them as peers.",
+    lastContactDate: "2025-04-30"
+  },
+
+  // ── Buyer → Downsizer (family home owners ready to right-size) ────────────
+  {
+    id: 5045, name: "Ross & Patricia McLeod", phone: "0419 445 667",
+    email: "ross.mcleod.berwick@gmail.com",
+    purchaseAddress: "66 Silkwood Rise, Berwick", suburb: "Berwick",
+    purchaseDate: "2015-07-14", purchasePrice: 780000, deposit: 156000,
+    propertyType: "House", beds: 5, baths: 3, land: 720,
+    status: "buyer→downsizer",
+    notes: "Ross is a retired dentist, Patricia a retired teacher. Both 64. Three adult kids all interstate. Ross has been talking about downsizing for two years but Patricia is emotionally attached to the garden. She recently said 'I think I'm ready now' — which is a big shift. They want a single-level 2 or 3-bed in Berwick Village with a courtyard or small garden. No stairs is non-negotiable for Patricia (hip replacement due next year). Strong financial position — property fully paid off.",
+    lastContactDate: "2024-11-15"
+  },
+  {
+    id: 5046, name: "Phil & Margaret Hart", phone: "0418 001 223",
+    email: "p.hart.1960@hotmail.com",
+    purchaseAddress: "34 Grandview Boulevard, Officer", suburb: "Officer",
+    purchaseDate: "2016-10-20", purchasePrice: 725000, deposit: 145000,
+    propertyType: "House", beds: 5, baths: 2, land: 695,
+    status: "buyer→downsizer",
+    notes: "Phil worked as a plumber for 40 years, now retired. Margaret still does casual work at Coles. They bought the 5-bed when all four kids were still at home. Now it's just them rattling around. Phil mentioned the upkeep is 'killing him' — gutters, painting, lawns. They've been talking to some of the other couples at Phil's Men's Shed about the downsizing process. Want something manageable — 2-bed + study, lock up and leave, near a golf course ideally.",
+    lastContactDate: "2024-10-25"
+  },
+  {
+    id: 5047, name: "Cheryl Donaldson", phone: "0423 334 556",
+    email: "cheryl.donaldson59@gmail.com",
+    purchaseAddress: "7 Yarrabee Way, Berwick", suburb: "Berwick",
+    purchaseDate: "2014-03-07", purchasePrice: 495000, deposit: 99000,
+    propertyType: "House", beds: 4, baths: 2, land: 580,
+    status: "buyer→downsizer",
+    notes: "Cheryl is a widow — husband Trevor passed away 18 months ago after a long illness. She's managing OK but said the big house is lonely and expensive to run. Both daughters have encouraged her to downsize to something near the Berwick Village strip. She attends the Berwick bowling club twice a week so she wants to stay close. Looking for a 2-bed villa or ground floor apartment. Proceeds from sale will top up her retirement savings. Handle with care and warmth — she trusts Cameron implicitly.",
+    lastContactDate: "2025-02-22"
+  },
+  {
+    id: 5048, name: "Barry & Anne Whitfield", phone: "0411 556 778",
+    email: "whitfieldanne@gmail.com",
+    purchaseAddress: "51 Somerfield Circuit, Berwick", suburb: "Berwick",
+    purchaseDate: "2017-01-18", purchasePrice: 855000, deposit: 171000,
+    propertyType: "House", beds: 5, baths: 3, land: 700,
+    status: "buyer→downsizer",
+    notes: "Barry is a retired accountant, Anne runs a small craft business online. Son in London, daughter in Brisbane. They're both 68 and ready to right-size. Barry wants to free up capital for travel — 'we want to see Europe properly while our knees still work,' he told Cameron at a function. Anne has been looking at townhouses near Berwick's high street. They're not in a rush but they're definitely in the mindset. A well-timed appraisal conversation would be very well received.",
+    lastContactDate: "2024-09-08"
+  },
+  {
+    id: 5049, name: "Norm & Val Perkins", phone: "0414 889 001",
+    email: "normval.perkins@bigpond.com",
+    purchaseAddress: "28 Hawthorn Park Drive, Narre Warren South", suburb: "Narre Warren South",
+    purchaseDate: "2013-09-11", purchasePrice: 520000, deposit: 104000,
+    propertyType: "House", beds: 4, baths: 2, land: 610,
+    status: "buyer→downsizer",
+    notes: "Norm worked at the council as an engineer, Val was a school librarian. Both retired. Four kids, all in their 30s and 40s, living across Melbourne. They bought through Cameron in 2013 when Cameron was just starting out — one of his earliest clients. Val mentioned at a community event that they were 'giving serious thought to downsizing.' Strong loyalty to Cameron. Have referred two people to him. Would be a meaningful listing and a good word-of-mouth opportunity.",
+    lastContactDate: "2024-07-30"
+  },
+  {
+    id: 5050, name: "Terry & Bev Cassidy", phone: "0420 223 445",
+    email: "tncassidy@gmail.com",
+    purchaseAddress: "16 Lakewood Avenue, Officer", suburb: "Officer",
+    purchaseDate: "2018-05-25", purchasePrice: 770000, deposit: 154000,
+    propertyType: "House", beds: 5, baths: 3, land: 660,
+    status: "buyer→downsizer",
+    notes: "Terry and Bev bought this 5-bed thinking the extended family would use it — that plan changed. Now it's just them. Terry has a chronic back condition and the stairs are a real problem. Bev mentioned she'd prefer a unit or single-storey townhouse in a complex with low maintenance. Their youngest still visits on weekends so they want at least a 2-bed with a quality spare room. Very pragmatic and process-focused. Terry will want a clear action plan and timeline before committing.",
+    lastContactDate: "2025-03-12"
+  },
+
   // ── Special situations ────────────────────────────────────────────────────
   {
     id: 5024, name: "Natalie & Brad Thompson", phone: "0405 778 990",

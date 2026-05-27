@@ -440,12 +440,45 @@ export async function writeSLMFieldToSheet(propertyId: number, field: string, va
 //
 // Apps Script must handle:
 //   GET  ?action=getPastBuyers          → { buyers: PastBuyerRow[] }
-//   POST type=update_past_buyer_contact → { id: number, lastContactDate: string }
+//   POST type=update_past_buyer_contact → { id: number, lastContactDate: string, lastMessage?: string }
 //
-// "Past Buyers" tab column order:
-//   id | name | phone | email | purchaseAddress | suburb | purchaseDate |
-//   purchasePrice | deposit | propertyType | beds | baths | land |
-//   status | notes | lastContactDate | contractTerms
+// "Past Buyers" tab column order (A–S):
+//   A: id | B: name | C: phone | D: email | E: purchaseAddress | F: suburb
+//   G: purchaseDate | H: purchasePrice | I: deposit | J: propertyType
+//   K: beds | L: baths | M: land | N: status | O: notes
+//   P: lastContactDate | Q: lastMessage | R: personalisationHook | S: currentEstimateOverride
+//
+//   personalisationHook (col R) — one-sentence hook the agent writes about this person
+//     e.g. "Jason mentioned CGT discount window after the 40 Jack William Way sale"
+//     When present, PropOS passes it directly to the AI outreach writer — skipping the
+//     Haiku extraction step — giving the agent full control over the personalisation angle.
+//
+//   currentEstimateOverride (col S) — agent-entered current market value ($)
+//     Overrides the PropOS auto-estimate. Use this after an appraisal visit or when
+//     agent has inside knowledge of recent comparable sales.
+//
+// ── Agents tab — agent profile directory ──────────────────────────────────────
+//
+// Apps Script must also handle:
+//   GET  ?action=getAgentProfile&name=...&agency=... → { profile: AgentSheetProfile }
+//
+// "Agents" tab column order:
+//   name | agency | phone | email | tagline | suburb
+//
+// Apps Script doGet addition:
+//   if (action === "getAgentProfile") {
+//     const name   = (e.parameter.name   || "").toLowerCase().trim()
+//     const agency = (e.parameter.agency || "").toLowerCase().trim()
+//     const sheet  = ss.getSheetByName("Agents")
+//     if (!sheet) return json({ profile: null })
+//     const [headers, ...rows] = sheet.getDataRange().getValues()
+//     const row = rows.find(r =>
+//       String(r[0]).toLowerCase().includes(name.split(" ")[0]) &&
+//       String(r[1]).toLowerCase().includes(agency.split(" ")[0])
+//     )
+//     if (!row) return json({ profile: null })
+//     return json({ profile: Object.fromEntries(headers.map((h, i) => [h, row[i]])) })
+//   }
 
 export interface PastBuyerRow {
   id: number
@@ -461,11 +494,40 @@ export interface PastBuyerRow {
   beds: number
   baths: number
   land?: number
-  status: "owner-occupier" | "investor" | "renter" | "unknown"
+  status: "owner-occupier" | "investor" | "renter" | "buyer→landlord" | "buyer→seller" | "renter→buyer" | "buyer→downsizer" | "unknown"
   notes: string
   lastContactDate?: string
-  lastMessage?: string       // last outreach SMS/email snippet written back to sheet (col Q)
+  lastMessage?: string              // col Q — last outreach snippet written back to sheet
   contractTerms?: string
+  personalisationHook?: string      // col R — pre-written AI outreach hook (bypasses Haiku step)
+  currentEstimateOverride?: number  // col S — agent-entered current market value
+}
+
+// ── Agent profile from Agents tab ────────────────────────────────────────────
+
+export interface AgentSheetProfile {
+  phone?:    string
+  email?:    string
+  tagline?:  string
+  suburb?:   string
+}
+
+/**
+ * Fetch an agent's profile from the "Agents" Google Sheets tab.
+ * Returns null when not found or sheet not connected.
+ * Used by AgentLogin to auto-fill phone/email/tagline from the sheet
+ * rather than hardcoding values in the app.
+ */
+export async function readAgentProfileFromSheet(name: string, agency: string): Promise<AgentSheetProfile | null> {
+  if (!SHEET_URL) return null
+  const url = `${SHEET_URL}?action=getAgentProfile&name=${encodeURIComponent(name)}&agency=${encodeURIComponent(agency)}`
+  try {
+    const res = await fetch(url, { cache: "no-store" })
+    if (!res.ok) return null
+    const data = await res.json() as { profile?: AgentSheetProfile | null; error?: string }
+    if (data.error || !data.profile) return null
+    return data.profile
+  } catch { return null }
 }
 
 function mapPastBuyerRow(row: Record<string, unknown>): PastBuyerRow {
@@ -484,12 +546,14 @@ function mapPastBuyerRow(row: Record<string, unknown>): PastBuyerRow {
     beds:            Number(row.beds ?? 0),
     baths:           Number(row.baths ?? 0),
     land:            row.land ? Number(row.land) : undefined,
-    status:          (["owner-occupier", "investor", "renter", "unknown"].includes(String(row.status))
+    status:          (["owner-occupier", "investor", "renter", "buyer→landlord", "buyer→seller", "renter→buyer", "buyer→downsizer", "unknown"].includes(String(row.status))
                        ? String(row.status) : "unknown") as PastBuyerRow["status"],
     notes:           String(row.notes ?? ""),
-    lastContactDate: row.lastContactDate ? String(row.lastContactDate) : undefined,
-    lastMessage:     row.lastMessage ? String(row.lastMessage) : undefined,
-    contractTerms:   row.contractTerms ? String(row.contractTerms) : undefined,
+    lastContactDate:          row.lastContactDate ? String(row.lastContactDate) : undefined,
+    lastMessage:              row.lastMessage ? String(row.lastMessage) : undefined,
+    contractTerms:            row.contractTerms ? String(row.contractTerms) : undefined,
+    personalisationHook:      row.personalisationHook ? String(row.personalisationHook).trim() : undefined,
+    currentEstimateOverride:  row.currentEstimateOverride ? Number(row.currentEstimateOverride) : undefined,
   }
 }
 
