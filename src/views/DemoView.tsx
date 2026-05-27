@@ -3224,106 +3224,235 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
 
 // ── Hyper-Personalisation Card ────────────────────────────────────────────────
 
-function HyperPersonalisationCard({ hook, theme }: {
-  hook: string
+/**
+ * NotesBridgeCard — shows the full AI personalisation transformation:
+ *   Stage 1: Raw CRM notes (what the agent typed)
+ *   Stage 2: "AI reading between the lines..." bridge (while generating)
+ *   Stage 3: What AI extracted — the single personalisation hook
+ *   Stage 4: "As written to [name]" — the sentence from the actual email
+ *
+ * This is PropOS's WOW moment: showing that the AI didn't just quote the note,
+ * it REFRAMED it into the contact's present situation.
+ */
+function NotesBridgeCard({ notes, prewrittenHook, extractedHook, personalisationLine, fname, generating, theme }: {
+  notes: string
+  prewrittenHook: string | null
+  extractedHook: string | null
+  personalisationLine: string | null
+  fname: string
+  generating: boolean
   theme: AgencyTheme
 }) {
-  const [typed, setTyped] = useState("")
-  const [done, setDone] = useState(false)
+  // The "active" hook — pre-written takes precedence, otherwise show extracted
+  const hook = prewrittenHook ?? extractedHook
 
+  const [typedHook, setTypedHook] = useState("")
+  const [hookDone, setHookDone] = useState(false)
+  const [typedLine, setTypedLine] = useState("")
+  const [lineDone, setLineDone] = useState(false)
+
+  // Typewriter for hook
   useEffect(() => {
-    setTyped("")
-    setDone(false)
+    if (!hook) { setTypedHook(""); setHookDone(false); return }
+    setTypedHook(""); setHookDone(false)
     let idx = 0
     const iv = setInterval(() => {
       idx++
-      setTyped(hook.slice(0, idx))
-      if (idx >= hook.length) { setDone(true); clearInterval(iv) }
-    }, 22)
+      setTypedHook(hook.slice(0, idx))
+      if (idx >= hook.length) { setHookDone(true); clearInterval(iv) }
+    }, 18)
     return () => clearInterval(iv)
   }, [hook])
 
+  // Typewriter for personalisationLine — delayed so it lands after hook finishes
+  useEffect(() => {
+    if (!personalisationLine) { setTypedLine(""); setLineDone(false); return }
+    setTypedLine(""); setLineDone(false)
+    const delay = setTimeout(() => {
+      let idx = 0
+      const iv = setInterval(() => {
+        idx++
+        setTypedLine(personalisationLine.slice(0, idx))
+        if (idx >= personalisationLine.length) { setLineDone(true); clearInterval(iv) }
+      }, 22)
+      return () => clearInterval(iv)
+    }, 600)
+    return () => clearTimeout(delay)
+  }, [personalisationLine])
+
+  // Truncate notes to the most meaningful excerpt (first 160 chars)
+  const notesExcerpt = notes.length > 160 ? notes.slice(0, 157) + "..." : notes
+
+  const showBridge = !!hook || generating
+  const showHook   = !!hook
+  const showLine   = !!personalisationLine
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: -10, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: "spring", damping: 18, stiffness: 280, delay: 0.08 }}
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", damping: 20, stiffness: 260 }}
       style={{
         borderRadius: 16, overflow: "hidden", position: "relative",
-        background: `linear-gradient(140deg, ${theme.primary}1a 0%, ${theme.primary}08 55%, ${C.bg2} 100%)`,
-        border: `1.5px solid ${theme.primary}55`,
-        boxShadow: `0 0 36px ${theme.primary}1a, inset 0 1px 0 ${theme.primary}22`,
+        background: `linear-gradient(160deg, ${theme.primary}12 0%, ${theme.primary}06 50%, ${C.bg2} 100%)`,
+        border: `1.5px solid ${theme.primary}44`,
+        boxShadow: `0 0 28px ${theme.primary}14`,
       }}
     >
-      {/* Top gradient accent stripe */}
-      <div style={{
-        height: 3,
-        background: `linear-gradient(90deg, ${theme.primary}, ${theme.gradient?.[1] ?? theme.primary}88, transparent 80%)`,
-      }} />
+      {/* Top accent bar */}
+      <div style={{ height: 3, background: `linear-gradient(90deg, ${theme.primary}, ${theme.gradient?.[1] ?? theme.primary}66, transparent 80%)` }} />
 
-      {/* Subtle shimmer sweep */}
+      {/* Shimmer */}
       <motion.div
         animate={{ x: ["-120%", "220%"] }}
-        transition={{ duration: 2.2, ease: "linear", repeat: Infinity, repeatDelay: 1.8 }}
-        style={{
-          position: "absolute", top: 0, left: 0, width: "35%", height: "100%",
-          background: `linear-gradient(90deg, transparent, ${theme.primary}12, transparent)`,
-          pointerEvents: "none",
-        }}
+        transition={{ duration: 2.6, ease: "linear", repeat: Infinity, repeatDelay: 2.4 }}
+        style={{ position: "absolute", top: 0, left: 0, width: "30%", height: "100%", background: `linear-gradient(90deg, transparent, ${theme.primary}0e, transparent)`, pointerEvents: "none" }}
       />
 
-      <div style={{ padding: "14px 18px" }}>
-        {/* Badge row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 11 }}>
+      <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 0 }}>
+
+        {/* ── Stage 1: CRM Notes ── */}
+        <div style={{ marginBottom: 11 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: C.faint, textTransform: "uppercase" }}>📋 From your CRM notes</span>
+          </div>
           <div style={{
-            display: "flex", alignItems: "center", gap: 5,
-            background: `linear-gradient(90deg, ${theme.primary}ee, ${theme.primary}bb)`,
-            borderRadius: 8, padding: "4px 11px",
-            boxShadow: `0 2px 10px ${theme.primary}44`,
+            fontSize: 12, color: C.muted, lineHeight: 1.55, fontStyle: "italic",
+            padding: "9px 12px", borderRadius: 9,
+            background: C.bg3, border: `1px solid ${C.border}`,
           }}>
-            <span style={{ fontSize: 10 }}>⚡</span>
-            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.8, color: "#fff", textTransform: "uppercase" }}>
-              Hyper-Personalised
-            </span>
-          </div>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5 }}>
-            <motion.div
-              animate={{ opacity: [1, 0.3, 1], scale: [1, 0.8, 1] }}
-              transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-              style={{ width: 7, height: 7, borderRadius: "50%", background: C.green, boxShadow: `0 0 8px ${C.green}` }}
-            />
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.green, letterSpacing: 0.5 }}>AI bypassed</span>
+            <span style={{ color: C.faint, fontWeight: 900, fontSize: 15, lineHeight: 0, verticalAlign: "-2px", marginRight: 2 }}>"</span>
+            {notesExcerpt}
+            <span style={{ color: C.faint, fontWeight: 900, fontSize: 15, lineHeight: 0, verticalAlign: "-2px", marginLeft: 2 }}>"</span>
           </div>
         </div>
 
-        {/* Quote / typewriter */}
-        <div style={{
-          fontSize: 13.5, fontWeight: 600, color: C.text, lineHeight: 1.65,
-          padding: "11px 14px", borderRadius: 10,
-          background: theme.primary + "0e",
-          border: `1px solid ${theme.primary}28`,
-          minHeight: 48, fontStyle: "italic", position: "relative",
-        }}>
-          <span style={{ color: theme.primary, fontWeight: 900, fontSize: 18, opacity: 0.55, lineHeight: 0, verticalAlign: "-3px" }}>"</span>
-          {typed}
-          {!done ? (
-            <motion.span
-              animate={{ opacity: [1, 0] }}
-              transition={{ duration: 0.55, repeat: Infinity, repeatType: "reverse", ease: "steps(1)" }}
-              style={{ display: "inline-block", width: 2, height: 13, marginLeft: 1, background: theme.primary, verticalAlign: "middle", borderRadius: 1 }}
-            />
-          ) : (
-            <span style={{ color: theme.primary, fontWeight: 900, fontSize: 18, opacity: 0.55, lineHeight: 0, verticalAlign: "-3px" }}>"</span>
-          )}
-        </div>
+        {/* ── Bridge: AI reading... ── */}
+        {showBridge && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 11, paddingLeft: 4 }}>
+            {/* Vertical connector line */}
+            <div style={{ width: 2, height: 28, background: `linear-gradient(to bottom, ${C.border}, ${theme.primary}55)`, borderRadius: 2, flexShrink: 0 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              {generating ? (
+                <>
+                  <motion.div
+                    animate={{ scale: [1, 1.5, 1], opacity: [0.7, 1, 0.7] }}
+                    transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                    style={{ width: 6, height: 6, borderRadius: "50%", background: theme.primary, flexShrink: 0 }}
+                  />
+                  <motion.span
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.4, repeat: Infinity }}
+                    style={{ fontSize: 10, color: theme.primary, fontWeight: 700, letterSpacing: 0.3 }}
+                  >
+                    AI reading between the lines...
+                  </motion.span>
+                </>
+              ) : (
+                <>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
+                  <span style={{ fontSize: 10, color: C.green, fontWeight: 700, letterSpacing: 0.3 }}>AI read the context</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
-        {/* Footer */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 9 }}>
-          <span style={{ fontSize: 10, color: C.faint }}>✍️ Pre-written by you · col R of sheet</span>
-          <span style={{ marginLeft: "auto", fontSize: 10, color: theme.primary + "cc", fontWeight: 700 }}>
-            Your exact words → sent verbatim
-          </span>
-        </div>
+        {/* ── Stage 2: What AI saw ── */}
+        {showHook && (
+          <div style={{ marginBottom: showLine ? 11 : 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 5,
+                background: `linear-gradient(90deg, ${theme.primary}ee, ${theme.primary}aa)`,
+                borderRadius: 7, padding: "3px 10px",
+                boxShadow: `0 2px 8px ${theme.primary}33`,
+              }}>
+                <span style={{ fontSize: 9 }}>⚡</span>
+                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: "#fff", textTransform: "uppercase" }}>
+                  {prewrittenHook ? "Your insight" : "What AI saw"}
+                </span>
+              </div>
+              {prewrittenHook && (
+                <span style={{ fontSize: 9, color: C.faint }}>✍️ pre-written · col R of sheet</span>
+              )}
+            </div>
+            <div style={{
+              fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.6,
+              padding: "10px 13px", borderRadius: 9,
+              background: theme.primary + "0d",
+              border: `1px solid ${theme.primary}2a`,
+              minHeight: 38, fontStyle: "italic",
+            }}>
+              <span style={{ color: theme.primary, fontWeight: 900, fontSize: 16, opacity: 0.5, lineHeight: 0, verticalAlign: "-2px" }}>"</span>
+              {typedHook}
+              {!hookDone ? (
+                <motion.span
+                  animate={{ opacity: [1, 0] }}
+                  transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
+                  style={{ display: "inline-block", width: 2, height: 12, marginLeft: 1, background: theme.primary, verticalAlign: "middle", borderRadius: 1 }}
+                />
+              ) : (
+                <span style={{ color: theme.primary, fontWeight: 900, fontSize: 16, opacity: 0.5, lineHeight: 0, verticalAlign: "-2px" }}>"</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Stage 3: As written in the outreach ── */}
+        {showLine && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          >
+            {/* Bridge to stage 3 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, paddingLeft: 4 }}>
+              <div style={{ width: 2, height: 24, background: `linear-gradient(to bottom, ${theme.primary}44, ${C.green}88)`, borderRadius: 2, flexShrink: 0 }} />
+              <span style={{ fontSize: 9, color: C.green, fontWeight: 700, letterSpacing: 0.3 }}>Woven into outreach as...</span>
+            </div>
+            <div style={{ marginBottom: 2 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  background: `linear-gradient(90deg, ${C.green}dd, ${C.green}99)`,
+                  borderRadius: 7, padding: "3px 10px",
+                }}>
+                  <span style={{ fontSize: 9 }}>✉️</span>
+                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: "#fff", textTransform: "uppercase" }}>
+                    As written to {fname}
+                  </span>
+                </div>
+              </div>
+              <div style={{
+                fontSize: 13, fontWeight: 500, color: C.text, lineHeight: 1.65,
+                padding: "10px 13px", borderRadius: 9,
+                background: C.green + "10",
+                border: `1px solid ${C.green}28`,
+                minHeight: 38, fontStyle: "italic",
+              }}>
+                <span style={{ color: C.green, fontWeight: 900, fontSize: 16, opacity: 0.5, lineHeight: 0, verticalAlign: "-2px" }}>"</span>
+                {typedLine}
+                {!lineDone ? (
+                  <motion.span
+                    animate={{ opacity: [1, 0] }}
+                    transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
+                    style={{ display: "inline-block", width: 2, height: 12, marginLeft: 1, background: C.green, verticalAlign: "middle", borderRadius: 1 }}
+                  />
+                ) : (
+                  <span style={{ color: C.green, fontWeight: 900, fontSize: 16, opacity: 0.5, lineHeight: 0, verticalAlign: "-2px" }}>"</span>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Footer hint — only when we have no hook yet and not generating */}
+        {!hook && !generating && (
+          <div style={{ fontSize: 9.5, color: C.faint, marginTop: 6, fontStyle: "italic" }}>
+            💡 Click Generate below to watch AI extract the personalisation hook from these notes
+          </div>
+        )}
       </div>
     </motion.div>
   )
@@ -4701,6 +4830,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
   const [voiceNotes, setVoiceNotes] = useState("")  // appended to CRM notes for generation
   const [showNegotiationCoach, setShowNegotiationCoach] = useState(false)
   const [showPrintAppraisal, setShowPrintAppraisal] = useState(false)
+  // NotesBridge: populated from API response after generation
+  const [extractedHook, setExtractedHook] = useState<string | null>(null)
+  const [personalisationLine, setPersonalisationLine] = useState<string | null>(null)
 
   // Voice memo — lets agent dictate extra context about this contact before generating
   const vendorVoice = useVoiceMemo({
@@ -4801,13 +4933,27 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
           body: JSON.stringify(payload),
         }).then(r => r.json()),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 14000)),
-      ]) as { sms?: string; email?: { subject?: string; body?: string[] } }
+      ]) as {
+        sms?: string
+        email?: { subject?: string; body?: string[] }
+        personalisationHook?: string | null
+        personalisationLine?: string | null
+      }
 
       const sms = res.sms ?? ""
       const emailSubject = res.email?.subject ?? ""
       const emailBody: string[] = res.email?.body ?? []
       if (!sms && !emailSubject) throw new Error("empty")
+
+      // Capture NotesBridge data — show the transformation BEFORE navigating to review
+      if (res.personalisationHook) setExtractedHook(res.personalisationHook)
+      if (res.personalisationLine) setPersonalisationLine(res.personalisationLine)
+
       setGenerating(false)
+
+      // Pause so the user sees the NotesBridge "What AI saw → As written to" animation
+      // before the review screen replaces the page (3.5s = typewriter + moment to read)
+      await new Promise(r => setTimeout(r, res.personalisationLine ? 3500 : 400))
       onReview(stripDashes(sms), stripDashes(emailSubject), emailBody.map(stripDashes))
     } catch {
       templateFallback()
@@ -5012,10 +5158,15 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
         {/* RIGHT — Triggers + pitch angles + generate */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* ⚡ Hyper-Personalisation hook — shown first when agent pre-wrote it */}
-          {(buyer as { personalisationHook?: string }).personalisationHook && (
-            <HyperPersonalisationCard
-              hook={(buyer as { personalisationHook?: string }).personalisationHook!}
+          {/* ⚡ NotesBridge — CRM notes → AI extraction → outreach sentence */}
+          {buyer.notes && (
+            <NotesBridgeCard
+              notes={buyer.notes}
+              prewrittenHook={(buyer as { personalisationHook?: string }).personalisationHook ?? null}
+              extractedHook={extractedHook}
+              personalisationLine={personalisationLine}
+              fname={fname}
+              generating={generating}
               theme={theme}
             />
           )}
