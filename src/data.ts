@@ -410,7 +410,34 @@ export const MANPREET_PORTFOLIO_SOLD: PortfolioProperty[] = [
   },
 ]
 
-export const MANPREET_PORTFOLIO_ACTIVE: PortfolioProperty[] = []
+export const MANPREET_PORTFOLIO_ACTIVE: PortfolioProperty[] = [
+  {
+    id: 602,
+    address: "13 Jack William Way",
+    suburb: "Berwick", state: "VIC", postcode: "3806",
+    price: 0, priceMin: 0, priceMax: 0,
+    beds: 0, baths: 0, cars: 0, land: 630,
+    type: "House", status: "active",
+    openDate: "TBD",
+    auctionDate: "TBD",
+    image: "/13-jack-william-way.jpg",
+    description: "630m² residential property (GRZ1) at Jack William Way, Berwick. Lot 106 PS516565X. Title Vol 10794 Fol 460. Electricity, gas, water and sewerage connected. No planning overlays. Not in bushfire prone area. E-2 drainage and sewerage easement (9m). ANZ mortgage discharged at settlement. City of Casey. Melway 131 A5.",
+    leadCount: 0,
+  },
+  {
+    id: 601,
+    address: "10 Scenic Road",
+    suburb: "Warragul", state: "VIC", postcode: "3820",
+    price: 0, priceMin: 0, priceMax: 0,
+    beds: 0, baths: 0, cars: 0, land: 1309,
+    type: "House", status: "active",
+    openDate: "TBD",
+    auctionDate: "TBD",
+    image: "/10-scenic-road.jpg",
+    description: "1,309m² residential block (GRZ1) with permanent swimming pool in Warragul. Lot 2 PS819986H. Title Vol 11967 Fol 877. All services connected. ESO4 and DCPO1 overlays. Not in bushfire prone area. Pool compliant (AS 1926.1-2012, certified April 2024). Baw Baw Shire Council.",
+    leadCount: 0,
+  },
+]
 
 // ─── DEMO MODE ────────────────────────────────────────────────────────────────
 export type DemoMode = "buyer" | "vendor"

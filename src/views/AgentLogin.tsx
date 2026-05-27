@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { C, FONT, getAgencyTheme, isCamKnoll, isPasSunilchandra, type AgentProfile, type AgencyTheme, type DemoMode } from "../data"
+import { C, FONT, getAgencyTheme, isCamKnoll, isPasSunilchandra, isManpreetSingh, MANPREET_DEFAULT_AGENT, type AgentProfile, type AgencyTheme, type DemoMode } from "../data"
+import { readAgentProfileFromSheet, sheetsConnected } from "../lib/sheet"
 
 // Returns true if the hex colour is perceptually dark (luminance < 128)
 function isDarkHex(hex: string): boolean {
@@ -246,13 +247,31 @@ export default function AgentLogin({ onLogin }: Props) {
       trainingCorpus: [],
     }
 
-    // Fill in known demo agent details if user left them blank
+    // Offline demo fallbacks — used when no sheet is connected or sheet lookup fails
     if (isCamKnoll(agent)) {
       if (!form.phone) agent.phone = "0428 762 148"
       if (!form.email) agent.email = "cameronk@peakere.com.au"
     } else if (isPasSunilchandra(agent)) {
       if (!form.phone) agent.phone = "0430 366 649"
       if (!form.email) agent.email = "pass@areaspecialist.com.au"
+    } else if (isManpreetSingh(agent)) {
+      if (!form.phone) agent.phone = MANPREET_DEFAULT_AGENT.phone
+      if (!form.email) agent.email = MANPREET_DEFAULT_AGENT.email
+      agent.tagline = MANPREET_DEFAULT_AGENT.tagline
+      agent.voiceProfile = MANPREET_DEFAULT_AGENT.voiceProfile
+    }
+
+    // Sheet-first: if sheet is connected, overwrite phone/email/tagline with live data
+    // This ensures nothing is hardcoded when a real agent is using their own sheet
+    if (sheetsConnected()) {
+      readAgentProfileFromSheet(agent.name, agent.agency).then(profile => {
+        if (profile) {
+          if (profile.phone)   agent.phone   = profile.phone
+          if (profile.email)   agent.email   = profile.email
+          if (profile.tagline) agent.tagline = profile.tagline
+          if (profile.suburb)  agent.suburb  = profile.suburb
+        }
+      }).catch(() => { /* fail silently — fallback already set */ })
     }
 
     setTimeout(() => onLogin(agent, t, mode), 2800)

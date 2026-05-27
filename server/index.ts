@@ -9,8 +9,10 @@ dotenv.config({ path: path.resolve(__dirname, ".env") })
 import express from "express"
 import cors from "cors"
 import compression from "compression"
+import rateLimit from "express-rate-limit"
 import generateRouter from "./routes/generate.js"
 import vendorGenerateRouter from "./routes/vendor-generate.js"
+import vendorBulkSendRouter from "./routes/vendor-bulk-send.js"
 import sheetRouter from "./routes/sheet.js"
 import transcriptRouter from "./routes/transcript.js"
 import sendRouter from "./routes/send.js"
@@ -27,6 +29,8 @@ import slmAnswerRouter from "./routes/slm-answer.js"
 import slmAnswerBatchRouter from "./routes/slm-answer-batch.js"
 import addContactRouter from "./routes/add-contact.js"
 import { loadConversations } from "./lib/conversations.js"
+import { initDb, isDbConnected } from "./lib/db.js"
+import { startScheduler } from "./lib/scheduler.js"
 
 const app = express()
 const PORT = process.env.PORT ?? 3001
@@ -37,8 +41,26 @@ app.use(express.json())
 // Twilio webhook sends URL-encoded body
 app.use("/api/webhook/sms", express.urlencoded({ extended: false }))
 
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+
+const generalLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false,
+  message: { error: "Too many requests — please slow down" } })
+const aiLimiter = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false,
+  message: { error: "AI generation rate limit reached — please wait a moment" } })
+const sendLimiter = rateLimit({ windowMs: 60_000, max: 50, standardHeaders: true, legacyHeaders: false,
+  message: { error: "Send rate limit reached" } })
+
+app.use("/api", generalLimiter)
+app.use("/api/generate",         aiLimiter)
+app.use("/api/vendor-generate",  aiLimiter)
+app.use("/api/slm-answer",       aiLimiter)
+app.use("/api/slm-answer-batch", aiLimiter)
+app.use("/api/send",             sendLimiter)
+app.use("/api/vendor-bulk-send", sendLimiter)
+
 app.use("/api/generate",         generateRouter)
 app.use("/api/vendor-generate",  vendorGenerateRouter)
+app.use("/api/vendor-bulk-send", vendorBulkSendRouter)
 app.use("/api/sheet",            sheetRouter)
 app.use("/api/transcript",  transcriptRouter)
 app.use("/api/send",        sendRouter)
@@ -65,6 +87,7 @@ app.get("/api/health", (_req, res) => {
     twilio:     !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
     gmail:      gmailConfigured(),
     boxdice:    !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
+    database:   isDbConnected(),
     testMode:   !!(testPhone || testEmail),
     testPhone,
     testEmail,
@@ -110,8 +133,16 @@ app.listen(PORT, async () => {
   console.log(`  Twilio:    ${process.env.TWILIO_ACCOUNT_SID ? "configured" : "not set (SMS disabled)"}`)
   console.log(`  Gmail:     ${gmailConfigured()              ? "configured" : "not set (email disabled)"}`)
   console.log(`  Boxdice:   ${process.env.BOXDICE_DOMAIN      ? "configured" : "not set (CRM disabled)"}`)
-  if (process.env.TEST_RECIPIENT_PHONE) console.log(`  TEST SMS → ${process.env.TEST_RECIPIENT_PHONE}`)
+  if (process.env.TEST_RECIPIENT_PHONE) console.log(`  TEST SMS  → ${process.env.TEST_RECIPIENT_PHONE}`)
   if (process.env.TEST_RECIPIENT_EMAIL) console.log(`  TEST Email → ${process.env.TEST_RECIPIENT_EMAIL}`)
+
+  // 1. Connect to database (non-fatal if DATABASE_URL not set)
+  await initDb()
+
+  // 2. Load compliance + conversation state
   await loadOptOuts()
   await loadConversations()
+
+  // 3. Start nurture scheduler (no-ops if no DB)
+  startScheduler()
 })

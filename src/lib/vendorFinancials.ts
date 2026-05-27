@@ -107,11 +107,13 @@ export function calculateFinancials(
 // ---------------------------------------------------------------------------
 
 export function fmtDollar(n: number): string {
+  if (!isFinite(n) || isNaN(n)) return "N/A"
   if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
   if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(0)}K`
   return `$${n}`
 }
 
 export function fmtPct(n: number): string {
+  if (!isFinite(n)) return "N/A"
   return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`
 }

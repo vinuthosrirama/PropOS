@@ -1,5 +1,139 @@
 const BASE_URL = process.env.BASE_URL ?? "https://propos.addvantage.site"
 
+// ---------------------------------------------------------------------------
+// Barry Plant Signature Block
+// ---------------------------------------------------------------------------
+
+function buildBarryPlantSignature(params: {
+  agentName: string
+  agentPhone?: string
+  agentEmail?: string
+}): string {
+  const nameParts = params.agentName.split(" ")
+  const lastName  = nameParts.slice(1).join(" ").toUpperCase()
+  const fullNameUpper = params.agentName.toUpperCase()
+
+  return `
+    <!-- ===== Barry Plant Signature ===== -->
+    <table cellpadding="0" cellspacing="0" width="100%" style="font-family:Arial,Helvetica,sans-serif;max-width:520px;">
+
+      <!-- Agent name + title -->
+      <tr>
+        <td style="padding-bottom:8px;">
+          <div style="font-size:14px;font-weight:700;color:#1a1a1a;letter-spacing:0.3px;line-height:1.3;">${fullNameUpper}</div>
+          <div style="font-size:11px;font-weight:700;color:#1a1a1a;letter-spacing:0.3px;">SALES CONSULTANT</div>
+        </td>
+      </tr>
+
+      <!-- Barry Plant logo row -->
+      <tr>
+        <td style="padding-bottom:10px;">
+          <table cellpadding="0" cellspacing="0">
+            <tr>
+              <td width="34" style="padding-right:7px;vertical-align:middle;">
+                <!-- Stylised BP flame/shield in red -->
+                <table cellpadding="0" cellspacing="0" width="30" height="30">
+                  <tr>
+                    <td style="background:#D94032;border-radius:3px;width:30px;height:30px;text-align:center;vertical-align:middle;">
+                      <div style="font-size:14px;font-weight:900;color:#ffffff;line-height:30px;font-family:Georgia,serif;">&#9650;</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+              <td style="vertical-align:middle;">
+                <span style="font-size:17px;font-weight:900;color:#1A2F5E;letter-spacing:2px;font-family:Arial,sans-serif;">BARRY</span>
+                <span style="font-size:17px;font-weight:400;color:#1A2F5E;letter-spacing:2px;font-family:Arial,sans-serif;">&nbsp;PLANT</span>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Phone numbers in brand red -->
+      ${params.agentPhone ? `
+      <tr>
+        <td style="padding-bottom:6px;">
+          <span style="font-size:12px;font-weight:600;color:#D94032;font-family:Arial,sans-serif;">03 9707 1400</span>
+          <span style="font-size:12px;color:#999;font-family:Arial,sans-serif;"> | </span>
+          <span style="font-size:12px;font-weight:600;color:#D94032;font-family:Arial,sans-serif;">${params.agentPhone}</span>
+        </td>
+      </tr>` : ""}
+
+      <!-- Office locations -->
+      <tr>
+        <td style="padding-bottom:2px;font-size:11px;font-family:Arial,sans-serif;">
+          <strong style="color:#1a1a1a;">Berwick</strong>
+          <span style="color:#555;"> | 100 High Street Berwick </span>
+          <a href="https://www.barryplant.com.au/offices/berwick" style="color:#D94032;text-decoration:underline;">VIC</a>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding-bottom:2px;font-size:11px;font-family:Arial,sans-serif;">
+          <strong style="color:#1a1a1a;">Pakenham</strong>
+          <span style="color:#555;"> | </span>
+          <a href="https://www.barryplant.com.au/offices/pakenham" style="color:#D94032;text-decoration:underline;">28 Southeast Boulevard Pakenham</a>
+          <span style="color:#555;"> VIC</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding-bottom:12px;font-size:11px;font-family:Arial,sans-serif;">
+          <strong style="color:#1a1a1a;">Warragul-Drouin</strong>
+          <span style="color:#555;"> | 49 Commercial Place Drouin VIC</span>
+        </td>
+      </tr>
+
+      <!-- GET AN APPRAISAL CTA button -->
+      <tr>
+        <td style="padding-bottom:16px;">
+          <a href="https://www.barryplant.com.au/appraisal"
+             style="display:inline-block;background:#D94032;color:#ffffff;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:8px 22px;border-radius:20px;text-decoration:none;font-family:Arial,sans-serif;">
+            GET AN APPRAISAL
+          </a>
+        </td>
+      </tr>
+
+      <!-- INVESTOR ADVANTAGE banner -->
+      <tr>
+        <td style="padding-bottom:16px;">
+          <table cellpadding="0" cellspacing="0" style="background:#1A2F5E;border-radius:5px;overflow:hidden;max-width:420px;width:420px;">
+            <tr>
+              <!-- Copper/book panel -->
+              <td width="90" style="background:linear-gradient(140deg,#7B3F1E,#A0522D);padding:0;text-align:center;vertical-align:middle;">
+                <div style="padding:14px 8px;font-size:20px;font-weight:900;color:#e8c97a;font-family:Georgia,serif;letter-spacing:-1px;line-height:1.1;">I<br>A</div>
+              </td>
+              <!-- Text panel -->
+              <td style="padding:10px 14px;vertical-align:middle;">
+                <div style="font-size:13px;font-weight:900;color:#ffffff;letter-spacing:2px;font-family:Arial,sans-serif;margin-bottom:3px;">INVESTOR ADVANTAGE</div>
+                <div style="font-size:9px;color:rgba(255,255,255,0.75);letter-spacing:1.2px;font-family:Arial,sans-serif;margin-bottom:8px;line-height:1.5;">
+                  RENTAL INSIGHTS AND TRENDS<br>AUTUMN REPORT OUT NOW!
+                </div>
+                <a href="https://www.barryplant.com.au/investor-advantage"
+                   style="display:inline-block;background:#D94032;color:#ffffff;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:5px 14px;border-radius:12px;text-decoration:none;font-family:Arial,sans-serif;">
+                  VIEW FREE REPORT
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Disclaimer -->
+      <tr>
+        <td>
+          <p style="margin:0;font-size:9px;color:#777;font-style:italic;line-height:1.6;font-family:Arial,sans-serif;max-width:520px;">
+            Disclaimer: This email, including any attachments, is confidential and may be privileged. If you are not the intended recipient, notify the sender and delete immediately; do not copy or disclose the contents. We may collect your personal information in the course of providing our services. For further information see our <a href="https://www.barryplant.com.au/privacy" style="color:#D94032;text-decoration:underline;">privacy policy</a>.
+            Occasionally, I work outside regular hours. <strong>If this email reaches you outside your work hours, there is no expectation for you to read, act, or respond to it.</strong>
+          </p>
+        </td>
+      </tr>
+
+    </table>`
+}
+
+// ---------------------------------------------------------------------------
+// Generic email HTML builder
+// ---------------------------------------------------------------------------
+
 export function buildEmailHTML(params: {
   agentName:       string
   agencyName:      string
@@ -19,6 +153,9 @@ export function buildEmailHTML(params: {
   const initials    = params.agentName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()
   const firstName   = params.agentName.split(" ")[0]
   const lastName    = params.agentName.split(" ").slice(1).join(" ")
+
+  // Detect Barry Plant brand
+  const isBarryPlant = params.agencyName.toLowerCase().includes("barry") || params.agencyName.toLowerCase().includes("bp")
 
   const paragraphsHtml = params.bodyParagraphs
     .map(p => `<p style="margin:0 0 16px 0;font-size:15px;color:#1a1a1a;line-height:1.7;font-family:Georgia,serif;">${p.replace(/\n/g, "<br/>")}</p>`)
@@ -61,17 +198,17 @@ export function buildEmailHTML(params: {
         <!-- Divider -->
         <tr><td style="padding:0 36px;"><div style="border-top:1px solid #e8e8e8;"></div></td></tr>
 
-        <!-- Signature -->
+        <!-- Signature (Barry Plant or generic) -->
         <tr><td style="padding:20px 36px 24px;">
-          <table cellpadding="0" cellspacing="0" style="border-radius:6px;overflow:hidden;width:100%;max-width:440px;">
+          ${isBarryPlant
+            ? buildBarryPlantSignature({ agentName: params.agentName, agentPhone: params.agentPhone, agentEmail: params.agentEmail })
+            : `<table cellpadding="0" cellspacing="0" style="border-radius:6px;overflow:hidden;width:100%;max-width:440px;">
             <tr>
-              <!-- Initials avatar -->
               <td width="72" style="vertical-align:top;padding-right:0;">
                 <div style="width:72px;height:72px;background:#e8e8e8;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#555;font-family:Arial,sans-serif;text-align:center;line-height:72px;">
                   ${initials}
                 </div>
               </td>
-              <!-- Agency banner -->
               <td style="background:${color};padding:10px 16px;vertical-align:top;">
                 <table cellpadding="0" cellspacing="0" width="100%">
                   <tr>
@@ -90,7 +227,8 @@ export function buildEmailHTML(params: {
               </td>
             </tr>
           </table>
-          ${contactLine ? `<div style="margin-top:10px;font-size:12px;color:#555;font-family:Arial,sans-serif;">${contactLine}</div>` : ""}
+          ${contactLine ? `<div style="margin-top:10px;font-size:12px;color:#555;font-family:Arial,sans-serif;">${contactLine}</div>` : ""}`
+          }
         </td></tr>
 
         <!-- Footer -->
