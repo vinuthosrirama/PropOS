@@ -102,6 +102,15 @@ router.post("/", async (req, res) => {
     const cgtLine = params.cgtSavingsBy2027 > 0
       ? ` The current 50% CGT discount saves you approximately ${fmtK(params.cgtSavingsBy2027)} if you sell before July 2027.`
       : ""
+    // If a pre-written personalisation hook exists, weave it into para 2 as its own sentence
+    const hookBase = params.parsedPersonalisation?.trim().replace(/\.$/, "") ?? ""
+    const hookSentence = hookBase
+      ? sanitise(`${hookBase}, and with ${equityStr} in equity built up, now might be the perfect time to act on it.`)
+      : ""
+    const para2 = sanitise(
+      `Your property at ${params.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${params.purchaseYear}. That's ${equityStr} in equity, a ${equityPct}% gain.${cgtLine}` +
+      (hookSentence ? ` ${hookSentence}` : "")
+    )
     const smsRaw = `Hi ${fname}, ${agentFirst} from ${params.agentAgency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${params.purchaseYear}). Worth a quick chat? ${signoff}, ${agentFirst}`
     const sms = clampSMS(sanitise(smsRaw))
     return res.json({
@@ -110,10 +119,13 @@ router.post("/", async (req, res) => {
         subject: sanitise(`Market update on ${params.purchaseAddress}, ${fname}`),
         body: [
           `Hi ${fname}, ${agentFirst} from ${params.agentAgency} here. Quick market update on ${params.suburb}.`,
-          `Your property at ${params.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${params.purchaseYear}. That's ${equityStr} in equity, a ${equityPct}% gain.${cgtLine}`,
+          para2,
           `I'd love to offer a complimentary, no-obligation appraisal if you're curious. Takes about 20 minutes, happy to come to you.\n\n${signoff},\n${agentFirst}`,
         ].map(sanitise),
       },
+      personalisationHook: params.parsedPersonalisation || null,
+      // Stage 3 shows just the personalisation sentence — keeps the demo moment focused
+      personalisationLine: hookSentence || null,
     })
   }
 
@@ -251,7 +263,7 @@ Owner type: ${isInvestor ? "Investor (investment property)" : "Owner-occupier"}$
 Write personalised SMS and email vendor outreach for ${fname}.
 
 Respond ONLY with valid JSON, no markdown:
-{"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]}}`
+{"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]},"personalisationLine":"the single sentence from the email body that best references the personal detail from the CRM notes (copy verbatim from the body, or empty string if no personal detail was used)"}`
 
     const message = await getClient().messages.create({
       model: "claude-sonnet-4-5",
@@ -266,6 +278,7 @@ Respond ONLY with valid JSON, no markdown:
       const parsed = JSON.parse(cleaned) as {
         sms: string
         email: { subject: string; body: string[] }
+        personalisationLine?: string
       }
       return res.json({
         sms:   clampSMS(sanitise(parsed.sms ?? "")),
@@ -273,6 +286,8 @@ Respond ONLY with valid JSON, no markdown:
           subject: sanitise(parsed.email?.subject ?? ""),
           body:    (parsed.email?.body ?? []).map(sanitise),
         },
+        personalisationHook: personalisationHook || null,
+        personalisationLine: sanitise(parsed.personalisationLine ?? "") || null,
       })
     } catch {
       // JSON parse failed — return template fallback
