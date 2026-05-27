@@ -84,11 +84,11 @@ function generateTemplate(contact: BulkContact, agentFirst: string, agentAgency:
   const sms = `Hi ${fname}, ${agentFirst} from ${agentAgency}. ${addr} is worth ~${estStr} today, ${equityStr} gain (${equityPct}%) since ${contact.purchaseYear}. Worth a chat? ${signoff}, ${agentFirst}`
     .slice(0, 160)
 
-  const emailSubject = `Your property update, ${fname} — ${contact.suburb} market insights`
+  const emailSubject = `Your property update, ${fname}: ${contact.suburb} market insights`
 
   const emailBody = [
     `Hi ${fname}, hope you're well. ${agentFirst} from ${agentAgency} here with a quick market update on your property.`,
-    `${contact.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${contact.purchaseYear}. That's ${equityStr} in equity — a ${equityPct}% gain on your investment.`,
+    `${contact.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${contact.purchaseYear}. That's ${equityStr} in equity, a ${equityPct}% gain on your investment.`,
     `I'd love to offer a complimentary, no-obligation appraisal if you're ever curious about your options. Just reply here or give me a call whenever suits.\n\n${signoff},\n${agentFirst}`,
   ]
 

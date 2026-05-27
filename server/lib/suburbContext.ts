@@ -131,10 +131,10 @@ export function getSuburbContext(suburb: string): SuburbContextBlock | null {
   // Build a 3-4 sentence prompt block
   const sentences: string[] = [
     `${titleCase(suburb)} median house price is ${medianStr}, up ${stats.annualGrowthPct}% annually.`,
-    `Properties are selling in an average of ${stats.avgDaysOnMarket} days with a ${stats.clearanceRate}% auction clearance rate — demand is ${stats.demandScore >= 8 ? "very strong" : stats.demandScore >= 6 ? "solid" : "steady"}.`,
+    `Properties are selling in an average of ${stats.avgDaysOnMarket} days with a ${stats.clearanceRate}% auction clearance rate. Demand is ${stats.demandScore >= 8 ? "very strong" : stats.demandScore >= 6 ? "solid" : "steady"}.`,
   ]
   if (stats.recentSalesCount > 0) {
-    sentences.push(`There have been approximately ${stats.recentSalesCount} sales in the suburb over the last 90 days — the market is ${trendWord} active.`)
+    sentences.push(`There have been approximately ${stats.recentSalesCount} sales in the suburb over the last 90 days. The market is ${trendWord} active.`)
   }
   if (stats.lifestyle) {
     sentences.push(`Buyers are drawn to ${titleCase(suburb)} for its ${stats.lifestyle}.`)
@@ -150,7 +150,7 @@ export function getSuburbContext(suburb: string): SuburbContextBlock | null {
   // Short SMS hook (pick the most compelling single fact)
   const smsHook = stats.avgDaysOnMarket <= 30
     ? `Homes in ${titleCase(suburb)} are selling in ${stats.avgDaysOnMarket} days right now.`
-    : `${titleCase(suburb)} prices are up ${stats.annualGrowthPct}% per year — market is strong.`
+    : `${titleCase(suburb)} prices are up ${stats.annualGrowthPct}% per year. Market is strong.`
 
   return { suburb: titleCase(suburb), stats, promptBlock, smsHook }
 }

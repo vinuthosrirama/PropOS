@@ -57,7 +57,7 @@ router.get("/hello-sms", async (_req, res) => {
     return res.status(503).json({ error: "Twilio not configured (TWILIO_* env vars missing)" })
   }
   try {
-    const result = await sendSMS(process.env.TEST_RECIPIENT_PHONE, "Hello from PropOS 👋 — Twilio is wired up and working.")
+    const result = await sendSMS(process.env.TEST_RECIPIENT_PHONE, "Hello from PropOS 👋 Twilio is wired up and working.")
     res.json({ ok: true, sid: result.sid })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)

@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, PORTFOLIO_SOLD, PORTFOLIO_ACTIVE,
   DEFAULT_THEME, getPortfolioForAgent, isPasSunilchandra, isManpreetSingh,
-  MANPREET_PORTFOLIO_SOLD,
   type AgentProfile, type AgencyTheme, type PortfolioProperty,
   type LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_ORDER,
   type DemoMode,
@@ -759,7 +758,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
           <div style={{ fontSize: 12, color: "#f59e0b", lineHeight: 1.4 }}>
             <span style={{ fontWeight: 700 }}>SLM incomplete: </span>
             {slmWarnings.map(({ p, pct }) => `${p.address} (${pct}%)`).join(" · ")}
-            {" "}— outreach quality improves when property data is complete.{" "}
+            {" "}Outreach quality improves when property data is complete.{" "}
             <span style={{ textDecoration: "underline", cursor: "pointer" }} onClick={onSettings}>
               Update in Settings →
             </span>
@@ -891,12 +890,12 @@ function MatchingScreen({ property, soldLeads, onComplete, theme }: {
   const slmInfo = getSLMCompleteness(loadSLMForProperty(property.id))
 
   const steps = [
-    `Reading property SLM — ${slmInfo.filled} attributes loaded`,
+    `Reading property SLM: ${slmInfo.filled} attributes loaded`,
     `Scanning ${soldIds.length} comparable sold properties`,
     `Scoring ${totalLeadCount} leads from Google Sheets`,
-    `Ranking by attribute overlap — configuration, land, school zone, legal profile`,
-    `Weighting by question alignment — matching what each lead asked to this property`,
-    `Match list ready — sorted by compatibility score`,
+    `Ranking by attribute overlap: configuration, land, school zone, legal profile`,
+    `Weighting by question alignment: matching what each lead asked to this property`,
+    `Match list ready, sorted by compatibility score`,
   ]
 
   useEffect(() => {
@@ -956,7 +955,7 @@ function MatchingScreen({ property, soldLeads, onComplete, theme }: {
             {property.address}
           </div>
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 28 }}>
-            {property.suburb} {property.state} — running SLM match
+            {property.suburb} {property.state} · running SLM match
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
@@ -1054,7 +1053,7 @@ function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
           Matched Leads
         </div>
         <div style={{ fontSize: 24, fontWeight: 700, color: C.text, letterSpacing: -0.8 }}>
-          {property.address} — {filtered.length} matched
+          {property.address} · {filtered.length} matched
         </div>
         <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>
           Sorted by persona-weighted compatibility
@@ -1383,7 +1382,7 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                         background: C.bg3, border: `1px solid ${C.border}`,
                         fontSize: 11, color: C.muted, fontWeight: 600,
                       }}>
-                        TBD — add in Settings
+                        TBD. Add in Settings
                       </div>
                     ) : (
                       <div style={{ fontSize: 13, color: C.text, lineHeight: 1.5 }}>{qa.answer}</div>
@@ -1425,7 +1424,7 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
               </div>
               {!voice.supported && (
                 <span style={{ fontSize: 11, color: C.faint }}>
-                  Unavailable — use Chrome or Safari
+                  Unavailable. Use Chrome or Safari.
                 </span>
               )}
               {voice.supported && !voice.permError && (
@@ -1496,8 +1495,8 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
               }}>
                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green }} />
                 {priorSessions > 0
-                  ? `Saved across ${priorSessions} session${priorSessions > 1 ? "s" : ""} — will personalise outreach and future matching`
-                  : "Voice context captured — will personalise outreach"}
+                  ? `Saved across ${priorSessions} session${priorSessions > 1 ? "s" : ""}. Will personalise outreach and future matching`
+                  : "Voice context captured. Will personalise outreach"}
               </div>
             )}
           </div>
@@ -1707,12 +1706,12 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
   const fakeDraft = `Hi ${fname}, ${agent.name.split(" ")[0]} here. New 4-bed just listed in ${property.suburb}. Open this Saturday. Worth a look?`
 
   const QA_STEPS: Array<{ icon: string; col: string; text: string }> = [
-    { icon: "✓",  col: C.green,  text: `Reading ${lead.name}'s profile — graded ${grade}, ${timeline} timeline` },
+    { icon: "✓",  col: C.green,  text: `Reading ${lead.name}'s profile: graded ${grade}, ${timeline} timeline` },
     { icon: "✓",  col: C.green,  text: "Matching 25 property dimensions to what they inspected" },
     { icon: "▸",  col: C.muted,  text: "Generating first draft..." },
     { icon: "→",  col: C.blue, text: "No open home reference detected. Rewriting..." },
     { icon: "→",  col: C.blue, text: "SMS 183 characters (limit 160). Trimming..." },
-    { icon: "✅", col: C.green,  text: "All checks passed — 157 chars · Voice match 94% · Personalisation: high" },
+    { icon: "✅", col: C.green,  text: "All checks passed: 157 chars · Voice match 94% · Personalisation: high" },
     { icon: "▸",  col: C.muted,  text: "Handing to agent for review..." },
   ]
   const STEP_MS = [900, 1800, 2800, 3900, 5100, 6200, 7100]
@@ -1874,10 +1873,10 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       const fname = lead.name.split(" ")[0]
       const aname = agent.name.split(" ")[0]
       setNurtureSeq([
-        { day: 0,  strategy: "New Listing Match",  sms: `Hi ${fname}, ${aname} here. I think ${property.address} is a great match for what you're looking for. Worth a look?`, email: { subject: `New listing match — ${property.address}`, body: [`Hi ${fname}, I wanted to reach out about a listing I think you'll love.`] } },
-        { day: 7,  strategy: "Market Pulse",        sms: `Hi ${fname}, ${aname} here. Interesting week in ${property.suburb} - a comparable home sold well above guide. Worth keeping in touch?`, email: { subject: `Market update — ${property.suburb}`, body: [`Hi ${fname}, quick market update from the week.`] } },
+        { day: 0,  strategy: "New Listing Match",  sms: `Hi ${fname}, ${aname} here. I think ${property.address} is a great match for what you're looking for. Worth a look?`, email: { subject: `New listing match: ${property.address}`, body: [`Hi ${fname}, I wanted to reach out about a listing I think you'll love.`] } },
+        { day: 7,  strategy: "Market Pulse",        sms: `Hi ${fname}, ${aname} here. Interesting week in ${property.suburb} - a comparable home sold well above guide. Worth keeping in touch?`, email: { subject: `Market update: ${property.suburb}`, body: [`Hi ${fname}, quick market update from the week.`] } },
         { day: 14, strategy: "Social Proof Drop",   sms: `Hi ${fname}, ${aname} here. Another buyer just moved on a similar place in ${property.suburb}. Competition's picking up - happy to chat. ${aname}`, email: { subject: `Moving fast in ${property.suburb}`, body: [`Hi ${fname}, things are moving quickly in this market.`] } },
-        { day: 30, strategy: "Life Check-In",       sms: `Hi ${fname}, ${aname} here. Just checking in - how's the search going? Happy to chat anytime. ${aname}`, email: { subject: `Checking in — ${fname}`, body: [`Hi ${fname}, just wanted to check in on where you're at with your search.`] } },
+        { day: 30, strategy: "Life Check-In",       sms: `Hi ${fname}, ${aname} here. Just checking in - how's the search going? Happy to chat anytime. ${aname}`, email: { subject: `Checking in, ${fname}`, body: [`Hi ${fname}, just wanted to check in on where you're at with your search.`] } },
       ])
       setShowNurture(true)
     } finally {
@@ -2379,7 +2378,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         }}>
           <div style={{ fontSize: 14 }}>⚠️</div>
           <div style={{ fontSize: 12, color: "#f59e0b", lineHeight: 1.4 }}>
-            <span style={{ fontWeight: 700 }}>Test mode active</span> — messages will go to{" "}
+            <span style={{ fontWeight: 700 }}>Test mode active.</span> Messages will go to{" "}
             {testMode.phone && <span style={{ fontFamily: "monospace" }}>{testMode.phone}</span>}
             {testMode.phone && testMode.email && " / "}
             {testMode.email && <span style={{ fontFamily: "monospace" }}>{testMode.email}</span>}
@@ -2487,7 +2486,7 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
           Re-match {rematched.length} lead{rematched.length !== 1 ? "s" : ""} who missed out
         </div>
         <div style={{ fontSize: 13, color: C.muted }}>
-          These leads registered to bid on {auctionProperty.address} but didn't win. They're warm — reach out now.
+          These leads registered to bid on {auctionProperty.address} but didn't win. They're warm. Reach out now.
         </div>
       </div>
 
@@ -2513,7 +2512,7 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
                 <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>{lead.name}</div>
                 <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>{lead.persona} · {fmt(lead.budget)} budget</div>
                 <div style={{ fontSize: 12, color: theme.primary }}>
-                  Best match: {bestProperty.address} — {Math.round(bestResult.score)}/99
+                  Best match: {bestProperty.address} · {Math.round(bestResult.score)}/99
                 </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
@@ -2604,7 +2603,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
         if (!hasAnyHook && merged.length > 0) {
           merged = [...merged]
           const demoHooks = [
-            (name: string) => `${name}, your hold period and equity position are exceptional right now — the CGT clock is ticking and this is the perfect window to talk.`,
+            (name: string) => `${name}, your hold period and equity position are exceptional right now. The CGT clock is ticking and this is the perfect window to talk.`,
             (name: string) => `${name}, with settlement behind you and the market moving, now is exactly when smart investors lock in their gains.`,
           ]
           for (let di = 0; di < Math.min(2, merged.length); di++) {
@@ -2663,7 +2662,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
       beds: parseInt(addForm.beds, 10) || 3,
       baths: parseInt(addForm.baths, 10) || 2,
       land: addForm.land ? parseInt(addForm.land.replace(/\D/g, ""), 10) || 0 : 0,
-      status: addForm.status,
+      status: addForm.status as import("../data/pastBuyers").BuyerStatus,
       notes: addForm.notes,
       lastContactDate: "",
     }
@@ -3043,7 +3042,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
           >
             <span style={{ fontSize: 12 }}>⚡</span>
             <span style={{ fontSize: 11, fontWeight: 700, color: theme.primary }}>{hpCount} contact{hpCount > 1 ? "s" : ""} hyper-personalised</span>
-            <span style={{ fontSize: 10, color: C.faint }}>— your words go straight in, no AI needed</span>
+            <span style={{ fontSize: 10, color: C.faint }}>Your words go straight in, no AI needed</span>
           </motion.div>
         )}
 
@@ -3061,7 +3060,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
             style={{ padding: "10px 18px", borderRadius: 12, border: `1px solid ${theme.primary}40`, cursor: "pointer", background: `${theme.primary}10`, color: theme.primary, fontSize: 12, fontWeight: 700, fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 6 }}>
             📡 Match Buyers
           </motion.button>
-          <span style={{ fontSize: 10, color: C.faint }}>Demo mode — routes to test inbox</span>
+          <span style={{ fontSize: 10, color: C.faint }}>Demo mode: routes to test inbox</span>
         </div>
       </div>
 
@@ -3358,7 +3357,7 @@ function VendorAppraisalPanel({ buyer, theme }: {
 
       {/* Section header */}
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase" }}>
-        Comparable Sales — {buyer.suburb}
+        Comparable Sales · {buyer.suburb}
       </div>
 
       {/* Comp cards */}
@@ -3522,7 +3521,7 @@ function VendorAppraisalPanel({ buyer, theme }: {
 // relationship-building strategies to keep generating business from them.
 
 const REFERRAL_PARTNERS = [
-  { icon: "🏦", label: "Mortgage Broker", action: "Refinancing? A free review could save them thousands — intro them to your broker." },
+  { icon: "🏦", label: "Mortgage Broker", action: "Refinancing? A free review could save them thousands. Intro them to your broker." },
   { icon: "📊", label: "Financial Planner", action: "Their equity is a real asset. A financial plan helps them see what's possible." },
   { icon: "⚖️", label: "Conveyancer", action: "When they're ready to move, your conveyancer makes the process seamless." },
   { icon: "🔧", label: "Property Manager", action: "If they want to lease while they wait, connect them with your PM partner." },
@@ -3532,7 +3531,7 @@ const NURTURE_ACTIONS = [
   { icon: "📅", label: "Set 90-day follow-up", description: "Schedule a market update call for Q3 2026" },
   { icon: "📰", label: "Suburb report email", description: "Send their suburb's quarterly stats and recent comparable sales" },
   { icon: "🏡", label: "Pre-market VIP alert", description: "Give them first access to new listings before they hit portals" },
-  { icon: "🎂", label: "Settlement anniversary", description: "Personal note on their purchase anniversary — builds loyalty" },
+  { icon: "🎂", label: "Settlement anniversary", description: "Personal note on their purchase anniversary. Builds loyalty." },
 ]
 
 function SecondaryEngagementCard({ entry, theme }: { entry: SegmentedBuyer; theme: AgencyTheme }) {
@@ -3560,7 +3559,7 @@ function SecondaryEngagementCard({ entry, theme }: { entry: SegmentedBuyer; them
           <span style={{ fontSize: 18 }}>🤝</span>
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>
-              {fname} isn't vendor-ready yet — here's how to stay valuable
+              {fname} isn't vendor-ready yet. Here's how to stay valuable
             </div>
             <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
               Referral partners · relationship touchpoints · nurture actions
@@ -3905,7 +3904,7 @@ function BulkFireModal({ segmented, agent, theme, onClose }: {
             }}>
               <span style={{ fontSize: 12 }}>⚠️</span>
               <span style={{ fontSize: 11, color: "#ffa726", fontWeight: 700 }}>
-                Demo mode — all emails route to {DEMO_EMAIL}
+                Demo mode: all emails route to {DEMO_EMAIL}
               </span>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
@@ -3959,7 +3958,7 @@ function BulkFireModal({ segmented, agent, theme, onClose }: {
               {result.sent} personalised emails fired in {(result.durationMs / 1000).toFixed(1)}s.
               {result.demoMode && (
                 <><br />
-                  <span style={{ color: "#ffa726" }}>Demo mode — all routed to <strong>{result.demoEmail}</strong></span>
+                  <span style={{ color: "#ffa726" }}>Demo mode: all routed to <strong>{result.demoEmail}</strong></span>
                 </>
               )}
             </div>
@@ -4064,7 +4063,7 @@ function CGTUrgencyModal({ segmented, theme, onClose, onSelectEntry }: {
         {contacts.length > 0 && (
           <div style={{ marginTop: 16, padding: "12px 16px", borderRadius: 12, background: `${theme.primary}08`, border: `1px solid ${theme.primary}20` }}>
             <div style={{ fontSize: 12, color: C.muted }}>
-              💡 Total CGT savings across database: <span style={{ color: C.green, fontWeight: 700 }}>{fmtDollar(contacts.reduce((s, e) => s + e.financials.cgtSavingsBy2027, 0))}</span> — money back in your clients' pockets if you act now.
+              💡 Total CGT savings across database: <span style={{ color: C.green, fontWeight: 700 }}>{fmtDollar(contacts.reduce((s, e) => s + e.financials.cgtSavingsBy2027, 0))}</span>. Money back in your clients' pockets if you act now.
             </div>
           </div>
         )}
@@ -4097,21 +4096,21 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
 
   const opening = topTrigger?.urgency === "high"
     ? `Hi ${fname}, ${agentFirst} from ${agent.agency}. I've been looking at your numbers and thought I'd reach out. The timing is looking really good right now. Got 10 minutes for a quick chat?`
-    : `Hi ${fname}, ${agentFirst} here. Been keeping an eye on ${buyer.suburb} — there's been some good movement lately that might be worth a look. Got a minute?`
+    : `Hi ${fname}, ${agentFirst} here. Been keeping an eye on ${buyer.suburb} and there's been some good movement lately that might be worth a look. Got a minute?`
 
   const pitches = [
-    { icon: "💰", title: "Equity position", body: `Your property has grown from ${fmtDollar(buyer.purchasePrice)} to approximately ${estVal} — that's ${equityStr} in equity (${equityPct}%) sitting dormant. Most people don't realise the position they're in.` },
+    { icon: "💰", title: "Equity position", body: `Your property has grown from ${fmtDollar(buyer.purchasePrice)} to approximately ${estVal}. That's ${equityStr} in equity (${equityPct}%) sitting dormant. Most people don't realise the position they're in.` },
     cgtStr ? { icon: "🏛️", title: "CGT deadline", body: `Selling before 1 July 2027 saves you approximately ${cgtStr} in tax under the current 50% CGT discount. After that date the rules change. That's real money at stake.` }
-           : { icon: "📈", title: "Market conditions", body: `${buyer.suburb} is running at ${range.clearanceRate}% clearance with just ${range.daysOnMarket} days on market. Sellers are in control right now — it's a strong window.` },
-    { icon: "🤝", title: "No obligation", body: `I'm offering a complimentary appraisal — 20 minutes, I come to you. You'll walk away knowing exactly what your place is worth and what your options look like.` },
+           : { icon: "📈", title: "Market conditions", body: `${buyer.suburb} is running at ${range.clearanceRate}% clearance with just ${range.daysOnMarket} days on market. Sellers are in control right now. It's a strong window.` },
+    { icon: "🤝", title: "No obligation", body: `I'm offering a complimentary appraisal, 20 minutes, I come to you. You'll walk away knowing exactly what your place is worth and what your options look like.` },
   ].filter(Boolean)
 
   const objections = [
-    { q: "I'm not ready to sell", a: `Totally fine — my job is just to make sure you have the numbers. You've got ${equityStr} in equity right now.${cgtStr ? ` And selling before July 2027 saves you ${cgtStr} in CGT.` : ""} The decision is completely yours.` },
-    { q: "The market feels slow", a: `${buyer.suburb} clearance rate is ${range.clearanceRate}% and average days on market is just ${range.daysOnMarket}. That's ${range.clearanceRate >= 72 ? "above" : "close to"} the long-run average — genuine buyer demand is still there.` },
-    { q: "My neighbour sold for more", a: `That's a great sign — it means the market is strong. At an estimated ${estVal} for your place, you're in a strong bracket. Let me pull the exact comps so you can see how yours stacks up.` },
-    { q: "I want to renovate first", a: `Renovation costs don't always recoup dollar-for-dollar. You already have ${equityStr} in equity. A $50K reno might add $30K in value — I can show you the numbers so you can decide.` },
-    { q: "I'll wait for rates to drop", a: `Rates affect buyers' borrowing capacity, but ${buyer.suburb} buyers are still active right now. Your property is worth ${estVal} today — and the CGT window is running.` },
+    { q: "I'm not ready to sell", a: `Totally fine. My job is just to make sure you have the numbers. You've got ${equityStr} in equity right now.${cgtStr ? ` And selling before July 2027 saves you ${cgtStr} in CGT.` : ""} The decision is completely yours.` },
+    { q: "The market feels slow", a: `${buyer.suburb} clearance rate is ${range.clearanceRate}% and average days on market is just ${range.daysOnMarket}. That's ${range.clearanceRate >= 72 ? "above" : "close to"} the long-run average. Genuine buyer demand is still there.` },
+    { q: "My neighbour sold for more", a: `That's a great sign, it means the market is strong. At an estimated ${estVal} for your place, you're in a strong bracket. Let me pull the exact comps so you can see how yours stacks up.` },
+    { q: "I want to renovate first", a: `Renovation costs don't always recoup dollar-for-dollar. You already have ${equityStr} in equity. A $50K reno might add $30K in value. I can show you the numbers so you can decide.` },
+    { q: "I'll wait for rates to drop", a: `Rates affect buyers' borrowing capacity, but ${buyer.suburb} buyers are still active right now. Your property is worth ${estVal} today and the CGT window is running.` },
   ]
 
   return (
@@ -4310,10 +4309,10 @@ function NurtureSequencePanel({ entry, agent, theme }: { entry: SegmentedBuyer; 
   const signoff   = buyer.status === "investor" ? "Kind regards" : "Cheers"
 
   const templates = [
-    { sms: `Hi ${fname}, ${agentFirst} from ${agent.agency}. Quick market update on ${buyer.suburb} — your place is looking really strong. Worth a chat? ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `Market update for ${buyer.suburb}, ${fname}` },
-    { sms: `Hi ${fname}, ${agentFirst} here — ${buyer.suburb} clearance rate is tracking well. Happy to share the data. ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `${buyer.suburb} market moving, ${fname}` },
+    { sms: `Hi ${fname}, ${agentFirst} from ${agent.agency}. Quick market update on ${buyer.suburb}. Your place is looking really strong. Worth a chat? ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `Market update for ${buyer.suburb}, ${fname}` },
+    { sms: `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} clearance rate is tracking well. Happy to share the data. ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `${buyer.suburb} market moving, ${fname}` },
     { sms: `Hi ${fname}, a comparable property in ${buyer.suburb} just sold for ${fmtK(Math.round(fin.currentEstimate * 1.03 / 5000) * 5000)}. Want the full comps? ${agentFirst}`.slice(0, 160), emailSubject: `Comparable sale you should see, ${fname}` },
-    { sms: `Hi ${fname}, ${agentFirst} here — just circling back. Happy to chat whenever the timing suits. ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `Still here when you're ready, ${fname}` },
+    { sms: `Hi ${fname}, ${agentFirst} here. Just circling back. Happy to chat whenever the timing suits. ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `Still here when you're ready, ${fname}` },
   ]
 
   const handleExpand = () => {
@@ -4462,7 +4461,7 @@ function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
 
         {/* Toolbar */}
         <div style={{ background: C.bg2, borderRadius: "20px 20px 0 0", padding: "10px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.border}` }}>
-          <span style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>📄 Appraisal Report Preview — {buyer.name}</span>
+          <span style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>📄 Appraisal Report Preview · {buyer.name}</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => window.print()} style={{ padding: "7px 18px", borderRadius: 9, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 12, fontWeight: 700, fontFamily: FONT, boxShadow: `0 2px 8px ${theme.glow}` }}>
               🖨️ Print Report
@@ -4559,7 +4558,7 @@ function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
           {/* CTA */}
           <div style={{ background: `linear-gradient(135deg, ${theme.gradient[0]}15, ${theme.gradient[1]}15)`, borderRadius: 12, padding: "18px 20px", border: `1px solid ${theme.primary}30` }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: theme.primary, marginBottom: 5, fontFamily: FONT }}>Ready to explore your options, {fname}?</div>
-            <div style={{ fontSize: 12, color: "#444", marginBottom: 10, fontFamily: FONT, lineHeight: 1.6 }}>Complimentary, no-obligation appraisal — 20 minutes at a time that suits you.</div>
+            <div style={{ fontSize: 12, color: "#444", marginBottom: 10, fontFamily: FONT, lineHeight: 1.6 }}>Complimentary, no-obligation appraisal. 20 minutes at a time that suits you.</div>
             <div style={{ fontSize: 13, fontWeight: 700, color: theme.primary, fontFamily: FONT }}>📞 {agent.phone} &nbsp;·&nbsp; ✉️ {agent.email}</div>
           </div>
 
@@ -4589,15 +4588,15 @@ function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; t
     },
     {
       icon: "📅", title: "Listing Window",
-      value: "Mar – May optimal",
+      value: "Mar to May optimal",
       sub: "Based on 3yr seasonal data",
-      detail: "Historical data shows autumn is the strongest listing window for the SE corridor — 12% more transactions and 4% higher clearance rates than winter. You're in the window now.",
+      detail: "Historical data shows autumn is the strongest listing window for the SE corridor: 12% more transactions and 4% higher clearance rates than winter. You're in the window now.",
     },
     {
       icon: "⏰", title: "CGT Deadline",
       value: `${DAYS_TO_CGT} days left`,
       sub: "50% discount · closes Jul 2027",
-      detail: `${cgtContacts} of your contacts qualify for the 50% CGT discount — but only if they sell before 1 July 2027. That's ${DAYS_TO_CGT} days. Every week of delay costs them real money.`,
+      detail: `${cgtContacts} of your contacts qualify for the 50% CGT discount, but only if they sell before 1 July 2027. That's ${DAYS_TO_CGT} days. Every week of delay costs them real money.`,
     },
     {
       icon: "🎙️", title: "Voice Intel Engine",
@@ -4609,7 +4608,7 @@ function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; t
       icon: "💬", title: "Smart Reply AI",
       value: "Vendor replied? AI drafts it",
       sub: "Context-aware follow-up",
-      detail: "When a vendor responds to your outreach, PropOS reads the reply and drafts a perfect follow-up that continues the conversation naturally — matching your voice, referencing their specific response.",
+      detail: "When a vendor responds to your outreach, PropOS reads the reply and drafts a perfect follow-up that continues the conversation naturally. Matches your voice, references their specific response.",
     },
     {
       icon: "📄", title: "One-Click Appraisal PDF",
@@ -4621,7 +4620,7 @@ function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; t
       icon: "📡", title: "Pre-Market Alert Network",
       value: `${highPriority} buyers → VIP access`,
       sub: "Tell them before portals",
-      detail: "Your top-priority past buyers become VIP buyers for new listings in their preferred suburb. Send a pre-market alert 48 hours before Domain/REA — builds loyalty and creates FOMO that accelerates offers.",
+      detail: "Your top-priority past buyers become VIP buyers for new listings in their preferred suburb. Send a pre-market alert 48 hours before Domain/REA. Builds loyalty and creates FOMO that accelerates offers.",
     },
     {
       icon: "🤝", title: "AI Negotiation Coach",
@@ -5071,7 +5070,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
           {/* Negotiation Coach button */}
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowNegotiationCoach(true)}
             style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${theme.primary}40`, background: `${theme.primary}10`, color: theme.primary, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            🤝 Negotiation Coach — call script for {fname}
+            🤝 Negotiation Coach: call script for {fname}
           </motion.button>
 
           {/* Contact info */}
@@ -5138,7 +5137,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
                   const emailSubject = `Your equity position, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here.`,
-                    `Ran the numbers on your place at ${shortAddr(buyer.purchaseAddress)}. You've built roughly ${fmtDollar(fin.equityGain)} in equity since ${year} — your property is sitting at around ${fmtDollar(fin.currentEstimate)} now. A lot of people in ${buyer.suburb} don't realise what position they're in.`,
+                    `Ran the numbers on your place at ${shortAddr(buyer.purchaseAddress)}. You've built roughly ${fmtDollar(fin.equityGain)} in equity since ${year}. Your property is sitting at around ${fmtDollar(fin.currentEstimate)} now. A lot of people in ${buyer.suburb} don't realise what position they're in.`,
                     `Happy to do a complimentary appraisal. Twenty minutes, I'll come to you. No obligation, just so you know your options.\n\n${signoff},\n${agentFirst}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
@@ -5149,13 +5148,13 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
                 id: "comps",
                 icon: "🏡",
                 title: "Recent Sale",
-                hook: `${comps[0].address} — ${fmtDollar(comps[0].soldPrice)}`,
+                hook: `${comps[0].address}: ${fmtDollar(comps[0].soldPrice)}`,
                 sub: comps[0].soldDate,
                 color: "#ffa726",
                 buildOutreach: () => {
-                  const smsRaw = `Hi ${fname}, ${agentFirst} here — a ${comps[0].beds}-bed in ${buyer.suburb} just sold for ${fmtDollar(comps[0].soldPrice)}. Your place stacks up really well. ${signoff}, ${agentFirst}`
+                  const smsRaw = `Hi ${fname}, ${agentFirst} here. A ${comps[0].beds}-bed in ${buyer.suburb} just sold for ${fmtDollar(comps[0].soldPrice)}. Your place stacks up really well. ${signoff}, ${agentFirst}`
                   const sms = stripDashes(smsRaw.slice(0, 160))
-                  const emailSubject = `Recent ${buyer.suburb} sale — relevant to your place, ${fname}`
+                  const emailSubject = `Recent ${buyer.suburb} sale relevant to your place, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here.`,
                     `A comparable ${comps[0].beds}-bedroom property at ${comps[0].address} just sold for ${fmtDollar(comps[0].soldPrice)} on ${comps[0].soldDate}. That puts your place — bought for ${fmtDollar(buyer.purchasePrice)} in ${year} — in a really strong position at roughly ${fmtDollar(fin.currentEstimate)}.`,
@@ -5218,6 +5217,10 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
                 <div style={{ textAlign: "center", fontSize: 10, color: C.faint, marginTop: 8 }}>
                   {voiceNotes ? "✅ Voice note included · tap an angle to generate" : "Tap an angle · SMS + email in your voice, instantly"}
                 </div>
+                <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={handleGenerate} disabled={generating}
+                  style={{ width: "100%", marginTop: 8, padding: "10px 14px", borderRadius: 12, border: `1px solid ${theme.primary}30`, background: `${theme.primary}08`, color: generating ? C.faint : theme.primary, fontSize: 12, fontWeight: 700, cursor: generating ? "default" : "pointer", fontFamily: FONT }}>
+                  {generating ? "✨ Generating AI outreach..." : "✨ Generate with AI (full personalisation)"}
+                </motion.button>
               </div>
             )
           })()}

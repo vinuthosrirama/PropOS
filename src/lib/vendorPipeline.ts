@@ -32,12 +32,12 @@ export interface PipelineLabel {
 }
 
 export const PIPELINE_LABELS: Record<Pipeline, PipelineLabel> = {
-  "investor-to-seller":    { id: "investor-to-seller",    label: "Investor — Sell for Profit",    shortLabel: "Sell for profit",    color: "#64d090", icon: "💰", description: "Held long enough to maximise CGT discount. Strong equity position. Time to realise gains." },
-  "investor-to-rebalance": { id: "investor-to-rebalance", label: "Investor — Rebalance",          shortLabel: "Rebalance",          color: "#a6daff", icon: "⚖️", description: "Consider selling one to reinvest. Market conditions favour realisation." },
-  "owner-to-seller":       { id: "owner-to-seller",       label: "Owner — Ready to Move",         shortLabel: "Ready to move",      color: "#c8a0ff", icon: "🏠", description: "Life stage suggests readiness. Equity unlocks the next chapter." },
-  "owner-to-upsizer":      { id: "owner-to-upsizer",      label: "Owner — Upsizing",              shortLabel: "Upsizer",            color: "#ffb864", icon: "📐", description: "Growing family, outgrowing current home. Equity enables the upgrade." },
-  "owner-to-downsizer":    { id: "owner-to-downsizer",    label: "Owner — Downsizing",            shortLabel: "Downsizer",          color: "#ff9e9e", icon: "🏡", description: "Kids have left or retiring. Free up equity, reduce maintenance." },
-  "renter-to-buyer":       { id: "renter-to-buyer",       label: "Renter — Ready to Buy",         shortLabel: "Renter → buyer",     color: "#90e0c0", icon: "🔑", description: "Renting in the area but showing purchase intent. Help them take the step." },
+  "investor-to-seller":    { id: "investor-to-seller",    label: "Investor: Sell for Profit",    shortLabel: "Sell for profit",    color: "#64d090", icon: "💰", description: "Held long enough to maximise CGT discount. Strong equity position. Time to realise gains." },
+  "investor-to-rebalance": { id: "investor-to-rebalance", label: "Investor: Rebalance",          shortLabel: "Rebalance",          color: "#a6daff", icon: "⚖️", description: "Consider selling one to reinvest. Market conditions favour realisation." },
+  "owner-to-seller":       { id: "owner-to-seller",       label: "Owner: Ready to Move",         shortLabel: "Ready to move",      color: "#c8a0ff", icon: "🏠", description: "Life stage suggests readiness. Equity unlocks the next chapter." },
+  "owner-to-upsizer":      { id: "owner-to-upsizer",      label: "Owner: Upsizing",              shortLabel: "Upsizer",            color: "#ffb864", icon: "📐", description: "Growing family, outgrowing current home. Equity enables the upgrade." },
+  "owner-to-downsizer":    { id: "owner-to-downsizer",    label: "Owner: Downsizing",            shortLabel: "Downsizer",          color: "#ff9e9e", icon: "🏡", description: "Kids have left or retiring. Free up equity, reduce maintenance." },
+  "renter-to-buyer":       { id: "renter-to-buyer",       label: "Renter: Ready to Buy",         shortLabel: "Renter to buyer",    color: "#90e0c0", icon: "🔑", description: "Renting in the area but showing purchase intent. Help them take the step." },
 }
 
 // ---------------------------------------------------------------------------
@@ -75,25 +75,25 @@ export function segmentBuyer(
   if (buyer.status === "investor") {
     // CGT window
     if (financials.cgtDiscount && financials.cgtSavingsBy2027 > 5000) {
-      triggers.push({ label: `CGT 50% discount saves ${fmtK(financials.cgtSavingsBy2027)} — window closes July 2027`, urgency: "high", source: "financial" })
+      triggers.push({ label: `CGT 50% discount saves ${fmtK(financials.cgtSavingsBy2027)}, window closes July 2027`, urgency: "high", source: "financial" })
       pitchAngles.push(`Selling before July 2027 saves you approximately ${fmtK(financials.cgtSavingsBy2027)} in capital gains tax under the current 50% discount`)
     }
 
     // Strong equity
     if (financials.equityGainPct > 30) {
       triggers.push({ label: `${Math.round(financials.equityGainPct)}% equity gain since purchase`, urgency: "high", source: "financial" })
-      pitchAngles.push(`Your property has grown ${Math.round(financials.equityGainPct)}% since you bought it — that's ${fmtK(financials.equityGain)} in equity`)
+      pitchAngles.push(`Your property has grown ${Math.round(financials.equityGainPct)}% since you bought it. That's ${fmtK(financials.equityGain)} in equity.`)
     }
 
     // Cash-on-cash
     if (financials.cashOnCashReturn && financials.cashOnCashReturn > 100) {
       triggers.push({ label: `${financials.cashOnCashReturn}% return on original deposit`, urgency: "medium", source: "financial" })
-      pitchAngles.push(`Your original deposit of ${fmtK(financials.depositOriginal!)} has turned into ${fmtK(financials.equityGain)} in equity — a ${financials.cashOnCashReturn}% return`)
+      pitchAngles.push(`Your original deposit of ${fmtK(financials.depositOriginal!)} has turned into ${fmtK(financials.equityGain)} in equity, a ${financials.cashOnCashReturn}% return.`)
     }
 
     // Long hold → sell for profit
     if (financials.yearsHeld >= 5) {
-      triggers.push({ label: `Held ${financials.yearsHeld} years — profit-taking window`, urgency: "medium", source: "rule" })
+      triggers.push({ label: `Held ${financials.yearsHeld} years, profit-taking window`, urgency: "medium", source: "rule" })
       const pipeline: Pipeline = "investor-to-seller"
       return { pipeline, confidence: 85, triggers, pitchAngles }
     }
@@ -108,7 +108,7 @@ export function segmentBuyer(
     // Notes-based triggers
     if (/upsize|upgrad|bigger|growing|more room|more space|another baby|third kid|fourth bed|5th bed/i.test(notesLower)) {
       triggers.push({ label: "Notes mention upsizing / growing family", urgency: "high", source: "notes" })
-      pitchAngles.push("Your family is growing — your current equity could unlock the space you need")
+      pitchAngles.push("Your family is growing and your current equity could unlock the space you need.")
     }
 
     if (/downsize|retire|empty nest|kids.*left|kids.*gone|kids.*moved|too big|maintenance/i.test(notesLower)) {
@@ -122,8 +122,8 @@ export function segmentBuyer(
     }
 
     if (/separat|divorce|split|settlement/i.test(notesLower)) {
-      triggers.push({ label: "Life change — separation/settlement", urgency: "high", source: "notes" })
-      pitchAngles.push("I understand things are changing — I can make the process as smooth and private as possible")
+      triggers.push({ label: "Life change: separation/settlement", urgency: "high", source: "notes" })
+      pitchAngles.push("I understand things are changing. I can make the process as smooth and private as possible.")
     }
 
     // Property-based inference
@@ -140,12 +140,12 @@ export function segmentBuyer(
     // Equity-based triggers (apply to all owners)
     if (financials.equityGainPct > 25) {
       triggers.push({ label: `${Math.round(financials.equityGainPct)}% equity growth`, urgency: "medium", source: "financial" })
-      pitchAngles.push(`Your home has appreciated ${Math.round(financials.equityGainPct)}% since you purchased — that's ${fmtK(financials.equityGain)} in equity you could deploy`)
+      pitchAngles.push(`Your home has appreciated ${Math.round(financials.equityGainPct)}% since you purchased. That's ${fmtK(financials.equityGain)} in equity you could deploy.`)
     }
 
     // Long hold + no strong signals → general seller
     if (financials.yearsHeld >= 7) {
-      triggers.push({ label: `Owned ${financials.yearsHeld} years — natural move window`, urgency: "low", source: "rule" })
+      triggers.push({ label: `Owned ${financials.yearsHeld} years, natural move window`, urgency: "low", source: "rule" })
     }
 
     // Determine pipeline from strongest trigger
@@ -163,7 +163,7 @@ export function segmentBuyer(
 
   // RENTER
   if (buyer.status === "renter") {
-    triggers.push({ label: "Currently renting — potential first home buyer", urgency: "medium", source: "rule" })
+    triggers.push({ label: "Currently renting, potential first home buyer", urgency: "medium", source: "rule" })
     pitchAngles.push("Have you thought about making the move from renting to owning? Happy to show you what's possible")
     return { pipeline: "renter-to-buyer", confidence: 50, triggers, pitchAngles }
   }

@@ -70,7 +70,7 @@ export function getTimingTriggers(params: {
       triggers.push({
         label: "cgt_deadline",
         urgency,
-        headline: `The current 50% CGT discount applies until July 2027 — that's ${monthsLeft} months away. Selling before then saves approximately $${Math.round(params.cgtSavingsBy2027 / 1000)}K in tax.`,
+        headline: `The current 50% CGT discount applies until July 2027. That's ${monthsLeft} months away. Selling before then saves approximately $${Math.round(params.cgtSavingsBy2027 / 1000)}K in tax.`,
         smsFragment: `${monthsLeft}mo left on the 50% CGT discount`,
       })
     }
@@ -96,7 +96,7 @@ export function getTimingTriggers(params: {
     triggers.push({
       label: "spring_season",
       urgency: weeksIn <= 4 ? "high" : "medium",
-      headline: `We're ${weeksIn <= 2 ? "just entering" : "well into"} the spring selling season — Melbourne's most active market window. Buyer competition is at its highest right now, which typically pushes prices 5-8% above guide.`,
+      headline: `We're ${weeksIn <= 2 ? "just entering" : "well into"} the spring selling season. Melbourne's most active market window. Buyer competition is at its highest right now, which typically pushes prices 5-8% above guide.`,
       smsFragment: "Spring season = highest buyer competition of the year",
     })
   }
@@ -116,7 +116,7 @@ export function getTimingTriggers(params: {
     triggers.push({
       label: "winter_warning",
       urgency: "low",
-      headline: `The market typically quietens through winter — most agents see a 15-20% drop in buyer enquiry from July onwards. Vendors who list in the next few weeks often get better outcomes than waiting until spring.`,
+      headline: `The market typically quietens through winter. Most agents see a 15-20% drop in buyer enquiry from July onwards. Vendors who list in the next few weeks often get better outcomes than waiting until spring.`,
       smsFragment: "Act before winter slows buyer activity",
     })
   }
@@ -128,7 +128,7 @@ export function getTimingTriggers(params: {
       triggers.push({
         label: "school_holiday",
         urgency: "low",
-        headline: `For families with school-age children, the ${holidayWindow} school holidays are a natural window to make a move — minimal disruption to the kids' routines.`,
+        headline: `For families with school-age children, the ${holidayWindow} school holidays are a natural window to make a move. Minimal disruption to the kids' routines.`,
         smsFragment: `School holidays = natural moving window`,
       })
     }
@@ -141,7 +141,7 @@ export function getTimingTriggers(params: {
       triggers.push({
         label: "hold_anniversary",
         urgency: "low",
-        headline: `${milestoneYears} years is a significant ownership milestone — a natural time to reflect on whether the property is still working hard for you financially.`,
+        headline: `${milestoneYears} years is a significant ownership milestone. A natural time to reflect on whether the property is still working hard for you financially.`,
         smsFragment: `${milestoneYears}-year anniversary is a natural decision point`,
       })
     }

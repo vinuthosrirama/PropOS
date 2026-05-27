@@ -12,7 +12,7 @@ function clampSMS(sms: string): string {
 
 // Strip em-dashes from all model output — enforced after every generation path
 function sanitise<T extends { sms: string; email: { subject: string; body: string[] } }>(r: T): T {
-  const clean = (s: string) => s.replace(/—/g, "-").replace(/--/g, "-")
+  const clean = (s: string) => s.replace(/—|–/g, ",").replace(/--/g, ",")
   return {
     ...r,
     sms: clampSMS(clean(r.sms)),
@@ -151,9 +151,9 @@ router.post("/", async (req, res) => {
         })
         // Auto-apply QA fixes, then re-sanitise and re-clamp
         if (!qa.passed) {
-          if (qa.revisedSMS)       result.sms = clampSMS(qa.revisedSMS.replace(/—/g, "-"))
-          if (qa.revisedSubject)   result.email.subject = qa.revisedSubject.replace(/—/g, "-")
-          if (qa.revisedEmailBody) result.email.body = qa.revisedEmailBody.map(p => p.replace(/—/g, "-"))
+          if (qa.revisedSMS)       result.sms = clampSMS(qa.revisedSMS.replace(/—|–/g, ","))
+          if (qa.revisedSubject)   result.email.subject = qa.revisedSubject.replace(/—|–/g, ",")
+          if (qa.revisedEmailBody) result.email.body = qa.revisedEmailBody.map(p => p.replace(/—|–/g, ","))
         }
         // Always hard-clamp SMS even if QA passed
         result.sms = clampSMS(result.sms)

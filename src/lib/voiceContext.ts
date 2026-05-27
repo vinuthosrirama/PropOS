@@ -74,42 +74,42 @@ const CAMERON_SEED: Array<{ type: "email" | "paste"; text: string; source: strin
   {
     type: "email",
     text: "Hi Vinuth and Aneesha, Thank you for your attendance today. Great to see some familiar faces in the crowd! Rental appraisal attached and will keep in touch for any other suitable properties. Happy to arrange a time to work through a demo of the product you have created. Let me know when suits. Enjoy the weekend and chat soon! Best",
-    source: "Email — post open home follow-up",
+    source: "Email: post open home follow-up",
   },
   {
     type: "email",
     text: "Hi Vinuth, Apologies for the delayed response. Saturday mornings are okay. Can't do this Saturday, how about next week the 16th? Cheers",
-    source: "Email — scheduling reply",
+    source: "Email: scheduling reply",
   },
   {
     type: "email",
     text: "Hi Vinuth and Aneesha, Apologies for the delayed response. I won't be available this Saturday at that time. Saturday's can be tricky due to open homes and auctions. Can we take it week-by-week and I can let you know if we could make this work on a Saturday which may have less open homes? Thank you",
-    source: "Email — scheduling reply",
+    source: "Email: scheduling reply",
   },
   {
     type: "paste",
     text: "No problem, chat then!",
-    source: "SMS — casual reply",
+    source: "SMS: casual reply",
   },
   {
     type: "paste",
     text: "No problem, Vinuth. Are you wanting to register for the auction? Yes please send a demo. Thank you",
-    source: "SMS — auction inquiry reply",
+    source: "SMS: auction inquiry reply",
   },
   {
     type: "paste",
     text: "Hi Vinuth, No need to apologise! Appreciate you doing your due diligence. I can let you know if this changes. If I can provide more confidence and clarity around this, let me know. Thank you for the demo. I tried to play around. Might be user error 😊",
-    source: "SMS — feedback reply",
+    source: "SMS: feedback reply",
   },
   {
     type: "paste",
     text: "How is early afternoon for you?",
-    source: "SMS — scheduling",
+    source: "SMS: scheduling",
   },
   {
     type: "paste",
     text: "Hi Vinuth, I am out of the office at the moment. Are you available around 1pm?",
-    source: "SMS — scheduling reply",
+    source: "SMS: scheduling reply",
   },
 ]
 
@@ -170,12 +170,12 @@ export function buildVoiceContext(
   const formalityDesc =
     profile.formalityScore <= 1 ? "Very casual, conversational" :
     profile.formalityScore <= 2 ? "Warm and friendly, not stiff" :
-    profile.formalityScore <= 3 ? "Balanced — professional but approachable" :
+    profile.formalityScore <= 3 ? "Balanced, professional but approachable" :
     profile.formalityScore <= 4 ? "Polished and professional" :
                                   "Formal and structured"
 
   const aussieDesc =
-    profile.aussieIndex >= 4 ? "Strong Australian voice — colloquial phrasing, local references" :
+    profile.aussieIndex >= 4 ? "Strong Australian voice, colloquial phrasing, local references" :
     profile.aussieIndex >= 3 ? "Noticeable Australian warmth" :
     profile.aussieIndex >= 2 ? "Neutral Australian tone" :
                                "Neutral, no strong regional markers"
@@ -184,22 +184,22 @@ export function buildVoiceContext(
 
   // Length + data style
   const lengthDesc =
-    profile.lengthStyle === "short"    ? "Short, punchy sentences — gets to the point" :
-    profile.lengthStyle === "medium"   ? "Medium length — enough detail without padding" :
-                                         "Detailed — includes supporting context and data"
+    profile.lengthStyle === "short"    ? "Short, punchy sentences. Gets to the point." :
+    profile.lengthStyle === "medium"   ? "Medium length. Enough detail without padding." :
+                                         "Detailed. Includes supporting context and data."
   lines.push(`Message length: ${lengthDesc}`)
 
   const dataDesc =
     profile.specificity >= 4 ? "Regularly uses specific numbers, stats, and data points" :
     profile.specificity >= 3 ? "Occasionally backs claims with data" :
-                               "Conversational — uses feelings and observations over data"
+                               "Conversational, uses feelings and observations over data"
   lines.push(`Data use: ${dataDesc}`)
 
   // Emoji preference
   const emojiDesc =
     profile.emojiUsage === "frequent"   ? "Uses emojis naturally throughout" :
     profile.emojiUsage === "occasional" ? "Uses emojis sparingly for warmth" :
-                                          "No emojis — keeps it professional"
+                                          "No emojis. Keeps it professional."
   lines.push(`Emoji: ${emojiDesc}`)
 
   // Detected personality traits

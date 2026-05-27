@@ -320,7 +320,7 @@ function buildDealBreakerScan(
     const floor = activeSLM.floorplanConfig
     if (typeof floor === "string" && /two.?stor|2.?stor|upstairs|double.?stor/i.test(floor)) {
       penalty += 20
-      warnings.push("May be two-storey — they mentioned needing single level")
+      warnings.push("May be two-storey. They mentioned needing single level.")
     }
   }
 
@@ -328,7 +328,7 @@ function buildDealBreakerScan(
   if (/no pool|don.?t want.?pool|low.?maintenance|no maintenance/i.test(text)) {
     if (activeSLM.pool === true) {
       penalty += 15
-      warnings.push("Has a pool — they prefer low maintenance")
+      warnings.push("Has a pool. They prefer low maintenance.")
     }
   }
 
@@ -337,7 +337,7 @@ function buildDealBreakerScan(
     const kw = activeSLM.solarKw
     if (kw === "TBD" || kw === 0) {
       penalty += 15
-      warnings.push("No solar confirmed — they said solar is essential")
+      warnings.push("No solar confirmed. They said solar is essential.")
     }
   }
 
@@ -345,7 +345,7 @@ function buildDealBreakerScan(
   if (/tenant.?free|vacant.?possession|no tenant|want.?vacant|move.?in/i.test(text)) {
     if (activeSLM.tenantInPlace === true) {
       penalty += 20
-      warnings.push("Tenant in place — they wanted vacant possession")
+      warnings.push("Tenant in place. They wanted vacant possession.")
     }
   }
 
@@ -354,7 +354,7 @@ function buildDealBreakerScan(
     const ori = activeSLM.orientation
     if (typeof ori === "string" && ori !== "TBD" && !/north/i.test(ori)) {
       penalty += 10
-      warnings.push(`Not north-facing (${ori}) — they asked about orientation`)
+      warnings.push(`Not north-facing (${ori}). They asked about orientation.`)
     }
   }
 
@@ -362,7 +362,7 @@ function buildDealBreakerScan(
   if (/flood|flood.?zone|flood.?plain/i.test(text)) {
     if (activeSLM.floodZone === true) {
       penalty += 25
-      warnings.push("In flood zone — they expressed concern about flooding")
+      warnings.push("In flood zone. They expressed concern about flooding.")
     }
   }
 
@@ -489,21 +489,21 @@ function buildReasons(
 
   // Delta strengths (active answers better than what they saw)
   for (const ds of questionDelta.deltaStrengths.slice(0, 2)) {
-    reasons.push({ type: "strength", text: `${ds} — better than ${soldSLM.address} on this point` })
+    reasons.push({ type: "strength", text: `${ds}. Better than ${soldSLM.address} on this point.` })
   }
 
   // Delta weaknesses
   for (const dw of questionDelta.deltaWeaknesses.slice(0, 1)) {
-    reasons.push({ type: "neutral", text: `${dw} — slightly different from the property they saw` })
+    reasons.push({ type: "neutral", text: `${dw}. Slightly different from the property they saw.` })
   }
 
   // Budget
   if (budgetFlag === "under") {
-    reasons.push({ type: "strength", text: "Within their budget — no stretch required" })
+    reasons.push({ type: "strength", text: "Within their budget. No stretch required." })
   } else if (budgetFlag === "stretch") {
-    reasons.push({ type: "neutral", text: "Slightly above budget — worth a conversation" })
+    reasons.push({ type: "neutral", text: "Slightly above budget. Worth a conversation." })
   } else if (budgetFlag === "over") {
-    reasons.push({ type: "warning", text: "Over budget — price expectation conversation needed" })
+    reasons.push({ type: "warning", text: "Over budget. Price expectation conversation needed." })
   }
 
   // Investor-specific
@@ -702,27 +702,27 @@ function buildInsight(
     const gy = typeof active.grossYieldAtAsk === "number" ? active.grossYieldAtAsk : null
     const soldGy = typeof sold.grossYieldAtAsk === "number" ? sold.grossYieldAtAsk : null
     if (gy !== null && soldGy !== null && gy > soldGy)
-      return `Investor play — ${gy}% gross yield vs ${soldGy}% at the property they inspected`
+      return `Investor play: ${gy}% gross yield vs ${soldGy}% at the property they inspected`
     const rental = typeof active.rentalAppraisalLow === "number" ? active.rentalAppraisalLow : null
     if (rental !== null)
-      return `Rental appraisal $${rental}–${typeof active.rentalAppraisalHigh === "number" ? active.rentalAppraisalHigh : rental}/wk — strong income from day one`
-    return `Strong investor match (${score}/100) — income and growth metrics align`
+      return `Rental appraisal $${rental}-${typeof active.rentalAppraisalHigh === "number" ? active.rentalAppraisalHigh : rental}/wk. Strong income from day one.`
+    return `Strong investor match (${score}/100). Income and growth metrics align.`
   }
 
   if (persona === "fhb") {
     if (active.schoolZoneCatchment !== "TBD")
-      return `FHB — ${active.schoolZoneCatchment} school zone confirmed, matching what they prioritised`
+      return `FHB: ${active.schoolZoneCatchment} school zone confirmed, matching what they prioritised`
     const pm = typeof active.priceMax === "number" ? active.priceMax : null
     if (pm !== null && pm <= 800000)
-      return `FHB grant eligible (${fmtPrice(pm)}) — under $800K threshold`
-    return `Budget-aligned FHB match — ${score}/100 on their priorities`
+      return `FHB grant eligible (${fmtPrice(pm)}). Under $800K threshold.`
+    return `Budget-aligned FHB match: ${score}/100 on their priorities`
   }
 
   if (persona === "upsizer") {
     const activeLand = typeof active.landSqm === "number" ? active.landSqm : null
     const soldLand = typeof sold.landSqm === "number" ? sold.landSqm : null
     if (activeLand !== null && soldLand !== null && activeLand > soldLand)
-      return `Upsizer upgrade — ${activeLand - soldLand}sqm more land and ${typeof active.beds === "number" ? active.beds : "?"}br`
+      return `Upsizer upgrade: ${activeLand - soldLand}sqm more land and ${typeof active.beds === "number" ? active.beds : "?"}br`
     return `Configuration upgrade over the sold property they saw`
   }
 
@@ -730,12 +730,12 @@ function buildInsight(
     const train = typeof active.distanceToTrainKm === "number" ? `${active.distanceToTrainKm}km to train` : null
     const shop = typeof active.distanceToShoppingKm === "number" ? `${active.distanceToShoppingKm}km to shops` : null
     const amenities = [train, shop].filter(Boolean).join(", ")
-    if (amenities) return `Downsizer — walkable amenities: ${amenities}`
+    if (amenities) return `Downsizer: walkable amenities: ${amenities}`
     return `Low-maintenance lifestyle match for downsizer profile`
   }
 
   const topFactor = factors[0]?.label ?? "strong attribute alignment"
-  return `${score}/100 match — ${topFactor}`
+  return `${score}/100 match: ${topFactor}`
 }
 
 // ---------------------------------------------------------------------------
