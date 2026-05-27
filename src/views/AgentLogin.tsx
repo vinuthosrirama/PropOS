@@ -341,7 +341,7 @@ export default function AgentLogin({ onLogin }: Props) {
                 PropOS
               </div>
               <div style={{ fontSize: 13, color: C.muted }}>
-                by AddVantage — Enter your details to begin
+                by AddVantage · Enter your details to begin
               </div>
             </div>
 

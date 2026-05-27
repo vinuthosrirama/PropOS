@@ -64,7 +64,7 @@ router.post("/", async (req, res) => {
         result = {
           sms: `Hi ${base.lead.name.split(" ")[0]}, ${base.agentName.split(" ")[0]} here. ${step.anchor}`,
           email: {
-            subject: `${step.strategy} — ${base.lead.name.split(" ")[0]}`,
+            subject: `${step.strategy}: ${base.lead.name.split(" ")[0]}`,
             body: [`Hi ${base.lead.name.split(" ")[0]}, ${step.anchor}`, `Cheers,\n${base.agentName.split(" ")[0]}`],
           },
         }
@@ -77,7 +77,7 @@ router.post("/", async (req, res) => {
         strategy: step.strategy,
         sms: `Hi ${base.lead.name.split(" ")[0]}, ${base.agentName.split(" ")[0]} here. Checking in on your search.`,
         email: {
-          subject: `Checking in — ${base.lead.name.split(" ")[0]}`,
+          subject: `Checking in, ${base.lead.name.split(" ")[0]}`,
           body: [`Hi ${base.lead.name.split(" ")[0]}, hope all is well.`, `Cheers,\n${base.agentName.split(" ")[0]}`],
         },
       })

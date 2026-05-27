@@ -365,9 +365,9 @@ async function generateNurtureMessage(
   // Template fallback
   const templates: NurtureMessage[] = [
     {
-      sms: `Hi ${firstName}, ${agentFirst} here. Quick update — the market in your suburb is moving well right now. Happy to share some recent numbers if you're interested? Cheers`,
+      sms: `Hi ${firstName}, ${agentFirst} here. Quick update. The market in your suburb is moving well right now. Happy to share some recent numbers if you're interested? Cheers`,
       email: {
-        subject: `Suburb market update — ${firstName}`,
+        subject: `Suburb market update, ${firstName}`,
         body: [
           `Hi ${firstName}, hope you're well.`,
           `I wanted to share a quick market update for your suburb. There have been some strong sales recently that directly impact your property's value. Happy to walk you through the numbers at a time that suits you.`,
@@ -378,22 +378,22 @@ async function generateNurtureMessage(
     {
       sms: `Hi ${firstName}, ${agentFirst} from Peake. Another owner nearby has just decided to go to market. The timing for sellers is looking really good right now. Worth a chat? Cheers`,
       email: {
-        subject: `Thought you'd want to know — ${firstName}`,
+        subject: `Thought you'd want to know, ${firstName}`,
         body: [
           `Hi ${firstName}, hope all is well.`,
-          `I wanted to let you know that another owner in your area has just decided to list their home. It's a good indicator of confidence in the current market — and the conditions are similarly strong for your property.`,
+          `I wanted to let you know that another owner in your area has just decided to list their home. It's a good indicator of confidence in the current market, and the conditions are similarly strong for your property.`,
           `Let me know if you'd like to catch up for a coffee to discuss. No pressure at all.`,
           `Cheers,\n${agentFirst}`,
         ],
       },
     },
     {
-      sms: `Hi ${firstName}, ${agentFirst} here — just checking in. Hope things are going well. If you've had any more thoughts about your property, I'm always happy to chat. Cheers`,
+      sms: `Hi ${firstName}, ${agentFirst} here. Just checking in. Hope things are going well. If you've had any more thoughts about your property, I'm always happy to chat. Cheers`,
       email: {
-        subject: `Just checking in — ${firstName}`,
+        subject: `Just checking in, ${firstName}`,
         body: [
           `Hi ${firstName}, just a quick hello.`,
-          `I hope everything is going well. I'm not reaching out with any particular news — just wanted to check in and see how you're getting on.`,
+          `I hope everything is going well. I'm not reaching out with any particular news, just wanted to check in and see how you're getting on.`,
           `If you've had any thoughts about your property situation at all, I'm always happy to have a no-obligation chat. Otherwise, have a great week.`,
           `Cheers,\n${agentFirst}`,
         ],

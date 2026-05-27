@@ -44,9 +44,9 @@ app.use("/api/webhook/sms", express.urlencoded({ extended: false }))
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 
 const generalLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false,
-  message: { error: "Too many requests — please slow down" } })
+  message: { error: "Too many requests. Please slow down." } })
 const aiLimiter = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, legacyHeaders: false,
-  message: { error: "AI generation rate limit reached — please wait a moment" } })
+  message: { error: "AI generation rate limit reached. Please wait a moment." } })
 const sendLimiter = rateLimit({ windowMs: 60_000, max: 50, standardHeaders: true, legacyHeaders: false,
   message: { error: "Send rate limit reached" } })
 

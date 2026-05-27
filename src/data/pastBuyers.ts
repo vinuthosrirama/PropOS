@@ -56,7 +56,7 @@ export const CAMERON_PAST_BUYERS: PastBuyer[] = [
     notes: "Lovely family. Two kids at Berwick Primary — Ella (yr 5) and Oscar (yr 3). Karen volunteers at the school canteen. David works in the city, catches the 6:42am train. They love the court position and the park across from Thirlmere. Karen mentioned wanting a bigger kitchen when they had everyone over at Christmas. Solid community people.",
     lastContactDate: "2024-11-20",
     contractTerms: "60 day settlement, 20% deposit",
-    personalisationHook: "Karen mentioned wanting a bigger kitchen when they had everyone over at Christmas — 7 years on, Ella and Oscar are outgrowing Thirlmere Court.",
+    personalisationHook: "Karen mentioned wanting a bigger kitchen when they had everyone over at Christmas. 7 years on, Ella and Oscar are outgrowing Thirlmere Court.",
   },
   {
     id: 5002,
