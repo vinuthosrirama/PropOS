@@ -3050,7 +3050,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
         <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowBulkFire(true)}
             style={{ padding: "10px 20px", borderRadius: 12, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 13, fontWeight: 700, fontFamily: FONT, boxShadow: `0 4px 16px ${theme.glow}`, display: "inline-flex", alignItems: "center", gap: 8 }}>
-            🚀 Fire all {segmented.length} contacts at once
+            ✨ Generate & review {segmented.length} personalised messages
           </motion.button>
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowCGTUrgency(true)}
             style={{ padding: "10px 18px", borderRadius: 12, border: `1px solid ${C.orange}50`, cursor: "pointer", background: `${C.orange}12`, color: C.orange, fontSize: 12, fontWeight: 700, fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -3492,7 +3492,6 @@ function VendorAppraisalPanel({ buyer, theme }: {
       {/* Comp cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         {comps.map((comp, i) => {
-          const matchColor = comp.matchScore >= 85 ? C.green : comp.matchScore >= 70 ? theme.primary : C.muted
           return (
             <div key={i} style={{
               background: C.bg3, borderRadius: 12,
@@ -3500,14 +3499,14 @@ function VendorAppraisalPanel({ buyer, theme }: {
               padding: "12px 13px",
               position: "relative",
             }}>
-              {/* Match badge */}
-              <div style={{
-                position: "absolute", top: 8, right: 9,
-                fontSize: 9, fontWeight: 800, color: matchColor,
-                background: matchColor + "18", padding: "1px 6px", borderRadius: 4,
-              }}>
-                {comp.matchScore}% match
-              </div>
+              {/* Match indicator — subtle dot only, no raw number */}
+              {comp.matchScore >= 85 && (
+                <div style={{
+                  position: "absolute", top: 10, right: 10,
+                  width: 7, height: 7, borderRadius: "50%",
+                  background: C.green, boxShadow: `0 0 6px ${C.green}88`,
+                }} title="Strong comparable" />
+              )}
 
               <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 1, paddingRight: 50 }}>
                 {comp.address}
@@ -3915,7 +3914,6 @@ function PropertyEstimatorModal({ theme, onClose }: { theme: AgencyTheme; onClos
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 800, color: theme.primary }}>{fmtK(comp.soldPrice)}</div>
-                    <div style={{ fontSize: 9, color: C.faint }}>{comp.matchScore}% match</div>
                   </div>
                 </div>
               ))}
@@ -4701,6 +4699,7 @@ function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
 }
 
 function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; theme: AgencyTheme }) {
+  const [open, setOpen] = useState(false)
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
 
   const totalEquity = segmented.reduce((s, e) => s + e.financials.equityGain, 0)
@@ -4761,9 +4760,23 @@ function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; t
 
   return (
     <div style={{ marginBottom: 28 }}>
-      <div style={{ fontSize: 10, fontWeight: 800, color: C.faint, letterSpacing: 1.4, textTransform: "uppercase", marginBottom: 10 }}>
-        AI Intelligence Suite
-      </div>
+      {/* Collapsed header — always visible */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6, background: "none",
+          border: "none", cursor: "pointer", padding: 0, marginBottom: open ? 10 : 0,
+        }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 800, color: C.faint, letterSpacing: 1.4, textTransform: "uppercase" }}>
+          AI Intelligence Suite
+        </span>
+        <span style={{ fontSize: 11, color: C.faint, transition: "transform 0.2s", display: "inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
+        {!open && <span style={{ fontSize: 10, color: C.faint, fontWeight: 400 }}>({WOW_ITEMS.length} features)</span>}
+      </button>
+
+      <AnimatePresence>
+      {open && (<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} style={{ overflow: "hidden" }}>
       <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
         {WOW_ITEMS.map((item, i) => (
           <motion.div
@@ -4810,6 +4823,8 @@ function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; t
           </motion.div>
         )}
       </AnimatePresence>
+      </motion.div>)}
+      </AnimatePresence>
     </div>
   )
 }
@@ -4830,6 +4845,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
   const [voiceNotes, setVoiceNotes] = useState("")  // appended to CRM notes for generation
   const [showNegotiationCoach, setShowNegotiationCoach] = useState(false)
   const [showPrintAppraisal, setShowPrintAppraisal] = useState(false)
+  const [showAllMetrics, setShowAllMetrics] = useState(false)
   // NotesBridge: populated from API response after generation
   const [extractedHook, setExtractedHook] = useState<string | null>(null)
   const [personalisationLine, setPersonalisationLine] = useState<string | null>(null)
@@ -5057,27 +5073,66 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
               </div>
             </div>
 
-            {/* Key metrics grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+            {/* Hero metrics — the 3 numbers that matter most */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 10 }}>
               {[
                 { label: "Equity gain", value: fmtDollar(fin.equityGain), color: C.green },
                 { label: "Est. current value", value: fmtDollar(fin.currentEstimate), color: C.text },
-                { label: "Annual growth", value: fmtPct(fin.annualAppreciation), color: C.blue },
-                fin.cashOnCashReturn ? { label: "Cash-on-cash return", value: `${fin.cashOnCashReturn}%`, color: C.green } : null,
-                fin.cgtDiscount ? { label: "Est. CGT (50% disc.)", value: fmtDollar(fin.estimatedCGT), color: C.orange } : null,
-                fin.cgtSavingsBy2027 > 0 ? { label: "CGT savings by Jul 2027", value: fmtDollar(fin.cgtSavingsBy2027), color: C.red ?? "#ef4444" } : null,
-                { label: "Selling costs (est.)", value: fmtDollar(fin.sellingCosts), color: C.muted },
-                { label: "Net proceeds (est.)", value: fmtDollar(fin.netProceeds), color: C.green },
-              ].filter(Boolean).map(m => (
-                <div key={m!.label} style={{
+                fin.cgtSavingsBy2027 > 0
+                  ? { label: "CGT saves by Jul 2027", value: fmtDollar(fin.cgtSavingsBy2027), color: C.red ?? "#ef4444" }
+                  : { label: "Net proceeds (est.)", value: fmtDollar(fin.netProceeds), color: C.green },
+              ].map(m => (
+                <div key={m.label} style={{
                   background: C.bg3, borderRadius: 10, padding: "10px 12px",
                   border: `1px solid ${C.border}`,
                 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>{m!.label}</div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: m!.color }}>{m!.value}</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>{m.label}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: m.color }}>{m.value}</div>
                 </div>
               ))}
             </div>
+
+            {/* Drill-down toggle */}
+            <button
+              onClick={() => setShowAllMetrics(v => !v)}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                fontSize: 11, color: C.faint, fontFamily: FONT,
+                display: "flex", alignItems: "center", gap: 4, padding: 0, marginBottom: 2,
+              }}
+            >
+              <span style={{ transition: "transform 0.2s", display: "inline-block", transform: showAllMetrics ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
+              {showAllMetrics ? "Hide" : "5 more metrics"}
+            </button>
+
+            {/* Expanded metrics */}
+            <AnimatePresence>
+              {showAllMetrics && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                  style={{ overflow: "hidden" }}
+                >
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, paddingTop: 8 }}>
+                    {[
+                      { label: "Annual growth", value: fmtPct(fin.annualAppreciation), color: C.blue },
+                      fin.cashOnCashReturn ? { label: "Cash-on-cash return", value: `${fin.cashOnCashReturn}%`, color: C.green } : null,
+                      fin.cgtDiscount ? { label: "Est. CGT (50% disc.)", value: fmtDollar(fin.estimatedCGT), color: C.orange } : null,
+                      { label: "Selling costs (est.)", value: fmtDollar(fin.sellingCosts), color: C.muted },
+                      { label: "Net proceeds (est.)", value: fmtDollar(fin.netProceeds), color: C.green },
+                    ].filter(Boolean).map(m => (
+                      <div key={m!.label} style={{
+                        background: C.bg3, borderRadius: 10, padding: "10px 12px",
+                        border: `1px solid ${C.border}`,
+                      }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>{m!.label}</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: m!.color }}>{m!.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Vendor Appraisal */}
@@ -5308,7 +5363,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
                   const emailSubject = `Recent ${buyer.suburb} sale relevant to your place, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here.`,
-                    `A comparable ${comps[0].beds}-bedroom property at ${comps[0].address} just sold for ${fmtDollar(comps[0].soldPrice)} on ${comps[0].soldDate}. That puts your place — bought for ${fmtDollar(buyer.purchasePrice)} in ${year} — in a really strong position at roughly ${fmtDollar(fin.currentEstimate)}.`,
+                    `A comparable ${comps[0].beds}-bedroom property at ${comps[0].address} just sold for ${fmtDollar(comps[0].soldPrice)} on ${comps[0].soldDate}. That puts your place (bought for ${fmtDollar(buyer.purchasePrice)} in ${year}) in a really strong position at roughly ${fmtDollar(fin.currentEstimate)}.`,
                     `Happy to put together a quick comps report and walk you through it. No obligation at all. Let me know if it's worth a look.\n\n${signoff},\n${agentFirst}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
@@ -5323,13 +5378,13 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
                 sub: `Avg ${range.daysOnMarket} days on market`,
                 color: theme.primary,
                 buildOutreach: () => {
-                  const smsRaw = `Hi ${fname}, ${agentFirst} here — ${buyer.suburb} is running at ${range.clearanceRate}% clearance. Good time to know your options. ${signoff}, ${agentFirst}`
+                  const smsRaw = `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} is running at ${range.clearanceRate}% clearance right now. Good time to know your options. ${signoff}, ${agentFirst}`
                   const sms = stripDashes(smsRaw.slice(0, 160))
                   const emailSubject = `${buyer.suburb} market is moving, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
-                    `Clearance rate is at ${range.clearanceRate}% with properties averaging just ${range.daysOnMarket} days on market. Strong seller conditions. Based on recent sales, your place is estimated at around ${fmtDollar(fin.currentEstimate)} — that's ${fmtDollar(fin.equityGain)} up since you bought in ${year}.`,
-                    `If you've had any thoughts about listing, it's a decent window. Happy to do a quick appraisal — 20 minutes, I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+                    `Clearance rate is at ${range.clearanceRate}% with properties averaging just ${range.daysOnMarket} days on market. Strong seller conditions. Based on recent sales, your place is estimated at around ${fmtDollar(fin.currentEstimate)}, which is ${fmtDollar(fin.equityGain)} up since you bought in ${year}.`,
+                    `If you've had any thoughts about listing, it's a decent window. Happy to do a quick appraisal, 20 minutes and I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
                 },

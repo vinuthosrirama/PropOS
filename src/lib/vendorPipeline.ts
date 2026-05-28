@@ -68,6 +68,8 @@ export function segmentBuyer(
   const triggers: TriggerEvent[] = []
   const pitchAngles: string[] = []
   const notesLower = (buyer.notes ?? "").toLowerCase()
+  const fname = buyer.name.split("&")[0].split(" ")[0].trim()
+  const suburb = buyer.suburb
 
   // ── Rule-based classification ─────────────────────────────────────────
 
@@ -76,19 +78,19 @@ export function segmentBuyer(
     // CGT window
     if (financials.cgtDiscount && financials.cgtSavingsBy2027 > 5000) {
       triggers.push({ label: `CGT 50% discount saves ${fmtK(financials.cgtSavingsBy2027)}, window closes July 2027`, urgency: "high", source: "financial" })
-      pitchAngles.push(`Selling before July 2027 saves you approximately ${fmtK(financials.cgtSavingsBy2027)} in capital gains tax under the current 50% discount`)
+      pitchAngles.push(`${fname} saves roughly ${fmtK(financials.cgtSavingsBy2027)} in tax if they sell before July 2027. That window is closing fast and most investors don't realise until it's too late.`)
     }
 
     // Strong equity
     if (financials.equityGainPct > 30) {
       triggers.push({ label: `${Math.round(financials.equityGainPct)}% equity gain since purchase`, urgency: "high", source: "financial" })
-      pitchAngles.push(`Your property has grown ${Math.round(financials.equityGainPct)}% since you bought it. That's ${fmtK(financials.equityGain)} in equity.`)
+      pitchAngles.push(`${fname}'s place in ${suburb} has grown ${Math.round(financials.equityGainPct)}% since purchase. That's ${fmtK(financials.equityGain)} sitting there. Worth a conversation about what that could unlock.`)
     }
 
     // Cash-on-cash
     if (financials.cashOnCashReturn && financials.cashOnCashReturn > 100) {
       triggers.push({ label: `${financials.cashOnCashReturn}% return on original deposit`, urgency: "medium", source: "financial" })
-      pitchAngles.push(`Your original deposit of ${fmtK(financials.depositOriginal!)} has turned into ${fmtK(financials.equityGain)} in equity, a ${financials.cashOnCashReturn}% return.`)
+      pitchAngles.push(`${fname} put in ${fmtK(financials.depositOriginal!)} and is now sitting on ${fmtK(financials.equityGain)} in equity. That's a ${financials.cashOnCashReturn}% return. Hard to find that anywhere else right now.`)
     }
 
     // Long hold → sell for profit
@@ -108,22 +110,22 @@ export function segmentBuyer(
     // Notes-based triggers
     if (/upsize|upgrad|bigger|growing|more room|more space|another baby|third kid|fourth bed|5th bed/i.test(notesLower)) {
       triggers.push({ label: "Notes mention upsizing / growing family", urgency: "high", source: "notes" })
-      pitchAngles.push("Your family is growing and your current equity could unlock the space you need.")
+      pitchAngles.push(`The family's outgrown the ${buyer.beds}-bed. With ${fmtK(financials.equityGain)} in equity they could step up to something with more space and barely feel it.`)
     }
 
     if (/downsize|retire|empty nest|kids.*left|kids.*gone|kids.*moved|too big|maintenance/i.test(notesLower)) {
       triggers.push({ label: "Notes mention downsizing / retirement", urgency: "high", source: "notes" })
-      pitchAngles.push("With the kids settled, now could be the perfect time to unlock your equity and simplify")
+      pitchAngles.push(`${fname} is probably paying maintenance on rooms they don't need anymore. ${fmtK(financials.equityGain)} in equity and a downsizer discount could set them up really comfortably.`)
     }
 
     if (/relocat|moving.*interstate|moving.*overseas|job.*transfer|brisbane|sydney|perth|adelaide/i.test(notesLower)) {
       triggers.push({ label: "Relocation mentioned in notes", urgency: "high", source: "notes" })
-      pitchAngles.push("If you're considering a move, the current market gives you a strong position to sell")
+      pitchAngles.push(`If ${fname}'s move is getting closer, the timing works in their favour. ${suburb} is running well and their equity position is strong for a clean exit.`)
     }
 
     if (/separat|divorce|split|settlement/i.test(notesLower)) {
       triggers.push({ label: "Life change: separation/settlement", urgency: "high", source: "notes" })
-      pitchAngles.push("I understand things are changing. I can make the process as smooth and private as possible.")
+      pitchAngles.push(`${fname} is going through a lot. I can keep this discreet, move quickly, and make the process as smooth as possible for everyone.`)
     }
 
     // Property-based inference
@@ -140,7 +142,7 @@ export function segmentBuyer(
     // Equity-based triggers (apply to all owners)
     if (financials.equityGainPct > 25) {
       triggers.push({ label: `${Math.round(financials.equityGainPct)}% equity growth`, urgency: "medium", source: "financial" })
-      pitchAngles.push(`Your home has appreciated ${Math.round(financials.equityGainPct)}% since you purchased. That's ${fmtK(financials.equityGain)} in equity you could deploy.`)
+      pitchAngles.push(`${fname}'s place has grown ${Math.round(financials.equityGainPct)}% since they bought. Most people in ${suburb} don't realise the position they're in. ${fmtK(financials.equityGain)} is real buying power.`)
     }
 
     // Long hold + no strong signals → general seller
@@ -164,7 +166,7 @@ export function segmentBuyer(
   // RENTER
   if (buyer.status === "renter") {
     triggers.push({ label: "Currently renting, potential first home buyer", urgency: "medium", source: "rule" })
-    pitchAngles.push("Have you thought about making the move from renting to owning? Happy to show you what's possible")
+    pitchAngles.push(`${fname} is still renting. Worth a conversation about what getting into the market actually looks like now versus waiting another year.`)
     return { pipeline: "renter-to-buyer", confidence: 50, triggers, pitchAngles }
   }
 
