@@ -89,7 +89,7 @@ function ScoreRing({ score, size = 48, strokeWidth = 3, label }: { score: number
   return (
     <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={cx} cy={cx} r={r} fill="none" stroke={color + "33"} strokeWidth={strokeWidth} />
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke={withAlpha(color, 0.2)} strokeWidth={strokeWidth} />
         <circle cx={cx} cy={cx} r={r} fill="none" stroke={color} strokeWidth={strokeWidth}
           strokeDasharray={`${dash} ${gap}`} strokeLinecap="round" />
       </svg>
@@ -116,6 +116,21 @@ function withAlpha(color: string, alpha: number): string {
     return color.replace(/,[\d.]+\)$/, `,${alpha})`)
   }
   return color
+}
+
+// Format fractional years as "10yr 10m" (e.g. 10.8 → "10yr 10m")
+function fmtYears(y: number): string {
+  const yrs = Math.floor(y)
+  const months = Math.round((y - yrs) * 12)
+  if (months === 0) return `${yrs}yr`
+  return `${yrs}yr ${months}m`
+}
+
+// Returns full address without duplicating the suburb if purchaseAddress already ends with it
+function fullAddr(purchaseAddress: string, suburb: string): string {
+  const norm = (s: string) => s.trim().toLowerCase()
+  if (!suburb || norm(purchaseAddress).endsWith(norm(suburb))) return purchaseAddress.trim()
+  return `${purchaseAddress.trim()}, ${suburb.trim()}`
 }
 
 // ── ActiveCard ────────────────────────────────────────────────────────────────
@@ -3102,13 +3117,14 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
                       {/* Notes / Voice Personalisation */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                         <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8 }}>Notes · Personalisation</label>
-                        {addVoice.supported && addVoice.phase === "idle" && addVoiceStage === "idle" && (
-                          <button onClick={addVoice.start} style={{
+                        {addVoice.phase === "idle" && addVoiceStage === "idle" && (
+                          <button onClick={addVoice.supported ? addVoice.start : undefined} style={{
                             fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
                             background: theme.primary + "18", color: theme.primary,
-                            border: `1px solid ${theme.primary}35`, cursor: "pointer", fontFamily: FONT,
-                            display: "flex", alignItems: "center", gap: 4,
-                          }}>🎙️ Voice note</button>
+                            border: `1px solid ${theme.primary}35`, cursor: addVoice.supported ? "pointer" : "default",
+                            fontFamily: FONT, display: "flex", alignItems: "center", gap: 4,
+                            opacity: addVoice.supported ? 1 : 0.5,
+                          }} title={addVoice.supported ? undefined : "Voice notes require Chrome or Edge"}>🎙️ Voice note</button>
                         )}
                         {addVoiceStage === "done" && (
                           <button onClick={() => { addVoice.reset(); setAddVoiceStage("idle"); setAddForm(f => ({ ...f, notes: "" })) }} style={{
@@ -3120,7 +3136,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
                       {/* Idle: plain textarea */}
                       {addVoice.phase === "idle" && addVoiceStage === "idle" && (
                         <textarea value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
-                          placeholder="Family growing, interested in schools, investment strategy — or use voice note above…"
+                          placeholder="Family growing, interested in schools, investment strategy. Or use voice note above…"
                           style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", minHeight: 64, resize: "vertical", boxSizing: "border-box" }}
                         />
                       )}
@@ -3189,7 +3205,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
                       {addVoiceStage === "done" && (
                         <div>
                           <div style={{ fontSize: 10, color: C.green, fontWeight: 600, marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
-                            <span>✓</span> Voice personalisation complete — review and edit below
+                            <span>✓</span> Voice personalisation complete. Review and edit below
                           </div>
                           <textarea value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
                             style={{ width: "100%", background: C.bg3, border: `1px solid ${theme.primary}30`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", minHeight: 72, resize: "vertical", boxSizing: "border-box" }}
@@ -3222,7 +3238,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
                     >
                       <div style={{ fontSize: 32, marginBottom: 10 }}>📤</div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>Drop your CSV file here</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>or click to browse — columns detected automatically</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>or click to browse, columns detected automatically</div>
                       <div style={{ fontSize: 10, color: C.faint, marginTop: 10 }}>Supports: Name, Phone, Email, Address, Suburb, Purchase Price, Purchase Date</div>
                     </div>
                   ) : (
@@ -3514,7 +3530,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
                   }}>
                     {pl.icon} {pl.shortLabel}
                   </div>
-                  <div style={{ fontSize: 10, color: C.faint }}>{fin.yearsHeld}yr hold</div>
+                  <div style={{ fontSize: 10, color: C.faint }}>{fmtYears(fin.yearsHeld)} hold</div>
                   {(buyer as { personalisationHook?: string }).personalisationHook && (
                     <div style={{
                       fontSize: 9, padding: "2px 7px", borderRadius: 6, fontWeight: 800,
@@ -5507,7 +5523,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
               {[
                 { label: "Purchased", value: buyer.purchaseDate.slice(0, 4) },
                 { label: "Purchase price", value: fmtDollar(buyer.purchasePrice) },
-                { label: "Hold period", value: `${fin.yearsHeld} yrs` },
+                { label: "Hold period", value: fmtYears(fin.yearsHeld) },
                 { label: "Type", value: `${buyer.beds}bd ${buyer.baths}ba ${buyer.propertyType}` },
                 buyer.land ? { label: "Land", value: `${buyer.land}sqm` } : null,
                 { label: "Status", value: formatBuyerStatus(buyer.status) },
@@ -5570,6 +5586,53 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
                 {fmtPct(fin.equityGainPct)} equity growth ({fmtPct(fin.annualAppreciation)} p.a.)
               </div>
             </div>
+
+            {/* Value growth line chart */}
+            {(() => {
+              const W = 320; const H = 72; const PAD_L = 4; const PAD_R = 4; const PAD_T = 8; const PAD_B = 20
+              const years = Math.max(2, Math.ceil(fin.yearsHeld))
+              const pts: { x: number; y: number; val: number; yr: number }[] = []
+              for (let i = 0; i <= years; i++) {
+                pts.push({ yr: i, val: fin.purchasePrice * Math.pow(1 + fin.annualAppreciation / 100, i), x: 0, y: 0 })
+              }
+              const minV = pts[0].val; const maxV = pts[pts.length - 1].val
+              const rng = maxV - minV || 1
+              pts.forEach((p, idx) => {
+                p.x = PAD_L + (idx / (pts.length - 1)) * (W - PAD_L - PAD_R)
+                p.y = PAD_T + (1 - (p.val - minV) / rng) * (H - PAD_T - PAD_B)
+              })
+              const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")
+              const areaD = `${d} L${pts[pts.length-1].x.toFixed(1)},${(H - PAD_B).toFixed(1)} L${PAD_L},${(H - PAD_B).toFixed(1)} Z`
+              const startYear = buyer.purchaseDate ? parseInt(buyer.purchaseDate.slice(0, 4)) || 2013 : 2013
+              return (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
+                    {buyer.suburb} value trajectory
+                  </div>
+                  <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}>
+                    <defs>
+                      <linearGradient id="vgFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={C.green} stopOpacity="0.25" />
+                        <stop offset="100%" stopColor={C.green} stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    {/* Area fill */}
+                    <path d={areaD} fill="url(#vgFill)" />
+                    {/* Line */}
+                    <path d={d} fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    {/* Start dot */}
+                    <circle cx={pts[0].x} cy={pts[0].y} r="3" fill={C.bg3} stroke={C.green} strokeWidth="1.5" />
+                    {/* End dot */}
+                    <circle cx={pts[pts.length-1].x} cy={pts[pts.length-1].y} r="4" fill={C.green} />
+                    {/* Labels */}
+                    <text x={PAD_L} y={H} fontSize="9" fill={C.faint} textAnchor="start">{startYear}</text>
+                    <text x={W - PAD_R} y={H} fontSize="9" fill={C.faint} textAnchor="end">{startYear + years}</text>
+                    <text x={PAD_L} y={pts[0].y - 4} fontSize="9" fill={C.faint} textAnchor="start">{fmtDollar(Math.round(pts[0].val / 1000) * 1000)}</text>
+                    <text x={W - PAD_R} y={pts[pts.length-1].y - 4} fontSize="9" fill={C.green} fontWeight="700" textAnchor="end">{fmtDollar(Math.round(pts[pts.length-1].val / 1000) * 1000)}</text>
+                  </svg>
+                </div>
+              )
+            })()}
 
             {/* Hero metrics — the 3 numbers that matter most */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 10 }}>
@@ -5990,7 +6053,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           agentPhone: agent.phone,
           agencyColor: theme.primary,
           agencyTagline: agent.tagline,
-          propertyAddress: `${buyer.purchaseAddress}, ${buyer.suburb}`,
+          propertyAddress: fullAddr(buyer.purchaseAddress, buyer.suburb),
           priceGuide: fmtDollar(fin.currentEstimate),
           sms, subject,
           emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
@@ -6034,7 +6097,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           agentPhone: agent.phone,
           agencyColor: theme.primary,
           agencyTagline: agent.tagline,
-          propertyAddress: `${buyer.purchaseAddress}, ${buyer.suburb}`,
+          propertyAddress: fullAddr(buyer.purchaseAddress, buyer.suburb),
           priceGuide: fmtDollar(fin.currentEstimate),
           sms, subject,
           emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
