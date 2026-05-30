@@ -77,6 +77,30 @@ function scoreColor(score: number): string {
   return C.red ?? "#ef4444"
 }
 
+/** Reusable SVG arc score ring — ring is `score`% complete */
+function ScoreRing({ score, size = 48, strokeWidth = 3, label }: { score: number; size?: number; strokeWidth?: number; label?: string }) {
+  const cx = size / 2
+  const r = cx - strokeWidth - 1
+  const circ = 2 * Math.PI * r
+  const pct = Math.min(Math.max(score, 0), 99) / 100
+  const dash = circ * pct
+  const gap = circ - dash
+  const color = scoreColor(score)
+  return (
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke={color + "33"} strokeWidth={strokeWidth} />
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke={color} strokeWidth={strokeWidth}
+          strokeDasharray={`${dash} ${gap}`} strokeLinecap="round" />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: Math.round(size * 0.28), fontWeight: 800, color, lineHeight: 1 }}>{score}</span>
+        {label && <span style={{ fontSize: Math.round(size * 0.155), color: C.faint, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: 0.5, marginTop: 1 }}>{label}</span>}
+      </div>
+    </div>
+  )
+}
+
 // Safely add alpha to any CSS colour (hex or rgb/rgba)
 function withAlpha(color: string, alpha: number): string {
   if (color.startsWith("#") && color.length === 7) {
@@ -2516,9 +2540,7 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
                 </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: scoreColor(bestResult.score) }}>
-                  {Math.round(bestResult.score)}
-                </div>
+                <ScoreRing score={Math.round(bestResult.score)} size={52} strokeWidth={3} />
                 <button
                   onClick={() => onSelectLead(scoredLead, bestProperty)}
                   style={{
@@ -2581,13 +2603,18 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
   const [addForm, setAddForm] = useState<AddContactForm>(EMPTY_FORM)
   const [addSaving, setAddSaving] = useState(false)
   const [addSaved, setAddSaved] = useState(false)
+  const [importSource, setImportSource] = useState<"manual" | "csv" | "crm">("manual")
+  const [csvContacts, setCsvContacts] = useState<Partial<AddContactForm>[]>([])
+  const [csvImporting, setCsvImporting] = useState(false)
+  const [csvImported, setCsvImported] = useState(false)
+  const [crmConnecting, setCrmConnecting] = useState<string | null>(null)
+  const csvRef = useRef<HTMLInputElement>(null)
 
-  // Try loading real past buyers from the Google Sheet on mount
-  useEffect(() => {
+  // Try loading real past buyers from the Google Sheet — also callable for manual refresh
+  const loadFromSheet = () => {
     setSheetLoading(true)
     readPastBuyersFromSheet().then(rows => {
       if (rows && rows.length > 0) {
-        // Overlay hardcoded personalisationHooks by name (for contacts present in both hardcoded + sheet)
         const hookByName = new Map(
           hardcodedBuyers
             .filter(b => b.personalisationHook)
@@ -2597,8 +2624,6 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
           ...r,
           personalisationHook: r.personalisationHook ?? hookByName.get(r.name.toLowerCase().trim()),
         }))
-        // Demo injection: if no contacts have a hook yet, seed the top 2 contacts with sample
-        // hooks so the feature is always visible in the demo — agents see what to put in col R
         const hasAnyHook = merged.some(r => r.personalisationHook)
         if (!hasAnyHook && merged.length > 0) {
           merged = [...merged]
@@ -2617,6 +2642,11 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
       }
       setSheetLoading(false)
     }).catch(() => setSheetLoading(false))
+  }
+
+  // Auto-load on mount
+  useEffect(() => {
+    loadFromSheet()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -2678,6 +2708,74 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
     setAddSaved(true)
     setAddSaving(false)
     setTimeout(() => { setShowAddModal(false); setAddForm(EMPTY_FORM); setAddSaved(false) }, 1200)
+  }
+
+  const handleCsvFile = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      const text = e.target?.result as string
+      const lines = text.split(/\r?\n/).filter(l => l.trim())
+      if (lines.length < 2) return
+      const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ""))
+      const col = (names: string[]) => {
+        for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i !== -1) return i }
+        return -1
+      }
+      const nameI = col(["name", "fullname", "contact"])
+      const phoneI = col(["phone", "mobile", "cell"])
+      const emailI = col(["email"])
+      const addrI = col(["address", "purchaseaddress", "property"])
+      const suburbI = col(["suburb", "city", "town"])
+      const priceI = col(["price", "purchaseprice", "sold"])
+      const dateI = col(["date", "purchasedate", "settlementdate"])
+      const parsed: Partial<AddContactForm>[] = lines.slice(1).map(line => {
+        const cols = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""))
+        return {
+          name: nameI !== -1 ? cols[nameI] : "",
+          phone: phoneI !== -1 ? cols[phoneI] : "",
+          email: emailI !== -1 ? cols[emailI] : "",
+          purchaseAddress: addrI !== -1 ? cols[addrI] : "",
+          suburb: suburbI !== -1 ? cols[suburbI] : "",
+          purchasePrice: priceI !== -1 ? cols[priceI] : "",
+          purchaseDate: dateI !== -1 ? cols[dateI] : "",
+          propertyType: "House",
+          status: "owner-occupier",
+        }
+      }).filter(c => c.name)
+      setCsvContacts(parsed)
+    }
+    reader.readAsText(file)
+  }
+
+  const handleCsvImport = async () => {
+    if (!csvContacts.length) return
+    setCsvImporting(true)
+    for (const c of csvContacts) {
+      const newContact = {
+        id: Date.now() + Math.random(),
+        name: c.name ?? "",
+        phone: c.phone ?? "",
+        email: c.email ?? "",
+        purchaseAddress: c.purchaseAddress ?? "",
+        suburb: c.suburb ?? "",
+        purchaseDate: c.purchaseDate ?? "",
+        purchasePrice: parseInt((c.purchasePrice ?? "").replace(/\D/g, ""), 10) || 0,
+        deposit: 0, propertyType: (c.propertyType ?? "House") as "House" | "Unit" | "Townhouse",
+        beds: 3, baths: 2, land: 0,
+        status: (c.status ?? "owner-occupier") as import("../data/pastBuyers").BuyerStatus,
+        notes: "", lastContactDate: "",
+      }
+      try {
+        await fetch(apiUrl("/api/add-contact"), {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newContact),
+        })
+      } catch { /* add locally anyway */ }
+      setBuyers(prev => [...prev, newContact])
+    }
+    setCsvImporting(false)
+    setCsvImported(true)
+    setTimeout(() => { setShowAddModal(false); setCsvContacts([]); setCsvImported(false); setImportSource("manual") }, 1400)
   }
 
   return (
@@ -2758,17 +2856,35 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Your CRM database</div>
-          {sheetLoading && <div style={{ fontSize: 10, color: C.faint }}>Loading from sheet...</div>}
+          {sheetLoading && (
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{
+                width: 10, height: 10, borderRadius: "50%",
+                border: "2px solid transparent",
+                borderTopColor: C.blue,
+                animation: "spin 0.7s linear infinite",
+                flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 10, color: C.faint }}>Syncing…</span>
+            </div>
+          )}
           {sheetSource === "sheet" && !sheetLoading && (
-            <div style={{ fontSize: 10, color: C.green, fontWeight: 600, padding: "2px 8px", background: C.green + "18", borderRadius: 6 }}>Live from sheet</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, flexShrink: 0 }} />
+              <span style={{ fontSize: 10, color: C.green, fontWeight: 600 }}>Live.</span>
+              <button onClick={loadFromSheet} title="Refresh from Google Sheets" style={{
+                background: "none", border: "none", cursor: "pointer", padding: "0 2px",
+                color: C.faint, fontSize: 11, lineHeight: 1, display: "flex", alignItems: "center",
+              }}>↺</button>
+            </div>
           )}
           {sheetSource === "demo" && !sheetLoading && (
             <div style={{ fontSize: 10, color: C.faint, padding: "2px 8px", background: C.bg3, borderRadius: 6 }}>Demo data</div>
           )}
           <button onClick={() => setShowAddModal(true)} style={{
-            marginLeft: "auto", padding: "5px 12px", borderRadius: 8,
-            background: theme.dim, border: `1px solid ${theme.primary}55`,
-            color: theme.primary, fontSize: 11, fontWeight: 700,
+            marginLeft: "auto", padding: "5px 14px", borderRadius: 8,
+            background: theme.primary, border: "none",
+            color: "#ffffff", fontSize: 11, fontWeight: 700,
             cursor: "pointer", fontFamily: FONT,
           }}>
             + Add contact
@@ -2869,88 +2985,190 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
                 maxHeight: "85vh", overflowY: "auto",
               }}
             >
-              <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 4 }}>Add contact</div>
-              <div style={{ fontSize: 12, color: C.muted, marginBottom: 24 }}>
-                Add a past buyer to your CRM database and Google Sheet.
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 3 }}>Add or Import Contacts</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Contacts are upserted to your Google Sheet CRM automatically.</div>
+                </div>
+                <button onClick={() => { setShowAddModal(false); setImportSource("manual") }} style={{
+                  background: "none", border: "none", color: C.faint, fontSize: 18,
+                  cursor: "pointer", padding: "0 4px", lineHeight: 1,
+                }}>✕</button>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+
+              {/* Source tabs */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 22, background: C.bg3, borderRadius: 10, padding: 4 }}>
                 {([
-                  ["Name", "name", "text", "Full name"],
-                  ["Phone", "phone", "tel", "+61 4xx xxx xxx"],
-                  ["Email", "email", "email", "email@domain.com"],
-                  ["Purchase address", "purchaseAddress", "text", "12 Smith St"],
-                  ["Suburb", "suburb", "text", "Berwick"],
-                  ["Purchase date", "purchaseDate", "date", ""],
-                  ["Purchase price", "purchasePrice", "text", "850000"],
-                  ["Deposit paid", "deposit", "text", "85000"],
-                  ["Beds", "beds", "number", "4"],
-                  ["Baths", "baths", "number", "2"],
-                  ["Land (sqm)", "land", "text", "612"],
-                ] as [string, keyof AddContactForm, string, string][]).map(([label, field, type, placeholder]) => (
-                  <div key={field} style={{ gridColumn: ["name", "purchaseAddress", "notes"].includes(field) ? "1 / -1" : undefined }}>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>{label}</label>
-                    <input
-                      type={type}
-                      value={addForm[field]}
-                      onChange={e => setAddForm(f => ({ ...f, [field]: e.target.value }))}
-                      placeholder={placeholder}
-                      style={{
-                        width: "100%", background: C.bg3, border: `1px solid ${C.border}`,
-                        borderRadius: 8, padding: "8px 10px", color: C.text,
-                        fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box",
-                      }}
-                    />
-                  </div>
+                  ["manual", "✍️", "Manual"],
+                  ["csv", "📤", "Import CSV"],
+                  ["crm", "🔌", "From CRM"],
+                ] as [typeof importSource, string, string][]).map(([src, icon, label]) => (
+                  <button key={src} onClick={() => setImportSource(src)} style={{
+                    flex: 1, padding: "8px 10px", borderRadius: 8, border: "none",
+                    background: importSource === src ? theme.primary : "transparent",
+                    color: importSource === src ? "#ffffff" : C.muted,
+                    fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+                    transition: "all 0.15s",
+                  }}>
+                    {icon} {label}
+                  </button>
                 ))}
-                <div>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Property type</label>
-                  <select value={addForm.propertyType} onChange={e => setAddForm(f => ({ ...f, propertyType: e.target.value }))}
-                    style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
-                    <option>House</option><option>Unit</option><option>Townhouse</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Status</label>
-                  <select value={addForm.status} onChange={e => setAddForm(f => ({ ...f, status: e.target.value }))}
-                    style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
-                    <option value="owner-occupier">Owner-occupier</option>
-                    <option value="investor">Investor</option>
-                    <option value="buyer→landlord">Buyer → Landlord</option>
-                    <option value="buyer→seller">Buyer → Seller</option>
-                    <option value="renter→buyer">Renter → Buyer</option>
-                    <option value="buyer→downsizer">Buyer → Downsizer</option>
-                  </select>
-                </div>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Notes</label>
-                  <textarea
-                    value={addForm.notes}
-                    onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
-                    placeholder="Family growing, interested in schools, investment strategy..."
-                    style={{
-                      width: "100%", background: C.bg3, border: `1px solid ${C.border}`,
-                      borderRadius: 8, padding: "8px 10px", color: C.text,
-                      fontSize: 13, fontFamily: FONT, outline: "none", minHeight: 64,
-                      resize: "vertical", boxSizing: "border-box",
-                    }}
+              </div>
+              {/* ── Manual Add ── */}
+              {importSource === "manual" && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    {([
+                      ["Name", "name", "text", "Full name"],
+                      ["Phone", "phone", "tel", "+61 4xx xxx xxx"],
+                      ["Email", "email", "email", "email@domain.com"],
+                      ["Purchase address", "purchaseAddress", "text", "12 Smith St"],
+                      ["Suburb", "suburb", "text", "Berwick"],
+                      ["Purchase date", "purchaseDate", "date", ""],
+                      ["Purchase price", "purchasePrice", "text", "850000"],
+                      ["Deposit paid", "deposit", "text", "85000"],
+                      ["Beds", "beds", "number", "4"],
+                      ["Baths", "baths", "number", "2"],
+                      ["Land (sqm)", "land", "text", "612"],
+                    ] as [string, keyof AddContactForm, string, string][]).map(([label, field, type, placeholder]) => (
+                      <div key={field} style={{ gridColumn: ["name", "purchaseAddress", "notes"].includes(field) ? "1 / -1" : undefined }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>{label}</label>
+                        <input type={type} value={addForm[field]}
+                          onChange={e => setAddForm(f => ({ ...f, [field]: e.target.value }))}
+                          placeholder={placeholder}
+                          style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                        />
+                      </div>
+                    ))}
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Property type</label>
+                      <select value={addForm.propertyType} onChange={e => setAddForm(f => ({ ...f, propertyType: e.target.value }))}
+                        style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
+                        <option>House</option><option>Unit</option><option>Townhouse</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Status</label>
+                      <select value={addForm.status} onChange={e => setAddForm(f => ({ ...f, status: e.target.value }))}
+                        style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
+                        <option value="owner-occupier">Owner-occupier</option>
+                        <option value="investor">Investor</option>
+                        <option value="buyer→landlord">Buyer → Landlord</option>
+                        <option value="buyer→seller">Buyer → Seller</option>
+                        <option value="renter→buyer">Renter → Buyer</option>
+                        <option value="buyer→downsizer">Buyer → Downsizer</option>
+                      </select>
+                    </div>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Notes</label>
+                      <textarea value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
+                        placeholder="Family growing, interested in schools, investment strategy..."
+                        style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", minHeight: 64, resize: "vertical", boxSizing: "border-box" }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                    <button onClick={() => setShowAddModal(false)} style={{ flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Cancel</button>
+                    <button onClick={handleAddContact} disabled={addSaving || addSaved} style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: addSaved ? C.green : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 14, fontWeight: 700, cursor: addSaving || addSaved ? "default" : "pointer", fontFamily: FONT }}>
+                      {addSaved ? "✓ Contact added" : addSaving ? "Saving…" : "Add contact"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* ── CSV Import ── */}
+              {importSource === "csv" && (
+                <>
+                  <input ref={csvRef} type="file" accept=".csv" style={{ display: "none" }}
+                    onChange={e => { if (e.target.files?.[0]) handleCsvFile(e.target.files[0]) }}
                   />
+                  {!csvContacts.length ? (
+                    <div
+                      onClick={() => csvRef.current?.click()}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleCsvFile(f) }}
+                      style={{ border: `2px dashed ${theme.primary}55`, borderRadius: 14, padding: "40px 24px", textAlign: "center", cursor: "pointer", background: theme.dim, userSelect: "none" }}
+                    >
+                      <div style={{ fontSize: 32, marginBottom: 10 }}>📤</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>Drop your CSV file here</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>or click to browse — columns detected automatically</div>
+                      <div style={{ fontSize: 10, color: C.faint, marginTop: 10 }}>Supports: Name, Phone, Email, Address, Suburb, Purchase Price, Purchase Date</div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ background: C.bg3, borderRadius: 10, padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: `${C.green}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>✓</div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{csvContacts.length} contacts found</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>Review below, then import all to your CRM and Google Sheet.</div>
+                        </div>
+                        <button onClick={() => { setCsvContacts([]); if (csvRef.current) csvRef.current.value = "" }} style={{ marginLeft: "auto", background: "none", border: "none", color: C.faint, fontSize: 12, cursor: "pointer", fontFamily: FONT }}>Change file</button>
+                      </div>
+                      <div style={{ maxHeight: 180, overflowY: "auto", borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 16 }}>
+                        {csvContacts.slice(0, 8).map((c, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: i < Math.min(csvContacts.length, 8) - 1 ? `1px solid ${C.border}` : "none" }}>
+                            <div style={{ width: 26, height: 26, borderRadius: 8, background: theme.dim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: theme.primary }}>{(c.name ?? "?").charAt(0)}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "—"}</div>
+                              <div style={{ fontSize: 10, color: C.faint }}>{c.purchaseAddress || c.suburb || c.phone || ""}</div>
+                            </div>
+                          </div>
+                        ))}
+                        {csvContacts.length > 8 && <div style={{ padding: "6px 12px", fontSize: 11, color: C.faint }}>+{csvContacts.length - 8} more contacts…</div>}
+                      </div>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <button onClick={() => { setCsvContacts([]); if (csvRef.current) csvRef.current.value = "" }} style={{ flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Cancel</button>
+                        <button onClick={handleCsvImport} disabled={csvImporting || csvImported} style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: csvImported ? C.green : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 14, fontWeight: 700, cursor: csvImporting || csvImported ? "default" : "pointer", fontFamily: FONT }}>
+                          {csvImported ? `✓ Imported ${csvContacts.length} contacts` : csvImporting ? "Importing…" : `Import ${csvContacts.length} contacts`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── From CRM ── */}
+              {importSource === "crm" && (
+                <div>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Connect your CRM to sync contacts automatically. PropOS maps your fields and upserts new records to your Google Sheet.</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    {([
+                      ["RealBase",       "rb", "🏠", true],
+                      ["Rex Software",   "rex", "📋", false],
+                      ["AgentBox",       "ab", "📦", false],
+                      ["Box+Dice",       "bd", "🎲", false],
+                      ["ActivePipe",     "ap", "🔥", false],
+                      ["Propic",         "pp", "💡", false],
+                      ["Reapit",         "rp", "🏢", false],
+                      ["VaultRE",        "vr", "🔐", false],
+                      ["Console Cloud",  "cc", "☁️", false],
+                      ["HubSpot",        "hs", "🟠", false],
+                    ] as [string, string, string, boolean][]).map(([name, key, icon, featured]) => (
+                      <div key={key} style={{ background: C.bg3, borderRadius: 12, padding: "14px 16px", border: `1px solid ${featured ? theme.primary + "44" : C.border}`, position: "relative" }}>
+                        {featured && <div style={{ position: "absolute", top: 8, right: 8, background: theme.primary, color: "#fff", fontSize: 8, fontWeight: 800, padding: "2px 6px", borderRadius: 4, letterSpacing: 0.5 }}>FEATURED</div>}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                          <span style={{ fontSize: 20 }}>{icon}</span>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{name}</div>
+                        </div>
+                        {crmConnecting === key ? (
+                          <div style={{ fontSize: 10, color: C.faint, display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: "50%", border: "1.5px solid transparent", borderTopColor: theme.primary, animation: "spin 0.7s linear infinite" }} />
+                            Connecting via OAuth…
+                          </div>
+                        ) : (
+                          <button onClick={() => { setCrmConnecting(key); setTimeout(() => setCrmConnecting(null), 2200) }} style={{ width: "100%", padding: "7px", borderRadius: 8, border: `1px solid ${theme.primary}55`, background: featured ? theme.primary : "transparent", color: featured ? "#fff" : theme.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                            {featured ? "🔗 Connect RealBase" : "Connect"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 14, padding: "10px 14px", background: C.bg3, borderRadius: 10, fontSize: 11, color: C.faint, textAlign: "center" }}>
+                    OAuth sync available in PropOS Pro. Contacts import once and stay in sync automatically.
+                  </div>
                 </div>
-              </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-                <button onClick={() => setShowAddModal(false)} style={{
-                  flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${C.border}`,
-                  background: "transparent", color: C.muted, fontSize: 14, fontWeight: 600,
-                  cursor: "pointer", fontFamily: FONT,
-                }}>Cancel</button>
-                <button onClick={handleAddContact} disabled={addSaving || addSaved} style={{
-                  flex: 2, padding: "12px", borderRadius: 10, border: "none",
-                  background: addSaved ? C.green : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
-                  color: "white", fontSize: 14, fontWeight: 700,
-                  cursor: addSaving || addSaved ? "default" : "pointer", fontFamily: FONT,
-                }}>
-                  {addSaved ? "Contact added" : addSaving ? "Saving..." : "Add contact"}
-                </button>
-              </div>
+              )}
             </motion.div>
           </motion.div>
         )}
@@ -3001,16 +3219,15 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
           const pctCgt    = segmented.filter(e => e.financials.cgtSavingsBy2027 > 5000).length / Math.max(segmented.length, 1)
           const pctEquity = segmented.filter(e => e.financials.equityGainPct >= 30).length / Math.max(segmented.length, 1)
           const score     = Math.round(pctConf * 40 + pctCgt * 30 + pctEquity * 30)
-          const sc        = score >= 70 ? C.green : score >= 50 ? C.orange : (C.red ?? "#ef4444")
           const optCount  = segmented.filter(e => e.segment.confidence >= 60).length
           const cgtCount  = segmented.filter(e => e.financials.cgtSavingsBy2027 > 5000).length
           const readyCount = segmented.filter(e => e.financials.equityGainPct >= 30 || e.segment.confidence >= 70).length
           return (
             <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
               style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12, padding: "14px 18px", borderRadius: 14, background: `linear-gradient(135deg, ${theme.gradient[0]}12, ${theme.gradient[1]}08)`, border: `1px solid ${theme.primary}30` }}>
-              {/* Arc score */}
-              <div style={{ textAlign: "center", flexShrink: 0 }}>
-                <div style={{ fontSize: 32, fontWeight: 900, color: sc, letterSpacing: -1, lineHeight: 1 }}>{score}</div>
+              {/* Arc score ring */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                <ScoreRing score={score} size={64} strokeWidth={4} />
                 <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8 }}>Database score</div>
               </div>
               {/* Divider */}
@@ -3085,9 +3302,9 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
       {/* Pipeline filter chips */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
         <button onClick={() => setFilterPipeline("all")} style={{
-          padding: "6px 14px", borderRadius: 20, border: `1px solid ${filterPipeline === "all" ? theme.primary : C.border}`,
-          background: filterPipeline === "all" ? theme.primary : C.bg2,
-          color: filterPipeline === "all" ? "#fff" : C.muted,
+          padding: "6px 14px", borderRadius: 20, border: `1px solid ${filterPipeline === "all" ? theme.primary : theme.primary + "40"}`,
+          background: filterPipeline === "all" ? theme.primary : "#fff",
+          color: filterPipeline === "all" ? "#fff" : theme.primary,
           fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
         }}>
           All ({segmented.length})
@@ -3097,9 +3314,9 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
           const count = segmented.filter(s => s.segment.pipeline === p).length
           return (
             <button key={p} onClick={() => setFilterPipeline(p)} style={{
-              padding: "6px 14px", borderRadius: 20, border: `1px solid ${filterPipeline === p ? pl.color : C.border}`,
-              background: filterPipeline === p ? pl.color + "22" : C.bg2,
-              color: filterPipeline === p ? pl.color : C.muted,
+              padding: "6px 14px", borderRadius: 20, border: `1px solid ${filterPipeline === p ? pl.color : pl.color + "50"}`,
+              background: filterPipeline === p ? pl.color + "22" : "#fff",
+              color: filterPipeline === p ? pl.color : pl.color,
               fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
             }}>
               {pl.icon} {pl.shortLabel} ({count})
@@ -3202,16 +3419,8 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
                 <div style={{ fontSize: 9, color: C.faint }}>est. value</div>
               </div>
 
-              {/* Priority score */}
-              <div style={{
-                width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-                background: scoreColor(entry.priority) + "18",
-                border: `1px solid ${scoreColor(entry.priority)}33`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 13, fontWeight: 800, color: scoreColor(entry.priority),
-              }}>
-                {entry.priority}
-              </div>
+              {/* Priority score ring */}
+              <ScoreRing score={entry.priority} size={44} strokeWidth={3} />
             </motion.div>
           )
         })}
@@ -4351,7 +4560,7 @@ function PreMarketMatcherModal({ segmented, agent, theme, onClose, onSelectEntry
             <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Select listing</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {activeListings.map(l => (
-                <button key={l.id} onClick={() => setSelId(l.id)} style={{ padding: "6px 14px", borderRadius: 10, border: `1px solid ${selId === l.id ? theme.primary : C.border}`, background: selId === l.id ? `${theme.primary}15` : C.bg2, color: selId === l.id ? theme.primary : C.muted, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                <button key={l.id} onClick={() => setSelId(l.id)} style={{ padding: "6px 14px", borderRadius: 10, border: `1px solid ${selId === l.id ? theme.primary : theme.primary + "40"}`, background: selId === l.id ? `${theme.primary}15` : "#fff", color: theme.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
                   {l.address.split(",")[0]}
                 </button>
               ))}
@@ -4390,9 +4599,8 @@ function PreMarketMatcherModal({ segmented, agent, theme, onClose, onSelectEntry
                         {factors.map(f => <span key={f} style={{ fontSize: 10, color: theme.primary, background: `${theme.primary}12`, border: `1px solid ${theme.primary}25`, padding: "2px 7px", borderRadius: 5 }}>{f}</span>)}
                       </div>
                     </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontSize: 20, fontWeight: 900, color: scoreColor(score) }}>{score}%</div>
-                      <div style={{ fontSize: 9, color: C.faint }}>match</div>
+                    <div style={{ flexShrink: 0 }}>
+                      <ScoreRing score={score} size={44} strokeWidth={3} label="match" />
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 5, flexShrink: 0 }}>
                       <button onClick={() => setAlerted(prev => new Set([...prev, buyer.id]))}
@@ -4401,7 +4609,7 @@ function PreMarketMatcherModal({ segmented, agent, theme, onClose, onSelectEntry
                       </button>
                       {onSelectEntry && (
                         <button onClick={() => { onClose(); onSelectEntry(entry) }}
-                          style={{ padding: "5px 11px", borderRadius: 9, border: `1px solid ${C.border}`, cursor: "pointer", background: C.bg2, color: C.muted, fontSize: 10, fontWeight: 700, fontFamily: FONT }}>
+                          style={{ padding: "5px 11px", borderRadius: 9, border: `1px solid ${theme.primary}50`, cursor: "pointer", background: "#fff", color: theme.primary, fontSize: 10, fontWeight: 700, fontFamily: FONT }}>
                           Profile →
                         </button>
                       )}
@@ -5003,7 +5211,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
               </div>
             </div>
             <div style={{ fontSize: 13, color: theme.primary, fontWeight: 600, marginBottom: 14 }}>
-              {buyer.purchaseAddress}, {buyer.suburb}
+              {buyer.purchaseAddress}
             </div>
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
               {[
@@ -5607,7 +5815,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           {fname}'s personalised vendor messages
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
-          <div style={{ fontSize: 13, color: C.muted }}>{buyer.purchaseAddress}, {buyer.suburb}</div>
+          <div style={{ fontSize: 13, color: C.muted }}>{buyer.purchaseAddress}</div>
           <div style={{
             fontSize: 10, padding: "2px 8px", borderRadius: 6,
             background: pl.color + "18", color: pl.color, fontWeight: 700,
@@ -5845,13 +6053,13 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         </div>
         {showNurture && (() => {
           const nurtureSteps = [
-            { day: 0,  label: "Day 0 — Initial outreach", color: theme.primary, note: "SMS + email sent (see above)" },
-            { day: 7,  label: "Day 7 — Market pulse",    color: C.blue,
-              sms: `Hi ${fname}, just a quick market update — a comparable home in ${buyer.suburb} sold well above guide this week. Worth a conversation? ${agent.name.split(" ")[0]}` },
-            { day: 14, label: "Day 14 — Value reminder", color: C.green,
-              sms: `Hi ${fname}, ${agent.name.split(" ")[0]} here. Equity in ${buyer.suburb} is up ${Math.round(fin.equityGainPct)}% since you bought — happy to run through the numbers if useful.` },
-            { day: 30, label: "Day 30 — Soft close",     color: C.orange,
-              sms: `Hi ${fname}, touching base on ${buyer.purchaseAddress.split(",")[0]}. If timing isn't right yet, no problem — happy to keep you updated on the market. ${agent.name.split(" ")[0]}` },
+            { day: 0,  label: "Day 0: Initial outreach", color: theme.primary, note: "SMS + email sent (see above)" },
+            { day: 7,  label: "Day 7: Market pulse",    color: C.blue,
+              sms: `Hi ${fname}, quick market update. A comparable home in ${buyer.suburb} sold well above guide this week. Worth a conversation? ${agent.name.split(" ")[0]}` },
+            { day: 14, label: "Day 14: Value reminder", color: C.green,
+              sms: `Hi ${fname}, ${agent.name.split(" ")[0]} here. Equity in ${buyer.suburb} is up ${Math.round(fin.equityGainPct)}% since you bought. Happy to run through the numbers if useful.` },
+            { day: 30, label: "Day 30: Soft close",     color: C.orange,
+              sms: `Hi ${fname}, touching base on ${buyer.purchaseAddress.split(",")[0]}. If timing isn't right yet, no problem. Happy to keep you updated on the market. ${agent.name.split(" ")[0]}` },
           ]
           return (
             <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>

@@ -144,21 +144,21 @@ export interface PropertySLM {
 export const SLM_DATA: Record<number, PropertySLM> = {
 
   // -------------------------------------------------------------------------
-  // 101 — 48 President Road, Narre Warren South (ACTIVE LISTING — $780K–$850K, auction 7 Jun 2026)
+  // 101 — 10 Ashby Drive, Berwick (ACTIVE LISTING — $900K–$1,000K, auction 14 Jun 2026)
   // SLM data: Extracted from Section 32 / COS (Ideal Conveyancing, 06/05/2026)
   // Title: Vol 10427 Folio 211 | Lot 598 PS416514Y | Springfield Stage 21
   // -------------------------------------------------------------------------
   101: {
     propertyId: 101,
-    address: "48 President Road",
-    suburb: "Narre Warren South VIC 3805",
+    address: "10 Ashby Drive",
+    suburb: "Berwick VIC 3806",
     status: "active",
 
     // PHYSICAL
     beds: 4,
     baths: 2,
     cars: 2,
-    landSqm: 630,
+    landSqm: 640,
     houseSqm: 210,
     yearBuilt: 2007,
     propertyType: "House",
@@ -1183,14 +1183,14 @@ export const SLM_DATA: Record<number, PropertySLM> = {
   },
 
   // -------------------------------------------------------------------------
-  // 105 — 34 Hartsmere Drive, Berwick (ACTIVE LISTING — S32 signed vendor 04/05/2026)
+  // 105 — 3 Fairholme Boulevard, Berwick (ACTIVE LISTING — S32 signed vendor 04/05/2026)
   // Title: Vol 10668 Folio 952 | Lot 323 PS444491A | Casey Council prop no. 81625
   // Covenant AB543185A | S173 Agreement P168642E (Kingsmere Estate) | Bank Australia mortgage AZ356770W
   // Vendor: Daniella May Maloney (sole proprietor since 28/06/2018; Maloney family from 2002 / $76K)
   // -------------------------------------------------------------------------
   105: {
     propertyId: 105,
-    address: "34 Hartsmere Drive",
+    address: "3 Fairholme Boulevard",
     suburb: "Berwick VIC 3806",
     status: "active",
 
@@ -1198,7 +1198,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     beds: 4,
     baths: 2,
     cars: 2,
-    landSqm: 621,
+    landSqm: 744,
     houseSqm: 218,
     yearBuilt: 2003,
     propertyType: "House",
