@@ -226,9 +226,9 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     daysOnMarketAvg: 31,
     clearanceRatePct: 67,
     comparableSales: [
-      { address: "52 President Road, Narre Warren South", price: 835000, date: "Mar 2026", beds: 4 },
+      { address: "9 Arlington Place, Narre Warren South", price: 880000, date: "Feb 2026", beds: 4 },
       { address: "11 Kershaw Drive, Narre Warren South",  price: 797000, date: "Jan 2026", beds: 4 },
-      { address: "38 Outlook Drive, Narre Warren South",  price: 862000, date: "Apr 2026", beds: 4 },
+      { address: "1 Lansbury Drive, Narre Warren South",  price: 810000, date: "Mar 2026", beds: 4 },
     ],
 
     // FEATURES & CONDITION
@@ -489,9 +489,9 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     daysOnMarketAvg: 32,
     clearanceRatePct: 74,
     comparableSales: [
-      { address: "7 Thirlmere Court, Berwick", price: 910000, date: "Feb 2026", beds: 4 },
-      { address: "14 Clive Court, Berwick", price: 955000, date: "Mar 2026", beds: 4 },
-      { address: "22 Fairway Drive, Berwick", price: 890000, date: "Jan 2026", beds: 4 },
+      { address: "7 Thirlmere Court, Berwick",    price: 910000, date: "Feb 2026", beds: 4 },
+      { address: "81 Earlsfield Drive, Berwick", price: 950000, date: "Mar 2026", beds: 4 },
+      { address: "2 Martin Court, Berwick",      price: 930000, date: "Jan 2026", beds: 4 },
     ],
 
     // FEATURES & CONDITION
@@ -758,9 +758,9 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     daysOnMarketAvg: 32,
     clearanceRatePct: 74,
     comparableSales: [
-      { address: "12 Ascot Rise, Berwick", price: 1270000, date: "Jan 2026", beds: 4 },
-      { address: "8 Grand Arch Way, Berwick", price: 1310000, date: "Feb 2026", beds: 4 },
-      { address: "3 Brookfield Drive, Berwick", price: 1250000, date: "Dec 2025", beds: 4 },
+      { address: "5 Logan Place, Berwick",     price: 1265000, date: "Jan 2026", beds: 4 },
+      { address: "8 Grand Arch Way, Berwick",  price: 1310000, date: "Feb 2026", beds: 4 },
+      { address: "3 Embling Street, Berwick",  price: 1250000, date: "Dec 2025", beds: 4 },
     ],
 
     // FEATURES & CONDITION
@@ -1788,8 +1788,8 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     clearanceRatePct: 74,
     comparableSales: [
       { address: "8 Grand Arch Way, Berwick", price: 1210000, date: "Feb 2026", beds: 4 },
-      { address: "5 Ascot Rise, Berwick", price: 1300000, date: "Apr 2026", beds: 4 },
-      { address: "12 Ascot Rise, Berwick", price: 1270000, date: "Jan 2026", beds: 4 },
+      { address: "5 Ascot Rise, Berwick",    price: 1265000, date: "Apr 2026", beds: 4 },
+      { address: "5 Logan Place, Berwick",   price: 1265000, date: "Jan 2026", beds: 4 },
     ],
 
     // FEATURES & CONDITION
@@ -2066,9 +2066,9 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     daysOnMarketAvg: 32,
     clearanceRatePct: 74,
     comparableSales: [
-      { address: "3 Thirlmere Court, Berwick", price: 941000, date: "May 2026", beds: 4 },
-      { address: "47 Premier Drive, Berwick", price: 1005000, date: "Apr 2026", beds: 4 },
-      { address: "22 Fairway Drive, Berwick", price: 890000, date: "Jan 2026", beds: 4 },
+      { address: "3 Thirlmere Court, Berwick",  price: 941000, date: "May 2026", beds: 4 },
+      { address: "47 Premier Drive, Berwick",   price: 1005000, date: "Apr 2026", beds: 4 },
+      { address: "2 Martin Court, Berwick",     price: 930000, date: "Jan 2026", beds: 4 },
     ],
 
     // FEATURES & CONDITION
@@ -2591,7 +2591,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
     comparableSales: [
       { address: "44 Broadway Street, Berwick", price: 918000, date: "Mar 2026", beds: 4 },
       { address: "71 Broadway Street, Berwick", price: 945000, date: "Jan 2026", beds: 4 },
-      { address: "12 Highview Road, Berwick",   price: 905000, date: "Apr 2026", beds: 4 },
+      { address: "16 Montpelier Drive, Berwick", price: 916000, date: "Apr 2026", beds: 4 },
     ],
 
     // FEATURES & CONDITION
@@ -2660,7 +2660,7 @@ export const SLM_DATA: Record<number, PropertySLM> = {
       },
       {
         question: "What comparable sales are there nearby?",
-        answer: "Recent sales on and near Broadway Street: 44 Broadway Street sold $918K (Mar 2026), 71 Broadway Street sold $945K (Jan 2026), 12 Highview Road sold $905K (Apr 2026). All 4-bedroom homes.",
+        answer: "Recent sales on and near Broadway Street: 44 Broadway Street sold $918K (Mar 2026), 71 Broadway Street sold $945K (Jan 2026), 16 Montpelier Drive sold $916K (Apr 2026). All 4-bedroom homes.",
         category: "financial",
         keywords: ["comparable", "comps", "recent sales", "sold nearby", "similar", "90 days", "comparable sales"],
       },
