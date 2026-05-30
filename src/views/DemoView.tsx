@@ -61,6 +61,7 @@ type Stage =
   | { kind: "missedOut"; auctionProperty: PortfolioProperty; leads: SheetLead[] }
   // ── Vendor prospecting stages ──────────────────────────────────────────
   | { kind: "vendorPortfolio" }
+  | { kind: "vendorAnalysing"; segmented: SegmentedBuyer[] }
   | { kind: "vendorDashboard"; segmented: SegmentedBuyer[] }
   | { kind: "vendorProfile"; entry: SegmentedBuyer }
   | { kind: "vendorReview"; entry: SegmentedBuyer; sms: string; emailSubject: string; emailBody: string[] }
@@ -147,6 +148,76 @@ const BERWICK_PRICES: { year: number; price: number }[] = [
   { year: 2025, price: 920_000 },  // REA chart: ~$920K May '25 surge
   { year: 2026, price: 935_000 },  // extrapolated +1.5% H1
 ]
+
+// Narre Warren South (source: REA.com.au/vic/narre-warren-south-3805)
+const NARRE_WARREN_SOUTH_PRICES: { year: number; price: number }[] = [
+  { year: 2010, price: 330_000 }, { year: 2011, price: 345_000 }, { year: 2012, price: 352_000 },
+  { year: 2013, price: 365_000 }, { year: 2014, price: 388_000 }, { year: 2015, price: 420_000 },
+  { year: 2016, price: 460_000 }, { year: 2017, price: 510_000 }, { year: 2018, price: 555_000 },
+  { year: 2019, price: 585_000 }, { year: 2020, price: 610_000 }, { year: 2021, price: 695_000 },
+  { year: 2022, price: 845_000 }, { year: 2023, price: 800_000 }, { year: 2024, price: 825_000 },
+  { year: 2025, price: 880_000 }, { year: 2026, price: 895_000 },
+]
+// Officer (source: REA.com.au/vic/officer-3809)
+const OFFICER_PRICES: { year: number; price: number }[] = [
+  { year: 2010, price: 280_000 }, { year: 2011, price: 295_000 }, { year: 2012, price: 305_000 },
+  { year: 2013, price: 320_000 }, { year: 2014, price: 345_000 }, { year: 2015, price: 375_000 },
+  { year: 2016, price: 415_000 }, { year: 2017, price: 455_000 }, { year: 2018, price: 490_000 },
+  { year: 2019, price: 515_000 }, { year: 2020, price: 540_000 }, { year: 2021, price: 620_000 },
+  { year: 2022, price: 755_000 }, { year: 2023, price: 710_000 }, { year: 2024, price: 740_000 },
+  { year: 2025, price: 790_000 }, { year: 2026, price: 805_000 },
+]
+// Pakenham (source: REA.com.au/vic/pakenham-3810)
+const PAKENHAM_PRICES: { year: number; price: number }[] = [
+  { year: 2010, price: 260_000 }, { year: 2011, price: 275_000 }, { year: 2012, price: 282_000 },
+  { year: 2013, price: 295_000 }, { year: 2014, price: 315_000 }, { year: 2015, price: 345_000 },
+  { year: 2016, price: 380_000 }, { year: 2017, price: 420_000 }, { year: 2018, price: 455_000 },
+  { year: 2019, price: 475_000 }, { year: 2020, price: 500_000 }, { year: 2021, price: 580_000 },
+  { year: 2022, price: 700_000 }, { year: 2023, price: 660_000 }, { year: 2024, price: 685_000 },
+  { year: 2025, price: 730_000 }, { year: 2026, price: 745_000 },
+]
+// Hampton Park (source: REA.com.au/vic/hampton-park-3976)
+const HAMPTON_PARK_PRICES: { year: number; price: number }[] = [
+  { year: 2010, price: 290_000 }, { year: 2011, price: 305_000 }, { year: 2012, price: 312_000 },
+  { year: 2013, price: 325_000 }, { year: 2014, price: 348_000 }, { year: 2015, price: 378_000 },
+  { year: 2016, price: 415_000 }, { year: 2017, price: 460_000 }, { year: 2018, price: 495_000 },
+  { year: 2019, price: 518_000 }, { year: 2020, price: 540_000 }, { year: 2021, price: 618_000 },
+  { year: 2022, price: 748_000 }, { year: 2023, price: 705_000 }, { year: 2024, price: 728_000 },
+  { year: 2025, price: 774_000 }, { year: 2026, price: 790_000 },
+]
+// Hallam (source: REA.com.au/vic/hallam-3803)
+const HALLAM_PRICES: { year: number; price: number }[] = [
+  { year: 2010, price: 295_000 }, { year: 2011, price: 310_000 }, { year: 2012, price: 318_000 },
+  { year: 2013, price: 330_000 }, { year: 2014, price: 352_000 }, { year: 2015, price: 382_000 },
+  { year: 2016, price: 420_000 }, { year: 2017, price: 462_000 }, { year: 2018, price: 498_000 },
+  { year: 2019, price: 520_000 }, { year: 2020, price: 545_000 }, { year: 2021, price: 622_000 },
+  { year: 2022, price: 750_000 }, { year: 2023, price: 708_000 }, { year: 2024, price: 732_000 },
+  { year: 2025, price: 778_000 }, { year: 2026, price: 794_000 },
+]
+// Narre Warren (source: REA.com.au/vic/narre-warren-3805)
+const NARRE_WARREN_PRICES: { year: number; price: number }[] = [
+  { year: 2010, price: 310_000 }, { year: 2011, price: 326_000 }, { year: 2012, price: 334_000 },
+  { year: 2013, price: 348_000 }, { year: 2014, price: 372_000 }, { year: 2015, price: 403_000 },
+  { year: 2016, price: 442_000 }, { year: 2017, price: 488_000 }, { year: 2018, price: 527_000 },
+  { year: 2019, price: 553_000 }, { year: 2020, price: 578_000 }, { year: 2021, price: 660_000 },
+  { year: 2022, price: 795_000 }, { year: 2023, price: 752_000 }, { year: 2024, price: 775_000 },
+  { year: 2025, price: 824_000 }, { year: 2026, price: 840_000 },
+]
+
+// Lookup map: suburb name (lowercase) → price series
+const SUBURB_PRICE_SERIES: Record<string, { year: number; price: number }[]> = {
+  "berwick":              BERWICK_PRICES,
+  "narre warren south":   NARRE_WARREN_SOUTH_PRICES,
+  "officer":              OFFICER_PRICES,
+  "pakenham":             PAKENHAM_PRICES,
+  "hampton park":         HAMPTON_PARK_PRICES,
+  "hallam":               HALLAM_PRICES,
+  "narre warren":         NARRE_WARREN_PRICES,
+}
+
+function getSuburbPriceSeries(suburb: string): { year: number; price: number }[] | null {
+  return SUBURB_PRICE_SERIES[suburb.toLowerCase().trim()] ?? null
+}
 
 /** Interpolate suburb price for a given fractional year using known data series */
 function suburbPriceAt(series: { year: number; price: number }[], y: number): number {
@@ -248,7 +319,7 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
             onClick={e => { e.stopPropagation(); onBuyerBrief(property) }}
             style={{
               marginTop: 8, padding: "5px 12px", borderRadius: 6, fontSize: 10, fontWeight: 700,
-              background: "#ffffff", border: `1px solid ${withAlpha(theme.primary, 0.28)}`,
+              background: "transparent", border: `1px solid ${withAlpha(theme.primary, 0.28)}`,
               color: theme.gradient[0], cursor: "pointer", fontFamily: FONT,
             }}
           >
@@ -2607,6 +2678,231 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
   )
 }
 
+// ── VendorAnalysingScreen: animated loading screen between CRM → Pipeline ────
+
+const ANALYSIS_STEPS = [
+  { icon: "🔍", label: "Scanning CRM database", detail: "Reading purchase records, notes, and contact history" },
+  { icon: "📊", label: "Calculating equity positions", detail: "Comparing purchase prices to current suburb medians" },
+  { icon: "🧠", label: "AI life-stage inference", detail: "Extracting triggers from agent notes using Claude Haiku" },
+  { icon: "⏳", label: "CGT deadline analysis", detail: "Flagging contacts with 50% discount savings windows" },
+  { icon: "📍", label: "Segmenting into pipelines", detail: "Classifying contacts by readiness and opportunity type" },
+  { icon: "✨", label: "Personalisation engine ready", detail: "Hyper-personalised outreach prepared for each contact" },
+]
+
+function VendorAnalysingScreen({ segmented, theme, onComplete }: {
+  segmented: SegmentedBuyer[]
+  theme: AgencyTheme
+  onComplete: () => void
+}) {
+  const [step, setStep] = useState(0)
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = []
+    ANALYSIS_STEPS.forEach((_, i) => {
+      timers.push(setTimeout(() => setStep(i + 1), 350 + i * 380))
+    })
+    timers.push(setTimeout(() => { setDone(true); setTimeout(onComplete, 600) }, 350 + ANALYSIS_STEPS.length * 380 + 200))
+    return () => timers.forEach(clearTimeout)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const totalEquity = segmented.reduce((s, e) => s + e.financials.equityGain, 0)
+  const cgtCount    = segmented.filter(e => e.financials.cgtSavingsBy2027 > 5000).length
+  const readyCount  = segmented.filter(e => e.segment.confidence >= 70).length
+
+  return (
+    <div style={{
+      minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", padding: "40px 24px",
+    }}>
+      {/* Pulsing orb */}
+      <div style={{ position: "relative", width: 80, height: 80, marginBottom: 32 }}>
+        <div style={{
+          position: "absolute", inset: 0, borderRadius: "50%",
+          background: `radial-gradient(circle, ${theme.primary}44, ${theme.primary}11)`,
+          animation: "ping 1.2s cubic-bezier(0,0,0.2,1) infinite",
+        }} />
+        <div style={{
+          position: "absolute", inset: 8, borderRadius: "50%",
+          background: `radial-gradient(circle, ${theme.primary}66, ${theme.primary}22)`,
+          animation: "ping 1.2s cubic-bezier(0,0,0.2,1) infinite 0.4s",
+        }} />
+        <div style={{
+          position: "absolute", inset: 16, borderRadius: "50%",
+          background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 22,
+        }}>
+          {done ? "✅" : "🧠"}
+        </div>
+      </div>
+
+      <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 8, letterSpacing: -0.5, textAlign: "center" }}>
+        {done ? "Analysis complete" : "Analysing your database"}
+      </div>
+      <div style={{ fontSize: 13, color: C.muted, marginBottom: 32, textAlign: "center" }}>
+        {done
+          ? `${segmented.length} contacts segmented, ${readyCount} high-priority leads identified`
+          : `Running AI analysis across ${segmented.length} contacts...`}
+      </div>
+
+      {/* Step list */}
+      <div style={{ width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", gap: 10, marginBottom: 32 }}>
+        {ANALYSIS_STEPS.map((s, i) => {
+          const active = step === i + 1
+          const complete = step > i + 1 || done
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: i < step ? 1 : 0.3, x: 0 }}
+              transition={{ delay: i * 0.05 }}
+              style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "10px 14px", borderRadius: 10,
+                background: active ? `${theme.primary}11` : C.bg2,
+                border: `1px solid ${active ? theme.primary + "44" : C.border}`,
+                transition: "all 0.3s",
+              }}
+            >
+              <span style={{ fontSize: 16, flexShrink: 0 }}>{s.icon}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: complete ? C.text : C.muted }}>{s.label}</div>
+                {(active || complete) && (
+                  <div style={{ fontSize: 10, color: C.faint, marginTop: 1 }}>{s.detail}</div>
+                )}
+              </div>
+              {complete && <span style={{ fontSize: 13, color: C.green }}>✓</span>}
+              {active && (
+                <div style={{
+                  width: 14, height: 14, borderRadius: "50%",
+                  border: `2px solid ${theme.primary}`,
+                  borderTopColor: "transparent",
+                  animation: "spin 0.6s linear infinite",
+                  flexShrink: 0,
+                }} />
+              )}
+            </motion.div>
+          )
+        })}
+      </div>
+
+      {/* Summary stats — visible when done */}
+      {done && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12,
+            width: "100%", maxWidth: 420,
+          }}
+        >
+          {[
+            { label: "Contacts segmented", value: `${segmented.length}`, color: C.blue },
+            { label: "High-priority", value: `${readyCount}`, color: C.green },
+            { label: "CGT deadlines", value: `${cgtCount}`, color: "#f59e0b" },
+          ].map(stat => (
+            <div key={stat.label} style={{
+              background: C.bg2, borderRadius: 10, padding: "12px 14px",
+              border: `1px solid ${C.border}`, textAlign: "center",
+            }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: stat.color }}>{stat.value}</div>
+              <div style={{ fontSize: 10, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>{stat.label}</div>
+            </div>
+          ))}
+        </motion.div>
+      )}
+
+      {!done && (
+        <div style={{ fontSize: 11, color: C.faint, marginTop: 8 }}>
+          Total equity identified: <strong style={{ color: C.green }}>{fmtDollar(totalEquity)}</strong>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── ComparableSalesMap: dot-grid of recent nearby sales ──────────────────────
+
+function ComparableSalesMap({ buyer, theme }: { buyer: SegmentedBuyer["buyer"]; theme: AgencyTheme }) {
+  const comps = generateComparables({
+    suburb: buyer.suburb,
+    beds: buyer.beds,
+    land: buyer.land,
+    purchasePrice: buyer.purchasePrice,
+    count: 6,
+  })
+
+  if (!comps.length) return null
+
+  const maxPrice = Math.max(...comps.map(c => c.soldPrice))
+  const minPrice = Math.min(...comps.map(c => c.soldPrice))
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
+        Recent comparable sales · {buyer.suburb}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+        {comps.map((comp, i) => {
+          const isSubject = i === 0
+          const pricePct = maxPrice > minPrice ? (comp.soldPrice - minPrice) / (maxPrice - minPrice) : 0.5
+          const dotColor = isSubject ? theme.primary : comp.matchScore >= 80 ? C.green : comp.matchScore >= 60 ? C.blue : "#f59e0b"
+          return (
+            <div key={i} style={{
+              background: isSubject ? `${theme.primary}11` : C.bg3,
+              border: `1px solid ${isSubject ? theme.primary + "44" : C.border}`,
+              borderRadius: 8, padding: "8px 10px",
+              position: "relative",
+            }}>
+              {/* Glowing dot */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                <div style={{ position: "relative", flexShrink: 0 }}>
+                  <div style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: dotColor,
+                    boxShadow: `0 0 0 ${isSubject ? 5 : 3}px ${dotColor}33, 0 0 ${isSubject ? 12 : 6}px ${dotColor}66`,
+                  }} />
+                  {isSubject && (
+                    <div style={{
+                      position: "absolute", inset: -3, borderRadius: "50%",
+                      border: `1px solid ${dotColor}44`,
+                      animation: "ping 2s ease-out infinite",
+                    }} />
+                  )}
+                </div>
+                <span style={{ fontSize: 9, fontWeight: 700, color: isSubject ? theme.primary : C.muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {isSubject ? "Subject" : comp.address.split(" ").slice(0, 3).join(" ")}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: isSubject ? theme.primary : C.text }}>{fmtK(comp.soldPrice)}</div>
+              <div style={{ fontSize: 9, color: C.faint }}>{comp.beds}bd · {comp.land}sqm</div>
+              {/* Price intensity bar */}
+              <div style={{ height: 2, background: C.bg2, borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
+                <div style={{ width: `${Math.round(pricePct * 100)}%`, height: "100%", background: dotColor, borderRadius: 2 }} />
+              </div>
+              <div style={{ fontSize: 8, color: C.faint, marginTop: 2 }}>{comp.soldDate}</div>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+        {[
+          { color: C.green, label: "High match (80+)" },
+          { color: C.blue, label: "Good match (60+)" },
+          { color: "#f59e0b", label: "Reference" },
+        ].map(l => (
+          <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: l.color, boxShadow: `0 0 4px ${l.color}88` }} />
+            <span style={{ fontSize: 9, color: C.faint }}>{l.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Vendor Prospecting: Portfolio (CRM Dashboard) ────────────────────────────
 
 interface AddContactForm {
@@ -2635,10 +2931,11 @@ const EMPTY_FORM: AddContactForm = {
   land: "", status: "owner-occupier", notes: "",
 }
 
-function VendorPortfolioPage({ agent, theme, onAnalyse }: {
+function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
   agent: AgentProfile
   theme: AgencyTheme
   onAnalyse: (segmented: SegmentedBuyer[]) => void
+  onSelectBuyer?: (entry: SegmentedBuyer) => void
 }) {
   const hardcodedBuyers = getPastBuyersForAgent(agent)
   const [buyers, setBuyers] = useState(hardcodedBuyers)
@@ -2727,16 +3024,28 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
   const estimatedValues = batchEstimateValues(buyers, { ...CURRENT_VALUE_ESTIMATES, ...sheetEstimateOverrides })
   const totalEstValue = buyers.reduce((s, b) => s + (estimatedValues.get(b.id) ?? 0), 0)
 
-  const handleAnalyse = () => {
-    setAnalysing(true)
+  // Build segmented array from current buyers + estimates
+  const buildSegmented = () => {
     const financialsMap = new Map<number, FinancialSnapshot>()
     for (const b of buyers) {
       const est = estimatedValues.get(b.id)
       if (!est) continue
       financialsMap.set(b.id, calculateFinancials(b.purchasePrice, b.purchaseDate, est, b.deposit))
     }
-    const segmented = batchSegment(buyers, financialsMap)
-    setTimeout(() => onAnalyse(segmented), 1200)
+    return batchSegment(buyers, financialsMap)
+  }
+
+  const handleAnalyse = () => {
+    setAnalysing(true)
+    const segmented = buildSegmented()
+    setTimeout(() => onAnalyse(segmented), 400)  // brief delay for button feedback, loader handles the rest
+  }
+
+  const handleBuyerClick = (buyer: typeof buyers[0]) => {
+    if (!onSelectBuyer) return
+    const segmented = buildSegmented()
+    const entry = segmented.find(s => s.buyer.id === buyer.id)
+    if (entry) onSelectBuyer(entry)
   }
 
   const handleAddContact = async () => {
@@ -2965,29 +3274,56 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
           {buyers.slice(0, showAllContacts ? buyers.length : 5).map(buyer => {
             const est = estimatedValues.get(buyer.id) ?? 0
             const equity = est - buyer.purchasePrice
+            const equityPct = buyer.purchasePrice > 0 ? (equity / buyer.purchasePrice) * 100 : 0
+            const isClickable = !!onSelectBuyer
             return (
-              <div key={buyer.id} style={{
-                background: C.bg2, borderRadius: 12, border: `1px solid ${C.border}`,
-                padding: "12px 16px", display: "flex", alignItems: "center", gap: 14,
-              }}>
+              <div
+                key={buyer.id}
+                onClick={() => handleBuyerClick(buyer)}
+                style={{
+                  background: C.bg2, borderRadius: 12, border: `1px solid ${C.border}`,
+                  padding: "14px 16px", display: "flex", alignItems: "center", gap: 14,
+                  cursor: isClickable ? "pointer" : "default",
+                  transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
+                }}
+                onMouseEnter={e => { if (isClickable) { e.currentTarget.style.borderColor = theme.primary + "55"; e.currentTarget.style.background = C.bg3; e.currentTarget.style.boxShadow = `0 4px 16px rgba(0,0,0,0.2)` } }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.bg2; e.currentTarget.style.boxShadow = "none" }}
+              >
                 <div style={{
-                  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                  width: 38, height: 38, borderRadius: 10, flexShrink: 0,
                   background: `linear-gradient(135deg, ${theme.gradient[0]}33, ${theme.gradient[1]}22)`,
                   border: `1px solid ${theme.primary}33`,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 13, fontWeight: 700, color: theme.primary,
+                  fontSize: 14, fontWeight: 700, color: theme.primary,
                 }}>
                   {buyer.name.charAt(0)}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{buyer.name}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>{buyer.purchaseAddress}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>{buyer.name}</div>
+                  <div style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{buyer.purchaseAddress}</div>
                 </div>
-                <div style={{ flexShrink: 0, textAlign: "right" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.green }}>{fmtDollar(equity)} equity</div>
-                  <div style={{ fontSize: 10, color: C.faint }}>
-                    {formatBuyerStatus(buyer.status)}
+                {/* Financial summary */}
+                <div style={{ flexShrink: 0, display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 10, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>Bought</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>{fmtDollar(buyer.purchasePrice)}</div>
                   </div>
+                  <div style={{ width: 1, height: 28, background: C.border }} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 10, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>Now</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{est > 0 ? fmtDollar(est) : "—"}</div>
+                  </div>
+                  <div style={{ width: 1, height: 28, background: C.border }} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 10, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>Equity</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: equity > 0 ? C.green : C.red ?? "#ef4444" }}>
+                      {equity > 0 ? "+" : ""}{fmtDollar(equity)}
+                    </div>
+                    <div style={{ fontSize: 9, color: C.faint }}>+{equityPct.toFixed(0)}%</div>
+                  </div>
+                  {isClickable && (
+                    <div style={{ fontSize: 14, color: C.faint, marginLeft: 4 }}>›</div>
+                  )}
                 </div>
               </div>
             )
@@ -3473,6 +3809,9 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
       {/* AI Intelligence Suite */}
       <WowInsightsPanel segmented={segmented} theme={theme} />
 
+      {/* AI Hyper-Personalisation Ideas */}
+      <AIIdeasPanel theme={theme} />
+
       {/* Bulk fire modal */}
       <AnimatePresence>
         {showBulkFire && <BulkFireModal segmented={segmented} agent={agent} theme={theme} onClose={() => setShowBulkFire(false)} />}
@@ -3492,7 +3831,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
         <button onClick={() => setFilterPipeline("all")} style={{
           padding: "6px 14px", borderRadius: 20, border: `1px solid ${filterPipeline === "all" ? theme.primary : theme.primary + "40"}`,
-          background: filterPipeline === "all" ? theme.primary : "#fff",
+          background: filterPipeline === "all" ? theme.primary : "transparent",
           color: filterPipeline === "all" ? "#fff" : theme.primary,
           fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
         }}>
@@ -3504,8 +3843,8 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
           return (
             <button key={p} onClick={() => setFilterPipeline(p)} style={{
               padding: "6px 14px", borderRadius: 20, border: `1px solid ${filterPipeline === p ? pl.color : pl.color + "50"}`,
-              background: filterPipeline === p ? pl.color + "22" : "#fff",
-              color: filterPipeline === p ? pl.color : pl.color,
+              background: filterPipeline === p ? pl.color + "22" : "transparent",
+              color: pl.color,
               fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
             }}>
               {pl.icon} {pl.shortLabel} ({count})
@@ -4898,7 +5237,7 @@ function PreMarketMatcherModal({ segmented, agent, theme, onClose, onSelectEntry
             <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Select listing</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {activeListings.map(l => (
-                <button key={l.id} onClick={() => setSelId(l.id)} style={{ padding: "6px 14px", borderRadius: 10, border: `1px solid ${selId === l.id ? theme.primary : theme.primary + "40"}`, background: selId === l.id ? `${theme.primary}15` : "#fff", color: theme.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                <button key={l.id} onClick={() => setSelId(l.id)} style={{ padding: "6px 14px", borderRadius: 10, border: `1px solid ${selId === l.id ? theme.primary : theme.primary + "40"}`, background: selId === l.id ? `${theme.primary}18` : "transparent", color: theme.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
                   {l.address.split(",")[0]}
                 </button>
               ))}
@@ -4947,7 +5286,7 @@ function PreMarketMatcherModal({ segmented, agent, theme, onClose, onSelectEntry
                       </button>
                       {onSelectEntry && (
                         <button onClick={() => { onClose(); onSelectEntry(entry) }}
-                          style={{ padding: "5px 11px", borderRadius: 9, border: `1px solid ${theme.primary}50`, cursor: "pointer", background: "#fff", color: theme.primary, fontSize: 10, fontWeight: 700, fontFamily: FONT }}>
+                          style={{ padding: "5px 11px", borderRadius: 9, border: `1px solid ${theme.primary}50`, cursor: "pointer", background: "transparent", color: theme.primary, fontSize: 10, fontWeight: 700, fontFamily: FONT }}>
                           Profile →
                         </button>
                       )}
@@ -5241,6 +5580,142 @@ function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
         </div>
       </motion.div>
     </motion.div>
+  )
+}
+
+// ── AIIdeasPanel: hyper-personalisation roadmap ───────────────────────────────
+
+const AI_IDEAS = [
+  {
+    emoji: "🏡",
+    title: "Street-level sale alerts",
+    tag: "Layer 3: Market context",
+    color: "#a6daff",
+    description:
+      "When a property sells within 500m of a contact's address, auto-trigger a personalised message: \"Hi David, a 4-bed just sold two streets over for $895K — that puts yours at roughly $920K now.\" Hooks into Domain/CoreLogic webhooks for real-time triggers.",
+    effort: "Medium",
+  },
+  {
+    emoji: "🎓",
+    title: "School-zone life-stage trigger",
+    tag: "Layer 2: Life-stage inference",
+    color: "#64d090",
+    description:
+      "Infer the age of each contact's children from CRM notes. When the youngest turns 17–18, fire a \"final year of school\" outreach: the most statistically common trigger for families upgrading or downsizing. Claude Haiku extracts this from free-text notes at <$0.001/contact.",
+    effort: "Low",
+  },
+  {
+    emoji: "⏳",
+    title: "CGT 50% discount countdown",
+    tag: "Layer 4: Timing intelligence",
+    color: "#ffb864",
+    description:
+      "Automatically calculate the exact date each investor crosses the 12-month CGT threshold. Send a personalised countdown message 90, 30, and 7 days before: \"Wei, you're 30 days from saving an estimated $54K in CGT. This window closes 14 July 2027.\" No other CRM in Australia does this.",
+    effort: "Ready now",
+  },
+  {
+    emoji: "🔁",
+    title: "Reply sentiment → next-step classifier",
+    tag: "AI reply agent",
+    color: "#a6daff",
+    description:
+      "When a contact replies to any outreach, Claude Sonnet classifies intent (interested / not now / hot lead / objection) and drafts the ideal next message with their equity snapshot embedded. An \"interested\" reply auto-books an appraisal slot. A \"not yet\" reply schedules a 90-day re-engagement.",
+    effort: "Medium",
+  },
+  {
+    emoji: "📰",
+    title: "Personalised market report PDF",
+    tag: "Layer 5: Relationship memory",
+    color: "#64d090",
+    description:
+      "Generate a one-page PDF for each contact showing: their property's estimated value, 3 comparable recent sales, CGT position, and a tailored paragraph from the agent. Send as an email attachment. Converts cold contacts into warm conversations — better ROI than any mass letterbox drop.",
+    effort: "Medium",
+  },
+  {
+    emoji: "🤝",
+    title: "Pre-market buyer matching",
+    tag: "Cross-database matching",
+    color: "#ffb864",
+    description:
+      "When a vendor prospect's profile (4bd, 650sqm Berwick) matches a buyer in your active CRM who couldn't find stock at auction, show the agent: \"You have 3 buyers looking for exactly this. You could facilitate a private sale before it hits the portal.\" Converts one listing into two commissions.",
+    effort: "Ready now",
+  },
+]
+
+function AIIdeasPanel({ theme }: { theme: AgencyTheme }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div style={{
+      marginBottom: 24, background: C.bg2, borderRadius: 14,
+      border: `1px solid ${theme.primary}22`,
+    }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: "100%", padding: "16px 20px", background: "none", border: "none",
+          cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", gap: 12,
+          textAlign: "left",
+        }}
+      >
+        <div style={{
+          width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+          background: `linear-gradient(135deg, ${theme.gradient[0]}33, ${theme.gradient[1]}22)`,
+          border: `1px solid ${theme.primary}33`,
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+        }}>🚀</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>AI Hyper-Personalisation Roadmap</div>
+          <div style={{ fontSize: 11, color: C.muted }}>6 ways to deepen the moat — ideas PropOS can build next</div>
+        </div>
+        <div style={{
+          fontSize: 10, fontWeight: 700, color: theme.primary, background: theme.primary + "18",
+          padding: "3px 8px", borderRadius: 6, letterSpacing: 0.5, textTransform: "uppercase", flexShrink: 0,
+        }}>Ideas</div>
+        <div style={{ fontSize: 16, color: C.faint, transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", flexShrink: 0 }}>›</div>
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            style={{ overflow: "hidden" }}
+          >
+            <div style={{ padding: "0 16px 16px", display: "grid", gap: 10 }}>
+              {AI_IDEAS.map((idea, i) => (
+                <div key={i} style={{
+                  background: C.bg3, borderRadius: 12, padding: "14px 16px",
+                  border: `1px solid ${C.border}`,
+                  borderLeft: `3px solid ${idea.color}`,
+                }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 6 }}>
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>{idea.emoji}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{idea.title}</span>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: idea.color, background: idea.color + "18", padding: "2px 7px", borderRadius: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>{idea.tag}</span>
+                        <span style={{
+                          marginLeft: "auto", fontSize: 9, fontWeight: 700, letterSpacing: 0.4,
+                          color: idea.effort === "Ready now" ? C.green : "#f59e0b",
+                          background: idea.effort === "Ready now" ? C.green + "18" : "#f59e0b18",
+                          padding: "2px 7px", borderRadius: 4, textTransform: "uppercase",
+                        }}>{idea.effort}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, paddingLeft: 28 }}>
+                    {idea.description}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 
@@ -5626,9 +6101,8 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
               const startYear = buyer.purchaseDate ? parseInt(buyer.purchaseDate.slice(0, 4)) || 2013 : 2013
               const endYear = new Date().getFullYear() + (new Date().getMonth() >= 6 ? 0.5 : 0)
               const steps = Math.max(8, Math.round((endYear - startYear) * 2)) // half-year steps
-              // Choose data source: real Berwick series OR compound formula for other suburbs
-              const isBerwick = buyer.suburb.toLowerCase().includes("berwick")
-              const priceSeries = isBerwick ? BERWICK_PRICES : null
+              // Choose data source: real suburb series OR compound formula for unknown suburbs
+              const priceSeries = getSuburbPriceSeries(buyer.suburb)
               const pts: { x: number; y: number; val: number; year: number }[] = []
               for (let i = 0; i <= steps; i++) {
                 const y = startYear + (i / steps) * (endYear - startYear)
@@ -5654,7 +6128,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
               const areaD = `${d} L${pts[pts.length-1].x.toFixed(1)},${(H - PAD_B).toFixed(1)} L${PAD_L},${(H - PAD_B).toFixed(1)} Z`
               // Find the peak point for annotation
               const peakPt = priceSeries ? pts.reduce((a, b) => a.val > b.val ? a : b) : null
-              const sourceLabel = isBerwick ? "REA.com.au data" : `${fmtPct(fin.annualAppreciation)} p.a.`
+              const sourceLabel = priceSeries ? "REA.com.au data" : `${fmtPct(fin.annualAppreciation)} p.a.`
               return (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -5686,6 +6160,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
                 </div>
               )
             })()}
+
+            {/* Comparable sales map */}
+            <ComparableSalesMap buyer={buyer} theme={theme} />
 
             {/* Hero metrics — the 3 numbers that matter most */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 10 }}>
@@ -6932,8 +7409,21 @@ export default function DemoView({
             agent={agent}
             theme={theme}
             onAnalyse={segmented =>
-              setStage({ kind: "vendorDashboard", segmented })
+              setStage({ kind: "vendorAnalysing", segmented })
             }
+            onSelectBuyer={entry =>
+              setStage({ kind: "vendorProfile", entry })
+            }
+          />
+        </motion.div>
+      )}
+
+      {stage.kind === "vendorAnalysing" && (
+        <motion.div key="vendorAnalysing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
+          <VendorAnalysingScreen
+            segmented={stage.segmented}
+            theme={theme}
+            onComplete={() => setStage({ kind: "vendorDashboard", segmented: stage.segmented })}
           />
         </motion.div>
       )}
