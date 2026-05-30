@@ -41,6 +41,8 @@ import {
   fmtK,
   type CompSale, type AppraisalRange, type EquityScenario,
 } from "../lib/appraisalEngine"
+import { computePropertyDNA, type PropertyDNA } from "../lib/propertyDNA"
+import { classifyRateSensitivity } from "../lib/rateSensitivity"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2823,6 +2825,222 @@ function VendorAnalysingScreen({ segmented, theme, onComplete }: {
   )
 }
 
+// ── Feature 2: Property DNA Card ─────────────────────────────────────────────
+
+function PropertyDNACard({ dna, theme }: { dna: PropertyDNA; theme: AgencyTheme }) {
+  const classBadge: Record<string, string> = {
+    "starter": "#6b7280", "family": C.blue, "prestige": "#a78bfa",
+    "investor-grade": C.green, "downsizer": C.orange,
+  }
+  const tierBadge: Record<string, string> = { "core": C.green, "growth": C.blue, "fringe": "#f59e0b" }
+  const stageBadge: Record<string, string> = {
+    "establishing": "#6b7280", "growing": C.blue, "plateauing": "#a78bfa",
+    "transitioning": C.orange, "downsizing": C.green,
+  }
+  const chips = [
+    { label: dna.propertyClass, color: classBadge[dna.propertyClass] },
+    { label: dna.locationTier,  color: tierBadge[dna.locationTier]   },
+    { label: dna.lifeStage,     color: stageBadge[dna.lifeStage]     },
+  ]
+  return (
+    <div style={{ background: C.bg3, borderRadius: 12, border: `1px solid ${C.border}`, padding: "12px 14px", marginBottom: 0 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Property DNA</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+        {chips.map(c => (
+          <span key={c.label} style={{ fontSize: 10, fontWeight: 700, color: c.color, background: c.color + "18", border: `1px solid ${c.color}30`, padding: "2px 8px", borderRadius: 6 }}>
+            {c.label}
+          </span>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>
+        <span style={{ color: C.faint }}>Upgrade capacity</span>
+        <span style={{ fontWeight: 700, color: theme.primary, marginLeft: 6 }}>
+          {dna.upgradeCapacity >= 1_000_000 ? `$${(dna.upgradeCapacity / 1_000_000).toFixed(1)}M` : `$${Math.round(dna.upgradeCapacity / 1000)}K`}
+        </span>
+      </div>
+      {dna.matchTags.length > 0 && (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {dna.matchTags.map(tag => (
+            <span key={tag} style={{ fontSize: 9, color: C.faint, background: C.bg2, border: `1px solid ${C.border}`, padding: "1px 6px", borderRadius: 4 }}>
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Feature 9: Sentiment Drift Alert ─────────────────────────────────────────
+
+type SentimentSignal = "warm" | "neutral" | "cool" | "cold"
+
+function computeSentimentDrift(buyer: import("../data/pastBuyers").PastBuyer, priority: number): {
+  signal: SentimentSignal; alert: string | null; daysSinceContact: number
+} {
+  if (!buyer.lastContactDate) return { signal: "warm", alert: null, daysSinceContact: 0 }
+  const days = Math.floor((Date.now() - new Date(buyer.lastContactDate).getTime()) / 86_400_000)
+  if (days > 90 && priority >= 60) {
+    return { signal: "cold", alert: `No contact in ${days} days. High-priority contact going cold.`, daysSinceContact: days }
+  }
+  if (days > 45 && days <= 90 && priority >= 50) {
+    const weeks = Math.round(days / 7)
+    return { signal: "cool", alert: `Last contacted ${weeks} weeks ago. Follow-up overdue.`, daysSinceContact: days }
+  }
+  if (buyer.lastMessage && days > 14) {
+    return { signal: "neutral", alert: "Outreach sent. Awaiting reply.", daysSinceContact: days }
+  }
+  return { signal: "warm", alert: null, daysSinceContact: days }
+}
+
+function SentimentDriftAlert({ entry, theme }: { entry: SegmentedBuyer; theme: AgencyTheme }) {
+  const drift = computeSentimentDrift(entry.buyer, entry.priority)
+  if (!drift.alert) return null
+
+  const isCold = drift.signal === "cold"
+  const isCool = drift.signal === "cool"
+  const bg    = isCold ? "#ef444412" : isCool ? `${C.orange}12` : C.bg3
+  const border = isCold ? "#ef444430" : isCool ? `${C.orange}30` : C.border
+  const color  = isCold ? "#ef4444"   : isCool ? C.orange          : C.faint
+
+  return (
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: "10px 14px", marginBottom: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>
+            {isCold ? "Contact going cold" : isCool ? "Follow-up overdue" : "Outreach status"}
+          </div>
+          <div style={{ fontSize: 11, color: C.muted }}>{drift.alert}</div>
+        </div>
+        {(isCold || isCool) && (
+          <span style={{ fontSize: 10, fontWeight: 700, color: theme.primary, background: `${theme.primary}18`, border: `1px solid ${theme.primary}30`, padding: "3px 10px", borderRadius: 6, whiteSpace: "nowrap", flexShrink: 0 }}>
+            Call now
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Feature 11: Best Time to Sell Panel ──────────────────────────────────────
+
+function BestTimeToSellPanel({ entry, theme }: { entry: SegmentedBuyer; theme: AgencyTheme }) {
+  const { financials: fin, segment } = entry
+  const now = new Date()
+  const month = now.getMonth() // 0-indexed
+
+  // Determine recommended window
+  let windowLabel: string
+  let windowReason: string
+  if (fin.yearsHeld < 1) {
+    windowLabel = "Hold — CGT discount not yet available"
+    windowReason = "Less than 12 months held. Wait for CGT discount eligibility."
+  } else if (fin.cgtSavingsBy2027 > 10000 && (month >= 8 || month <= 1)) {
+    // Sep-Feb: in or just past peak — act now
+    windowLabel = month >= 8 && month <= 10 ? "Now — peak spring market" : "Q1 2027 — act before CGT deadline"
+    windowReason = month >= 8 && month <= 10
+      ? "You are in peak spring clearance season. CGT deadline adds urgency."
+      : "CGT savings window closes July 2027. List by March to settle in time."
+  } else if (fin.cgtSavingsBy2027 > 10000) {
+    windowLabel = "Sep–Oct 2026 — spring peak + CGT timing"
+    windowReason = "Spring clearance peaks in SE Melbourne. Selling in spring maximises buyer competition and you settle well before the July 2027 CGT deadline."
+  } else {
+    windowLabel = "Sep–Nov 2026 — peak spring clearance"
+    windowReason = "SE Melbourne spring auction clearance averages 78%. Late winter listings often undersell by 5-8%."
+  }
+
+  // CGT signal
+  const cgtSignal = fin.cgtSavingsBy2027 > 10000 ? "high" : fin.cgtSavingsBy2027 > 3000 ? "medium" : "low"
+  const cgtColor = cgtSignal === "high" ? "#ef4444" : cgtSignal === "medium" ? C.orange : C.faint
+
+  // 12-month timeline bar (Jun 2026 → Jun 2027)
+  const W = 280; const barH = 8
+  // Highlight peak (Sep=3 to Nov=5 in 0-indexed months from Jul)
+  const peakStart = 3/12; const peakEnd = 6/12  // Sep-Dec within Jul-Jun bar
+
+  const signals = [
+    { label: "CGT window",    value: fin.cgtSavingsBy2027 > 0 ? `Saves $${Math.round(fin.cgtSavingsBy2027/1000)}K before Jul 2027` : "No CGT savings", color: cgtColor },
+    { label: "Market season", value: "Spring (Sep–Nov) peaks at 78%+ clearance", color: C.green },
+    { label: "Life stage",    value: segment.pipeline.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()), color: theme.primary },
+  ]
+
+  return (
+    <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "16px 18px" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Optimal Listing Window</div>
+
+      {/* Timeline bar */}
+      <div style={{ marginBottom: 12 }}>
+        <svg width="100%" viewBox={`0 0 ${W} 28`} style={{ display: "block", overflow: "visible" }}>
+          {/* Track */}
+          <rect x={0} y={10} width={W} height={barH} rx={4} fill={C.bg3} />
+          {/* Peak highlight */}
+          <rect x={W * peakStart} y={10} width={W * (peakEnd - peakStart)} height={barH} rx={3} fill={C.green} opacity="0.35" />
+          {/* CGT deadline marker */}
+          {fin.cgtSavingsBy2027 > 0 && <rect x={W * 12/12 - 2} y={6} width={3} height={barH + 8} rx={1} fill="#ef4444" opacity="0.7" />}
+          {/* Current date marker */}
+          {(() => {
+            // Map current month to bar position (bar = Jul 2026 → Jun 2027)
+            const currentMonth = new Date().getMonth() // 0 = Jan
+            // Jul 2026 = start of bar. Months from Jul 2026:
+            const monthsFromStart = ((currentMonth + 12) - 6) % 12  // 0=Jul, 1=Aug...
+            const cx = W * (monthsFromStart / 12)
+            return <circle cx={cx} cy={14} r={5} fill={theme.primary} />
+          })()}
+          {/* Month labels */}
+          {["Jul", "Sep", "Nov", "Jan", "Mar", "May"].map((m, i) => (
+            <text key={m} x={W * i / 6} y={28} fontSize="7" fill={C.faint} textAnchor="middle">{m}</text>
+          ))}
+        </svg>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+          <span style={{ fontSize: 8, color: C.faint }}>Jul 2026</span>
+          <span style={{ fontSize: 8, color: fin.cgtSavingsBy2027 > 0 ? "#ef4444" : C.faint }}>CGT deadline Jul 2027</span>
+        </div>
+      </div>
+
+      {/* Signal rows */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+        {signals.map(s => (
+          <div key={s.label} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: s.color, marginTop: 4, flexShrink: 0 }} />
+            <div>
+              <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.6 }}>{s.label}: </span>
+              <span style={{ fontSize: 10, color: C.muted }}>{s.value}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Recommendation */}
+      <div style={{ background: `${theme.primary}10`, border: `1px solid ${theme.primary}25`, borderRadius: 8, padding: "8px 12px" }}>
+        <div style={{ fontSize: 9, color: C.faint, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>Recommended window</div>
+        <div style={{ fontSize: 12, fontWeight: 800, color: theme.primary }}>{windowLabel}</div>
+        <div style={{ fontSize: 10, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>{windowReason}</div>
+      </div>
+    </div>
+  )
+}
+
+// ── Feature 6: Rate Sensitivity Badge ────────────────────────────────────────
+
+function RateSensitivityBadge({ entry, theme }: { entry: SegmentedBuyer; theme: AgencyTheme }) {
+  const result = classifyRateSensitivity(entry.buyer, entry.financials)
+  const color = result.sensitivity === "high" ? "#ef4444" : result.sensitivity === "medium" ? C.orange : C.green
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: color + "0d", border: `1px solid ${color}25`, borderRadius: 10, padding: "10px 14px" }}>
+      <div style={{ flexShrink: 0, marginTop: 1 }}>
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: `0 0 6px ${color}88` }} />
+      </div>
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, color, textTransform: "uppercase", letterSpacing: 0.8 }}>Rate sensitivity: {result.sensitivity}</span>
+          <span style={{ fontSize: 8, color: C.faint }}>LVR est. {result.lvrEstimate}%</span>
+        </div>
+        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{result.reason}</div>
+      </div>
+    </div>
+  )
+}
+
 // ── ComparableSalesMap: dot-grid of recent nearby sales ──────────────────────
 
 function ComparableSalesMap({ buyer, theme }: { buyer: SegmentedBuyer["buyer"]; theme: AgencyTheme }) {
@@ -5264,19 +5482,46 @@ function PreMarketMatcherModal({ segmented, agent, theme, onClose, onSelectEntry
 
   const listing = activeListings.find(l => l.id === selId) ?? null
 
-  const matchScore = (entry: SegmentedBuyer, l: PortfolioProperty) => {
+  const ADJACENT_SUBURBS: Record<string, string[]> = {
+    "berwick":            ["narre warren south", "officer", "hallam"],
+    "narre warren south": ["berwick", "narre warren", "hallam"],
+    "officer":            ["pakenham", "berwick", "narre warren south"],
+    "pakenham":           ["officer"],
+    "hallam":             ["berwick", "narre warren south", "narre warren"],
+    "narre warren":       ["narre warren south", "hallam"],
+  }
+  const matchScore = (entry: SegmentedBuyer, l: PortfolioProperty): { score: number; factors: string[] } => {
+    const dna = computePropertyDNA(entry.buyer, entry.financials)
+    const b = entry.buyer
     let s = 0
-    const b = entry.buyer; const fin = entry.financials
-    if (b.suburb.toLowerCase() === l.suburb.toLowerCase()) s += 40
-    if (Math.abs(b.beds - (l.beds ?? 4)) <= 1) s += 15
-    if (b.status === "investor") s += 15
-    if (fin.equityGainPct >= 25) s += 15
-    if (entry.priority >= 60) s += 15
-    return Math.min(s, 95)
+    const factors: string[] = []
+    // Suburb proximity
+    const sameSuburb = b.suburb.toLowerCase() === (l.suburb ?? "").toLowerCase()
+    const adjacent = (ADJACENT_SUBURBS[b.suburb.toLowerCase()] ?? []).includes((l.suburb ?? "").toLowerCase())
+    if (sameSuburb) { s += 40; factors.push("Same suburb") }
+    else if (adjacent) { s += 22; factors.push("Adjacent suburb") }
+    // Bed match
+    const lBeds = l.beds ?? 4
+    if (Math.abs(b.beds - lBeds) <= 1) { s += 15; factors.push("Bed match") }
+    else if (lBeds > b.beds && dna.lifeStage === "growing") { s += 10; factors.push("Upsizer fit") }
+    // Upgrade capacity vs listing price
+    const listingPrice = l.price || l.priceMin || 0
+    if (listingPrice > 0 && dna.upgradeCapacity > listingPrice * 0.9) { s += 18; factors.push(`$${Math.round(dna.upgradeCapacity/1000)}K capacity`) }
+    // Investor match
+    if (b.status === "investor" && l.priceMin && l.priceMin > 500_000) { s += 12; factors.push("Investor grade") }
+    // DNA tag bonus
+    if (dna.matchTags.includes("school-zone") && /school|primary|berwick/i.test((l.suburb ?? "") + " " + l.address)) { s += 8; factors.push("School zone") }
+    // Priority
+    if (entry.priority >= 60) { s += 8; factors.push("High priority") }
+    return { score: Math.min(s, 98), factors }
   }
 
   const matches = listing
-    ? segmented.map(e => ({ entry: e, score: matchScore(e, listing) })).filter(m => m.score >= 30).sort((a, b) => b.score - a.score).slice(0, 5)
+    ? segmented
+        .map(e => { const r = matchScore(e, listing); return { entry: e, score: r.score, factors: r.factors } })
+        .filter(m => m.score >= 30)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
     : []
 
   return (
@@ -5319,14 +5564,9 @@ function PreMarketMatcherModal({ segmented, agent, theme, onClose, onSelectEntry
           <>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>{matches.length} matched buyers</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {matches.map(({ entry, score }, i) => {
-                const { buyer, financials: fin } = entry
+              {matches.map(({ entry, score, factors }, i) => {
+                const { buyer } = entry
                 const sent = alerted.has(buyer.id)
-                const factors: string[] = []
-                if (listing && buyer.suburb.toLowerCase() === listing.suburb.toLowerCase()) factors.push(`Same suburb`)
-                if (fin.equityGainPct >= 25) factors.push(`${Math.round(fin.equityGainPct)}% equity to upgrade`)
-                if (buyer.status === "investor") factors.push("Active investor")
-                if (entry.priority >= 60) factors.push("High priority")
                 return (
                   <div key={buyer.id} style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${i === 0 ? theme.primary + "50" : C.border}`, padding: "14px 16px", display: "flex", gap: 12, alignItems: "center" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -6104,6 +6344,12 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
             </div>
           </div>
 
+          {/* Feature 9: Sentiment drift alert */}
+          <SentimentDriftAlert entry={entry} theme={theme} />
+
+          {/* Feature 2: Property DNA */}
+          <PropertyDNACard dna={computePropertyDNA(buyer, fin)} theme={theme} />
+
           {/* Financial Snapshot */}
           <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 16 }}>
@@ -6662,6 +6908,12 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
               </div>
             )
           })()}
+
+          {/* Feature 6: Rate sensitivity */}
+          <RateSensitivityBadge entry={entry} theme={theme} />
+
+          {/* Feature 11: Best time to sell */}
+          <BestTimeToSellPanel entry={entry} theme={theme} />
         </div>
       </div>
 

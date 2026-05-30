@@ -128,6 +128,29 @@ export function segmentBuyer(
       pitchAngles.push(`${fname} is going through a lot. I can keep this discreet, move quickly, and make the process as smooth as possible for everyone.`)
     }
 
+    // School calendar trigger — Year 11/12 transition is the #1 family move trigger
+    const yrMatch = notesLower.match(/yr\s*(\d+)|year\s*(\d+)/)
+    const yrNum = yrMatch ? parseInt(yrMatch[1] ?? yrMatch[2], 10) : null
+    if (yrNum !== null && yrNum >= 9 && yrNum <= 12) {
+      const yrsToFinish = Math.max(0, 12 - yrNum)
+      const urgency: TriggerEvent["urgency"] = yrsToFinish <= 1 ? "high" : yrsToFinish <= 2 ? "medium" : "low"
+      triggers.push({
+        label: yrsToFinish === 0
+          ? "School transition: child finishing Year 12 this year — peak move window"
+          : `School transition: ${yrsToFinish} year${yrsToFinish > 1 ? "s" : ""} until Year 12 — plan now`,
+        urgency,
+        source: "notes",
+      })
+      pitchAngles.push(
+        yrsToFinish === 0
+          ? `With the kids finishing school this year, now is the natural window for ${fname} to make the next move. Most families wait until after — getting in before means less competition and better timing on CGT.`
+          : `${fname}'s children are ${yrsToFinish} year${yrsToFinish > 1 ? "s" : ""} from finishing school. That's the most common trigger for a move in ${suburb} — worth a conversation now while they can plan properly.`
+      )
+    } else if (/school|kindy|prep|primary|yr\s*[1-8]|year\s*[1-8]/i.test(notesLower) && /kid|child|son|daughter/i.test(notesLower)) {
+      triggers.push({ label: "School-zone timing: children in school years align with upgrade window", urgency: "medium", source: "notes" })
+      pitchAngles.push(`Families in ${suburb} with school-age kids tend to move when the timing aligns with school zones. ${fname}'s equity position means they can move on their terms.`)
+    }
+
     // Property-based inference
     if (buyer.beds <= 3 && /kid|child|baby|school|family|pregnant/i.test(notesLower)) {
       triggers.push({ label: `${buyer.beds}-bed home with growing family`, urgency: "medium", source: "rule" })
