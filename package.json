@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "server": "cd server && npm run dev",
-    "build": "vite build && node scripts/patch-html.cjs",
+    "build": "vite build && node scripts/patch-html.cjs && node -e \"const{cpSync,rmSync,existsSync}=require('fs');if(existsSync('server/public'))rmSync('server/public',{recursive:true});cpSync('dist','server/public',{recursive:true});console.log('[sync] dist → server/public')\"",
     "preview": "vite preview",
     "start": "cd server && node_modules/.bin/tsx index.ts"
   },
