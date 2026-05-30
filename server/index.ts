@@ -97,7 +97,11 @@ app.get("/api/health", (_req, res) => {
 })
 
 // Serve Vite production build — must come after all API routes
-const distPath = path.resolve(__dirname, "..", "dist")
+// On Railway, Nixpacks snapshots server/ only, so frontend is pre-built into server/public/.
+// In local dev, dist/ lives one level up (repo root).
+import { existsSync } from "fs"
+const railwayPublic = path.join(__dirname, "public")
+const distPath = existsSync(railwayPublic) ? railwayPublic : path.resolve(__dirname, "..", "dist")
 
 // Hashed JS/CSS/image assets — immutable, cache 1 year
 app.use("/assets", express.static(path.join(distPath, "assets"), {

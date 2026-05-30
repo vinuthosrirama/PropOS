@@ -5,3 +5,5 @@ dist
 .claude
 .env
 server/.env
+# server/public is the Railway-deploy copy of dist/ — tracked in git
+!server/public
