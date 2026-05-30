@@ -1,8 +1,5 @@
-[build]
-builder = "dockerfile"
-
 [deploy]
-startCommand = "server/node_modules/.bin/tsx server/index.ts"
+startCommand = "cd server && node_modules/.bin/tsx index.ts"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
