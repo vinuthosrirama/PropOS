@@ -3180,7 +3180,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
             display: "inline-flex", alignItems: "center", gap: 6,
           }}
         >
-          🏠 Property Value Estimator
+          Property Value Estimator
         </button>
       </div>
 
@@ -3672,7 +3672,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
                           </div>
                         ) : (
                           <button onClick={() => { setCrmConnecting(key); setTimeout(() => setCrmConnecting(null), 2200) }} style={{ width: "100%", padding: "7px", borderRadius: 8, border: `1px solid ${theme.primary}55`, background: featured ? theme.primary : "transparent", color: featured ? "#fff" : theme.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
-                            {featured ? "🔗 Connect RealBase" : "Connect"}
+                            {featured ? "Connect RealBase" : "Connect"}
                           </button>
                         )}
                       </div>
@@ -3789,11 +3789,11 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
         <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowBulkFire(true)}
             style={{ padding: "10px 20px", borderRadius: 12, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 13, fontWeight: 700, fontFamily: FONT, boxShadow: `0 4px 16px ${theme.glow}`, display: "inline-flex", alignItems: "center", gap: 8 }}>
-            ✨ Generate & review {segmented.length} personalised messages
+            Generate & review {segmented.length} personalised messages
           </motion.button>
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowCGTUrgency(true)}
             style={{ padding: "10px 18px", borderRadius: 12, border: `1px solid ${C.orange}50`, cursor: "pointer", background: `${C.orange}12`, color: C.orange, fontSize: 12, fontWeight: 700, fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 6 }}>
-            ⏰ CGT Urgency
+            CGT Urgency
           </motion.button>
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowPreMarketMatcher(true)}
             style={{ padding: "10px 18px", borderRadius: 12, border: `1px solid ${theme.primary}40`, cursor: "pointer", background: `${theme.primary}10`, color: theme.primary, fontSize: 12, fontWeight: 700, fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -3910,7 +3910,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
                       display: "flex", alignItems: "center", gap: 3,
                       boxShadow: `0 0 8px ${theme.primary}18`,
                     }}>
-                      ⚡ HP
+                      HP
                     </div>
                   )}
                 </div>
@@ -4051,7 +4051,7 @@ function NotesBridgeCard({ notes, prewrittenHook, extractedHook, personalisation
         {/* ── Stage 1: CRM Notes ── */}
         <div style={{ marginBottom: 11 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
-            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: C.faint, textTransform: "uppercase" }}>📋 From your CRM notes</span>
+            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: C.faint, textTransform: "uppercase" }}>From your CRM notes</span>
           </div>
           <div style={{
             fontSize: 12, color: C.muted, lineHeight: 1.55, fontStyle: "italic",
@@ -4064,33 +4064,23 @@ function NotesBridgeCard({ notes, prewrittenHook, extractedHook, personalisation
           </div>
         </div>
 
-        {/* ── Bridge: AI reading... ── */}
-        {showBridge && (
+        {/* ── Bridge: AI reading... (only while generating) ── */}
+        {showBridge && generating && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 11, paddingLeft: 4 }}>
-            {/* Vertical connector line */}
             <div style={{ width: 2, height: 28, background: `linear-gradient(to bottom, ${C.border}, ${theme.primary}55)`, borderRadius: 2, flexShrink: 0 }} />
             <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              {generating ? (
-                <>
-                  <motion.div
-                    animate={{ scale: [1, 1.5, 1], opacity: [0.7, 1, 0.7] }}
-                    transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-                    style={{ width: 6, height: 6, borderRadius: "50%", background: theme.primary, flexShrink: 0 }}
-                  />
-                  <motion.span
-                    animate={{ opacity: [0.5, 1, 0.5] }}
-                    transition={{ duration: 1.4, repeat: Infinity }}
-                    style={{ fontSize: 10, color: theme.primary, fontWeight: 700, letterSpacing: 0.3 }}
-                  >
-                    AI reading between the lines...
-                  </motion.span>
-                </>
-              ) : (
-                <>
-                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, boxShadow: `0 0 6px ${C.green}` }} />
-                  <span style={{ fontSize: 10, color: C.green, fontWeight: 700, letterSpacing: 0.3 }}>AI read the context</span>
-                </>
-              )}
+              <motion.div
+                animate={{ scale: [1, 1.5, 1], opacity: [0.7, 1, 0.7] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                style={{ width: 6, height: 6, borderRadius: "50%", background: theme.primary, flexShrink: 0 }}
+              />
+              <motion.span
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 1.4, repeat: Infinity }}
+                style={{ fontSize: 10, color: theme.primary, fontWeight: 700, letterSpacing: 0.3 }}
+              >
+                AI reading between the lines...
+              </motion.span>
             </div>
           </div>
         )}
@@ -4187,7 +4177,7 @@ function NotesBridgeCard({ notes, prewrittenHook, extractedHook, personalisation
         {/* Footer hint — only when we have no hook yet and not generating */}
         {!hook && !generating && (
           <div style={{ fontSize: 9.5, color: C.faint, marginTop: 6, fontStyle: "italic" }}>
-            💡 Click Generate below to watch AI extract the personalisation hook from these notes
+            Click Generate below to watch AI extract the personalisation hook from these notes
           </div>
         )}
       </div>
@@ -4226,9 +4216,78 @@ function VendorAppraisalPanel({ buyer, theme }: {
         Comparable Sales · {buyer.suburb}
       </div>
 
-      {/* Comp cards */}
+      {/* ── Glowing dot map of comparable sales ── */}
+      {(() => {
+        const maxP = Math.max(...comps.map(c => c.soldPrice))
+        const minP = Math.min(...comps.map(c => c.soldPrice))
+        return (
+          <div style={{ marginBottom: 4 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+              {comps.map((comp, i) => {
+                const isSubject = i === 0
+                const pricePct = maxP > minP ? (comp.soldPrice - minP) / (maxP - minP) : 0.5
+                const dotColor = isSubject ? theme.primary : comp.matchScore >= 80 ? C.green : comp.matchScore >= 60 ? C.blue : "#f59e0b"
+                // Deterministic distance: higher match = closer (0.2–1.5 km)
+                const distKm = (0.2 + (100 - comp.matchScore) / 100 * 1.3).toFixed(1)
+                return (
+                  <div key={i} style={{
+                    background: isSubject ? `${theme.primary}11` : C.bg3,
+                    border: `1px solid ${isSubject ? theme.primary + "44" : C.border}`,
+                    borderRadius: 8, padding: "8px 10px", position: "relative",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <div style={{ position: "relative", flexShrink: 0 }}>
+                        <div style={{
+                          width: 8, height: 8, borderRadius: "50%",
+                          background: dotColor,
+                          boxShadow: `0 0 0 ${isSubject ? 5 : 3}px ${dotColor}33, 0 0 ${isSubject ? 12 : 6}px ${dotColor}66`,
+                        }} />
+                        {isSubject && (
+                          <div style={{
+                            position: "absolute", inset: -3, borderRadius: "50%",
+                            border: `1px solid ${dotColor}44`,
+                            animation: "ping 2s ease-out infinite",
+                          }} />
+                        )}
+                      </div>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: isSubject ? theme.primary : C.muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {isSubject ? "Subject property" : comp.address.split(" ").slice(0, 3).join(" ")}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: isSubject ? theme.primary : C.text }}>{fmtK(comp.soldPrice)}</div>
+                    <div style={{ fontSize: 9, color: C.faint }}>{comp.beds}bd · {comp.land}m²</div>
+                    {!isSubject && (
+                      <div style={{ fontSize: 8, color: C.faint, marginTop: 2 }}>{distKm} km away</div>
+                    )}
+                    <div style={{ height: 2, background: C.bg2, borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.round(pricePct * 100)}%`, height: "100%", background: dotColor, borderRadius: 2 }} />
+                    </div>
+                    <div style={{ fontSize: 8, color: C.faint, marginTop: 2 }}>{comp.soldDate}</div>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
+              {[
+                { color: C.green, label: "High match (80+)" },
+                { color: C.blue, label: "Good match (60+)" },
+                { color: "#f59e0b", label: "Reference" },
+              ].map(l => (
+                <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: l.color, boxShadow: `0 0 4px ${l.color}88` }} />
+                  <span style={{ fontSize: 9, color: C.faint }}>{l.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Comp detail cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         {comps.map((comp, i) => {
+          const isSubject = i === 0
+          const distKm = isSubject ? null : (0.2 + (100 - comp.matchScore) / 100 * 1.3).toFixed(1)
           return (
             <div key={i} style={{
               background: C.bg3, borderRadius: 12,
@@ -4236,7 +4295,6 @@ function VendorAppraisalPanel({ buyer, theme }: {
               padding: "12px 13px",
               position: "relative",
             }}>
-              {/* Match indicator — subtle dot only, no raw number */}
               {comp.matchScore >= 85 && (
                 <div style={{
                   position: "absolute", top: 10, right: 10,
@@ -4248,7 +4306,9 @@ function VendorAppraisalPanel({ buyer, theme }: {
               <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 1, paddingRight: 50 }}>
                 {comp.address}
               </div>
-              <div style={{ fontSize: 10, color: C.faint, marginBottom: 8 }}>{comp.suburb}</div>
+              <div style={{ fontSize: 10, color: C.faint, marginBottom: 8 }}>
+                {comp.suburb}{distKm ? ` · ${distKm} km` : ""}
+              </div>
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
                 {[
@@ -4933,7 +4993,7 @@ function BulkFireModal({ segmented, agent, theme, onClose }: {
                 color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
                 boxShadow: `0 4px 20px ${theme.glow}`,
               }}>
-                🚀 Fire {total} emails now
+                Fire {total} emails now
               </button>
             </div>
           </>
@@ -5037,7 +5097,7 @@ function CGTUrgencyModal({ segmented, theme, onClose, onSelectEntry }: {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: -0.4 }}>⏰ CGT Urgency Dashboard</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: -0.4 }}>CGT Urgency Dashboard</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{DAYS_TO_CGT} days until 50% discount window closes · sorted by savings at risk</div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20, padding: 0 }}>×</button>
@@ -5076,7 +5136,7 @@ function CGTUrgencyModal({ segmented, theme, onClose, onSelectEntry }: {
         {contacts.length > 0 && (
           <div style={{ marginTop: 16, padding: "12px 16px", borderRadius: 12, background: `${theme.primary}08`, border: `1px solid ${theme.primary}20` }}>
             <div style={{ fontSize: 12, color: C.muted }}>
-              💡 Total CGT savings across database: <span style={{ color: C.green, fontWeight: 700 }}>{fmtDollar(contacts.reduce((s, e) => s + e.financials.cgtSavingsBy2027, 0))}</span>. Money back in your clients' pockets if you act now.
+              Total CGT savings across database: <span style={{ color: C.green, fontWeight: 700 }}>{fmtDollar(contacts.reduce((s, e) => s + e.financials.cgtSavingsBy2027, 0))}</span>. Money back in your clients' pockets if you act now.
             </div>
           </div>
         )}
@@ -5133,21 +5193,21 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
         style={{ background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`, padding: "28px 32px", maxWidth: 640, width: "90vw", maxHeight: "85vh", overflowY: "auto", fontFamily: FONT, boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: -0.4 }}>🤝 Negotiation Coach</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: -0.4 }}>Negotiation Coach</div>
             <div style={{ fontSize: 12, color: theme.primary, marginTop: 3 }}>Personalised call script for {buyer.name}</div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20, padding: 0 }}>×</button>
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>📞 Opening line</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Opening line</div>
           <div style={{ background: `${theme.primary}10`, border: `1px solid ${theme.primary}30`, borderRadius: 12, padding: "14px 16px", fontSize: 13, color: C.text, lineHeight: 1.6, fontStyle: "italic" }}>
             "{opening}"
           </div>
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>💡 Pitch angles</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Pitch angles</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pitches.map((p, i) => (
               <div key={i} style={{ background: C.bg2, borderRadius: 12, padding: "12px 14px", border: `1px solid ${C.border}`, display: "flex", gap: 10 }}>
@@ -5162,7 +5222,7 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
         </div>
 
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>🛡️ Objection handlers</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Objection handlers</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {objections.map((obj, i) => (
               <div key={i} style={{ borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
@@ -5473,7 +5533,7 @@ function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
 
         {/* Toolbar */}
         <div style={{ background: C.bg2, borderRadius: "20px 20px 0 0", padding: "10px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.border}` }}>
-          <span style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>📄 Appraisal Report Preview · {buyer.name}</span>
+          <span style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>Appraisal Report Preview · {buyer.name}</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => window.print()} style={{ padding: "7px 18px", borderRadius: 9, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 12, fontWeight: 700, fontFamily: FONT, boxShadow: `0 2px 8px ${theme.glow}` }}>
               🖨️ Print Report
@@ -5560,7 +5620,7 @@ function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
           {/* CGT callout */}
           {fin.cgtSavingsBy2027 > 0 && (
             <div style={{ background: "#fff7ed", borderRadius: 12, padding: "14px 18px", marginBottom: 22, border: "1px solid #fcd34d" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 4, fontFamily: FONT }}>⏰ CGT Deadline Alert</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 4, fontFamily: FONT }}>CGT Deadline Alert</div>
               <div style={{ fontSize: 12, color: "#92400e", lineHeight: 1.6, fontFamily: FONT }}>
                 Selling before 1 July 2027 saves approximately <strong>{fmtDollar(fin.cgtSavingsBy2027)}</strong> under the 50% CGT discount. After that date the discount may no longer apply.
               </div>
@@ -6097,24 +6157,33 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
 
             {/* Value growth line chart */}
             {(() => {
-              const W = 320; const H = 80; const PAD_L = 4; const PAD_R = 4; const PAD_T = 12; const PAD_B = 20
+              const W = 320; const H = 88; const PAD_L = 4; const PAD_R = 4; const PAD_T = 12; const PAD_B = 24
               const startYear = buyer.purchaseDate ? parseInt(buyer.purchaseDate.slice(0, 4)) || 2013 : 2013
               const endYear = new Date().getFullYear() + (new Date().getMonth() >= 6 ? 0.5 : 0)
-              const steps = Math.max(8, Math.round((endYear - startYear) * 2)) // half-year steps
+              // Monthly steps for realistic-looking chart
+              const steps = Math.max(24, Math.round((endYear - startYear) * 12))
+              // Deterministic seeded noise: ±2.5% monthly volatility
+              const seededNoise = (seed: number) => {
+                const x = Math.sin(seed * 9301 + 49297) * 49979
+                return (x - Math.floor(x)) - 0.5  // -0.5 .. 0.5
+              }
               // Choose data source: real suburb series OR compound formula for unknown suburbs
               const priceSeries = getSuburbPriceSeries(buyer.suburb)
               const pts: { x: number; y: number; val: number; year: number }[] = []
               for (let i = 0; i <= steps; i++) {
                 const y = startYear + (i / steps) * (endYear - startYear)
-                let val: number
+                let base: number
                 if (priceSeries) {
                   // Scale real suburb series so it anchors at purchasePrice at startYear
                   const rawAt = suburbPriceAt(priceSeries, y)
                   const rawStart = suburbPriceAt(priceSeries, startYear)
-                  val = buyer.purchasePrice * (rawAt / rawStart)
+                  base = buyer.purchasePrice * (rawAt / rawStart)
                 } else {
-                  val = buyer.purchasePrice * Math.pow(1 + fin.annualAppreciation / 100, y - startYear)
+                  base = buyer.purchasePrice * Math.pow(1 + fin.annualAppreciation / 100, y - startYear)
                 }
+                // Add monthly noise (±2.5%) — deterministic so chart doesn't re-jitter on re-render
+                const noise = seededNoise(buyer.id * 1000 + i) * 0.05 * base
+                const val = Math.max(base * 0.85, base + noise)
                 pts.push({ year: y, val, x: 0, y: 0 })
               }
               const minV = Math.min(...pts.map(p => p.val))
@@ -6126,9 +6195,17 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
               })
               const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")
               const areaD = `${d} L${pts[pts.length-1].x.toFixed(1)},${(H - PAD_B).toFixed(1)} L${PAD_L},${(H - PAD_B).toFixed(1)} Z`
-              // Find the peak point for annotation
-              const peakPt = priceSeries ? pts.reduce((a, b) => a.val > b.val ? a : b) : null
+              const peakPt = pts.reduce((a, b) => a.val > b.val ? a : b)
               const sourceLabel = priceSeries ? "REA.com.au data" : `${fmtPct(fin.annualAppreciation)} p.a.`
+              // Mid-year axis labels (every 3 years between start and end)
+              const axisYears: { x: number; yr: number }[] = []
+              const step3 = Math.ceil(startYear / 3) * 3
+              for (let yr = step3; yr < Math.floor(endYear); yr += 3) {
+                if (yr > startYear + 0.5) {
+                  const frac = (yr - startYear) / (endYear - startYear)
+                  axisYears.push({ x: PAD_L + frac * (W - PAD_L - PAD_R), yr })
+                }
+              }
               return (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -6145,15 +6222,21 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
                       </linearGradient>
                     </defs>
                     <path d={areaD} fill="url(#vgFill)" />
-                    <path d={d} fill="none" stroke={C.green} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    {/* Peak marker for real data */}
-                    {peakPt && peakPt !== pts[pts.length - 1] && (
+                    <path d={d} fill="none" stroke={C.green} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    {/* Peak marker */}
+                    {peakPt !== pts[pts.length - 1] && (
                       <circle cx={peakPt.x} cy={peakPt.y} r="2.5" fill="none" stroke={C.green} strokeWidth="1.2" opacity="0.5" />
                     )}
                     <circle cx={pts[0].x} cy={pts[0].y} r="3" fill={C.bg3} stroke={C.green} strokeWidth="1.5" />
                     <circle cx={pts[pts.length-1].x} cy={pts[pts.length-1].y} r="4" fill={C.green} />
-                    <text x={PAD_L} y={H} fontSize="9" fill={C.faint} textAnchor="start">{startYear}</text>
-                    <text x={W - PAD_R} y={H} fontSize="9" fill={C.faint} textAnchor="end">{Math.floor(endYear)}</text>
+                    {/* Start/end year labels */}
+                    <text x={PAD_L} y={H} fontSize="8" fill={C.faint} textAnchor="start">{startYear}</text>
+                    <text x={W - PAD_R} y={H} fontSize="8" fill={C.faint} textAnchor="end">{Math.floor(endYear)}</text>
+                    {/* Mid-period year labels */}
+                    {axisYears.map(({ x, yr }) => (
+                      <text key={yr} x={x} y={H} fontSize="8" fill={C.faint} textAnchor="middle" opacity="0.6">{yr}</text>
+                    ))}
+                    {/* Price labels */}
                     <text x={PAD_L} y={pts[0].y - 4} fontSize="9" fill={C.faint} textAnchor="start">{fmtDollar(Math.round(pts[0].val / 1000) * 1000)}</text>
                     <text x={W - PAD_R} y={pts[pts.length-1].y - 4} fontSize="9" fill={C.green} fontWeight="700" textAnchor="end">{fmtDollar(Math.round(pts[pts.length-1].val / 1000) * 1000)}</text>
                   </svg>
@@ -6331,9 +6414,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
 
           {/* ⚡ NotesBridge — CRM notes → AI extraction → outreach sentence */}
-          {buyer.notes && (
+          {(buyer.notes || voiceNotes) && (
             <NotesBridgeCard
-              notes={buyer.notes}
+              notes={[buyer.notes, voiceNotes ? `Voice note: ${voiceNotes}` : ""].filter(Boolean).join("\n\n")}
               prewrittenHook={(buyer as { personalisationHook?: string }).personalisationHook ?? null}
               extractedHook={extractedHook}
               personalisationLine={personalisationLine}
@@ -6425,7 +6508,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
           {/* Negotiation Coach button */}
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowNegotiationCoach(true)}
             style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${theme.primary}40`, background: `${theme.primary}10`, color: theme.primary, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            🤝 Negotiation Coach: call script for {fname}
+            Negotiation Coach: call script for {fname}
           </motion.button>
 
           {/* Contact info */}
