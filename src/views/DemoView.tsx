@@ -126,6 +126,38 @@ function fmtYears(y: number): string {
   return `${yrs}yr ${months}m`
 }
 
+// Real Berwick median house price history (source: realestate.com.au/vic/berwick-3806)
+// Yearly anchors — chart interpolates linearly between points
+const BERWICK_PRICES: { year: number; price: number }[] = [
+  { year: 2010, price: 350_000 },
+  { year: 2011, price: 368_000 },
+  { year: 2012, price: 375_000 },
+  { year: 2013, price: 390_000 },
+  { year: 2014, price: 415_000 },
+  { year: 2015, price: 450_000 },
+  { year: 2016, price: 495_000 },
+  { year: 2017, price: 545_000 },
+  { year: 2018, price: 590_000 },
+  { year: 2019, price: 625_000 },
+  { year: 2020, price: 650_000 },
+  { year: 2021, price: 725_000 },  // REA chart: ~$725K May '21
+  { year: 2022, price: 878_000 },  // REA chart: ~$878K peak May '22
+  { year: 2023, price: 840_000 },  // REA chart: ~$840K post-correction
+  { year: 2024, price: 862_000 },  // REA chart: ~$862K recovery
+  { year: 2025, price: 920_000 },  // REA chart: ~$920K May '25 surge
+  { year: 2026, price: 935_000 },  // extrapolated +1.5% H1
+]
+
+/** Interpolate suburb price for a given fractional year using known data series */
+function suburbPriceAt(series: { year: number; price: number }[], y: number): number {
+  const loArr = series.filter(p => p.year <= y)
+  const lo = loArr.length > 0 ? loArr[loArr.length - 1] : series[0]
+  const hi = series.find(p => p.year > y) ?? series[series.length - 1]
+  if (lo === hi) return lo.price
+  const t = (y - lo.year) / (hi.year - lo.year)
+  return lo.price + t * (hi.price - lo.price)
+}
+
 // Returns full address without duplicating the suburb if purchaseAddress already ends with it
 function fullAddr(purchaseAddress: string, suburb: string): string {
   const norm = (s: string) => s.trim().toLowerCase()
@@ -5360,6 +5392,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
   const [showNegotiationCoach, setShowNegotiationCoach] = useState(false)
   const [showPrintAppraisal, setShowPrintAppraisal] = useState(false)
   const [showAllMetrics, setShowAllMetrics] = useState(false)
+  const [showInsights, setShowInsights] = useState(false)   // trigger events + pitch angles collapsed by default
   // NotesBridge: populated from API response after generation
   const [extractedHook, setExtractedHook] = useState<string | null>(null)
   const [personalisationLine, setPersonalisationLine] = useState<string | null>(null)
@@ -5589,13 +5622,29 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
 
             {/* Value growth line chart */}
             {(() => {
-              const W = 320; const H = 72; const PAD_L = 4; const PAD_R = 4; const PAD_T = 8; const PAD_B = 20
-              const years = Math.max(2, Math.ceil(fin.yearsHeld))
-              const pts: { x: number; y: number; val: number; yr: number }[] = []
-              for (let i = 0; i <= years; i++) {
-                pts.push({ yr: i, val: fin.purchasePrice * Math.pow(1 + fin.annualAppreciation / 100, i), x: 0, y: 0 })
+              const W = 320; const H = 80; const PAD_L = 4; const PAD_R = 4; const PAD_T = 12; const PAD_B = 20
+              const startYear = buyer.purchaseDate ? parseInt(buyer.purchaseDate.slice(0, 4)) || 2013 : 2013
+              const endYear = new Date().getFullYear() + (new Date().getMonth() >= 6 ? 0.5 : 0)
+              const steps = Math.max(8, Math.round((endYear - startYear) * 2)) // half-year steps
+              // Choose data source: real Berwick series OR compound formula for other suburbs
+              const isBerwick = buyer.suburb.toLowerCase().includes("berwick")
+              const priceSeries = isBerwick ? BERWICK_PRICES : null
+              const pts: { x: number; y: number; val: number; year: number }[] = []
+              for (let i = 0; i <= steps; i++) {
+                const y = startYear + (i / steps) * (endYear - startYear)
+                let val: number
+                if (priceSeries) {
+                  // Scale real suburb series so it anchors at purchasePrice at startYear
+                  const rawAt = suburbPriceAt(priceSeries, y)
+                  const rawStart = suburbPriceAt(priceSeries, startYear)
+                  val = buyer.purchasePrice * (rawAt / rawStart)
+                } else {
+                  val = buyer.purchasePrice * Math.pow(1 + fin.annualAppreciation / 100, y - startYear)
+                }
+                pts.push({ year: y, val, x: 0, y: 0 })
               }
-              const minV = pts[0].val; const maxV = pts[pts.length - 1].val
+              const minV = Math.min(...pts.map(p => p.val))
+              const maxV = Math.max(...pts.map(p => p.val))
               const rng = maxV - minV || 1
               pts.forEach((p, idx) => {
                 p.x = PAD_L + (idx / (pts.length - 1)) * (W - PAD_L - PAD_R)
@@ -5603,30 +5652,34 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
               })
               const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")
               const areaD = `${d} L${pts[pts.length-1].x.toFixed(1)},${(H - PAD_B).toFixed(1)} L${PAD_L},${(H - PAD_B).toFixed(1)} Z`
-              const startYear = buyer.purchaseDate ? parseInt(buyer.purchaseDate.slice(0, 4)) || 2013 : 2013
+              // Find the peak point for annotation
+              const peakPt = priceSeries ? pts.reduce((a, b) => a.val > b.val ? a : b) : null
+              const sourceLabel = isBerwick ? "REA.com.au data" : `${fmtPct(fin.annualAppreciation)} p.a.`
               return (
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
-                    {buyer.suburb} value trajectory
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                      {buyer.suburb} median price trend
+                    </div>
+                    <div style={{ fontSize: 8, color: C.faint, opacity: 0.6 }}>{sourceLabel}</div>
                   </div>
                   <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}>
                     <defs>
                       <linearGradient id="vgFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={C.green} stopOpacity="0.25" />
+                        <stop offset="0%" stopColor={C.green} stopOpacity="0.22" />
                         <stop offset="100%" stopColor={C.green} stopOpacity="0" />
                       </linearGradient>
                     </defs>
-                    {/* Area fill */}
                     <path d={areaD} fill="url(#vgFill)" />
-                    {/* Line */}
-                    <path d={d} fill="none" stroke={C.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    {/* Start dot */}
+                    <path d={d} fill="none" stroke={C.green} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    {/* Peak marker for real data */}
+                    {peakPt && peakPt !== pts[pts.length - 1] && (
+                      <circle cx={peakPt.x} cy={peakPt.y} r="2.5" fill="none" stroke={C.green} strokeWidth="1.2" opacity="0.5" />
+                    )}
                     <circle cx={pts[0].x} cy={pts[0].y} r="3" fill={C.bg3} stroke={C.green} strokeWidth="1.5" />
-                    {/* End dot */}
                     <circle cx={pts[pts.length-1].x} cy={pts[pts.length-1].y} r="4" fill={C.green} />
-                    {/* Labels */}
                     <text x={PAD_L} y={H} fontSize="9" fill={C.faint} textAnchor="start">{startYear}</text>
-                    <text x={W - PAD_R} y={H} fontSize="9" fill={C.faint} textAnchor="end">{startYear + years}</text>
+                    <text x={W - PAD_R} y={H} fontSize="9" fill={C.faint} textAnchor="end">{Math.floor(endYear)}</text>
                     <text x={PAD_L} y={pts[0].y - 4} fontSize="9" fill={C.faint} textAnchor="start">{fmtDollar(Math.round(pts[0].val / 1000) * 1000)}</text>
                     <text x={W - PAD_R} y={pts[pts.length-1].y - 4} fontSize="9" fill={C.green} fontWeight="700" textAnchor="end">{fmtDollar(Math.round(pts[pts.length-1].val / 1000) * 1000)}</text>
                   </svg>
@@ -5711,43 +5764,44 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
           <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 18px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase" }}>CRM Notes</div>
-              {/* Voice memo button */}
-              {vendorVoice.supported && (
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  {vendorVoice.phase === "idle" && (
-                    <button
-                      onClick={vendorVoice.start}
-                      style={{
-                        fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
-                        background: theme.primary + "15", color: theme.primary,
-                        border: `1px solid ${theme.primary}30`, cursor: "pointer", fontFamily: FONT,
-                        display: "flex", alignItems: "center", gap: 4,
-                      }}
-                    >
-                      🎙️ Add voice note
-                    </button>
-                  )}
-                  {vendorVoice.phase === "recording" && (
-                    <button
-                      onClick={vendorVoice.stop}
-                      style={{
-                        fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
-                        background: "#ef444420", color: "#ef4444",
-                        border: "1px solid #ef444440", cursor: "pointer", fontFamily: FONT,
-                        display: "flex", alignItems: "center", gap: 4,
-                      }}
-                    >
-                      <motion.span animate={{ opacity: [1, 0] }} transition={{ duration: 0.6, repeat: Infinity }}>●</motion.span>
-                      Stop ({vendorVoice.seconds}s)
-                    </button>
-                  )}
-                  {vendorVoice.phase === "done" && (
-                    <button onClick={vendorVoice.reset} style={{
-                      fontSize: 10, color: C.faint, background: "none", border: "none", cursor: "pointer",
-                    }}>Reset</button>
-                  )}
-                </div>
-              )}
+              {/* Voice memo button — always visible */}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {vendorVoice.phase === "idle" && (
+                  <button
+                    onClick={vendorVoice.supported ? vendorVoice.start : undefined}
+                    title={vendorVoice.supported ? undefined : "Voice notes require Chrome or Edge"}
+                    style={{
+                      fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
+                      background: theme.primary + "15", color: theme.primary,
+                      border: `1px solid ${theme.primary}30`,
+                      cursor: vendorVoice.supported ? "pointer" : "default",
+                      opacity: vendorVoice.supported ? 1 : 0.5,
+                      fontFamily: FONT, display: "flex", alignItems: "center", gap: 4,
+                    }}
+                  >
+                    🎙️ Add voice note
+                  </button>
+                )}
+                {vendorVoice.phase === "recording" && (
+                  <button
+                    onClick={vendorVoice.stop}
+                    style={{
+                      fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
+                      background: "#ef444420", color: "#ef4444",
+                      border: "1px solid #ef444440", cursor: "pointer", fontFamily: FONT,
+                      display: "flex", alignItems: "center", gap: 4,
+                    }}
+                  >
+                    <motion.span animate={{ opacity: [1, 0] }} transition={{ duration: 0.6, repeat: Infinity }}>●</motion.span>
+                    Stop ({vendorVoice.seconds}s)
+                  </button>
+                )}
+                {vendorVoice.phase === "done" && (
+                  <button onClick={vendorVoice.reset} style={{
+                    fontSize: 10, color: C.faint, background: "none", border: "none", cursor: "pointer", fontFamily: FONT,
+                  }}>↺ Re-record</button>
+                )}
+              </div>
             </div>
             {buyer.notes && <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.55 }}>{buyer.notes}</div>}
             {/* Live transcript while recording */}
@@ -5756,12 +5810,37 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
                 🎙️ {vendorVoice.liveTranscript}
               </div>
             )}
-            {/* Saved voice notes */}
+            {/* Saved voice notes + upsert button */}
             {voiceNotes && (
               <div style={{ fontSize: 12, color: C.text, marginTop: 8, padding: "8px 10px", background: theme.primary + "10", borderRadius: 6, lineHeight: 1.5, border: `1px solid ${theme.primary}20` }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: theme.primary, textTransform: "uppercase", letterSpacing: 0.8 }}>🎙️ Voice note added · feeds into AI generation</span>
-                <div style={{ marginTop: 4, color: C.muted }}>{voiceNotes}</div>
-                {/* AI Brief parsed from voice */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: theme.primary, textTransform: "uppercase", letterSpacing: 0.8 }}>🎙️ Voice note · included in AI generation</span>
+                  <button
+                    onClick={async () => {
+                      // Append voice transcript to the buyer's notes and save back to sheet
+                      const merged = [buyer.notes, voiceNotes].filter(Boolean).join("\n\nVoice note: ")
+                      try {
+                        await fetch(apiUrl("/api/sheet"), {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "updateNotes", id: buyer.id, notes: merged }),
+                        })
+                      } catch { /* non-fatal — sheet may not support updates yet */ }
+                      // Optimistically update local display
+                      buyer.notes = merged
+                      vendorVoice.reset()
+                      setVoiceNotes("")
+                    }}
+                    style={{
+                      fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 5,
+                      background: theme.primary + "20", color: theme.primary,
+                      border: `1px solid ${theme.primary}40`, cursor: "pointer", fontFamily: FONT, flexShrink: 0, marginLeft: 8,
+                    }}
+                  >
+                    ✓ Save to notes
+                  </button>
+                </div>
+                <div style={{ color: C.muted }}>{voiceNotes}</div>
                 <VoiceBriefCard transcript={voiceNotes} buyerName={buyer.name} buyerSuburb={buyer.suburb} theme={theme} />
               </div>
             )}
@@ -5787,49 +5866,81 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
             />
           )}
 
-          {/* Trigger events */}
-          <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 14 }}>
-              Trigger events
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {segment.triggers.map((t, i) => {
-                const uColor = t.urgency === "high" ? (C.red ?? "#ef4444") : t.urgency === "medium" ? C.orange : C.faint
-                return (
-                  <div key={i} style={{
-                    display: "flex", gap: 10, padding: "10px 12px", borderRadius: 10,
-                    background: uColor + "10", border: `1px solid ${uColor}25`,
-                  }}>
-                    <span style={{
-                      fontSize: 8, fontWeight: 800, color: uColor, textTransform: "uppercase",
-                      background: uColor + "20", padding: "2px 6px", borderRadius: 4, alignSelf: "flex-start",
-                    }}>{t.urgency}</span>
-                    <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>{t.label}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+          {/* Trigger events + Pitch angles — collapsible */}
+          <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            {/* Header row — always visible */}
+            <button
+              onClick={() => setShowInsights(v => !v)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "14px 20px", background: "transparent", border: "none", cursor: "pointer", fontFamily: FONT,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, color: C.muted, textTransform: "uppercase" }}>
+                  Triggers &amp; pitch angles
+                </span>
+                {/* Top trigger preview chip */}
+                {!showInsights && segment.triggers[0] && (() => {
+                  const t = segment.triggers[0]
+                  const uColor = t.urgency === "high" ? (C.red ?? "#ef4444") : t.urgency === "medium" ? C.orange : C.faint
+                  return (
+                    <span style={{ fontSize: 10, color: uColor, background: uColor + "15", padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>
+                      {t.label.slice(0, 40)}{t.label.length > 40 ? "…" : ""}
+                    </span>
+                  )
+                })()}
+              </div>
+              <span style={{
+                fontSize: 13, color: C.faint,
+                transform: showInsights ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block",
+              }}>⌄</span>
+            </button>
 
-          {/* AI pitch angles */}
-          {segment.pitchAngles.length > 0 && (
-            <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 14 }}>
-                Pitch angles for {fname}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {segment.pitchAngles.map((angle, i) => (
-                  <div key={i} style={{
-                    display: "flex", gap: 10, padding: "10px 12px", borderRadius: 10,
-                    background: C.bg3, border: `1px solid ${C.border}`,
-                  }}>
-                    <span style={{ fontSize: 16, flexShrink: 0 }}>💡</span>
-                    <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>{angle}</span>
+            {/* Expanded content */}
+            <AnimatePresence>
+              {showInsights && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                  style={{ overflow: "hidden" }}
+                >
+                  <div style={{ padding: "0 20px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+                    {/* Triggers */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {segment.triggers.map((t, i) => {
+                        const uColor = t.urgency === "high" ? (C.red ?? "#ef4444") : t.urgency === "medium" ? C.orange : C.faint
+                        return (
+                          <div key={i} style={{
+                            display: "flex", gap: 8, padding: "8px 10px", borderRadius: 8,
+                            background: uColor + "0d", border: `1px solid ${uColor}20`,
+                          }}>
+                            <span style={{ fontSize: 8, fontWeight: 800, color: uColor, textTransform: "uppercase", background: uColor + "18", padding: "2px 5px", borderRadius: 3, alignSelf: "flex-start", flexShrink: 0 }}>{t.urgency}</span>
+                            <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{t.label}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {/* Pitch angles */}
+                    {segment.pitchAngles.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8 }}>Pitch angles for {fname}</div>
+                        {segment.pitchAngles.map((angle, i) => (
+                          <div key={i} style={{
+                            display: "flex", gap: 8, padding: "8px 10px", borderRadius: 8,
+                            background: C.bg3, border: `1px solid ${C.border}`,
+                          }}>
+                            <span style={{ fontSize: 14, flexShrink: 0 }}>💡</span>
+                            <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{angle}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {/* Secondary buyer engagement strategies */}
           {isSecondary && <SecondaryEngagementCard entry={entry} theme={theme} />}
