@@ -108,6 +108,22 @@ router.post("/", async (req, res) => {
     }
   }
 
+  // ── Pre-log to get outreach ID (for email tracking pixel) ───────────────────
+  let outreachLogId = 0
+  if ((channel === "email" || channel === "both") && compliance.emailOk && email) {
+    outreachLogId = await logOutreach({
+      contactPhone:    phone,
+      contactEmail:    email,
+      contactName:     leadName,
+      channel,
+      smsBody:         sms,
+      emailSubject:    subject,
+      emailBody:       emailBody,
+      status:          "sent",
+      propertyAddress: propertyAddr,
+    }).catch(() => 0)
+  }
+
   // ── Email ────────────────────────────────────────────────────────────────────
   if ((channel === "email" || channel === "both") && compliance.emailOk) {
     if (!email) {
@@ -127,6 +143,7 @@ router.post("/", async (req, res) => {
         priceGuide,
         bodyParagraphs:  emailBody.split("\n\n").filter(p => p.trim()),
         leadId,
+        trackingId:      outreachLogId > 0 ? outreachLogId : undefined,
       })
       try {
         results.email = await withRetry(() => sendEmail({ to: email, fromName: agentName, subject, htmlBody: html }))
@@ -144,8 +161,8 @@ router.post("/", async (req, res) => {
     await addAgentMessageToThread(phone, sms, { leadId, leadName, email, propertyAddress: propertyAddr })
   }
 
-  if (delivered) {
-    // Log to database for analytics
+  // Log SMS-only sends (email sends were pre-logged above for tracking)
+  if (delivered && outreachLogId === 0) {
     await logOutreach({
       contactPhone:    phone,
       contactEmail:    email,
@@ -154,7 +171,7 @@ router.post("/", async (req, res) => {
       smsBody:         sms,
       emailSubject:    subject,
       emailBody:       emailBody,
-      status:          results.errors.length > 0 ? "sent" : "sent",
+      status:          "sent",
       propertyAddress: propertyAddr,
     }).catch(() => { /* non-fatal */ })
   }
