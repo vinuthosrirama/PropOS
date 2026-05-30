@@ -86,7 +86,7 @@ Questions raised: ${lead.questions || "none"}${transcriptBlock}
 STRATEGY: ${strategy}
 
 Write personalised SMS and email outreach for ${lead.name}. Rules:
-- SMS: Under 160 chars. ${smsAddrGuide} Structure: greet by first name, reference seeing them at the old property (use short form), bridge with ONE specific thing they cared about from their notes/questions, introduce the new property (short form) with one matching fact, CTA, close with agent sign-off from training examples above. Example: "Hi [Name], saw you at [OldAddr] — given [their interest], [NewAddr] [matching fact]. [CTA]. Cheers [AgentFirst]!" Keep it natural.
+- SMS: Under 160 chars. ${smsAddrGuide} Structure: greet by first name, reference seeing them at the old property (use short form), bridge with ONE specific thing they cared about from their notes/questions, introduce the new property (short form) with one matching fact, CTA, close with agent sign-off from training examples above. Example: "Hi [Name], saw you at [OldAddr]. Given [their interest], [NewAddr] has [matching fact]. [CTA]. Cheers [AgentFirst]!" Keep it natural.
 - Email subject: Conversational, specific. Reference the old property or their question. No "New Listing" or generic subjects.
 - Email body: Para 1 name the old property and one specific thing they asked/said. Para 2 answer their key question with a data point from the Q&A context (e.g. land size, school zone, price comparison). Para 3 open home date/CTA. Sign off with your name only.
 - Never write generic phrases when you have real intel.
