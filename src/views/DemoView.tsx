@@ -3320,10 +3320,18 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
   const [showBulkFire, setShowBulkFire] = useState(false)
   const [showCGTUrgency, setShowCGTUrgency] = useState(false)
   const [showPreMarketMatcher, setShowPreMarketMatcher] = useState(false)
+  const [roiData, setRoiData] = useState<VendorAnalyticsData | null>(null)
   const filtered = filterPipeline === "all" ? segmented : segmented.filter(s => s.segment.pipeline === filterPipeline)
   const pipelines = [...new Set(segmented.map(s => s.segment.pipeline))]
   const totalEquity = segmented.reduce((s, e) => s + e.financials.equityGain, 0)
   const hpCount = segmented.filter(s => (s.buyer as { personalisationHook?: string }).personalisationHook).length
+
+  useEffect(() => {
+    fetch(apiUrl("/api/analytics/vendor"))
+      .then(r => r.json())
+      .then((d: VendorAnalyticsData) => setRoiData(d))
+      .catch(() => { /* show demo data from backend */ })
+  }, [])
   const urgencyColor = (u: "high" | "medium" | "low") =>
     u === "high" ? (C.red ?? "#ef4444") : u === "medium" ? C.orange : C.faint
 
@@ -3410,6 +3418,9 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
           <span style={{ fontSize: 10, color: C.faint }}>Demo mode: routes to test inbox</span>
         </div>
       </div>
+
+      {/* ROI Dashboard */}
+      <VendorROIPanel data={roiData} theme={theme} />
 
       {/* AI Intelligence Suite */}
       <WowInsightsPanel segmented={segmented} theme={theme} />
@@ -4262,6 +4273,155 @@ function PropertyEstimatorModal({ theme, onClose }: { theme: AgencyTheme; onClos
         )}
       </motion.div>
     </motion.div>
+  )
+}
+
+// ── Vendor Analytics / ROI Dashboard ─────────────────────────────────────────
+
+interface VendorAnalyticsData {
+  funnel: {
+    outreachSent:     number
+    emailOpened:      number
+    replied:          number
+    appraisalsBooked: number
+    listingsWon:      number
+    estimatedGCI:     number
+  }
+  nurture: { pending: number; sent: number }
+  roi: {
+    monthlySubscription: number
+    listingsAttributed:  number
+    revenueGenerated:    number
+    roiMultiple:         number
+  }
+}
+
+// Demo data shown immediately while the fetch is in flight
+const DEMO_ROI: VendorAnalyticsData = {
+  funnel: { outreachSent: 47, emailOpened: 31, replied: 9, appraisalsBooked: 3, listingsWon: 1, estimatedGCI: 17000 },
+  nurture: { pending: 18, sent: 22 },
+  roi: { monthlySubscription: 399, listingsAttributed: 1, revenueGenerated: 17000, roiMultiple: 42.6 },
+}
+
+function VendorROIPanel({ data, theme }: { data: VendorAnalyticsData | null; theme: AgencyTheme }) {
+  const [open, setOpen] = useState(false)
+  const d = data ?? DEMO_ROI
+  const { funnel, nurture, roi } = d
+
+  const pctOpen   = funnel.outreachSent > 0 ? Math.round((funnel.emailOpened    / funnel.outreachSent) * 100) : 66
+  const pctReply  = funnel.outreachSent > 0 ? Math.round((funnel.replied        / funnel.outreachSent) * 100) : 19
+  const pctAppr   = funnel.outreachSent > 0 ? Math.round((funnel.appraisalsBooked / funnel.outreachSent) * 100) : 6
+  const pctList   = funnel.outreachSent > 0 ? Math.round((funnel.listingsWon    / funnel.outreachSent) * 100) : 2
+
+  const funnelSteps = [
+    { label: "Sent",        value: funnel.outreachSent,     pct: 100,      color: C.blue },
+    { label: "Opened",      value: funnel.emailOpened,      pct: pctOpen,  color: "#a78bfa" },
+    { label: "Replied",     value: funnel.replied,          pct: pctReply, color: C.green },
+    { label: "Appraisals",  value: funnel.appraisalsBooked, pct: pctAppr,  color: C.orange },
+    { label: "Listings",    value: funnel.listingsWon,      pct: pctList,  color: theme.gradient[0] },
+  ]
+
+  const gciStr = funnel.estimatedGCI > 0
+    ? `$${(funnel.estimatedGCI / 1000).toFixed(0)}K GCI earned`
+    : funnel.listingsWon > 0 ? `${funnel.listingsWon} listing${funnel.listingsWon > 1 ? "s" : ""} won` : "0 listings yet"
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: open ? 10 : 0,
+          width: "100%",
+        }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 800, color: C.faint, letterSpacing: 1.4, textTransform: "uppercase" }}>
+          ROI Dashboard
+        </span>
+        <span style={{ fontSize: 11, color: C.faint, transition: "transform 0.2s", display: "inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
+        {!open && (
+          <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: C.green }}>
+            {roi.roiMultiple > 0 ? `${roi.roiMultiple}× ROI` : gciStr}
+          </span>
+        )}
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }} style={{ overflow: "hidden" }}
+          >
+            <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 20px" }}>
+
+              {/* ROI hero number */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>Return on PropOS investment</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontSize: 36, fontWeight: 900, color: C.green, letterSpacing: -1 }}>
+                      {roi.roiMultiple > 0 ? `${roi.roiMultiple}×` : "–"}
+                    </span>
+                    {roi.revenueGenerated > 0 && (
+                      <span style={{ fontSize: 14, fontWeight: 700, color: C.green }}>
+                        ${(roi.revenueGenerated / 1000).toFixed(0)}K GCI
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    ${roi.monthlySubscription}/mo · {roi.listingsAttributed} listing{roi.listingsAttributed !== 1 ? "s" : ""} attributed
+                  </div>
+                </div>
+
+                {/* Nurture queue stats */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  {[
+                    { v: nurture.pending, l: "nurture pending", c: C.orange },
+                    { v: nurture.sent,    l: "follow-ups sent",  c: C.green  },
+                  ].map(m => (
+                    <div key={m.l} style={{ background: C.bg3, border: `1px solid ${m.c}30`, borderRadius: 10, padding: "8px 14px", textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: m.c }}>{m.v}</div>
+                      <div style={{ fontSize: 9, color: C.faint, whiteSpace: "nowrap" }}>{m.l}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Funnel bars */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {funnelSteps.map(step => (
+                  <div key={step.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 72, fontSize: 10, color: C.muted, textAlign: "right", flexShrink: 0 }}>{step.label}</div>
+                    <div style={{ flex: 1, height: 6, background: C.bg3, borderRadius: 3, overflow: "hidden" }}>
+                      <motion.div
+                        initial={{ width: 0 }} animate={{ width: `${step.pct}%` }} transition={{ duration: 0.6, delay: 0.1 }}
+                        style={{ height: "100%", background: step.color, borderRadius: 3 }}
+                      />
+                    </div>
+                    <div style={{ width: 54, display: "flex", gap: 4, alignItems: "baseline", flexShrink: 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: step.color }}>{step.value}</span>
+                      {step.pct < 100 && <span style={{ fontSize: 9, color: C.faint }}>{step.pct}%</span>}
+                    </div>
+                  </div>
+                ))}
+                {/* GCI row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ width: 72, fontSize: 10, color: C.faint, textAlign: "right", flexShrink: 0 }}>GCI</div>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 800, color: C.green }}>
+                    {funnel.estimatedGCI > 0 ? `$${(funnel.estimatedGCI / 1000).toFixed(0)}K` : "–"}
+                  </div>
+                  <div style={{ width: 54, fontSize: 10, color: C.faint, flexShrink: 0 }}>earned</div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 10, fontSize: 10, color: C.faint, fontStyle: "italic" }}>
+                {data ? "Live data from your outreach log" : "Demo figures · connect database to track real numbers"}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 

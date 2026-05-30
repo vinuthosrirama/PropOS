@@ -146,6 +146,7 @@ export function buildEmailHTML(params: {
   priceGuide?:     string
   bodyParagraphs:  string[]
   leadId:          string
+  trackingId?:     number   // outreach_log id — enables open/click pixel tracking
 }): string {
   const unsubUrl    = `${BASE_URL}/unsubscribe?token=${encodeURIComponent(params.leadId)}`
   const color       = params.agencyColor ?? "#4B2E7E"
@@ -231,6 +232,15 @@ export function buildEmailHTML(params: {
           }
         </td></tr>
 
+        <!-- CTA button (shown when trackingId is set — links to tracked click endpoint) -->
+        ${params.trackingId ? `
+        <tr><td style="padding:8px 36px 20px;">
+          <a href="${BASE_URL}/api/track/click/${params.trackingId}?url=${encodeURIComponent(`mailto:${params.agentEmail ?? ""}?subject=${encodeURIComponent("Appraisal Request – " + params.propertyAddress)}`)}"
+             style="display:inline-block;padding:12px 24px;background:${params.agencyColor ?? "#4B2E7E"};color:#ffffff;font-size:13px;font-weight:700;border-radius:7px;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.2px;">
+            📅 Book a Free Appraisal
+          </a>
+        </td></tr>` : ""}
+
         <!-- Footer -->
         <tr><td style="background:#f9f9f9;border-top:1px solid #eeeeee;padding:12px 36px;">
           <p style="margin:0;font-size:11px;color:#aaa;line-height:1.6;font-family:Arial,sans-serif;">
@@ -242,6 +252,7 @@ export function buildEmailHTML(params: {
       </table>
     </td></tr>
   </table>
+  ${params.trackingId ? `<img src="${BASE_URL}/api/track/open/${params.trackingId}" width="1" height="1" style="display:block;width:1px;height:1px;visibility:hidden;" alt="">` : ""}
 </body>
 </html>`
 }

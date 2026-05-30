@@ -28,6 +28,7 @@ import replyAgentRouter from "./routes/reply-agent.js"
 import slmAnswerRouter from "./routes/slm-answer.js"
 import slmAnswerBatchRouter from "./routes/slm-answer-batch.js"
 import addContactRouter from "./routes/add-contact.js"
+import trackRouter from "./routes/track.js"
 import { loadConversations } from "./lib/conversations.js"
 import { initDb, isDbConnected } from "./lib/db.js"
 import { startScheduler } from "./lib/scheduler.js"
@@ -74,6 +75,7 @@ app.use("/api/reply-agent",  replyAgentRouter)
 app.use("/api/slm-answer",        slmAnswerRouter)
 app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
 app.use("/api/add-contact",       addContactRouter)
+app.use("/api/track",             trackRouter)
 
 // Health check — must be before express.static so it's never shadowed by the SPA
 app.get("/api/health", (_req, res) => {
