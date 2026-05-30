@@ -100,7 +100,9 @@ app.get("/api/health", (_req, res) => {
 // On Railway, Nixpacks snapshots server/ only, so frontend is pre-built into server/public/.
 // In local dev, dist/ lives one level up (repo root).
 import { existsSync } from "fs"
-const railwayPublic = path.join(__dirname, "public")
+// When compiled by tsc: __dirname=/app/dist/, so ../public = /app/public/ (server/public pre-built)
+// When running tsx locally: __dirname=/repo/server/, so ../public = /repo/public/ (doesn't exist, falls through to dist/)
+const railwayPublic = path.resolve(__dirname, "..", "public")
 const distPath = existsSync(railwayPublic) ? railwayPublic : path.resolve(__dirname, "..", "dist")
 
 // Hashed JS/CSS/image assets — immutable, cache 1 year
