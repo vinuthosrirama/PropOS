@@ -1,14 +1,9 @@
 {
-  "version": "1.3.0",
-  "releasedAt": "2026-05-30T00:00:00+10:00",
+  "version": "1.3.2",
+  "releasedAt": "2026-05-30T10:30:00+10:00",
   "changes": [
-    "Contacts expand dropdown: Show N more / Show less toggle",
-    "Voice transcription in Add Contact modal with 4-step pipeline animation",
-    "Version badge v1.3.0 in nav bar (desktop + mobile)",
-    "Address audit: all demo addresses replaced with real verified Berwick listings",
-    "Add Contact modal: tabbed import (Manual / CSV / CRM connections)",
-    "Sheet status: animated spinner + green Live badge + manual refresh",
-    "Login mode button: white text on selected state",
-    "Barry Plant theme: red gradient, updated icon"
+    "Remove em-dashes from LLM prompt SMS + email examples in openai.ts",
+    "Remove em-dashes from LLM prompt SMS example in claude.ts",
+    "Version badge v1.3.2 in nav bar — auto-synced from package.json"
   ]
 }

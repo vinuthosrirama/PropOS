@@ -86,9 +86,9 @@ STRATEGY: ${strategy}
 CHANNEL: ${channel}
 
 Write the message now:
-- SMS: Under 160 chars. ${smsAddrGuide} Structure: greet by first name, reference seeing them at the old property (use short form), bridge with ONE specific thing they cared about from their notes or questions, introduce the new property (short form) with one matching fact (land, school zone, beds), give a CTA (open home time or "worth a look?"), close with agent sign-off from training examples. Example rhythm: "Hi [Name], [saw you at OldAddr] — [their specific interest], [NewAddr] [matching fact]. [CTA]. [Sign-off]!" Keep it natural, not a fill-in-the-blank.
+- SMS: Under 160 chars. ${smsAddrGuide} Structure: greet by first name, reference seeing them at the old property (use short form), bridge with ONE specific thing they cared about from their notes or questions, introduce the new property (short form) with one matching fact (land, school zone, beds), give a CTA (open home time or "worth a look?"), close with agent sign-off from training examples. Example rhythm: "Hi [Name], saw you at OldAddr. Given [their specific interest], [NewAddr] has [matching fact]. [CTA]. [Sign-off]!" Keep it natural, not a fill-in-the-blank.
 - Email subject: Conversational, specific to this lead. Reference the old property address or their question. No "[TEST", "New Listing", or generic subjects.
-- Email body: Para 1 — name the old property and one specific thing they said/asked there. Para 2 — directly answer their key question using a data point from the Q&A context above (e.g. "land here is 650sqm vs the 612sqm at [old addr]"). Para 3 — open home date/time with a low-pressure CTA. Sign off with your name only.
+- Email body: Para 1, name the old property and one specific thing they said/asked there. Para 2, directly answer their key question using a data point from the Q&A context above (e.g. "land here is 650sqm vs the 612sqm at [old addr]"). Para 3, open home date/time with a low-pressure CTA. Sign off with your name only.
 - NEVER write "I have a new listing that might interest you" or "let me know if you want more info".
 Respond ONLY with valid JSON, no markdown:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]}}`
