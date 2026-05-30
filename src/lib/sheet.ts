@@ -531,13 +531,18 @@ export async function readAgentProfileFromSheet(name: string, agency: string): P
 }
 
 function mapPastBuyerRow(row: Record<string, unknown>): PastBuyerRow {
+  const rawAddr  = String(row.purchaseAddress ?? "").trim()
+  const rawSuburb = String(row.suburb ?? "").trim()
+  // Strip suburb from end of purchaseAddress if the sheet has already embedded it
+  const normEnds = rawAddr.toLowerCase().endsWith(`, ${rawSuburb.toLowerCase()}`)
+  const cleanAddr = normEnds ? rawAddr.slice(0, rawAddr.length - rawSuburb.length - 2).trim() : rawAddr
   return {
     id:              Number(row.id ?? 0),
     name:            String(row.name ?? ""),
     phone:           String(row.phone ?? ""),
     email:           row.email ? String(row.email) : undefined,
-    purchaseAddress: String(row.purchaseAddress ?? ""),
-    suburb:          String(row.suburb ?? ""),
+    purchaseAddress: cleanAddr,
+    suburb:          rawSuburb,
     purchaseDate:    String(row.purchaseDate ?? ""),
     purchasePrice:   Number(row.purchasePrice ?? 0),
     deposit:         row.deposit ? Number(row.deposit) : undefined,
