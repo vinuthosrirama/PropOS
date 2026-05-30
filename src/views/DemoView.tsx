@@ -2609,6 +2609,23 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
   const [csvImported, setCsvImported] = useState(false)
   const [crmConnecting, setCrmConnecting] = useState<string | null>(null)
   const csvRef = useRef<HTMLInputElement>(null)
+  const [showAllContacts, setShowAllContacts] = useState(false)
+  const [addVoiceStage, setAddVoiceStage] = useState<"idle" | "transcribing" | "analysing" | "personalising" | "done">("idle")
+  const addVoice = useVoiceMemo({
+    onTranscript: (text) => {
+      setAddVoiceStage("transcribing")
+      setTimeout(() => {
+        setAddForm(f => ({ ...f, notes: text }))
+        setAddVoiceStage("analysing")
+        setTimeout(() => {
+          setAddVoiceStage("personalising")
+          setTimeout(() => {
+            setAddVoiceStage("done")
+          }, 1600)
+        }, 1000)
+      }, 1200)
+    },
+  })
 
   // Try loading real past buyers from the Google Sheet — also callable for manual refresh
   const loadFromSheet = () => {
@@ -2707,7 +2724,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
     setBuyers(prev => [...prev, newContact])
     setAddSaved(true)
     setAddSaving(false)
-    setTimeout(() => { setShowAddModal(false); setAddForm(EMPTY_FORM); setAddSaved(false) }, 1200)
+    setTimeout(() => { setShowAddModal(false); setAddForm(EMPTY_FORM); setAddSaved(false); addVoice.reset(); setAddVoiceStage("idle") }, 1200)
   }
 
   const handleCsvFile = (file: File) => {
@@ -2776,6 +2793,13 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
     setCsvImporting(false)
     setCsvImported(true)
     setTimeout(() => { setShowAddModal(false); setCsvContacts([]); setCsvImported(false); setImportSource("manual") }, 1400)
+  }
+
+  const closeAddModal = () => {
+    setShowAddModal(false)
+    setImportSource("manual")
+    addVoice.reset()
+    setAddVoiceStage("idle")
   }
 
   return (
@@ -2891,7 +2915,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
           </button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {buyers.slice(0, 5).map(buyer => {
+          {buyers.slice(0, showAllContacts ? buyers.length : 5).map(buyer => {
             const est = estimatedValues.get(buyer.id) ?? 0
             const equity = est - buyer.purchasePrice
             return (
@@ -2922,9 +2946,23 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
             )
           })}
           {buyers.length > 5 && (
-            <div style={{ fontSize: 11, color: C.faint, textAlign: "center", padding: "8px 0" }}>
-              + {buyers.length - 5} more contacts
-            </div>
+            <button
+              onClick={() => setShowAllContacts(v => !v)}
+              style={{
+                width: "100%", padding: "10px 16px", borderRadius: 12,
+                background: C.bg2, border: `1px solid ${C.border}`,
+                color: C.muted, fontSize: 12, fontWeight: 600,
+                cursor: "pointer", fontFamily: FONT,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = C.bg3)}
+              onMouseLeave={e => (e.currentTarget.style.background = C.bg2)}
+            >
+              {showAllContacts
+                ? "∧ Show less"
+                : `∨ Show ${buyers.length - 5} more contacts`}
+            </button>
           )}
         </div>
       </div>
@@ -2974,7 +3012,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
               background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)",
               display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
             }}
-            onClick={() => setShowAddModal(false)}
+            onClick={closeAddModal}
           >
             <motion.div
               initial={{ scale: 0.93, y: 16 }} animate={{ scale: 1, y: 0 }}
@@ -2991,7 +3029,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
                   <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 3 }}>Add or Import Contacts</div>
                   <div style={{ fontSize: 12, color: C.muted }}>Contacts are upserted to your Google Sheet CRM automatically.</div>
                 </div>
-                <button onClick={() => { setShowAddModal(false); setImportSource("manual") }} style={{
+                <button onClick={closeAddModal} style={{
                   background: "none", border: "none", color: C.faint, fontSize: 18,
                   cursor: "pointer", padding: "0 4px", lineHeight: 1,
                 }}>✕</button>
@@ -3061,15 +3099,107 @@ function VendorPortfolioPage({ agent, theme, onAnalyse }: {
                       </select>
                     </div>
                     <div style={{ gridColumn: "1 / -1" }}>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Notes</label>
-                      <textarea value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
-                        placeholder="Family growing, interested in schools, investment strategy..."
-                        style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", minHeight: 64, resize: "vertical", boxSizing: "border-box" }}
-                      />
+                      {/* Notes / Voice Personalisation */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8 }}>Notes · Personalisation</label>
+                        {addVoice.supported && addVoice.phase === "idle" && addVoiceStage === "idle" && (
+                          <button onClick={addVoice.start} style={{
+                            fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
+                            background: theme.primary + "18", color: theme.primary,
+                            border: `1px solid ${theme.primary}35`, cursor: "pointer", fontFamily: FONT,
+                            display: "flex", alignItems: "center", gap: 4,
+                          }}>🎙️ Voice note</button>
+                        )}
+                        {addVoiceStage === "done" && (
+                          <button onClick={() => { addVoice.reset(); setAddVoiceStage("idle"); setAddForm(f => ({ ...f, notes: "" })) }} style={{
+                            fontSize: 10, color: C.faint, background: "none", border: "none", cursor: "pointer", fontFamily: FONT,
+                          }}>↺ Re-record</button>
+                        )}
+                      </div>
+
+                      {/* Idle: plain textarea */}
+                      {addVoice.phase === "idle" && addVoiceStage === "idle" && (
+                        <textarea value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
+                          placeholder="Family growing, interested in schools, investment strategy — or use voice note above…"
+                          style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", minHeight: 64, resize: "vertical", boxSizing: "border-box" }}
+                        />
+                      )}
+
+                      {/* Recording: show live transcript + stop button */}
+                      {addVoice.phase === "recording" && (
+                        <div style={{ background: C.bg3, border: `1px solid ${theme.primary}30`, borderRadius: 10, padding: "12px 14px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: addVoice.liveTranscript ? 10 : 0 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }}>
+                              <motion.div animate={{ opacity: [1, 0] }} transition={{ duration: 0.6, repeat: Infinity }}
+                                style={{ width: "100%", height: "100%", borderRadius: "50%", background: "#ef4444" }} />
+                            </div>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Recording voice memo</span>
+                            <span style={{ fontSize: 10, color: C.faint, marginLeft: "auto" }}>{addVoice.seconds}s</span>
+                            <button onClick={addVoice.stop} style={{
+                              fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
+                              background: "#ef444420", color: "#ef4444", border: "1px solid #ef444440",
+                              cursor: "pointer", fontFamily: FONT,
+                            }}>Stop</button>
+                          </div>
+                          {addVoice.liveTranscript && (
+                            <div style={{ fontSize: 12, color: theme.primary, fontStyle: "italic", lineHeight: 1.5 }}>
+                              {addVoice.liveTranscript}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Processing pipeline (transcribing → analysing → personalising) */}
+                      {(addVoiceStage === "transcribing" || addVoiceStage === "analysing" || addVoiceStage === "personalising") && (() => {
+                        const STEPS: [typeof addVoiceStage, string][] = [
+                          ["transcribing",  "Transcribing audio"],
+                          ["analysing",     "Analysing transcript"],
+                          ["personalising", "Personalising using PropOS AI"],
+                        ]
+                        const ORDER = ["transcribing", "analysing", "personalising", "done"]
+                        const curIdx = ORDER.indexOf(addVoiceStage)
+                        return (
+                          <div style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                            {/* Step 0: Recording — always done at this point */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <span style={{ fontSize: 13, color: C.green }}>✓</span>
+                              <span style={{ fontSize: 12, color: C.muted }}>Recording voice memo</span>
+                            </div>
+                            {STEPS.map(([stage, label], i) => {
+                              const stepIdx = i + 1
+                              const isDone    = curIdx > stepIdx
+                              const isCurrent = curIdx === stepIdx
+                              return (
+                                <div key={stage} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                  {isDone
+                                    ? <span style={{ fontSize: 13, color: C.green }}>✓</span>
+                                    : isCurrent
+                                      ? <div style={{ width: 12, height: 12, borderRadius: "50%", border: "2px solid transparent", borderTopColor: theme.primary, animation: "spin 0.7s linear infinite", flexShrink: 0 }} />
+                                      : <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${C.faint}55`, flexShrink: 0 }} />
+                                  }
+                                  <span style={{ fontSize: 12, color: isCurrent ? C.text : isDone ? C.muted : C.faint, fontWeight: isCurrent ? 600 : 400 }}>{label}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
+
+                      {/* Done: show editable result */}
+                      {addVoiceStage === "done" && (
+                        <div>
+                          <div style={{ fontSize: 10, color: C.green, fontWeight: 600, marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                            <span>✓</span> Voice personalisation complete — review and edit below
+                          </div>
+                          <textarea value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
+                            style={{ width: "100%", background: C.bg3, border: `1px solid ${theme.primary}30`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", minHeight: 72, resize: "vertical", boxSizing: "border-box" }}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-                    <button onClick={() => setShowAddModal(false)} style={{ flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Cancel</button>
+                    <button onClick={closeAddModal} style={{ flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Cancel</button>
                     <button onClick={handleAddContact} disabled={addSaving || addSaved} style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: addSaved ? C.green : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 14, fontWeight: 700, cursor: addSaving || addSaved ? "default" : "pointer", fontFamily: FONT }}>
                       {addSaved ? "✓ Contact added" : addSaving ? "Saving…" : "Add contact"}
                     </button>
