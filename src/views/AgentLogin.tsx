@@ -377,7 +377,7 @@ export default function AgentLogin({ onLogin }: Props) {
                         outline: active ? `1px solid ${theme?.primary ?? C.blue}44` : "none",
                         transition: "all 0.15s",
                       }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: active ? (theme?.primary ?? C.blue) : C.muted, marginBottom: 2 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: active ? "#ffffff" : C.muted, marginBottom: 2 }}>
                           {m === "buyer" ? "🏘" : "🏡"} {label}
                         </div>
                         <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.3 }}>{desc}</div>
