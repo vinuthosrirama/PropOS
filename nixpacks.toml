@@ -1,0 +1,12 @@
+# Force Nixpacks to build from the repo root, not server/
+# Without this, Nixpacks detects server/package.json as the primary
+# package and runs `tsc` instead of `vite build`, leaving no dist/.
+
+[phases.install]
+cmds = ["npm ci", "cd server && npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "cd server && node_modules/.bin/tsx index.ts"
