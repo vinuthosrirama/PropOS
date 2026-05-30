@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch index.ts",
-    "build": "echo 'Frontend pre-built in server/public — no Railway build needed'",
+    "build": "tsc",
     "start": "tsx index.ts"
   },
   "dependencies": {

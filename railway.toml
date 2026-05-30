@@ -1,5 +1,4 @@
 [deploy]
-startCommand = "./node_modules/.bin/tsx index.ts"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
