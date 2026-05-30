@@ -107,6 +107,9 @@ export default function Nav({
           {logoBlock}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {sheetChip}
+            <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, opacity: 0.6, letterSpacing: 0.4 }}>
+              v{__APP_VERSION__}
+            </div>
             <div style={{
               fontSize: 11, color: "rgb(225, 205, 255)", fontWeight: 600,
               background: theme.dim, padding: "3px 8px", borderRadius: 12,
@@ -293,6 +296,15 @@ export default function Nav({
       </div>
 
       {sheetChip && <div style={{ marginLeft: 12 }}>{sheetChip}</div>}
+
+      {/* Version badge */}
+      <div style={{
+        marginLeft: 10, flexShrink: 0,
+        fontSize: 9, fontWeight: 700, color: C.faint,
+        letterSpacing: 0.5, opacity: 0.6,
+      }}>
+        v{__APP_VERSION__}
+      </div>
 
       {onLogout && (
         <button onClick={onLogout} title="Switch profile"
