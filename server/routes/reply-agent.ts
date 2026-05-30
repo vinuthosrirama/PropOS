@@ -32,6 +32,15 @@ export interface ConversationMessage {
   ts: string
 }
 
+export interface VendorContext {
+  equityGain:        number
+  equityGainPct:     number
+  cgtSavingsBy2027:  number
+  netProceeds:       number
+  purchasePrice:     number
+  currentEstimate:   number
+}
+
 export interface ReplyAgentRequest {
   // Lead context
   leadName:       string
@@ -53,14 +62,18 @@ export interface ReplyAgentRequest {
 
   // Optional — auction date for BOOKING responses
   auctionDate?:   string
+
+  // Optional — vendor financial data; injected when replying in vendor prospecting context
+  vendorContext?: VendorContext
 }
 
 export interface ReplyAgentResponse {
-  intent:      ReplyIntent
-  confidence:  number            // 0-100
-  draft:       string            // ready-to-send SMS draft, max 160 chars
-  reasoning:   string            // why this intent was chosen (for agent review)
-  autoSend:    false             // always false — agent must approve
+  intent:                ReplyIntent
+  confidence:            number   // 0-100
+  draft:                 string   // ready-to-send SMS draft, max 160 chars
+  reasoning:             string   // why this intent was chosen (for agent review)
+  autoSend:              false    // always false — agent must approve
+  financialDataInjected: boolean
 }
 
 // Hard cap on SMS (same rule as outbound)
@@ -112,11 +125,12 @@ router.post("/", async (req, res) => {
   // No API key — return contingency framework immediately so inbox is never blank
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.json({
-      intent:     "UNKNOWN",
-      confidence: 0,
-      draft:      contingencyDraft("UNKNOWN", body),
-      reasoning:  "AI not configured - using contingency framework",
-      autoSend:   false,
+      intent:                "UNKNOWN",
+      confidence:            0,
+      draft:                 contingencyDraft("UNKNOWN", body),
+      reasoning:             "AI not configured - using contingency framework",
+      autoSend:              false,
+      financialDataInjected: false,
     } satisfies ReplyAgentResponse)
   }
 
@@ -129,11 +143,20 @@ router.post("/", async (req, res) => {
   const slmBlock = body.slmContext ? `\nProperty context:\n${body.slmContext}\n` : ""
   const auctionBlock = body.auctionDate ? `\nOpen home / auction: ${body.auctionDate}` : ""
 
+  const hasVendorContext = !!(body.vendorContext)
+  const vendorBlock = hasVendorContext && body.vendorContext ? `
+Vendor financial context (reference specific numbers if the lead raises price or timing concerns):
+- Purchased for $${Math.round(body.vendorContext.purchasePrice / 1000)}K, now worth ~$${Math.round(body.vendorContext.currentEstimate / 1000)}K
+- Equity gain: $${Math.round(body.vendorContext.equityGain / 1000)}K (${Math.round(body.vendorContext.equityGainPct)}%)
+- Estimated net proceeds after selling costs and CGT: $${Math.round(body.vendorContext.netProceeds / 1000)}K
+${body.vendorContext.cgtSavingsBy2027 > 0 ? `- CGT savings if sold before July 2027: $${Math.round(body.vendorContext.cgtSavingsBy2027 / 1000)}K` : ""}
+` : ""
+
   const prompt = `You are a real estate sales assistant helping ${body.agentName} at ${body.agentAgency} draft a reply to an inbound SMS.
 
 Lead: ${body.leadName}
 Property: ${body.propertyAddress}${auctionBlock}
-${slmBlock}
+${slmBlock}${vendorBlock}
 Conversation so far:
 ${threadBlock}
 
@@ -154,7 +177,7 @@ Your job:
    - Directly addresses their message — do not be vague
    - For QUESTION: answer the specific question using the property context above
    - For BOOKING: confirm the open home time and offer to meet them there or separately
-   - For OBJECTION: acknowledge the concern without being pushy; offer one specific counter-point
+   - For OBJECTION: acknowledge the concern without being pushy; if vendorContext provided, cite the specific equity/net proceeds number as a counter-point
    - For OPT_OUT: just return empty string "" — the system handles opt-out separately
    - HARD CONSTRAINT: no em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma instead.
    - Australian tone. Warm but brief.
@@ -185,18 +208,20 @@ Return ONLY valid JSON (no markdown):
       const aiDraft = clampSMS(sanitise(p.draft ?? ""))
       parsed = {
         intent,
-        confidence: p.confidence ?? 50,
-        draft:      aiDraft || contingencyDraft(intent, body),
-        reasoning:  p.reasoning ?? "",
-        autoSend:   false,
+        confidence:            p.confidence ?? 50,
+        draft:                 aiDraft || contingencyDraft(intent, body),
+        reasoning:             p.reasoning ?? "",
+        autoSend:              false,
+        financialDataInjected: hasVendorContext,
       }
     } catch {
       parsed = {
-        intent:     "UNKNOWN",
-        confidence: 0,
-        draft:      contingencyDraft("UNKNOWN", body),
-        reasoning:  "JSON parse failed - using contingency framework",
-        autoSend:   false,
+        intent:                "UNKNOWN",
+        confidence:            0,
+        draft:                 contingencyDraft("UNKNOWN", body),
+        reasoning:             "JSON parse failed - using contingency framework",
+        autoSend:              false,
+        financialDataInjected: false,
       }
     }
 
@@ -206,11 +231,12 @@ Return ONLY valid JSON (no markdown):
     console.error("Reply agent error:", msg)
     // Return contingency framework so the inbox is never blank
     res.json({
-      intent:     "UNKNOWN",
-      confidence: 0,
-      draft:      contingencyDraft("UNKNOWN", body),
-      reasoning:  "AI unavailable - using contingency framework",
-      autoSend:   false,
+      intent:                "UNKNOWN",
+      confidence:            0,
+      draft:                 contingencyDraft("UNKNOWN", body),
+      reasoning:             "AI unavailable - using contingency framework",
+      autoSend:              false,
+      financialDataInjected: false,
     } satisfies ReplyAgentResponse)
   }
 })
