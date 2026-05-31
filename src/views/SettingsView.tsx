@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { C, FONT, PORTFOLIO_ACTIVE, PORTFOLIO_SOLD, PAS_PORTFOLIO_ACTIVE, PAS_PORTFOLIO_SOLD, getAgencyTheme, getPortfolioForAgent, type AgentProfile } from "../data"
+import { C, FONT, PORTFOLIO_ACTIVE, PORTFOLIO_SOLD, PAS_PORTFOLIO_ACTIVE, PAS_PORTFOLIO_SOLD, getAgencyTheme, getPortfolioForAgent, type AgentProfile, type VendorDisplaySettings } from "../data"
 import {
   loadSLMForProperty, saveSLMForProperty, resetSLMForProperty,
   getSLMCompleteness, type PropertySLM, type PropertyQA
@@ -553,7 +553,11 @@ function QACard({
 // Main Component
 // ---------------------------------------------------------------------------
 
-export default function SettingsView({ agent }: { agent: AgentProfile }) {
+export default function SettingsView({ agent, vendorSettings: _vendorSettings, onVendorSettingsChange: _onVendorSettingsChange }: {
+  agent: AgentProfile
+  vendorSettings?: VendorDisplaySettings
+  onVendorSettingsChange?: (s: VendorDisplaySettings) => void
+}) {
   const agentPropertyIds = getPropertyIdsForAgent(agent)
   const [selectedPropId, setSelectedPropId] = useState<number>(() => agentPropertyIds[0] ?? 201)
   const [editedSLMs, setEditedSLMs] = useState<Record<number, PropertySLM>>({})

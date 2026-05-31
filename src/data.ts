@@ -71,6 +71,23 @@ export function getAgencyTheme(agency: string): AgencyTheme {
   }
 }
 
+// ─── VENDOR DISPLAY SETTINGS ──────────────────────────────────────────────────
+export interface VendorDisplaySettings {
+  showCRMNotes:        boolean
+  showTriggers:        boolean
+  showOutreachAngles:  boolean
+  showEquityScenarios: boolean
+  showOptimalWindow:   boolean
+}
+
+export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
+  showCRMNotes:        false,
+  showTriggers:        false,
+  showOutreachAngles:  false,
+  showEquityScenarios: false,
+  showOptimalWindow:   false,
+}
+
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 export type ViewId = "demo" | "setup"
 
