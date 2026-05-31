@@ -2685,10 +2685,7 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
 const ANALYSIS_STEPS = [
   { icon: "🔍", label: "Scanning CRM database", detail: "Reading purchase records, notes, and contact history" },
   { icon: "📊", label: "Calculating equity positions", detail: "Comparing purchase prices to current suburb medians" },
-  { icon: "🧠", label: "AI life-stage inference", detail: "Extracting triggers from agent notes using Claude Haiku" },
-  { icon: "⏳", label: "CGT deadline analysis", detail: "Flagging contacts with 50% discount savings windows" },
   { icon: "📍", label: "Segmenting into pipelines", detail: "Classifying contacts by readiness and opportunity type" },
-  { icon: "✨", label: "Personalisation engine ready", detail: "Hyper-personalised outreach prepared for each contact" },
 ]
 
 function VendorAnalysingScreen({ segmented, theme, onComplete }: {
@@ -2702,9 +2699,9 @@ function VendorAnalysingScreen({ segmented, theme, onComplete }: {
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = []
     ANALYSIS_STEPS.forEach((_, i) => {
-      timers.push(setTimeout(() => setStep(i + 1), 50 + i * 175))
+      timers.push(setTimeout(() => setStep(i + 1), 200 + i * 700))
     })
-    timers.push(setTimeout(() => { setDone(true); setTimeout(onComplete, 400) }, 50 + ANALYSIS_STEPS.length * 175 + 150))
+    timers.push(setTimeout(() => { setDone(true); setTimeout(onComplete, 600) }, 200 + ANALYSIS_STEPS.length * 700 + 300))
     return () => timers.forEach(clearTimeout)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -3082,7 +3079,6 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
   const [sheetSource, setSheetSource] = useState<"demo" | "sheet">("demo")
   const [analysing, setAnalysing] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [showEstimator, setShowEstimator] = useState(false)
   const [addForm, setAddForm] = useState<AddContactForm>(EMPTY_FORM)
   const [addSaving, setAddSaving] = useState(false)
   const [addSaved, setAddSaved] = useState(false)
@@ -3315,42 +3311,44 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
         <div style={{ fontSize: 13, color: C.muted, maxWidth: 560, marginBottom: 14 }}>
           PropOS analyses your CRM database to find past buyers who are ready to sell. We calculate their equity, CGT position, and life-stage triggers, then generate hyper-personalised outreach in your voice.
         </div>
-        <button
-          onClick={() => setShowEstimator(true)}
-          style={{
-            padding: "8px 18px", borderRadius: 10, border: `1px solid ${theme.primary}40`,
-            background: `${theme.primary}10`, color: theme.primary,
-            fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
-            display: "inline-flex", alignItems: "center", gap: 6,
-          }}
-        >
-          Property Value Estimator
-        </button>
       </div>
-
-      {/* Property estimator modal */}
-      <AnimatePresence>
-        {showEstimator && <PropertyEstimatorModal theme={theme} onClose={() => setShowEstimator(false)} />}
-      </AnimatePresence>
 
       {/* CRM Summary Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
-        {[
-          { label: "Total contacts", value: `${buyers.length}`, icon: "👥" },
-          { label: "Potential vendors", value: `${owners.length}`, icon: "🏠" },
-          { label: "Investors", value: `${investors.length}`, icon: "💰" },
-          { label: "Est. portfolio value", value: fmtDollar(totalEstValue), icon: "📊" },
-        ].map(stat => (
-          <div key={stat.label} style={{
-            background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`,
-            padding: "16px 18px", textAlign: "center",
-          }}>
-            <div style={{ fontSize: 20, marginBottom: 6 }}>{stat.icon}</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 2 }}>{stat.value}</div>
-            <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</div>
+      {(() => {
+        // Industry averages: 2% commission, 60% agent / 40% agency split
+        const COMMISSION_RATE = 0.02
+        const AGENT_SPLIT     = 0.60
+        const totalGCI    = totalEstValue * COMMISSION_RATE
+        const agentGCI    = totalGCI * AGENT_SPLIT
+        const fmtM = (v: number) => v >= 1_000_000
+          ? `$${(v / 1_000_000).toFixed(1)}M`
+          : v >= 1_000 ? `$${(v / 1_000).toFixed(0)}K` : `$${v.toFixed(0)}`
+        const stats = [
+          { label: "Total contacts",      value: `${buyers.length}`,    icon: "👥", color: C.text },
+          { label: "Potential vendors",   value: `${owners.length}`,    icon: "🏠", color: C.text },
+          { label: "Investors",           value: `${investors.length}`, icon: "💰", color: C.text },
+          { label: "Est. property value", value: fmtM(totalEstValue),   icon: "📊", color: C.text },
+          { label: "Est. GCI income",     value: fmtM(agentGCI),        icon: "💎", color: C.green,
+            sub: `at 2% comm · 60/40 split` },
+        ]
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 28 }}>
+            {stats.map(stat => (
+              <div key={stat.label} style={{
+                background: C.bg2, borderRadius: 14, border: `1px solid ${stat.color === C.green ? C.green + "33" : C.border}`,
+                padding: "16px 18px", textAlign: "center",
+              }}>
+                <div style={{ fontSize: 20, marginBottom: 6 }}>{stat.icon}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: stat.color, marginBottom: 2 }}>{stat.value}</div>
+                <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</div>
+                {'sub' in stat && stat.sub && (
+                  <div style={{ fontSize: 9, color: C.faint, marginTop: 3 }}>{stat.sub}</div>
+                )}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        )
+      })()}
 
       {/* Sheet setup guide — shown when falling back to demo data */}
       {sheetSource === "demo" && !sheetLoading && (
@@ -3901,13 +3899,10 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
 }) {
   const [filterPipeline, setFilterPipeline] = useState<Pipeline | "all">("all")
   const [showBulkFire, setShowBulkFire] = useState(false)
-  const [showCGTUrgency, setShowCGTUrgency] = useState(false)
-  const [showPreMarketMatcher, setShowPreMarketMatcher] = useState(false)
   const [roiData, setRoiData] = useState<VendorAnalyticsData | null>(null)
   const filtered = filterPipeline === "all" ? segmented : segmented.filter(s => s.segment.pipeline === filterPipeline)
   const pipelines = [...new Set(segmented.map(s => s.segment.pipeline))]
   const totalEquity = segmented.reduce((s, e) => s + e.financials.equityGain, 0)
-  const hpCount = segmented.filter(s => (s.buyer as { personalisationHook?: string }).personalisationHook).length
 
   useEffect(() => {
     fetch(apiUrl("/api/analytics/vendor"))
@@ -3969,36 +3964,12 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
             </motion.div>
           )
         })()}
-        {hpCount > 0 && (
-          <motion.div
-            initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 8,
-              background: `linear-gradient(90deg, ${theme.primary}18, ${theme.primary}08)`,
-              border: `1px solid ${theme.primary}35`, borderRadius: 10, padding: "5px 12px",
-            }}
-          >
-            <span style={{ fontSize: 12 }}>⚡</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: theme.primary }}>{hpCount} contact{hpCount > 1 ? "s" : ""} hyper-personalised</span>
-            <span style={{ fontSize: 10, color: C.faint }}>Your words go straight in, no AI needed</span>
-          </motion.div>
-        )}
-
         {/* Action buttons row */}
         <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowBulkFire(true)}
             style={{ padding: "10px 20px", borderRadius: 12, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 13, fontWeight: 700, fontFamily: FONT, boxShadow: `0 4px 16px ${theme.glow}`, display: "inline-flex", alignItems: "center", gap: 8 }}>
             Review {segmented.length} messages →
           </motion.button>
-          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowCGTUrgency(true)}
-            style={{ padding: "10px 18px", borderRadius: 12, border: `1px solid ${C.orange}50`, cursor: "pointer", background: `${C.orange}12`, color: C.orange, fontSize: 12, fontWeight: 700, fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 6 }}>
-            CGT Urgency
-          </motion.button>
-          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowPreMarketMatcher(true)}
-            style={{ padding: "10px 18px", borderRadius: 12, border: `1px solid ${theme.primary}40`, cursor: "pointer", background: `${theme.primary}10`, color: theme.primary, fontSize: 12, fontWeight: 700, fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 6 }}>
-            📡 Match Buyers
-          </motion.button>
-          <span style={{ fontSize: 10, color: C.faint }}>Demo mode: routes to test inbox</span>
         </div>
       </div>
 
@@ -4014,16 +3985,6 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
       {/* Bulk fire modal */}
       <AnimatePresence>
         {showBulkFire && <BulkFireModal segmented={segmented} agent={agent} theme={theme} onClose={() => setShowBulkFire(false)} />}
-      </AnimatePresence>
-
-      {/* CGT Urgency modal */}
-      <AnimatePresence>
-        {showCGTUrgency && <CGTUrgencyModal segmented={segmented} theme={theme} onClose={() => setShowCGTUrgency(false)} onSelectEntry={e => { setShowCGTUrgency(false); onSelectEntry(e) }} />}
-      </AnimatePresence>
-
-      {/* Pre-Market Matcher modal */}
-      <AnimatePresence>
-        {showPreMarketMatcher && <PreMarketMatcherModal segmented={segmented} agent={agent} theme={theme} onClose={() => setShowPreMarketMatcher(false)} onSelectEntry={e => { setShowPreMarketMatcher(false); onSelectEntry(e) }} />}
       </AnimatePresence>
 
       {/* Pipeline filter chips */}
@@ -4764,7 +4725,7 @@ function SecondaryEngagementCard({ entry, theme }: { entry: SegmentedBuyer; them
 
 // ── Property Value Estimator Modal ────────────────────────────────────────────
 
-function PropertyEstimatorModal({ theme, onClose }: { theme: AgencyTheme; onClose: () => void }) {
+export function PropertyEstimatorModal({ theme, onClose }: { theme: AgencyTheme; onClose: () => void }) {
   const [suburb, setSuburb] = useState("Berwick")
   const [propertyType, setPropertyType] = useState<"House" | "Unit" | "Townhouse">("House")
   const [beds, setBeds] = useState(4)
@@ -5289,7 +5250,7 @@ const DAYS_TO_CGT  = Math.round((CGT_DEADLINE.getTime() - NOW_DATE.getTime()) / 
 
 // ── CGT Urgency Modal ─────────────────────────────────────────────────────────
 
-function CGTUrgencyModal({ segmented, theme, onClose, onSelectEntry }: {
+export function CGTUrgencyModal({ segmented, theme, onClose, onSelectEntry }: {
   segmented: SegmentedBuyer[]
   theme: AgencyTheme
   onClose: () => void
@@ -5469,7 +5430,7 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
 
 // ── Pre-Market Buyer Matcher Modal ────────────────────────────────────────────
 
-function PreMarketMatcherModal({ segmented, agent, theme, onClose, onSelectEntry }: {
+export function PreMarketMatcherModal({ segmented, agent, theme, onClose, onSelectEntry }: {
   segmented: SegmentedBuyer[]
   agent: AgentProfile
   theme: AgencyTheme
@@ -7451,6 +7412,7 @@ export default function DemoView({
   showInbox: showInboxProp,
   onShowInboxChange,
   onBadgeChange,
+  vendorSettings: _vendorSettings,
 }: {
   agent: AgentProfile
   theme?: AgencyTheme
@@ -7460,6 +7422,7 @@ export default function DemoView({
   showInbox?: boolean
   onShowInboxChange?: (v: boolean) => void
   onBadgeChange?: (n: number) => void
+  vendorSettings?: import("../data").VendorDisplaySettings
 }) {
   const homeStage: Stage = mode === "vendor" ? { kind: "vendorPortfolio" } : { kind: "portfolio" }
   const [stage, setStage] = useState<Stage>(homeStage)

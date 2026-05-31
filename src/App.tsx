@@ -1,8 +1,8 @@
 import { useState, useEffect, lazy, Suspense } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
-  C, FONT, DEFAULT_AGENT, DEFAULT_THEME,
-  type AgentProfile, type AgencyTheme, type ViewId, type DemoMode,
+  C, FONT, DEFAULT_AGENT, DEFAULT_THEME, DEFAULT_VENDOR_SETTINGS,
+  type AgentProfile, type AgencyTheme, type ViewId, type DemoMode, type VendorDisplaySettings,
 } from "./data"
 import Nav from "./components/Nav"
 import { seedCorpusIfEmpty } from "./lib/voiceContext"
@@ -34,6 +34,17 @@ export default function App() {
   const [demoBack, setDemoBack] = useState<{ fn: () => void } | null>(null)
   const [inboxOpen, setInboxOpen]   = useState(false)
   const [inboxBadge, setInboxBadge] = useState(0)
+  const [vendorSettings, setVendorSettings] = useState<VendorDisplaySettings>(() => {
+    try {
+      const s = localStorage.getItem("vendorDisplaySettings")
+      return s ? { ...DEFAULT_VENDOR_SETTINGS, ...JSON.parse(s) } : DEFAULT_VENDOR_SETTINGS
+    } catch { return DEFAULT_VENDOR_SETTINGS }
+  })
+
+  const handleVendorSettings = (s: VendorDisplaySettings) => {
+    setVendorSettings(s)
+    localStorage.setItem("vendorDisplaySettings", JSON.stringify(s))
+  }
 
   const handleLogin = (newAgent: AgentProfile, newTheme: AgencyTheme, newMode: DemoMode) => {
     setAgent(newAgent)
@@ -94,8 +105,9 @@ export default function App() {
             transition={{ duration: 0.2 }}>
 
             {view === "demo"  && <DemoView agent={agent} theme={theme} mode={mode} onSettings={() => navigate("setup")} onRegisterBack={fn => setDemoBack(fn ? { fn } : null)}
-                                          showInbox={inboxOpen} onShowInboxChange={setInboxOpen} onBadgeChange={setInboxBadge} />}
-            {view === "setup" && <SettingsView agent={agent} />}
+                                          showInbox={inboxOpen} onShowInboxChange={setInboxOpen} onBadgeChange={setInboxBadge}
+                                          vendorSettings={vendorSettings} />}
+            {view === "setup" && <SettingsView agent={agent} vendorSettings={vendorSettings} onVendorSettingsChange={handleVendorSettings} />}
           </motion.div>
         </AnimatePresence>
       </Suspense>
