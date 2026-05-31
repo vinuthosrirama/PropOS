@@ -1,0 +1,164 @@
+{
+  "5001": {
+    "address": "8 Thirlmere Court, Berwick",
+    "low": 850000,
+    "high": 935000,
+    "mid": 892500,
+    "raw": "$850,000 - $935,000",
+    "source": "range",
+    "url": "https://www.domain.com.au/property-profile/8-thirlmere-court-berwick-vic-3806"
+  },
+  "5002": {
+    "address": "14 Whitecliffe Way, Berwick",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/14-whitecliffe-way-berwick-vic-3806"
+  },
+  "5003": {
+    "address": "22 Birchwood Drive, Berwick",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/22-birchwood-drive-berwick-vic-3806"
+  },
+  "5004": {
+    "address": "18 Ascot Rise, Berwick",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/18-ascot-rise-berwick-vic-3806"
+  },
+  "5005": {
+    "address": "7 Heritage Court, Berwick",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/7-heritage-court-berwick-vic-3806"
+  },
+  "5006": {
+    "address": "11 Yemaya Place, Berwick",
+    "low": 840000,
+    "high": 1120000,
+    "mid": 980000,
+    "raw": "$840k to $1.12m",
+    "source": "range",
+    "url": "https://www.domain.com.au/property-profile/11-yemaya-place-berwick-vic-3806"
+  },
+  "5007": {
+    "address": "52 Timbertop Drive, Berwick",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/52-timbertop-drive-berwick-vic-3806"
+  },
+  "5008": {
+    "address": "3 Sundance Boulevard, Narre Warren South",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/3-sundance-boulevard-narre-warren-south-vic-3805"
+  },
+  "5009": {
+    "address": "Unit 6/88 High Street, Berwick",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/6-88-high-street-berwick-vic-3806"
+  },
+  "5010": {
+    "address": "29 Donalds Road, Narre Warren",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/29-donalds-road-narre-warren-vic-3805"
+  },
+  "6001": {
+    "address": "71 Broadway Street, Hampton Park",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/71-broadway-street-hampton-park-vic-3976"
+  },
+  "6002": {
+    "address": "15 Chelmsford Drive, Hampton Park",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/15-chelmsford-drive-hampton-park-vic-3976"
+  },
+  "6003": {
+    "address": "45 Seattle Crescent, Hallam",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/45-seattle-crescent-hallam-vic-3803"
+  },
+  "7001": {
+    "address": "6 Creekwood Rise, Berwick",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/6-creekwood-rise-berwick-vic-3806"
+  },
+  "7002": {
+    "address": "17 Windward Crescent, Berwick",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/17-windward-crescent-berwick-vic-3806"
+  },
+  "7003": {
+    "address": "42 Delfin Drive, Berwick",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/42-delfin-drive-berwick-vic-3806"
+  },
+  "7004": {
+    "address": "54 Jack William Way, Berwick",
+    "low": null,
+    "high": null,
+    "mid": null,
+    "raw": null,
+    "source": "not_found",
+    "url": "https://www.domain.com.au/property-profile/54-jack-william-way-berwick-vic-3806"
+  },
+  "7005": {
+    "address": "21 Hartsmere Drive, Berwick",
+    "low": 810000,
+    "high": 1070000,
+    "mid": 940000,
+    "raw": "$810k to $1.07m",
+    "source": "range",
+    "url": "https://www.domain.com.au/property-profile/21-hartsmere-drive-berwick-vic-3806"
+  }
+}
