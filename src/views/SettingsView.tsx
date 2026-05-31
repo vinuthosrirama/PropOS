@@ -553,7 +553,7 @@ function QACard({
 // Main Component
 // ---------------------------------------------------------------------------
 
-export default function SettingsView({ agent, vendorSettings: _vendorSettings, onVendorSettingsChange: _onVendorSettingsChange }: {
+export default function SettingsView({ agent, vendorSettings, onVendorSettingsChange }: {
   agent: AgentProfile
   vendorSettings?: VendorDisplaySettings
   onVendorSettingsChange?: (s: VendorDisplaySettings) => void
@@ -565,7 +565,7 @@ export default function SettingsView({ agent, vendorSettings: _vendorSettings, o
   const [syncing, setSyncing] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [openSections, setOpenSections] = useState<Record<number, Set<number>>>({})
-  const [settingsTab, setSettingsTab] = useState<"slm" | "voice" | "analytics" | "integrations">("slm")
+  const [settingsTab, setSettingsTab] = useState<"slm" | "voice" | "analytics" | "integrations" | "display">("slm")
   const [corpus, setCorpus] = useState<TrainingEntry[]>(() => loadCorpus())
   const [stylePaste, setStylePaste] = useState("")
 
@@ -785,7 +785,7 @@ export default function SettingsView({ agent, vendorSettings: _vendorSettings, o
 
         {/* ── Top-level tab strip ── */}
         <div style={{ display: "flex", gap: 2, marginBottom: 28, flexWrap: "wrap" }}>
-          {(["slm", "voice", "analytics", "integrations"] as const).map(tab => (
+          {(["slm", "voice", "display", "analytics", "integrations"] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setSettingsTab(tab)}
@@ -801,13 +801,17 @@ export default function SettingsView({ agent, vendorSettings: _vendorSettings, o
                 transition: "all 0.15s",
               }}
             >
-              {tab === "slm" ? "SLM Brain" : tab === "voice" ? "Writing Style" : tab === "analytics" ? "Analytics" : "Integrations"}
+              {tab === "slm" ? "SLM Brain" : tab === "voice" ? "Writing Style" : tab === "display" ? "Display" : tab === "analytics" ? "Analytics" : "Integrations"}
             </button>
           ))}
         </div>
 
         {settingsTab === "analytics" && <AnalyticsDashboard agent={agent} theme={getAgencyTheme(agent.agency)} />}
         {settingsTab === "integrations" && <IntegrationsPanel />}
+
+        {settingsTab === "display" && vendorSettings && onVendorSettingsChange && (
+          <VendorPanelToggles settings={vendorSettings} onChange={onVendorSettingsChange} />
+        )}
 
         {settingsTab === "voice" && (
           <VoiceStylePanel
@@ -1411,6 +1415,83 @@ function VoiceStylePanel({ corpus, stylePaste, onPasteChange, onAdd, onBulkAdd, 
             ))}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Vendor Panel Toggles ─────────────────────────────────────────────────────
+
+const VENDOR_PANEL_META: Array<{
+  key: keyof VendorDisplaySettings
+  label: string
+  description: string
+}> = [
+  { key: "showCRMNotes",        label: "From Your CRM Notes",      description: "AI-extracted personalisation hooks from contact notes" },
+  { key: "showTriggers",        label: "Triggers & Pitch Angles",   description: "Life-stage triggers and outreach angle suggestions" },
+  { key: "showOutreachAngles",  label: "Choose Outreach Angle",     description: "Equity / lifestyle / CGT / market angle picker cards" },
+  { key: "showEquityScenarios", label: "Equity Release Scenarios",  description: "Low / mid / high sale price breakdown with net proceeds" },
+  { key: "showOptimalWindow",   label: "Optimal Listing Window",    description: "AI-predicted best months to list based on market data" },
+]
+
+function VendorPanelToggles({
+  settings,
+  onChange,
+}: {
+  settings: VendorDisplaySettings
+  onChange: (s: VendorDisplaySettings) => void
+}) {
+  const toggle = (key: keyof VendorDisplaySettings) =>
+    onChange({ ...settings, [key]: !settings[key] })
+
+  return (
+    <div style={{ maxWidth: 600 }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>
+        Vendor Profile Panels
+      </div>
+      <div style={{ fontSize: 14, color: C.muted, marginBottom: 24, lineHeight: 1.5 }}>
+        Choose which panels appear on each vendor contact profile. Hidden panels can be re-enabled at any time.
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {VENDOR_PANEL_META.map(({ key, label, description }) => {
+          const on = settings[key]
+          return (
+            <div
+              key={key}
+              onClick={() => toggle(key)}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                background: C.bg2, border: `1px solid ${on ? "var(--accent, rgb(166,218,255))40" : C.border}`,
+                borderRadius: 12, padding: "14px 18px", cursor: "pointer",
+                transition: "border-color 0.15s",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 2 }}>{label}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>{description}</div>
+              </div>
+              {/* Toggle pill */}
+              <div style={{
+                flexShrink: 0, width: 44, height: 24, borderRadius: 12, marginLeft: 16,
+                background: on ? "var(--accent, rgb(166,218,255))" : C.bg3,
+                border: `1px solid ${on ? "transparent" : C.border}`,
+                position: "relative", transition: "background 0.2s",
+              }}>
+                <div style={{
+                  position: "absolute", top: 3, left: on ? 22 : 3,
+                  width: 16, height: 16, borderRadius: "50%",
+                  background: on ? C.bg : C.muted,
+                  transition: "left 0.2s",
+                }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{ marginTop: 20, fontSize: 12, color: C.faint, lineHeight: 1.5 }}>
+        Changes apply immediately and are saved to this browser. All panels are hidden by default for a cleaner outreach view.
       </div>
     </div>
   )

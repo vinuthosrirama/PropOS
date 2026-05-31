@@ -75,9 +75,8 @@ export function segmentBuyer(
 
   // INVESTOR checks
   if (buyer.status === "investor") {
-    // CGT window
+    // CGT window — trigger label hidden; data still used in financial snapshots
     if (financials.cgtDiscount && financials.cgtSavingsBy2027 > 5000) {
-      triggers.push({ label: `CGT 50% discount saves ${fmtK(financials.cgtSavingsBy2027)}, window closes July 2027`, urgency: "high", source: "financial" })
       pitchAngles.push(`${fname} saves roughly ${fmtK(financials.cgtSavingsBy2027)} in tax if they sell before July 2027. That window is closing fast and most investors don't realise until it's too late.`)
     }
 
