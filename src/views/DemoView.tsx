@@ -2702,9 +2702,9 @@ function VendorAnalysingScreen({ segmented, theme, onComplete }: {
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = []
     ANALYSIS_STEPS.forEach((_, i) => {
-      timers.push(setTimeout(() => setStep(i + 1), 350 + i * 380))
+      timers.push(setTimeout(() => setStep(i + 1), 50 + i * 175))
     })
-    timers.push(setTimeout(() => { setDone(true); setTimeout(onComplete, 600) }, 350 + ANALYSIS_STEPS.length * 380 + 200))
+    timers.push(setTimeout(() => { setDone(true); setTimeout(onComplete, 400) }, 50 + ANALYSIS_STEPS.length * 175 + 150))
     return () => timers.forEach(clearTimeout)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -3022,7 +3022,7 @@ function BestTimeToSellPanel({ entry, theme }: { entry: SegmentedBuyer; theme: A
 
 // ── Feature 6: Rate Sensitivity Badge ────────────────────────────────────────
 
-function RateSensitivityBadge({ entry, theme }: { entry: SegmentedBuyer; theme: AgencyTheme }) {
+function RateSensitivityBadge({ entry }: { entry: SegmentedBuyer }) {
   const result = classifyRateSensitivity(entry.buyer, entry.financials)
   const color = result.sensitivity === "high" ? "#ef4444" : result.sensitivity === "medium" ? C.orange : C.green
   return (
@@ -3041,85 +3041,6 @@ function RateSensitivityBadge({ entry, theme }: { entry: SegmentedBuyer; theme: 
   )
 }
 
-// ── ComparableSalesMap: dot-grid of recent nearby sales ──────────────────────
-
-function ComparableSalesMap({ buyer, theme }: { buyer: SegmentedBuyer["buyer"]; theme: AgencyTheme }) {
-  const comps = generateComparables({
-    suburb: buyer.suburb,
-    beds: buyer.beds,
-    land: buyer.land,
-    purchasePrice: buyer.purchasePrice,
-    count: 6,
-  })
-
-  if (!comps.length) return null
-
-  const maxPrice = Math.max(...comps.map(c => c.soldPrice))
-  const minPrice = Math.min(...comps.map(c => c.soldPrice))
-
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
-        Recent comparable sales · {buyer.suburb}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-        {comps.map((comp, i) => {
-          const isSubject = i === 0
-          const pricePct = maxPrice > minPrice ? (comp.soldPrice - minPrice) / (maxPrice - minPrice) : 0.5
-          const dotColor = isSubject ? theme.primary : comp.matchScore >= 80 ? C.green : comp.matchScore >= 60 ? C.blue : "#f59e0b"
-          return (
-            <div key={i} style={{
-              background: isSubject ? `${theme.primary}11` : C.bg3,
-              border: `1px solid ${isSubject ? theme.primary + "44" : C.border}`,
-              borderRadius: 8, padding: "8px 10px",
-              position: "relative",
-            }}>
-              {/* Glowing dot */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <div style={{ position: "relative", flexShrink: 0 }}>
-                  <div style={{
-                    width: 8, height: 8, borderRadius: "50%",
-                    background: dotColor,
-                    boxShadow: `0 0 0 ${isSubject ? 5 : 3}px ${dotColor}33, 0 0 ${isSubject ? 12 : 6}px ${dotColor}66`,
-                  }} />
-                  {isSubject && (
-                    <div style={{
-                      position: "absolute", inset: -3, borderRadius: "50%",
-                      border: `1px solid ${dotColor}44`,
-                      animation: "ping 2s ease-out infinite",
-                    }} />
-                  )}
-                </div>
-                <span style={{ fontSize: 9, fontWeight: 700, color: isSubject ? theme.primary : C.muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {isSubject ? "Subject" : comp.address.split(" ").slice(0, 3).join(" ")}
-                </span>
-              </div>
-              <div style={{ fontSize: 11, fontWeight: 800, color: isSubject ? theme.primary : C.text }}>{fmtK(comp.soldPrice)}</div>
-              <div style={{ fontSize: 9, color: C.faint }}>{comp.beds}bd · {comp.land}sqm</div>
-              {/* Price intensity bar */}
-              <div style={{ height: 2, background: C.bg2, borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
-                <div style={{ width: `${Math.round(pricePct * 100)}%`, height: "100%", background: dotColor, borderRadius: 2 }} />
-              </div>
-              <div style={{ fontSize: 8, color: C.faint, marginTop: 2 }}>{comp.soldDate}</div>
-            </div>
-          )
-        })}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
-        {[
-          { color: C.green, label: "High match (80+)" },
-          { color: C.blue, label: "Good match (60+)" },
-          { color: "#f59e0b", label: "Reference" },
-        ].map(l => (
-          <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: l.color, boxShadow: `0 0 4px ${l.color}88` }} />
-            <span style={{ fontSize: 9, color: C.faint }}>{l.label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 // ── Vendor Prospecting: Portfolio (CRM Dashboard) ────────────────────────────
 
@@ -3169,7 +3090,9 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
   const [csvContacts, setCsvContacts] = useState<Partial<AddContactForm>[]>([])
   const [csvImporting, setCsvImporting] = useState(false)
   const [csvImported, setCsvImported] = useState(false)
-  const [crmConnecting, setCrmConnecting] = useState<string | null>(null)
+  const [crmApiKeyStage, setCrmApiKeyStage] = useState<Record<string, "idle" | "loading" | "key" | "connected">>({})
+  const [crmApiKeyValues, setCrmApiKeyValues] = useState<Record<string, string>>({})
+  const [showOptionalFields, setShowOptionalFields] = useState(false)
   const csvRef = useRef<HTMLInputElement>(null)
   const [showAllContacts, setShowAllContacts] = useState(false)
   const [addVoiceStage, setAddVoiceStage] = useState<"idle" | "transcribing" | "analysing" | "personalising" | "done">("idle")
@@ -3383,8 +3306,11 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 8 }}>
           Vendor Prospecting
         </div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: C.text, letterSpacing: -0.6, marginBottom: 8 }}>
+        <div style={{ fontSize: 26, fontWeight: 800, color: C.text, letterSpacing: -0.6, marginBottom: 8, display: "flex", alignItems: "center", gap: 14 }}>
           Turn past buyers into new listings
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.faint, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "3px 10px", letterSpacing: 0 }}>
+            {buyers.length} contacts
+          </span>
         </div>
         <div style={{ fontSize: 13, color: C.muted, maxWidth: 560, marginBottom: 14 }}>
           PropOS analyses your CRM database to find past buyers who are ready to sell. We calculate their equity, CGT position, and life-stage triggers, then generate hyper-personalised outreach in your voice.
@@ -3585,7 +3511,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
           marginBottom: 12,
         }}
       >
-        {analysing ? "Analysing your database..." : sheetLoading ? "Loading CRM..." : `✦ Analyse ${buyers.length} contacts for vendor opportunities`}
+        {analysing ? "Analysing your database..." : sheetLoading ? "Loading CRM..." : `✦ Analyse all ${buyers.length} contacts →`}
       </motion.button>
 
       {/* Pitch callout */}
@@ -3657,21 +3583,16 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
               {/* ── Manual Add ── */}
               {importSource === "manual" && (
                 <>
+                  {/* 5 required fields */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     {([
-                      ["Name", "name", "text", "Full name"],
-                      ["Phone", "phone", "tel", "+61 4xx xxx xxx"],
-                      ["Email", "email", "email", "email@domain.com"],
-                      ["Purchase address", "purchaseAddress", "text", "12 Smith St"],
-                      ["Suburb", "suburb", "text", "Berwick"],
-                      ["Purchase date", "purchaseDate", "date", ""],
-                      ["Purchase price", "purchasePrice", "text", "850000"],
-                      ["Deposit paid", "deposit", "text", "85000"],
-                      ["Beds", "beds", "number", "4"],
-                      ["Baths", "baths", "number", "2"],
-                      ["Land (sqm)", "land", "text", "612"],
+                      ["Name *", "name", "text", "Full name"],
+                      ["Phone *", "phone", "tel", "+61 4xx xxx xxx"],
+                      ["Purchase address *", "purchaseAddress", "text", "12 Smith St"],
+                      ["Purchase price *", "purchasePrice", "text", "850000"],
+                      ["Purchase date *", "purchaseDate", "date", ""],
                     ] as [string, keyof AddContactForm, string, string][]).map(([label, field, type, placeholder]) => (
-                      <div key={field} style={{ gridColumn: ["name", "purchaseAddress", "notes"].includes(field) ? "1 / -1" : undefined }}>
+                      <div key={field} style={{ gridColumn: ["name", "purchaseAddress"].includes(field) ? "1 / -1" : undefined }}>
                         <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>{label}</label>
                         <input type={type} value={addForm[field]}
                           onChange={e => setAddForm(f => ({ ...f, [field]: e.target.value }))}
@@ -3680,26 +3601,54 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
                         />
                       </div>
                     ))}
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Property type</label>
-                      <select value={addForm.propertyType} onChange={e => setAddForm(f => ({ ...f, propertyType: e.target.value }))}
-                        style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
-                        <option>House</option><option>Unit</option><option>Townhouse</option>
-                      </select>
+                  </div>
+
+                  {/* Optional details — collapsible */}
+                  <button onClick={() => setShowOptionalFields(v => !v)} style={{ marginTop: 8, background: "none", border: "none", cursor: "pointer", fontSize: 11, color: C.faint, fontFamily: FONT, display: "flex", alignItems: "center", gap: 4, padding: 0 }}>
+                    <span style={{ transform: showOptionalFields ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block" }}>›</span>
+                    {showOptionalFields ? "Hide optional details" : "Optional details"}
+                  </button>
+                  {showOptionalFields && (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 8 }}>
+                      {([
+                        ["Email", "email", "email", "email@domain.com"],
+                        ["Suburb", "suburb", "text", "Berwick"],
+                        ["Deposit paid", "deposit", "text", "85000"],
+                        ["Beds", "beds", "number", "4"],
+                        ["Baths", "baths", "number", "2"],
+                        ["Land (sqm)", "land", "text", "612"],
+                      ] as [string, keyof AddContactForm, string, string][]).map(([label, field, type, placeholder]) => (
+                        <div key={field}>
+                          <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>{label}</label>
+                          <input type={type} value={addForm[field]}
+                            onChange={e => setAddForm(f => ({ ...f, [field]: e.target.value }))}
+                            placeholder={placeholder}
+                            style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                          />
+                        </div>
+                      ))}
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Property type</label>
+                        <select value={addForm.propertyType} onChange={e => setAddForm(f => ({ ...f, propertyType: e.target.value }))}
+                          style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
+                          <option>House</option><option>Unit</option><option>Townhouse</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Status</label>
+                        <select value={addForm.status} onChange={e => setAddForm(f => ({ ...f, status: e.target.value }))}
+                          style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
+                          <option value="owner-occupier">Owner-occupier</option>
+                          <option value="investor">Investor</option>
+                          <option value="buyer→landlord">Buyer → Landlord</option>
+                          <option value="buyer→seller">Buyer → Seller</option>
+                          <option value="renter→buyer">Renter → Buyer</option>
+                          <option value="buyer→downsizer">Buyer → Downsizer</option>
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Status</label>
-                      <select value={addForm.status} onChange={e => setAddForm(f => ({ ...f, status: e.target.value }))}
-                        style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
-                        <option value="owner-occupier">Owner-occupier</option>
-                        <option value="investor">Investor</option>
-                        <option value="buyer→landlord">Buyer → Landlord</option>
-                        <option value="buyer→seller">Buyer → Seller</option>
-                        <option value="renter→buyer">Renter → Buyer</option>
-                        <option value="buyer→downsizer">Buyer → Downsizer</option>
-                      </select>
-                    </div>
-                    <div style={{ gridColumn: "1 / -1" }}>
+                  )}
+                    <div style={{ marginTop: 12 }}>
                       {/* Notes / Voice Personalisation */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                         <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8 }}>Notes · Personalisation</label>
@@ -3799,7 +3748,6 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
                         </div>
                       )}
                     </div>
-                  </div>
                   <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
                     <button onClick={closeAddModal} style={{ flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Cancel</button>
                     <button onClick={handleAddContact} disabled={addSaving || addSaved} style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: addSaved ? C.green : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 14, fontWeight: 700, cursor: addSaving || addSaved ? "default" : "pointer", fontFamily: FONT }}>
@@ -3883,16 +3831,49 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
                           <span style={{ fontSize: 20 }}>{icon}</span>
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{name}</div>
                         </div>
-                        {crmConnecting === key ? (
-                          <div style={{ fontSize: 10, color: C.faint, display: "flex", alignItems: "center", gap: 6 }}>
-                            <div style={{ width: 8, height: 8, borderRadius: "50%", border: "1.5px solid transparent", borderTopColor: theme.primary, animation: "spin 0.7s linear infinite" }} />
-                            Connecting via OAuth…
-                          </div>
-                        ) : (
-                          <button onClick={() => { setCrmConnecting(key); setTimeout(() => setCrmConnecting(null), 2200) }} style={{ width: "100%", padding: "7px", borderRadius: 8, border: `1px solid ${theme.primary}55`, background: featured ? theme.primary : "transparent", color: featured ? "#fff" : theme.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
-                            {featured ? "Connect RealBase" : "Connect"}
-                          </button>
-                        )}
+                        {(() => {
+                          const stage = crmApiKeyStage[key] ?? "idle"
+                          if (stage === "loading") return (
+                            <div style={{ fontSize: 10, color: C.faint, display: "flex", alignItems: "center", gap: 6 }}>
+                              <div style={{ width: 8, height: 8, borderRadius: "50%", border: "1.5px solid transparent", borderTopColor: theme.primary, animation: "spin 0.7s linear infinite" }} />
+                              Connecting…
+                            </div>
+                          )
+                          if (stage === "key") return (
+                            <div>
+                              <div style={{ fontSize: 10, color: C.faint, marginBottom: 5 }}>Enter your API key or OAuth token</div>
+                              <div style={{ display: "flex", gap: 5 }}>
+                                <input
+                                  placeholder="sk-…"
+                                  value={crmApiKeyValues[key] ?? ""}
+                                  onChange={e => setCrmApiKeyValues(v => ({ ...v, [key]: e.target.value }))}
+                                  onKeyDown={e => { if (e.key === "Enter") setCrmApiKeyStage(s => ({ ...s, [key]: "connected" })) }}
+                                  style={{ flex: 1, padding: "5px 8px", background: C.bg, border: `1px solid ${theme.primary}55`, borderRadius: 6, color: C.text, fontSize: 11, fontFamily: FONT, outline: "none" }}
+                                />
+                                <button
+                                  onClick={() => setCrmApiKeyStage(s => ({ ...s, [key]: "connected" }))}
+                                  style={{ padding: "5px 10px", borderRadius: 6, border: "none", background: theme.primary, color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}
+                                >✓</button>
+                              </div>
+                            </div>
+                          )
+                          if (stage === "connected") return (
+                            <div style={{ fontSize: 10, color: C.green, display: "flex", alignItems: "center", gap: 5 }}>
+                              <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.green }} />
+                              Connected
+                            </div>
+                          )
+                          return (
+                            <button
+                              onClick={() => {
+                                setCrmApiKeyStage(s => ({ ...s, [key]: "loading" }))
+                                setTimeout(() => setCrmApiKeyStage(s => ({ ...s, [key]: "key" })), 900)
+                              }}
+                              style={{ width: "100%", padding: "7px", borderRadius: 8, border: `1px solid ${theme.primary}55`, background: featured ? theme.primary : "transparent", color: featured ? "#fff" : theme.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                              {name === "RealBase" ? "Connect RealBase" : "Connect"}
+                            </button>
+                          )
+                        })()}
                       </div>
                     ))}
                   </div>
@@ -3946,8 +3927,8 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 8 }}>
           Pipeline Dashboard
         </div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5, marginBottom: 6 }}>
-          {segmented.length} contacts segmented into {pipelines.length} pipelines
+        <div style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5, marginBottom: 6, display: "flex", alignItems: "baseline", gap: 12 }}>
+          <span>{segmented.length} contacts segmented into {pipelines.length} pipelines</span>
         </div>
         <div style={{ fontSize: 13, color: C.muted }}>
           Combined equity: <span style={{ color: C.green, fontWeight: 700 }}>{fmtDollar(totalEquity)}</span> across your database
@@ -4007,7 +3988,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
         <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowBulkFire(true)}
             style={{ padding: "10px 20px", borderRadius: 12, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 13, fontWeight: 700, fontFamily: FONT, boxShadow: `0 4px 16px ${theme.glow}`, display: "inline-flex", alignItems: "center", gap: 8 }}>
-            Generate & review {segmented.length} personalised messages
+            Review {segmented.length} messages →
           </motion.button>
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowCGTUrgency(true)}
             style={{ padding: "10px 18px", borderRadius: 12, border: `1px solid ${C.orange}50`, cursor: "pointer", background: `${C.orange}12`, color: C.orange, fontSize: 12, fontWeight: 700, fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -4022,7 +4003,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
       </div>
 
       {/* ROI Dashboard */}
-      <VendorROIPanel data={roiData} theme={theme} />
+      <VendorROIPanel data={roiData} theme={theme} segmented={segmented} />
 
       {/* AI Intelligence Suite */}
       <WowInsightsPanel segmented={segmented} theme={theme} />
@@ -4058,6 +4039,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
         {pipelines.map(p => {
           const pl = PIPELINE_LABELS[p]
           const count = segmented.filter(s => s.segment.pipeline === p).length
+          if (count === 0) return null
           return (
             <button key={p} onClick={() => setFilterPipeline(p)} style={{
               padding: "6px 14px", borderRadius: 20, border: `1px solid ${filterPipeline === p ? pl.color : pl.color + "50"}`,
@@ -4121,15 +4103,15 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
                   </div>
                   <div style={{ fontSize: 10, color: C.faint }}>{fmtYears(fin.yearsHeld)} hold</div>
                   {(buyer as { personalisationHook?: string }).personalisationHook && (
-                    <div style={{
-                      fontSize: 9, padding: "2px 7px", borderRadius: 6, fontWeight: 800,
-                      background: theme.primary + "20", color: theme.primary,
-                      border: `1px solid ${theme.primary}35`,
-                      display: "flex", alignItems: "center", gap: 3,
-                      boxShadow: `0 0 8px ${theme.primary}18`,
-                    }}>
-                      HP
-                    </div>
+                    <div
+                      title="Hyper-personalised — agent notes injected directly into outreach"
+                      style={{
+                        width: 7, height: 7, borderRadius: "50%",
+                        background: theme.primary,
+                        boxShadow: `0 0 0 2px ${theme.primary}33, 0 0 8px ${theme.primary}66`,
+                        flexShrink: 0,
+                      }}
+                    />
                   )}
                 </div>
                 <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>
@@ -4165,8 +4147,11 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
                 <div style={{ fontSize: 9, color: C.faint }}>est. value</div>
               </div>
 
-              {/* Priority score ring */}
-              <ScoreRing score={entry.priority} size={44} strokeWidth={3} />
+              {/* Priority score ring + View profile cue */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                <ScoreRing score={entry.priority} size={44} strokeWidth={3} />
+                <span style={{ fontSize: 8, color: C.faint, whiteSpace: "nowrap" }}>View →</span>
+              </div>
             </motion.div>
           )
         })}
@@ -4430,8 +4415,9 @@ function VendorAppraisalPanel({ buyer, theme }: {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
       {/* Section header */}
-      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase" }}>
-        Comparable Sales · {buyer.suburb}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase" }}>Recent Comparable Sales</div>
+        <div style={{ fontSize: 11, color: C.faint }}>{buyer.suburb}</div>
       </div>
 
       {/* ── Glowing dot map of comparable sales ── */}
@@ -4968,9 +4954,23 @@ const DEMO_ROI: VendorAnalyticsData = {
   roi: { monthlySubscription: 399, listingsAttributed: 1, revenueGenerated: 17000, roiMultiple: 42.6 },
 }
 
-function VendorROIPanel({ data, theme }: { data: VendorAnalyticsData | null; theme: AgencyTheme }) {
+function VendorROIPanel({ data, theme, segmented }: { data: VendorAnalyticsData | null; theme: AgencyTheme; segmented?: SegmentedBuyer[] }) {
   const [open, setOpen] = useState(false)
-  const d = data ?? DEMO_ROI
+  // If API returned real data use it; otherwise derive projections from current database
+  const projected: VendorAnalyticsData | null = segmented && !data ? (() => {
+    const n = segmented.length
+    const sent = n
+    const replied = Math.max(1, Math.round(n * 0.10))
+    const appraisals = Math.max(1, Math.round(n * 0.03))
+    const listings = Math.max(1, Math.round(n * 0.01))
+    const gci = listings * 17000
+    return {
+      funnel: { outreachSent: sent, emailOpened: Math.round(sent * 0.65), replied, appraisalsBooked: appraisals, listingsWon: listings, estimatedGCI: gci },
+      nurture: { pending: Math.round(n * 0.6), sent: 0 },
+      roi: { monthlySubscription: 399, listingsAttributed: listings, revenueGenerated: gci, roiMultiple: Math.round(gci / 399 * 10) / 10 },
+    }
+  })() : null
+  const d = data ?? projected ?? DEMO_ROI
   const { funnel, nurture, roi } = d
 
   const pctOpen   = funnel.outreachSent > 0 ? Math.round((funnel.emailOpened    / funnel.outreachSent) * 100) : 66
@@ -5418,14 +5418,14 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Opening line</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Step 1 — Opening</div>
           <div style={{ background: `${theme.primary}10`, border: `1px solid ${theme.primary}30`, borderRadius: 12, padding: "14px 16px", fontSize: 13, color: C.text, lineHeight: 1.6, fontStyle: "italic" }}>
             "{opening}"
           </div>
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Pitch angles</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Step 2 — Key points to cover</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {pitches.map((p, i) => (
               <div key={i} style={{ background: C.bg2, borderRadius: 12, padding: "12px 14px", border: `1px solid ${C.border}`, display: "flex", gap: 10 }}>
@@ -5440,7 +5440,7 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
         </div>
 
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Objection handlers</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Step 3 — If they push back</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {objections.map((obj, i) => (
               <div key={i} style={{ borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
@@ -5607,11 +5607,11 @@ function PreMarketMatcherModal({ segmented, agent, theme, onClose, onSelectEntry
 // ── Nurture Sequence Panel ────────────────────────────────────────────────────
 
 const NURTURE_STEP_LABELS = ["Initial outreach", "Market pulse follow-up", "Comparable sales update", "Final check-in"]
-const NURTURE_STEP_ICONS  = ["✉️", "📊", "🏡", "🤝"]
 const NURTURE_DAYS        = [0, 7, 14, 30]
 
 function NurtureSequencePanel({ entry, agent, theme }: { entry: SegmentedBuyer; agent: AgentProfile; theme: AgencyTheme }) {
-  const [expanded, setExpanded] = useState(false)
+  const [enabled, setEnabled] = useState(false)
+  const [showSchedule, setShowSchedule] = useState(false)
   const fetchedRef = useRef(false)
   const [msgs, setMsgs] = useState<Array<{ sms: string; emailSubject: string }> | null>(null)
 
@@ -5627,9 +5627,10 @@ function NurtureSequencePanel({ entry, agent, theme }: { entry: SegmentedBuyer; 
     { sms: `Hi ${fname}, ${agentFirst} here. Just circling back. Happy to chat whenever the timing suits. ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `Still here when you're ready, ${fname}` },
   ]
 
-  const handleExpand = () => {
-    setExpanded(e => !e)
-    if (!fetchedRef.current) {
+  const handleEnable = () => {
+    const next = !enabled
+    setEnabled(next)
+    if (next && !fetchedRef.current) {
       fetchedRef.current = true
       setMsgs(templates)
       fetch(apiUrl("/api/nurture"), {
@@ -5644,45 +5645,62 @@ function NurtureSequencePanel({ entry, agent, theme }: { entry: SegmentedBuyer; 
   }
 
   return (
-    <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-      <div onClick={handleExpand} style={{ padding: "14px 18px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 18px" }}>
+      {/* Single enable toggle */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 14 }}>📅</span>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Automated Follow-up Sequence</div>
-            <div style={{ fontSize: 10, color: C.faint }}>4 messages · Day 0, 7, 14, 30</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Automated follow-up sequence</div>
+            <div style={{ fontSize: 10, color: C.faint }}>
+              {enabled
+                ? `Active · 4 messages · Day 0, 7, 14, 30 · stops if ${fname} replies`
+                : "4 messages over 30 days, sent in your voice"}
+            </div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: C.green, background: `${C.green}15`, border: `1px solid ${C.green}30`, borderRadius: 6, padding: "2px 8px", display: "flex", alignItems: "center", gap: 4 }}>
-            <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 2, repeat: Infinity }} style={{ width: 5, height: 5, borderRadius: "50%", background: C.green }} />
-            RUNNING
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {enabled && (
+            <button onClick={() => setShowSchedule(v => !v)} style={{ fontSize: 10, color: theme.primary, background: "none", border: "none", cursor: "pointer", fontFamily: FONT, textDecoration: "underline" }}>
+              {showSchedule ? "Hide schedule" : "Edit schedule →"}
+            </button>
+          )}
+          {/* Toggle pill */}
+          <div
+            onClick={handleEnable}
+            style={{
+              width: 38, height: 22, borderRadius: 11, cursor: "pointer", position: "relative",
+              background: enabled ? C.green : C.bg3,
+              border: `1px solid ${enabled ? C.green : C.border}`,
+              transition: "background 0.2s",
+              flexShrink: 0,
+            }}
+          >
+            <div style={{
+              position: "absolute", top: 3, left: enabled ? 18 : 3, width: 14, height: 14,
+              borderRadius: "50%", background: enabled ? "#fff" : C.faint,
+              transition: "left 0.2s",
+            }} />
           </div>
-          <span style={{ fontSize: 11, color: C.faint }}>{expanded ? "▲" : "▼"}</span>
         </div>
       </div>
+
+      {/* Schedule detail — collapsed by default */}
       <AnimatePresence>
-        {expanded && (
-          <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} style={{ overflow: "hidden" }}>
-            <div style={{ padding: "0 18px 16px", borderTop: `1px solid ${C.border}` }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 12 }}>
-                {NURTURE_DAYS.map((day, i) => {
-                  const m = msgs?.[i]
-                  return (
-                    <div key={day} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 12px", background: C.bg3, borderRadius: 10, border: `1px solid ${C.border}` }}>
-                      <div style={{ flexShrink: 0, background: theme.primary + "20", color: theme.primary, fontSize: 10, fontWeight: 800, borderRadius: 8, padding: "4px 8px", minWidth: 46, textAlign: "center" }}>Day {day}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", gap: 5, marginBottom: 3 }}><span style={{ fontSize: 12 }}>{NURTURE_STEP_ICONS[i]}</span><span style={{ fontSize: 10, fontWeight: 700, color: C.muted }}>{NURTURE_STEP_LABELS[i]}</span></div>
-                        <div style={{ fontSize: 11, color: C.text, marginBottom: 2, lineHeight: 1.4 }}>📱 {m?.sms ?? templates[i].sms}</div>
-                        <div style={{ fontSize: 10, color: C.faint }}>✉️ {m?.emailSubject ?? templates[i].emailSubject}</div>
-                      </div>
+        {enabled && showSchedule && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} style={{ overflow: "hidden" }}>
+            <div style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+              {NURTURE_DAYS.map((day, i) => {
+                const m = msgs?.[i]
+                return (
+                  <div key={day} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 10px", background: C.bg3, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                    <div style={{ flexShrink: 0, background: theme.primary + "20", color: theme.primary, fontSize: 9, fontWeight: 800, borderRadius: 6, padding: "3px 7px", minWidth: 40, textAlign: "center" }}>Day {day}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, marginBottom: 2 }}>{NURTURE_STEP_LABELS[i]}</div>
+                      <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m?.sms ?? templates[i].sms}</div>
                     </div>
-                  )
-                })}
-              </div>
-              <div style={{ fontSize: 10, color: C.faint, textAlign: "center", marginTop: 10 }}>
-                ✅ Sends in your voice · stops if {fname} replies
-              </div>
+                  </div>
+                )
+              })}
             </div>
           </motion.div>
         )}
@@ -6167,7 +6185,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
   const [showNegotiationCoach, setShowNegotiationCoach] = useState(false)
   const [showPrintAppraisal, setShowPrintAppraisal] = useState(false)
   const [showAllMetrics, setShowAllMetrics] = useState(false)
-  const [showInsights, setShowInsights] = useState(false)   // trigger events + pitch angles collapsed by default
+  const [showInsights, setShowInsights] = useState(true)    // triggers open by default
+  const [showPitchAngles, setShowPitchAngles] = useState(false)  // pitch angles collapsed by default
+  const [profileTab, setProfileTab] = useState<"analysis" | "outreach">("analysis")
   // NotesBridge: populated from API response after generation
   const [extractedHook, setExtractedHook] = useState<string | null>(null)
   const [personalisationLine, setPersonalisationLine] = useState<string | null>(null)
@@ -6309,42 +6329,62 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
     <div style={{ maxWidth: 1020, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
       <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, marginBottom: 20, padding: 0 }}>←</button>
 
+      {/* Identity card — always visible */}
+      <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px", marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>{buyer.name}</div>
+          <div style={{
+            fontSize: 10, padding: "3px 10px", borderRadius: 8,
+            background: pl.color + "18", color: pl.color, fontWeight: 700,
+          }}>
+            {pl.icon} {pl.label}
+          </div>
+        </div>
+        <div style={{ fontSize: 13, color: theme.primary, fontWeight: 600, marginBottom: 14 }}>
+          {buyer.purchaseAddress}
+        </div>
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+          {[
+            { label: "Purchased", value: buyer.purchaseDate.slice(0, 4) },
+            { label: "Purchase price", value: fmtDollar(buyer.purchasePrice) },
+            { label: "Hold period", value: fmtYears(fin.yearsHeld) },
+            { label: "Type", value: `${buyer.beds}bd ${buyer.baths}ba ${buyer.propertyType}` },
+            buyer.land ? { label: "Land", value: `${buyer.land}sqm` } : null,
+            { label: "Status", value: formatBuyerStatus(buyer.status) },
+          ].filter(Boolean).map(item => (
+            <div key={item!.label}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>{item!.label}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{item!.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab bar */}
+      <div style={{ display: "flex", gap: 0, marginBottom: 20, borderBottom: `1px solid ${C.border}` }}>
+        {(["analysis", "outreach"] as const).map(tab => (
+          <button key={tab} onClick={() => setProfileTab(tab)} style={{
+            padding: "10px 22px", background: "none", border: "none", cursor: "pointer",
+            fontSize: 13, fontWeight: 700, fontFamily: FONT,
+            color: profileTab === tab ? theme.primary : C.faint,
+            borderBottom: `2px solid ${profileTab === tab ? theme.primary : "transparent"}`,
+            marginBottom: -1,
+            transition: "color 0.15s, border-color 0.15s",
+          }}>
+            {tab === "analysis" ? "Analysis" : "Outreach"}
+          </button>
+        ))}
+      </div>
+
+      {/* Two-column layout — tab controls which sections are visible */}
       <div style={{ display: "flex", gap: 28 }}>
-        {/* LEFT — Contact details + financial snapshot */}
+        {/* LEFT col */}
         <div style={{ flex: "0 0 58%", display: "flex", flexDirection: "column", gap: 18 }}>
 
-          {/* Identity card */}
-          <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5 }}>{buyer.name}</div>
-              <div style={{
-                fontSize: 10, padding: "3px 10px", borderRadius: 8,
-                background: pl.color + "18", color: pl.color, fontWeight: 700,
-              }}>
-                {pl.icon} {pl.label}
-              </div>
-            </div>
-            <div style={{ fontSize: 13, color: theme.primary, fontWeight: 600, marginBottom: 14 }}>
-              {buyer.purchaseAddress}
-            </div>
-            <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-              {[
-                { label: "Purchased", value: buyer.purchaseDate.slice(0, 4) },
-                { label: "Purchase price", value: fmtDollar(buyer.purchasePrice) },
-                { label: "Hold period", value: fmtYears(fin.yearsHeld) },
-                { label: "Type", value: `${buyer.beds}bd ${buyer.baths}ba ${buyer.propertyType}` },
-                buyer.land ? { label: "Land", value: `${buyer.land}sqm` } : null,
-                { label: "Status", value: formatBuyerStatus(buyer.status) },
-              ].filter(Boolean).map(item => (
-                <div key={item!.label}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 }}>{item!.label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{item!.value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* === ANALYSIS TAB: financial + DNA sections === */}
+          {profileTab === "analysis" && (<>
 
-          {/* Feature 9: Sentiment drift alert */}
+          {/* Sentiment drift alert */}
           <SentimentDriftAlert entry={entry} theme={theme} />
 
           {/* Feature 2: Property DNA */}
@@ -6490,9 +6530,6 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
               )
             })()}
 
-            {/* Comparable sales map */}
-            <ComparableSalesMap buyer={buyer} theme={theme} />
-
             {/* Hero metrics — the 3 numbers that matter most */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 10 }}>
               {[
@@ -6565,6 +6602,11 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
               </button>
             </div>
           </div>
+
+          </>)}
+
+          {/* === OUTREACH TAB: notes + voice + nurture === */}
+          {profileTab === "outreach" && (<>
 
           {/* CRM Notes + Voice Memo Recorder */}
           <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 18px" }}>
@@ -6654,10 +6696,15 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
 
           {/* Nurture Sequence Panel */}
           <NurtureSequencePanel entry={entry} agent={agent} theme={theme} />
+
+          </>)}
         </div>
 
-        {/* RIGHT — Triggers + pitch angles + generate */}
+        {/* RIGHT col */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* === OUTREACH TAB: NotesBridge + outreach picker + coach + contact === */}
+          {profileTab === "outreach" && (<>
 
           {/* ⚡ NotesBridge — CRM notes → AI extraction → outreach sentence */}
           {(buyer.notes || voiceNotes) && (
@@ -6671,6 +6718,11 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
               theme={theme}
             />
           )}
+
+          </>)}
+
+          {/* === ANALYSIS TAB: triggers + rate sensitivity + best time === */}
+          {profileTab === "analysis" && (<>
 
           {/* Trigger events + Pitch angles — collapsible */}
           <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, overflow: "hidden" }}>
@@ -6727,19 +6779,32 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
                         )
                       })}
                     </div>
-                    {/* Pitch angles */}
+                    {/* Pitch angles — collapsed by default */}
                     {segment.pitchAngles.length > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8 }}>Pitch angles for {fname}</div>
-                        {segment.pitchAngles.map((angle, i) => (
-                          <div key={i} style={{
-                            display: "flex", gap: 8, padding: "8px 10px", borderRadius: 8,
-                            background: C.bg3, border: `1px solid ${C.border}`,
-                          }}>
-                            <span style={{ fontSize: 14, flexShrink: 0 }}>💡</span>
-                            <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{angle}</span>
-                          </div>
-                        ))}
+                      <div>
+                        <button
+                          onClick={() => setShowPitchAngles(v => !v)}
+                          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 5, fontFamily: FONT, marginBottom: showPitchAngles ? 6 : 0 }}
+                        >
+                          <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8 }}>Pitch angles for {fname}</span>
+                          <span style={{ fontSize: 10, color: C.faint, transform: showPitchAngles ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block" }}>›</span>
+                        </button>
+                        <AnimatePresence>
+                          {showPitchAngles && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} style={{ overflow: "hidden" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                {segment.pitchAngles.map((angle, i) => (
+                                  <div key={i} style={{
+                                    display: "flex", gap: 8, padding: "8px 10px", borderRadius: 8,
+                                    background: C.bg3, border: `1px solid ${C.border}`,
+                                  }}>
+                                    <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{angle}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     )}
                   </div>
@@ -6748,13 +6813,18 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
             </AnimatePresence>
           </div>
 
+          </>)}
+
+          {/* === OUTREACH TAB: secondary engagement + coach + contact + picker === */}
+          {profileTab === "outreach" && (<>
+
           {/* Secondary buyer engagement strategies */}
           {isSecondary && <SecondaryEngagementCard entry={entry} theme={theme} />}
 
           {/* Negotiation Coach button */}
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowNegotiationCoach(true)}
             style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${theme.primary}40`, background: `${theme.primary}10`, color: theme.primary, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            Negotiation Coach: call script for {fname}
+            Generate call script for {fname} →
           </motion.button>
 
           {/* Contact info */}
@@ -6909,11 +6979,18 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview }: {
             )
           })()}
 
-          {/* Feature 6: Rate sensitivity */}
-          <RateSensitivityBadge entry={entry} theme={theme} />
+          </>)}
 
-          {/* Feature 11: Best time to sell */}
+          {/* === ANALYSIS TAB: rate sensitivity + best time to sell === */}
+          {profileTab === "analysis" && (<>
+
+          {/* Rate sensitivity */}
+          <RateSensitivityBadge entry={entry} />
+
+          {/* Best time to sell */}
           <BestTimeToSellPanel entry={entry} theme={theme} />
+
+          </>)}
         </div>
       </div>
 
