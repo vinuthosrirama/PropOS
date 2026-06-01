@@ -18,6 +18,8 @@ jobs:
       - run: npm ci
 
       - run: npm run build
+        env:
+          VITE_SHEET_URL: ${{ secrets.VITE_SHEET_URL }}
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
