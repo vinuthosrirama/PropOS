@@ -24,4 +24,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 5c76741d68d3c6244f76c866e962e0bb
-          command: pages deploy dist --project-name=propos --branch=main
+          command: pages deploy dist --project-name=openhome-engine --branch=main
