@@ -5,7 +5,6 @@ import {
   type AgentProfile, type AgencyTheme, type ViewId, type DemoMode, type VendorDisplaySettings,
 } from "./data"
 import Nav from "./components/Nav"
-import BillingBanner from "./components/BillingBanner"
 import { seedCorpusIfEmpty } from "./lib/voiceContext"
 import { clearAccessToken } from "./lib/authFetch"
 
@@ -110,7 +109,6 @@ export default function App() {
       <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn}
            onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge}
            mode={mode} onSwitchMode={setMode} />
-      <BillingBanner />
 
       <Suspense fallback={<LoadingSpinner />}>
         <AnimatePresence mode="wait">
