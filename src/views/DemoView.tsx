@@ -2536,9 +2536,6 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
                   {agent.name.charAt(0)}
                 </div>
               </div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textAlign: "right", marginTop: 6 }}>
-                {sms.length}/160 chars
-              </div>
             </div>
           )}
         </div>
@@ -5910,11 +5907,22 @@ function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
   return (
     <motion.div key="print-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}
       style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()}
+      <motion.div id="appraisal-print-root" className="appraisal-report-modal" initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()}
         style={{ background: "#fff", borderRadius: 20, maxWidth: 700, width: "90vw", maxHeight: "88vh", overflowY: "auto", color: "#1a1a1a", boxShadow: "0 24px 80px rgba(0,0,0,0.6)", fontFamily: "'Georgia', serif" }}>
 
+        {/* Print CSS — forces white background and hides the modal overlay when printing */}
+        <style>{`
+          @media print {
+            body > *:not(#appraisal-print-root) { display: none !important; }
+            #appraisal-print-root { position: static !important; background: white !important; }
+            .appraisal-report-modal { box-shadow: none !important; border-radius: 0 !important; max-height: none !important; overflow: visible !important; }
+            .appraisal-toolbar { display: none !important; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          }
+        `}</style>
+
         {/* Toolbar */}
-        <div style={{ background: C.bg2, borderRadius: "20px 20px 0 0", padding: "10px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.border}` }}>
+        <div className="appraisal-toolbar" style={{ background: C.bg2, borderRadius: "20px 20px 0 0", padding: "10px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.border}` }}>
           <span style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>Appraisal Report Preview · {buyer.name}</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => window.print()} style={{ padding: "7px 18px", borderRadius: 9, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 12, fontWeight: 700, fontFamily: FONT, boxShadow: `0 2px 8px ${theme.glow}` }}>
@@ -5987,7 +5995,7 @@ function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#888", marginBottom: 10, fontFamily: FONT }}>Equity Waterfall · Mid-Range Scenario</div>
             {[
               { l: "Estimated sale price", v: `+ ${fmtK(range.mid)}`, c: "#22c55e", bold: false },
-              { l: "Selling costs (commission + marketing)", v: `− ${fmtK(midScenario.sellingCosts)}`, c: "#ef4444", bold: false },
+              { l: "Selling costs (commission + marketing)", v: fmtK(midScenario.sellingCosts), c: "#ef4444", bold: false },
               midScenario.estimatedCGT > 0 ? { l: "Estimated CGT (50% discount)", v: `− ${fmtK(midScenario.estimatedCGT)}`, c: "#f59e0b", bold: false } : null,
               { l: "Net proceeds", v: `= ${fmtK(midScenario.netProceeds)}`, c: theme.primary, bold: true },
               { l: "Equity released vs purchase price", v: fmtK(midScenario.netProceeds - buyer.purchasePrice), c: "#22c55e", bold: true },
@@ -6016,8 +6024,34 @@ function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
             <div style={{ fontSize: 13, fontWeight: 700, color: theme.primary, fontFamily: FONT }}>📞 {agent.phone} &nbsp;·&nbsp; ✉️ {agent.email}</div>
           </div>
 
-          <div style={{ marginTop: 20, fontSize: 10, color: "#aaa", lineHeight: 1.5, fontFamily: FONT }}>
-            Prepared by {agent.name} of {agent.agency}. Estimates based on comparable sales as at {today}. This is not a formal valuation.
+          {/* Agent card footer */}
+          <div style={{ marginTop: 28, borderTop: `2px solid ${theme.primary}20`, paddingTop: 20, display: "flex", alignItems: "center", gap: 18 }}>
+            {/* Photo / initials */}
+            <div style={{ flexShrink: 0 }}>
+              {agent.photoUrl && !agent.photoUrl.includes("peakere.com.au/our-team") ? (
+                <img src={agent.photoUrl} alt={agent.name}
+                  style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", border: `3px solid ${theme.primary}` }} />
+              ) : (
+                <div style={{
+                  width: 72, height: 72, borderRadius: "50%",
+                  background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 26, fontWeight: 900, color: "white", fontFamily: FONT,
+                  border: `3px solid ${theme.primary}`,
+                }}>
+                  {agent.name.split(" ").map(p => p[0]).slice(0, 2).join("")}
+                </div>
+              )}
+            </div>
+            {/* Details */}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 17, fontWeight: 800, color: "#1a1a1a", fontFamily: FONT, letterSpacing: -0.3 }}>{agent.name}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: theme.primary, fontFamily: FONT }}>{agent.agency}</div>
+              <div style={{ fontSize: 12, color: "#555", fontFamily: FONT, marginTop: 3 }}>{agent.phone} · {agent.email}</div>
+              <div style={{ fontSize: 10, color: "#aaa", fontFamily: FONT, marginTop: 6, lineHeight: 1.5 }}>
+                Estimates based on comparable sales as at {today}. This report is prepared as a guide only and is not a formal property valuation.
+              </div>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -6366,6 +6400,17 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const handleGenerate = async () => {
     setGenerating(true)
 
+    // Auto-save voice notes to sheet before generating (persist regardless of whether agent sends)
+    if (voiceNotes) {
+      const merged = [buyer.notes, voiceNotes].filter(Boolean).join("\n\nVoice note: ")
+      authFetch(apiUrl("/api/sheet"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "updateNotes", id: buyer.id, notes: merged }),
+      }).catch(() => {})
+      buyer.notes = merged  // optimistic local update
+    }
+
     const triggerSummary = segment.triggers.map(t => t.label).join("; ")
 
     // Find comparable recent sales in same suburb from agent's portfolio
@@ -6457,6 +6502,14 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       templateFallback()
     }
   }
+
+  // Fix 6: Auto-trigger generation as soon as outreach tab is selected — skip the manual button click
+  useEffect(() => {
+    if (profileTab === "outreach" && !generating) {
+      handleGenerate()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileTab])
 
   const equityPct = Math.round((fin.equityGain / fin.purchasePrice) * 100)
   const equityBarWidth = Math.min(equityPct, 100)
@@ -7204,7 +7257,6 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   emailBody: string[]
   onBack: () => void
 }) {
-  const [sms, setSMS] = useState(initSMS)
   const [subject, setSubject] = useState(initSubject)
   const [bodyText, setBodyText] = useState(initBody.join("\n\n"))
   const [editMode, setEditMode] = useState<"sms" | "email" | null>(null)
@@ -7220,12 +7272,36 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const [listingPrice, setListingPrice] = useState("")
   const [savingMilestone, setSavingMilestone] = useState(false)
   const [showNurture, setShowNurture] = useState(false)
+  // SMS carousel: 3 tone variants
+  const [smsVariantIdx, setSmsVariantIdx] = useState(0)
 
   const { buyer, financials: fin, segment } = entry
   const pl = PIPELINE_LABELS[segment.pipeline]
   const fname = buyer.name.split("&")[0].split(" ")[0].trim()
   const bubbleColor = theme?.primary ?? "rgb(0,122,255)"
   const avatarGrad = `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
+
+  // Build 3 SMS variants (first = AI-generated, rest = local tone alternatives)
+  const agentFirstRV = agent.name.split(" ")[0]
+  const purchaseYearRV = buyer.purchaseDate?.slice(0, 4) ?? "2020"
+  const estStrRV = fmtDollar(fin.currentEstimate)
+  const equityStrRV = fmtDollar(fin.equityGain)
+  const shortAddrRV = shortAddr(buyer.purchaseAddress)
+  const signoffRV = buyer.status === "investor" ? "Kind regards" : "Cheers"
+  const trim160 = (t: string) => t.length > 160 ? t.slice(0, 157) + "..." : t
+  const noEmDash = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
+  const smsVariants: string[] = [
+    initSMS,
+    trim160(noEmDash(`Hi ${fname}, just a quick update from ${agentFirstRV} at ${agent.agency}. ${shortAddrRV} has grown to ~${estStrRV} since ${purchaseYearRV}, that's ${equityStrRV} in equity. Worth a chat? ${signoffRV}, ${agentFirstRV}`)),
+    trim160(noEmDash(`Hi ${fname}, ${agentFirstRV} here. Your property is now worth around ${estStrRV}, up ${equityStrRV} since you bought. Happy to pop over for a free appraisal if you're curious. ${signoffRV}, ${agentFirstRV}`)),
+  ]
+  const [sms, setSMS] = useState(initSMS)
+
+  // Keep sms in sync with carousel selection (unless user has manually edited)
+  useEffect(() => {
+    setSMS(smsVariants[smsVariantIdx])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [smsVariantIdx])
 
   const handleSend = async () => {
     setSending(true)
@@ -7266,6 +7342,25 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
 
       // Write today's date + last message back to the Past Buyers sheet tab
       await updateLastContactDate(buyer.id, undefined, sms || bodyText.split("\n\n")[0]?.slice(0, 200))
+
+      // Log sent outreach to Sheets event log (same as buyer outreach)
+      postEvent({
+        leadId: `vendor_${buyer.id}`, leadName: buyer.name,
+        propertyAddress: fullAddr(buyer.purchaseAddress, buyer.suburb),
+        fromProperty: buyer.purchaseAddress, eventType: "outreach_sent",
+        smsText: sms, emailSubject: subject,
+        emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
+        deliveryChannel: "both",
+        deliverySid: deliveryRes?.sms?.sid,
+        sendgridId: deliveryRes?.email?.messageId,
+        leadStatus: "outreach_sent",
+      }).catch(() => {})
+
+      // Write approved vendor outreach to VoiceCorpus tab
+      const ts = new Date().toISOString()
+      writeAgentVoiceEntry({ text: sms, type: "sms", channel: "sms", ts }).catch(() => {})
+      writeAgentVoiceEntry({ text: subject, type: "email_subject", channel: "email", ts }).catch(() => {})
+      writeAgentVoiceEntry({ text: bodyText.split("\n\n")[0], type: "email_body", channel: "email", ts }).catch(() => {})
     } catch {}
     setSending(false)
     setSent(true)
@@ -7426,8 +7521,33 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
                   {agent.name.charAt(0)}
                 </div>
               </div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textAlign: "right", marginTop: 6 }}>
-                {sms.length}/160 chars
+              {/* Carousel navigation */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 12 }}>
+                <button
+                  onClick={() => setSmsVariantIdx(i => Math.max(0, i - 1))}
+                  disabled={smsVariantIdx === 0}
+                  style={{
+                    width: 28, height: 28, borderRadius: "50%", border: "none",
+                    background: smsVariantIdx === 0 ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.18)",
+                    color: smsVariantIdx === 0 ? "rgba(255,255,255,0.25)" : "white",
+                    cursor: smsVariantIdx === 0 ? "default" : "pointer",
+                    fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >‹</button>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", minWidth: 36, textAlign: "center" }}>
+                  {smsVariantIdx + 1} / {smsVariants.length}
+                </span>
+                <button
+                  onClick={() => setSmsVariantIdx(i => Math.min(smsVariants.length - 1, i + 1))}
+                  disabled={smsVariantIdx === smsVariants.length - 1}
+                  style={{
+                    width: 28, height: 28, borderRadius: "50%", border: "none",
+                    background: smsVariantIdx === smsVariants.length - 1 ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.18)",
+                    color: smsVariantIdx === smsVariants.length - 1 ? "rgba(255,255,255,0.25)" : "white",
+                    cursor: smsVariantIdx === smsVariants.length - 1 ? "default" : "pointer",
+                    fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >›</button>
               </div>
             </div>
           )}

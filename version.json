@@ -1,12 +1,14 @@
 {
-  "version": "1.3.5",
-  "releasedAt": "2026-06-02T14:00:00+10:00",
+  "version": "1.3.6",
+  "releasedAt": "2026-06-02T16:00:00+10:00",
   "changes": [
     "Fix 1: CSV parser handles quoted fields with commas; wider CRM column aliases (Rex, AgentBox, Vault, BoxDice); merges First Name + Last Name columns; extracts suburb from address when no suburb column",
+    "Fix 2: Appraisal Report — removed minus prefix from Selling Costs line in equity waterfall",
     "Fix 3: Add '+ Capture lead' button to Buyer Outreach PortfolioPage; modal saves to Lead tab via /api/add-lead",
-    "Fix 4: Voice memo calls GPT-4o /api/parse-notes for structured CRM note parsing (temperature 0.1)",
-    "Fix 5: vendorReview -> vendorProfile back navigation preserves allEntries/entryIdx",
-    "Fix 6: Vendor Prospecting stats grid replaced with compact horizontal strip (no emojis, single-row)",
-    "Fix 7: ComparableSalesMap now shows vendor's subject property as first pin (purple pulsing)"
+    "Fix 4: Print button — @media print CSS hides dark app shell, forces white background for appraisal report",
+    "Fix 5: Voice notes auto-saved to sheet at start of generate (persist regardless of send)",
+    "Fix 6: Outreach tab auto-triggers generation on mount — skips manual Generate SMS + Email button",
+    "Fix 7: SMS carousel in vendor review — 3 tone variants with ‹ 1/3 › navigation arrows",
+    "Fix 8: After sending, vendor outreach is upserted to Sheets event log and VoiceCorpus tab"
   ]
 }

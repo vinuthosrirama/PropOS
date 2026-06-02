@@ -64,11 +64,12 @@ const SUBURB_DATA: Record<string, SuburbData> = {
     medianHouse: 880000, annualGrowthPct: 6.2,
     daysOnMarket: 24, clearanceRate: 76, demandScore: 8,
     streets: [
-      "Ascot Rise", "Thornton Way", "Maple Court", "Cedar Close",
-      "Heritage Boulevard", "Parkview Drive", "Ironbark Lane",
-      "Sundial Court", "Willowbrook Rise", "Harvest Close",
-      "Lancaster Way", "Creekwood Rise", "Windward Crescent",
-      "Delfin Drive", "Hartsmere Drive", "Belvedere Court",
+      "Clyde Road", "Birkdale Road", "Eden Rise", "Manuka Drive",
+      "O'Neil Road", "Peel Street", "Outlook Drive", "Inverness Way",
+      "Soldiers Road", "Heritage Boulevard", "Lakeview Boulevard",
+      "Delfin Drive", "Hartsmere Drive", "Ashmore Avenue",
+      "Homestead Drive", "Ayr Hill Avenue", "Brindabella Drive",
+      "Riviera Way", "Jacaranda Court", "Mayfield Drive",
     ],
   },
   "narre warren south": {
