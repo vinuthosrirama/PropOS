@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import { useBreakpoint } from "../hooks/useBreakpoint"
 import {
   C, FONT, PORTFOLIO_SOLD, PORTFOLIO_ACTIVE,
   DEFAULT_THEME, getPortfolioForAgent, isPasSunilchandra, isManpreetSingh,
@@ -27,7 +28,9 @@ import {
 } from "../lib/sheet"
 import AuctionOutcomePanel from "../components/AuctionOutcomePanel"
 import BuyerPitchReport from "../components/BuyerPitchReport"
+import OutreachQueue, { type QueueItem } from "../components/OutreachQueue"
 import { apiUrl } from "../lib/api"
+import { authFetch } from "../lib/authFetch"
 import { buildVoiceContext, loadCorpus } from "../lib/voiceContext"
 import { DEMO_FALLBACK_LEADS } from "../lib/demoFallback"
 import { getCachedOutreach } from "../lib/cachedOutreach"
@@ -67,6 +70,7 @@ type Stage =
   | { kind: "vendorDashboard"; segmented: SegmentedBuyer[] }
   | { kind: "vendorProfile"; entry: SegmentedBuyer; allEntries?: SegmentedBuyer[]; entryIdx?: number }
   | { kind: "vendorReview"; entry: SegmentedBuyer; sms: string; emailSubject: string; emailBody: string[] }
+  | { kind: "outreachQueue"; items: QueueItem[]; segmented: SegmentedBuyer[] }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1377,7 +1381,7 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
     ;(async () => {
       try {
         const propertyAddress = `${property.address}, ${property.suburb} ${property.state}`
-        const r = await fetch(apiUrl("/api/slm-answer-batch"), {
+        const r = await authFetch(apiUrl("/api/slm-answer-batch"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ questions: unmatchedQs, slm: activeSLM, propertyAddress }),
@@ -1820,7 +1824,7 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
 
     const callGenerate = () =>
       Promise.race([
-        fetch(apiUrl("/api/generate"), {
+        authFetch(apiUrl("/api/generate"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -1977,7 +1981,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
 
   // Fetch server test mode config once on mount
   useEffect(() => {
-    fetch(apiUrl("/api/health"))
+    authFetch(apiUrl("/api/health"))
       .then(r => r.json())
       .then((h: { testMode?: boolean; testPhone?: string | null; testEmail?: string | null }) => {
         if (h.testMode) setTestMode({ phone: h.testPhone ?? null, email: h.testEmail ?? null })
@@ -1989,7 +1993,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
     if (nurtureSeq.length > 0) { setShowNurture(true); return }
     setLoadingNurture(true)
     try {
-      const res = await fetch(apiUrl("/api/nurture"), {
+      const res = await authFetch(apiUrl("/api/nurture"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2056,7 +2060,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
         : fmt(property.price)
 
-      const deliveryRes = await fetch(apiUrl("/api/send"), {
+      const deliveryRes = await authFetch(apiUrl("/api/send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2098,7 +2102,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       })
 
       // 3. Upsert lead row with voice transcript + generated content
-      await fetch(apiUrl("/api/transcript"), {
+      await authFetch(apiUrl("/api/transcript"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2132,7 +2136,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       const priceGuide = property.priceMin && property.priceMax
         ? `${fmt(property.priceMin)} - ${fmt(property.priceMax)}`
         : fmt(property.price)
-      await fetch(apiUrl("/api/send"), {
+      await authFetch(apiUrl("/api/send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3185,7 +3189,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
     }
     // Try to save to sheet via /api/add-contact
     try {
-      await fetch(apiUrl("/api/add-contact"), {
+      await authFetch(apiUrl("/api/add-contact"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newContact),
@@ -3253,7 +3257,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
         notes: "", lastContactDate: "",
       }
       try {
-        await fetch(apiUrl("/api/add-contact"), {
+        await authFetch(apiUrl("/api/add-contact"), {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newContact),
         })
@@ -3866,22 +3870,26 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
 
 // ── Vendor Prospecting: Pipeline Dashboard ──────────────────────────────────
 
-function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }: {
+function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, onGenerateAll }: {
   segmented: SegmentedBuyer[]
   onBack: () => void
   onSelectEntry: (entry: SegmentedBuyer) => void
   theme: AgencyTheme
   agent: AgentProfile
+  onGenerateAll?: (items: QueueItem[]) => void
 }) {
+  const bp = useBreakpoint()
+  const isMobile = bp === "mobile"
   const [filterPipeline, setFilterPipeline] = useState<Pipeline | "all">("all")
   const [showBulkFire, setShowBulkFire] = useState(false)
   const [roiData, setRoiData] = useState<VendorAnalyticsData | null>(null)
+  const [generatingAll, setGeneratingAll] = useState(false)
   const filtered = filterPipeline === "all" ? segmented : segmented.filter(s => s.segment.pipeline === filterPipeline)
   const pipelines = [...new Set(segmented.map(s => s.segment.pipeline))]
   const totalEquity = segmented.reduce((s, e) => s + e.financials.equityGain, 0)
 
   useEffect(() => {
-    fetch(apiUrl("/api/analytics/vendor"))
+    authFetch(apiUrl("/api/analytics/vendor"))
       .then(r => r.json())
       .then((d: VendorAnalyticsData) => setRoiData(d))
       .catch(() => { /* show demo data from backend */ })
@@ -3890,7 +3898,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
     u === "high" ? (C.red ?? "#ef4444") : u === "medium" ? C.orange : C.faint
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: isMobile ? "80px 16px 48px" : "88px 28px 48px", fontFamily: FONT }}>
       <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, marginBottom: 20, padding: 0 }}>←</button>
 
       {/* Header with summary */}
@@ -3898,7 +3906,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 8 }}>
           Pipeline Dashboard
         </div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.5, marginBottom: 6, display: "flex", alignItems: "baseline", gap: 12 }}>
+        <div style={{ fontSize: isMobile ? 18 : 24, fontWeight: 800, color: C.text, letterSpacing: -0.5, marginBottom: 6, display: "flex", alignItems: "baseline", gap: 12 }}>
           <span>{segmented.length} contacts segmented into {pipelines.length} pipelines</span>
         </div>
         <div style={{ fontSize: 13, color: C.muted }}>
@@ -3944,6 +3952,57 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
             style={{ padding: "10px 20px", borderRadius: 12, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 13, fontWeight: 700, fontFamily: FONT, boxShadow: `0 4px 16px ${theme.glow}`, display: "inline-flex", alignItems: "center", gap: 8 }}>
             Review {segmented.length} messages →
           </motion.button>
+          {onGenerateAll && (
+            <motion.button
+              whileHover={{ scale: generatingAll ? 1 : 1.02 }}
+              whileTap={{ scale: generatingAll ? 1 : 0.97 }}
+              disabled={generatingAll}
+              onClick={async () => {
+                setGeneratingAll(true)
+                try {
+                  const contacts = segmented.map(({ buyer, financials: fin, segment: seg }) => ({
+                    id: buyer.id,
+                    name: buyer.name,
+                    email: buyer.email ?? "",
+                    phone: buyer.phone,
+                    purchaseAddress: buyer.purchaseAddress,
+                    suburb: buyer.suburb,
+                    purchaseYear: buyer.purchaseDate.slice(0, 4),
+                    purchasePrice: fin.purchasePrice,
+                    currentEstimate: fin.currentEstimate,
+                    equityGain: fin.equityGain,
+                    equityGainPct: fin.equityGainPct,
+                    pipeline: seg.pipeline,
+                    pipelineLabel: PIPELINE_LABELS[seg.pipeline]?.label ?? seg.pipeline,
+                    notes: buyer.notes ?? "",
+                  }))
+                  const res = await authFetch(apiUrl("/api/vendor-batch/generate"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ contacts, agentName: agent.name, agentAgency: agent.agency }),
+                  }).then(r => r.json()).catch(() => ({ items: [] }))
+                  if (res.items?.length > 0) {
+                    onGenerateAll(res.items as QueueItem[])
+                  }
+                } catch {
+                  // fall through
+                } finally {
+                  setGeneratingAll(false)
+                }
+              }}
+              style={{
+                padding: "10px 20px", borderRadius: 12, border: `1px solid ${theme.primary}55`,
+                cursor: generatingAll ? "default" : "pointer",
+                background: "transparent", color: generatingAll ? C.faint : theme.primary,
+                fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                display: "inline-flex", alignItems: "center", gap: 8,
+              }}
+            >
+              {generatingAll
+                ? <><motion.span animate={{ rotate: [0, 360] }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} style={{ display: "inline-block" }}>⚙️</motion.span> Generating…</>
+                : `✦ Generate for All ${segmented.length} →`}
+            </motion.button>
+          )}
         </div>
       </div>
 
@@ -4074,17 +4133,19 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent }:
                 )}
               </div>
 
-              {/* Financial summary */}
-              <div style={{ flexShrink: 0, textAlign: "right" }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: C.green }}>{fmtDollar(fin.equityGain)}</div>
-                <div style={{ fontSize: 9, color: C.faint, marginBottom: 4 }}>equity gain</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.text }}>{fmtDollar(fin.currentEstimate)}</div>
-                <div style={{ fontSize: 9, color: C.faint }}>est. value</div>
-              </div>
+              {/* Financial summary — hidden on mobile to keep cards compact */}
+              {!isMobile && (
+                <div style={{ flexShrink: 0, textAlign: "right" }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: C.green }}>{fmtDollar(fin.equityGain)}</div>
+                  <div style={{ fontSize: 9, color: C.faint, marginBottom: 4 }}>equity gain</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.text }}>{fmtDollar(fin.currentEstimate)}</div>
+                  <div style={{ fontSize: 9, color: C.faint }}>est. value</div>
+                </div>
+              )}
 
               {/* Priority score ring + View profile cue */}
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flexShrink: 0 }}>
-                <ScoreRing score={entry.priority} size={44} strokeWidth={3} />
+                <ScoreRing score={entry.priority} size={isMobile ? 36 : 44} strokeWidth={3} />
                 <span style={{ fontSize: 8, color: C.faint, whiteSpace: "nowrap" }}>View →</span>
               </div>
             </motion.div>
@@ -5019,7 +5080,7 @@ function BulkFireModal({ segmented, agent, theme, onClose }: {
         status: buyer.status,
       }))
 
-      const res = await fetch(apiUrl("/api/vendor-bulk-send"), {
+      const res = await authFetch(apiUrl("/api/vendor-bulk-send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -5503,7 +5564,7 @@ function NurtureSequencePanel({ entry, agent, theme }: { entry: SegmentedBuyer; 
     if (next && !fetchedRef.current) {
       fetchedRef.current = true
       setMsgs(templates)
-      fetch(apiUrl("/api/nurture"), {
+      authFetch(apiUrl("/api/nurture"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agentName: agent.name, agentAgency: agent.agency, agentPhone: agent.phone, agentEmail: agent.email, lead: { name: buyer.name, budget: fin.currentEstimate, persona: buyer.status, notes: buyer.notes ?? "", questions: [] }, grade: "C" }),
@@ -6058,6 +6119,26 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [extractedHook, setExtractedHook] = useState<string | null>(null)
   const [personalisationLine, setPersonalisationLine] = useState<string | null>(null)
 
+  const bpVP = useBreakpoint()
+  const isMobileVP = bpVP === "mobile"
+  const [avmRefreshing, setAvmRefreshing] = useState(false)
+  const [avmSource, setAvmSource] = useState<string | null>(null)
+
+  const handleAvmRefresh = async () => {
+    setAvmRefreshing(true)
+    try {
+      const res = await authFetch(apiUrl(`/api/avm?address=${encodeURIComponent(buyer.purchaseAddress + ", " + buyer.suburb)}`))
+      if (res.ok) {
+        const data = await res.json() as { mid?: number; source?: string }
+        if (data.mid && data.mid > 0) {
+          setOverrideValue(data.mid)
+          setAvmSource(data.source ?? "Domain API")
+        }
+      }
+    } catch { /* silent — keep existing estimate */ }
+    setAvmRefreshing(false)
+  }
+
   // Voice memo — lets agent dictate extra context about this contact before generating
   const vendorVoice = useVoiceMemo({
     onTranscript: (t) => setVoiceNotes(prev => prev ? prev + " " + t : t),
@@ -6151,7 +6232,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
 
     try {
       const res = await Promise.race([
-        fetch(apiUrl("/api/vendor-generate"), {
+        authFetch(apiUrl("/api/vendor-generate"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -6192,7 +6273,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const range = buildAppraisalRange(comps, buyer.suburb)
 
   return (
-    <div style={{ maxWidth: 1020, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
+    <div style={{ maxWidth: 1020, margin: "0 auto", padding: isMobileVP ? "80px 16px 48px" : "88px 28px 48px", fontFamily: FONT }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, padding: 0 }}>←</button>
         {allEntries && entryIdx !== undefined && allEntries.length > 1 && (
@@ -6274,9 +6355,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       </div>
 
       {/* Two-column layout — tab controls which sections are visible */}
-      <div style={{ display: "flex", gap: 28 }}>
+      <div style={{ display: "flex", flexDirection: isMobileVP ? "column" : "row", gap: isMobileVP ? 16 : 28 }}>
         {/* LEFT col */}
-        <div style={{ flex: "0 0 58%", display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ flex: isMobileVP ? "unset" : "0 0 58%", display: "flex", flexDirection: "column", gap: 18 }}>
 
           {/* === ANALYSIS TAB: financial + DNA sections === */}
           {profileTab === "analysis" && (<>
@@ -6306,18 +6387,34 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                     />
                   </div>
                 ) : (
-                  <button
-                    onClick={startEditValue}
-                    title="Click to override estimate"
-                    style={{
-                      background: "transparent", border: "none", cursor: "pointer", padding: 0,
-                      display: "flex", alignItems: "center", gap: 4,
-                    }}
-                  >
-                    <span style={{ fontSize: 12, color: C.green, fontWeight: 700, fontFamily: FONT }}>Now {fmtDollar(fin.currentEstimate)}</span>
-                    {overrideValue && <span style={{ fontSize: 9, color: theme.primary, background: theme.primary + "18", padding: "1px 5px", borderRadius: 4 }}>custom</span>}
-                    <span style={{ fontSize: 9, color: C.faint }}>✏️</span>
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button
+                      onClick={startEditValue}
+                      title="Click to override estimate"
+                      style={{
+                        background: "transparent", border: "none", cursor: "pointer", padding: 0,
+                        display: "flex", alignItems: "center", gap: 4,
+                      }}
+                    >
+                      <span style={{ fontSize: 12, color: C.green, fontWeight: 700, fontFamily: FONT }}>Now {fmtDollar(fin.currentEstimate)}</span>
+                      {overrideValue && <span style={{ fontSize: 9, color: theme.primary, background: theme.primary + "18", padding: "1px 5px", borderRadius: 4 }}>{avmSource ?? "custom"}</span>}
+                      <span style={{ fontSize: 9, color: C.faint }}>✏️</span>
+                    </button>
+                    <button
+                      onClick={handleAvmRefresh}
+                      disabled={avmRefreshing}
+                      title="Refresh via Domain API"
+                      style={{
+                        background: avmRefreshing ? "none" : C.bg3,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 6, padding: "2px 7px",
+                        fontSize: 9, color: avmRefreshing ? C.faint : theme.primary,
+                        cursor: avmRefreshing ? "default" : "pointer", fontFamily: FONT, fontWeight: 600,
+                      }}
+                    >
+                      {avmRefreshing ? "…" : "↻ AVM"}
+                    </button>
+                  </div>
                 )}
               </div>
               <div style={{ height: 10, background: C.bg3, borderRadius: 6, overflow: "hidden" }}>
@@ -6559,7 +6656,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                       // Append voice transcript to the buyer's notes and save back to sheet
                       const merged = [buyer.notes, voiceNotes].filter(Boolean).join("\n\nVoice note: ")
                       try {
-                        await fetch(apiUrl("/api/sheet"), {
+                        await authFetch(apiUrl("/api/sheet"), {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ action: "updateNotes", id: buyer.id, notes: merged }),
@@ -6923,7 +7020,12 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const [sendingToSelf, setSendingToSelf] = useState(false)
   const [sentToSelf, setSentToSelf] = useState(false)
   const [deliveryNote, setDeliveryNote] = useState("")
+  const bpRV = useBreakpoint()
+  const isMobileRV = bpRV === "mobile"
   const [appraisalBooked, setAppraisalBooked] = useState(false)
+  const [listingWon, setListingWon] = useState(false)
+  const [listingPrice, setListingPrice] = useState("")
+  const [savingMilestone, setSavingMilestone] = useState(false)
   const [showNurture, setShowNurture] = useState(false)
 
   const { buyer, financials: fin, segment } = entry
@@ -6935,7 +7037,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const handleSend = async () => {
     setSending(true)
     try {
-      const deliveryRes = await fetch(apiUrl("/api/send"), {
+      const deliveryRes = await authFetch(apiUrl("/api/send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -6979,7 +7081,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const handleSendToSelf = async () => {
     setSendingToSelf(true)
     try {
-      await fetch(apiUrl("/api/send"), {
+      await authFetch(apiUrl("/api/send"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -7048,7 +7150,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "80px 32px 48px", fontFamily: FONT }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobileRV ? "76px 16px 48px" : "80px 32px 48px", fontFamily: FONT }}>
       <button onClick={onBack} style={{
         background: "transparent", border: "none", cursor: "pointer",
         color: theme.primary, fontSize: 18, fontFamily: FONT,
@@ -7060,7 +7162,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: theme.primary, textTransform: "uppercase", marginBottom: 4 }}>
           Review outreach
         </div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: C.text, letterSpacing: -0.8 }}>
+        <div style={{ fontSize: isMobileRV ? 18 : 24, fontWeight: 800, color: C.text, letterSpacing: -0.8 }}>
           {fname}'s personalised vendor messages
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
@@ -7078,7 +7180,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobileRV ? "1fr" : "1fr 1fr", gap: 24, marginBottom: 24 }}>
         {/* SMS — iMessage style */}
         <div>
           <div style={{
@@ -7260,14 +7362,31 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         Experience what your vendors feel
       </div>
 
-      {/* Appraisal booked */}
+      {/* Appraisal booked + listing won */}
       <div style={{ marginTop: 28, padding: "18px 20px", borderRadius: 14, background: C.bg2, border: `1px solid ${C.border}` }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 10 }}>
           Did {fname} agree to an appraisal?
         </div>
         <button
-          onClick={() => setAppraisalBooked(true)}
-          disabled={appraisalBooked}
+          onClick={async () => {
+            if (appraisalBooked) return
+            setSavingMilestone(true)
+            try {
+              await authFetch(apiUrl("/api/analytics/milestone"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contactPhone: buyer.phone,
+                  contactName: buyer.name,
+                  type: "appraisal_booked",
+                  propertyAddress: buyer.purchaseAddress,
+                }),
+              })
+            } catch { /* offline — still show UI update */ }
+            finally { setSavingMilestone(false) }
+            setAppraisalBooked(true)
+          }}
+          disabled={appraisalBooked || savingMilestone}
           style={{
             padding: "10px 20px", borderRadius: 10,
             border: `1px solid ${appraisalBooked ? C.green + "44" : theme.primary + "44"}`,
@@ -7277,9 +7396,63 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
             fontFamily: FONT,
           }}
         >
-          {appraisalBooked ? "Appraisal booked" : "Mark appraisal booked"}
+          {savingMilestone ? "Saving…" : appraisalBooked ? "✓ Appraisal booked" : "Mark appraisal booked"}
         </button>
-        {appraisalBooked && (
+        {appraisalBooked && !listingWon && (
+          <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+              Did it convert to a listing?
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="number"
+                placeholder="Sale price (e.g. 870000)"
+                value={listingPrice}
+                onChange={e => setListingPrice(e.target.value)}
+                style={{
+                  flex: 1, padding: "8px 12px", borderRadius: 8,
+                  border: `1px solid ${C.border}`, background: C.bg3,
+                  color: C.text, fontSize: 13, fontFamily: FONT,
+                }}
+              />
+              <button
+                disabled={!listingPrice || savingMilestone}
+                onClick={async () => {
+                  setSavingMilestone(true)
+                  try {
+                    await authFetch(apiUrl("/api/analytics/milestone"), {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        contactPhone: buyer.phone,
+                        contactName: buyer.name,
+                        type: "listing_won",
+                        propertyAddress: buyer.purchaseAddress,
+                        listingPrice: parseInt(listingPrice) || 0,
+                      }),
+                    })
+                  } catch { /* offline */ }
+                  finally { setSavingMilestone(false) }
+                  setListingWon(true)
+                }}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, border: "none",
+                  background: C.green, color: "#04070d",
+                  fontSize: 13, fontWeight: 700, cursor: listingPrice ? "pointer" : "default",
+                  fontFamily: FONT, opacity: listingPrice ? 1 : 0.5,
+                }}
+              >
+                {savingMilestone ? "…" : "Mark won →"}
+              </button>
+            </div>
+          </div>
+        )}
+        {listingWon && (
+          <div style={{ fontSize: 12, color: C.green, marginTop: 10, fontWeight: 700 }}>
+            🏆 Listing won recorded — GCI updated in ROI dashboard.
+          </div>
+        )}
+        {appraisalBooked && !listingWon && (
           <div style={{ fontSize: 11, color: C.green, marginTop: 8 }}>
             Pipeline status updated. Follow up within 48 hrs to confirm time.
           </div>
@@ -7336,6 +7509,39 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   )
 }
 
+// ── Outreach Queue Stage wrapper ─────────────────────────────────────────────
+
+function OutreachQueueStage({ items, agent, theme, onBack, onDone }: {
+  items: QueueItem[]
+  agent: AgentProfile
+  theme: AgencyTheme
+  onBack: () => void
+  onDone: () => void
+}) {
+  const [sending, setSending] = useState(false)
+  return (
+    <OutreachQueue
+      items={items}
+      agentName={agent.name}
+      sending={sending}
+      theme={theme}
+      onBack={onBack}
+      onSend={async approved => {
+        setSending(true)
+        try {
+          await authFetch(apiUrl("/api/vendor-batch/send"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ items: approved }),
+          })
+        } catch { /* best-effort */ }
+        setSending(false)
+        onDone()
+      }}
+    />
+  )
+}
+
 // ── Main DemoView ─────────────────────────────────────────────────────────────
 
 export default function DemoView({
@@ -7382,7 +7588,7 @@ export default function DemoView({
   // Poll for unread SMS replies every 30 seconds
   useEffect(() => {
     const poll = () => {
-      fetch(apiUrl("/api/conversations"))
+      authFetch(apiUrl("/api/conversations"))
         .then(r => r.json())
         .then((d: { unread: number; threads: typeof inboxThreads }) => {
           setUnreadReplies(d.unread ?? 0)
@@ -7439,7 +7645,7 @@ export default function DemoView({
             setDraftingReply(true)
             setReplyDraft(null)
             try {
-              const res = await fetch(apiUrl("/api/reply-agent"), {
+              const res = await authFetch(apiUrl("/api/reply-agent"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -7467,7 +7673,7 @@ export default function DemoView({
             if (!selectedThread || !replyText.trim()) return
             setSendingReply(true)
             try {
-              await fetch(apiUrl("/api/send"), {
+              await authFetch(apiUrl("/api/send"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -7489,7 +7695,7 @@ export default function DemoView({
                 }),
               })
               // Refresh threads after sending
-              const updated = await fetch(apiUrl("/api/conversations")).then(r => r.json())
+              const updated = await authFetch(apiUrl("/api/conversations")).then(r => r.json())
               setInboxThreads(updated.threads ?? [])
               setUnreadReplies(updated.unread ?? 0)
               setReplyDraft(null)
@@ -7536,8 +7742,8 @@ export default function DemoView({
                     onClick={async () => {
                       setSeedingDemo(true)
                       try {
-                        await fetch(apiUrl("/api/conversations/seed-demo"), { method: "POST" })
-                        const updated = await fetch(apiUrl("/api/conversations")).then(r => r.json())
+                        await authFetch(apiUrl("/api/conversations/seed-demo"), { method: "POST" })
+                        const updated = await authFetch(apiUrl("/api/conversations")).then(r => r.json())
                         setInboxThreads(updated.threads ?? [])
                         setUnreadReplies(updated.unread ?? 0)
                       } finally { setSeedingDemo(false) }
@@ -7568,7 +7774,7 @@ export default function DemoView({
                       new Date(t.lastReplyAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)
                     return (
                       <div key={t.phone}
-                        onClick={() => { setSelectedThreadPhone(t.phone); setReplyDraft(null); setReplyText(""); fetch(apiUrl(`/api/conversations/${encodeURIComponent(t.phone)}/read`), { method: "POST" }) }}
+                        onClick={() => { setSelectedThreadPhone(t.phone); setReplyDraft(null); setReplyText(""); authFetch(apiUrl(`/api/conversations/${encodeURIComponent(t.phone)}/read`), { method: "POST" }) }}
                         style={{
                           padding: "12px 14px", borderBottom: `1px solid ${C.border}`,
                           background: isUnread ? "rgba(245,158,11,0.05)" : "transparent",
@@ -7749,6 +7955,21 @@ export default function DemoView({
               const idx = stage.segmented.findIndex(e => e.buyer.id === entry.buyer.id)
               setStage({ kind: "vendorProfile", entry, allEntries: stage.segmented, entryIdx: idx >= 0 ? idx : 0 })
             }}
+            onGenerateAll={items =>
+              setStage({ kind: "outreachQueue", items, segmented: stage.segmented })
+            }
+          />
+        </motion.div>
+      )}
+
+      {stage.kind === "outreachQueue" && (
+        <motion.div key="outreachQueue" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+          <OutreachQueueStage
+            items={stage.items}
+            agent={agent}
+            theme={theme}
+            onBack={() => setStage({ kind: "vendorDashboard", segmented: stage.segmented })}
+            onDone={() => setStage({ kind: "vendorDashboard", segmented: stage.segmented })}
           />
         </motion.div>
       )}

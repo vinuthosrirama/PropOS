@@ -3,9 +3,10 @@ import { AnimatePresence, motion } from "framer-motion"
 import { C, FONT, DEFAULT_THEME, type AgentProfile, type AgencyTheme, type ViewId, type DemoMode } from "../data"
 import { useBreakpoint } from "../hooks/useBreakpoint"
 
-export const VIEWS: { id: ViewId; label: string; short: string }[] = [
-  { id: "demo",  label: "Demo",     short: "Demo" },
-  { id: "setup", label: "Settings", short: "Settings" },
+export const VIEWS: { id: ViewId; label: string; short: string; principalOnly?: boolean }[] = [
+  { id: "demo",      label: "Demo",     short: "Demo" },
+  { id: "setup",     label: "Settings", short: "Settings" },
+  { id: "principal", label: "Office",   short: "Office", principalOnly: true },
 ]
 
 export default function Nav({
@@ -145,7 +146,7 @@ export default function Nav({
                 borderBottom: `1px solid ${C.border}`,
                 padding: "12px 0", maxHeight: "80vh", overflowY: "auto",
               }}>
-              {VIEWS.map((v, i) => (
+              {VIEWS.filter(v => !v.principalOnly || agent.role === "principal").map((v, i) => (
                 <button key={v.id} onClick={() => navigate(v.id)} style={{
                   width: "100%", padding: "14px 20px",
                   display: "flex", alignItems: "center", gap: 14,
@@ -158,7 +159,7 @@ export default function Nav({
                     <div style={{ fontSize: 14, fontWeight: view === v.id ? 700 : 400, color: view === v.id ? "rgb(225, 205, 255)" : C.text }}>
                       {v.label}
                     </div>
-                    <div style={{ fontSize: 10, color: C.faint }}>Step {i + 1} of {VIEWS.length}</div>
+                    <div style={{ fontSize: 10, color: C.faint }}>Step {i + 1}</div>
                   </div>
                   {i < currentIdx && <span style={{ marginLeft: "auto", color: C.green, fontSize: 12 }}>✓</span>}
                 </button>
@@ -233,8 +234,8 @@ export default function Nav({
         display: "flex", gap: 2, overflowX: "auto", flex: 1,
         scrollbarWidth: "none", msOverflowStyle: "none",
       }}>
-        {/* Nav items: Demo, Settings, Inbox */}
-        {VIEWS.map((v, i) => {
+        {/* Nav items: Demo, Settings, Inbox (+ Office for principals) */}
+        {VIEWS.filter(v => !v.principalOnly || agent.role === "principal").map((v, i) => {
           const active = v.id === view
           const past = i < currentIdx
           return (

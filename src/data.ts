@@ -89,7 +89,7 @@ export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
 }
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
-export type ViewId = "demo" | "setup"
+export type ViewId = "demo" | "setup" | "principal"
 
 export type LeadStatus =
   | "outreach_sent"
@@ -158,6 +158,7 @@ export interface AgentProfile {
   phone:   string
   suburb:  string
   tagline: string
+  role?:   "agent" | "principal"
   voiceProfile:    VoiceProfile
   trainingCorpus:  TrainingEntry[]
 }

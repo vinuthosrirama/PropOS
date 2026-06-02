@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { isDbConnected, query } from "../lib/db.js"
+import { isDbConnected, query, execute, queryOne } from "../lib/db.js"
 
 const router = Router()
 
@@ -65,14 +65,28 @@ router.get("/vendor", async (req, res) => {
       byPipeline[r.pipeline] = parseInt(r.count, 10)
     }
 
+    // Real milestone data from milestones table
+    const milestoneRows = await query<{ type: string; count: string; total_price: string }>(
+      `SELECT type, COUNT(*) as count, COALESCE(SUM(listing_price), 0) as total_price
+       FROM milestones WHERE agent_id = $1 GROUP BY type`,
+      [agentId],
+    )
+    const appraisalsBooked = parseInt(
+      milestoneRows.find(r => r.type === "appraisal_booked")?.count ?? "0", 10)
+    const listingsWon      = parseInt(
+      milestoneRows.find(r => r.type === "listing_won")?.count ?? "0", 10)
+    const totalPrice       = parseInt(
+      milestoneRows.find(r => r.type === "listing_won")?.total_price ?? "0", 10)
+    const estimatedGCI     = Math.round(totalPrice * 0.02)
+
     res.json({
       funnel: {
-        outreachSent:       sent,
-        emailOpened:        opened,
-        replied:            replied,
-        appraisalsBooked:   0,   // manual tracking — future feature
-        listingsWon:        0,   // manual tracking — future feature
-        estimatedGCI:       0,   // listings * avg commission — future feature
+        outreachSent:    sent,
+        emailOpened:     opened,
+        replied,
+        appraisalsBooked,
+        listingsWon,
+        estimatedGCI,
       },
       nurture: {
         pending: parseInt(nurturePending?.count ?? "0", 10),
@@ -80,12 +94,11 @@ router.get("/vendor", async (req, res) => {
       },
       byPipeline,
       recentOutreach: recentRows,
-      // ROI calculation (placeholder until listings are tracked)
       roi: {
         monthlySubscription: 399,
-        listingsAttributed:  0,
-        revenueGenerated:    0,
-        roiMultiple:         0,
+        listingsAttributed:  listingsWon,
+        revenueGenerated:    estimatedGCI,
+        roiMultiple:         estimatedGCI > 0 ? Math.round((estimatedGCI / 4788) * 10) / 10 : 0,
       },
     })
   } catch (err) {
@@ -121,6 +134,108 @@ function demoVendorAnalytics() {
     },
   }
 }
+
+// ── Milestones (appraisal booked / listing won) ───────────────────────────────
+
+/**
+ * POST /api/analytics/milestone
+ * Records an appraisal booking or listing win for a contact.
+ */
+router.post("/milestone", async (req, res) => {
+  const { contactPhone, contactName, type, propertyAddress, listingPrice, agentId } = req.body as {
+    contactPhone?: string
+    contactName?: string
+    type?: string
+    propertyAddress?: string
+    listingPrice?: number
+    agentId?: string | number
+  }
+
+  if (!type || !["appraisal_booked", "listing_won"].includes(type)) {
+    return res.status(400).json({ error: "type must be 'appraisal_booked' or 'listing_won'" })
+  }
+
+  if (!isDbConnected()) {
+    // Graceful demo mode — return success but nothing is persisted
+    return res.json({ ok: true, id: null, demo: true })
+  }
+
+  const rows = await queryOne<{ id: number }>(
+    `INSERT INTO milestones (agent_id, contact_phone, contact_name, type, property_address, listing_price)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id`,
+    [
+      agentId ?? (req as unknown as { agentId?: number }).agentId ?? 0,
+      contactPhone ?? "",
+      contactName ?? "",
+      type,
+      propertyAddress ?? "",
+      listingPrice ?? null,
+    ],
+  )
+  return res.json({ ok: true, id: rows?.id ?? null })
+})
+
+/**
+ * GET /api/analytics/office
+ * Returns per-agent funnel rollup for a principal view.
+ * Requires all agents to share the same office_id.
+ */
+router.get("/office", async (req, res) => {
+  if (!isDbConnected()) {
+    return res.json({ agents: [], totalGCI: 0 })
+  }
+  const officeId = req.query.officeId
+  if (!officeId) {
+    return res.status(400).json({ error: "officeId is required" })
+  }
+
+  try {
+    const agentRows = await query<{ id: number; name: string; agency: string; email: string }>(
+      "SELECT id, name, agency, email FROM agents WHERE office_id = $1",
+      [officeId],
+    )
+
+    const perAgent = await Promise.all(agentRows.map(async agent => {
+      const [outreach, milestones] = await Promise.all([
+        queryOne<{ sent: string; opened: string; replied: string }>(
+          `SELECT
+             COUNT(*) FILTER (WHERE pipeline IS NOT NULL) AS sent,
+             COUNT(*) FILTER (WHERE status IN ('opened','clicked')) AS opened,
+             COUNT(*) FILTER (WHERE status = 'replied') AS replied
+           FROM outreach_log WHERE agent_id = $1
+             AND sent_at > NOW() - INTERVAL '30 days'`,
+          [String(agent.id)],
+        ),
+        queryOne<{ appraisals: string; listings: string; gci: string }>(
+          `SELECT
+             COUNT(*) FILTER (WHERE type='appraisal_booked') AS appraisals,
+             COUNT(*) FILTER (WHERE type='listing_won')      AS listings,
+             COALESCE(SUM(listing_price * 0.02) FILTER (WHERE type='listing_won'), 0) AS gci
+           FROM milestones WHERE agent_id = $1`,
+          [agent.id],
+        ),
+      ])
+      return {
+        id:               agent.id,
+        name:             agent.name,
+        agency:           agent.agency,
+        outreachSent:     parseInt(outreach?.sent    ?? "0", 10),
+        emailOpened:      parseInt(outreach?.opened  ?? "0", 10),
+        replied:          parseInt(outreach?.replied ?? "0", 10),
+        appraisalsBooked: parseInt(milestones?.appraisals ?? "0", 10),
+        listingsWon:      parseInt(milestones?.listings   ?? "0", 10),
+        estimatedGCI:     Math.round(parseFloat(milestones?.gci ?? "0")),
+      }
+    }))
+
+    const totalGCI = perAgent.reduce((s, a) => s + a.estimatedGCI, 0)
+    return res.json({ agents: perAgent, totalGCI })
+  } catch (err) {
+    console.error("[analytics/office]", err)
+    return res.json({ agents: [], totalGCI: 0 })
+  }
+})
 
 interface AuctionOutcome {
   propertyAddress: string

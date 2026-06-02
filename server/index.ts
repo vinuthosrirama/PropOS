@@ -9,10 +9,12 @@ dotenv.config({ path: path.resolve(__dirname, ".env") })
 import express from "express"
 import cors from "cors"
 import compression from "compression"
+import cookieParser from "cookie-parser"
 import rateLimit from "express-rate-limit"
 import generateRouter from "./routes/generate.js"
 import vendorGenerateRouter from "./routes/vendor-generate.js"
 import vendorBulkSendRouter from "./routes/vendor-bulk-send.js"
+import vendorBatchRouter from "./routes/vendor-batch.js"
 import sheetRouter from "./routes/sheet.js"
 import transcriptRouter from "./routes/transcript.js"
 import sendRouter from "./routes/send.js"
@@ -21,6 +23,8 @@ import unsubscribeRouter from "./routes/unsubscribe.js"
 import nurtureRouter from "./routes/nurture.js"
 import analyticsRouter from "./routes/analytics.js"
 import boxdiceRouter from "./routes/boxdice.js"
+import authRouter from "./routes/auth.js"
+import billingRouter from "./routes/billing.js"
 import { loadOptOuts } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
 import conversationsRouter from "./routes/conversations.js"
@@ -32,12 +36,22 @@ import trackRouter from "./routes/track.js"
 import { loadConversations } from "./lib/conversations.js"
 import { initDb, isDbConnected } from "./lib/db.js"
 import { startScheduler } from "./lib/scheduler.js"
+import { requireAuth } from "./middleware/auth.js"
+import { getDomainEstimate } from "./lib/domainAvm.js"
 
 const app = express()
 const PORT = process.env.PORT ?? 3001
 
-app.use(cors({ origin: ["http://localhost:3001", "http://localhost:3003", "http://localhost:5173", "https://propos.addvantage.site", process.env.BASE_URL].filter(Boolean) as string[] }))
+app.use(cors({
+  origin: ["http://localhost:3001", "http://localhost:3003", "http://localhost:5173", "https://propos.addvantage.site", process.env.BASE_URL].filter(Boolean) as string[],
+  credentials: true,   // needed for httpOnly refresh-token cookie
+}))
 app.use(compression())
+app.use(cookieParser())
+
+// Stripe webhook needs raw body for signature verification — must come BEFORE express.json()
+app.use("/api/billing/webhook", express.raw({ type: "application/json" }))
+
 app.use(express.json())
 // Twilio webhook sends URL-encoded body
 app.use("/api/webhook/sms", express.urlencoded({ extended: false }))
@@ -59,23 +73,43 @@ app.use("/api/slm-answer-batch", aiLimiter)
 app.use("/api/send",             sendLimiter)
 app.use("/api/vendor-bulk-send", sendLimiter)
 
+// ── Public routes (no auth required) ─────────────────────────────────────────
+app.use("/api/auth",        authRouter)
+app.use("/api/billing",     billingRouter)
+app.use("/unsubscribe",     unsubscribeRouter)
+app.use("/api/track",       trackRouter)
+app.use("/api/webhook",     webhookRouter)
+// SLM answer routes also public (called from buyer-facing demo)
+app.use("/api/slm-answer",        slmAnswerRouter)
+app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
+
+// ── Protected routes (require valid JWT) ─────────────────────────────────────
+// Uncomment the line below to enable auth enforcement in production.
+// In demo mode (no DATABASE_URL) auth is a no-op since agents table won't exist.
+// app.use("/api", requireAuth)
+
 app.use("/api/generate",         generateRouter)
 app.use("/api/vendor-generate",  vendorGenerateRouter)
 app.use("/api/vendor-bulk-send", vendorBulkSendRouter)
+app.use("/api/vendor-batch",     vendorBatchRouter)
 app.use("/api/sheet",            sheetRouter)
-app.use("/api/transcript",  transcriptRouter)
-app.use("/api/send",        sendRouter)
-app.use("/api/webhook",     webhookRouter)
-app.use("/unsubscribe",     unsubscribeRouter)
-app.use("/api/nurture",     nurtureRouter)
-app.use("/api/analytics",   analyticsRouter)
-app.use("/api/boxdice",       boxdiceRouter)
-app.use("/api/conversations", conversationsRouter)
-app.use("/api/reply-agent",  replyAgentRouter)
-app.use("/api/slm-answer",        slmAnswerRouter)
-app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
-app.use("/api/add-contact",       addContactRouter)
-app.use("/api/track",             trackRouter)
+app.use("/api/transcript",       transcriptRouter)
+app.use("/api/send",             sendRouter)
+app.use("/api/nurture",          nurtureRouter)
+app.use("/api/analytics",        analyticsRouter)
+app.use("/api/boxdice",          boxdiceRouter)
+app.use("/api/conversations",    conversationsRouter)
+app.use("/api/reply-agent",      replyAgentRouter)
+app.use("/api/add-contact",      addContactRouter)
+
+// ── AVM route ─────────────────────────────────────────────────────────────────
+app.get("/api/avm", async (req, res) => {
+  const address = String(req.query.address ?? "").trim()
+  if (!address) return res.status(400).json({ error: "address is required" })
+  const estimate = await getDomainEstimate(address)
+  if (!estimate) return res.json({ ok: false, estimate: null })
+  return res.json({ ok: true, estimate })
+})
 
 // Health check — must be before express.static so it's never shadowed by the SPA
 app.get("/api/health", (_req, res) => {
@@ -89,6 +123,8 @@ app.get("/api/health", (_req, res) => {
     twilio:     !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
     gmail:      gmailConfigured(),
     boxdice:    !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
+    domainAvm:  !!process.env.DOMAIN_API_KEY,
+    stripe:     !!process.env.STRIPE_SECRET_KEY,
     database:   isDbConnected(),
     testMode:   !!(testPhone || testEmail),
     testPhone,
