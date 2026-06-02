@@ -567,7 +567,6 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
   const [openSections, setOpenSections] = useState<Record<number, Set<number>>>({})
   const [settingsTab, setSettingsTab] = useState<"slm" | "voice" | "analytics" | "integrations" | "display">("slm")
   const [corpus, setCorpus] = useState<TrainingEntry[]>(() => loadCorpus())
-  const [stylePaste, setStylePaste] = useState("")
 
   // Load all SLMs on mount
   useEffect(() => {
@@ -816,32 +815,18 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
         {settingsTab === "voice" && (
           <VoiceStylePanel
             corpus={corpus}
-            stylePaste={stylePaste}
-            onPasteChange={setStylePaste}
-            onAdd={(text, type) => {
+            onAdd={({ text, type, persona, label }) => {
               const entry: TrainingEntry = {
                 id: `entry_${Date.now()}`,
                 type,
                 text: text.trim(),
                 timestamp: new Date().toISOString(),
                 wordCount: text.trim().split(/\s+/).length,
-                source: type === "email" ? "Email example" : "SMS example",
+                source: type === "email" ? "Email Body" : type === "email_subject" ? "Email Subject" : "SMS",
+                persona,
+                label: label?.trim() || undefined,
               }
               const updated = [...corpus, entry]
-              saveCorpus(updated)
-              setCorpus(updated)
-              setStylePaste("")
-            }}
-            onBulkAdd={(entries) => {
-              const newEntries: TrainingEntry[] = entries.map((e, i) => ({
-                id: `bulk_${Date.now()}_${i}`,
-                type: e.type,
-                text: e.text.trim(),
-                timestamp: new Date().toISOString(),
-                wordCount: e.text.trim().split(/\s+/).length,
-                source: e.type === "email" ? "Email example" : "SMS example",
-              }))
-              const updated = [...corpus, ...newEntries]
               saveCorpus(updated)
               setCorpus(updated)
             }}
@@ -1121,10 +1106,7 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
 
 interface VoiceStylePanelProps {
   corpus: TrainingEntry[]
-  stylePaste: string
-  onPasteChange: (v: string) => void
-  onAdd: (text: string, type: "email" | "paste") => void
-  onBulkAdd: (entries: Array<{ text: string; type: "email" | "paste" }>) => void
+  onAdd: (entry: { text: string; type: TrainingEntry["type"]; persona?: TrainingEntry["persona"]; label?: string }) => void
   onRemove: (id: string) => void
   onClearAll: () => void
 }
@@ -1194,166 +1176,220 @@ function IntegrationsPanel() {
   )
 }
 
-function VoiceStylePanel({ corpus, stylePaste, onPasteChange, onAdd, onBulkAdd, onRemove, onClearAll }: VoiceStylePanelProps) {
-  const [bulkMode, setBulkMode] = useState(false)
-  const [bulkText, setBulkText] = useState("")
+function VoiceStylePanel({ corpus, onAdd, onRemove, onClearAll }: VoiceStylePanelProps) {
+  const [pasteText, setPasteText]     = useState("")
+  const [msgType, setMsgType]         = useState<TrainingEntry["type"]>("paste")
+  const [persona, setPersona]         = useState<TrainingEntry["persona"] | "">("")
+  const [labelText, setLabelText]     = useState("")
+
   const card: React.CSSProperties = {
-    background: C.bg2,
-    border: `1px solid ${C.border}`,
-    borderRadius: 12,
-    padding: "20px 24px",
-    marginBottom: 20,
+    background: C.bg2, border: `1px solid ${C.border}`,
+    borderRadius: 12, padding: "20px 24px", marginBottom: 16,
   }
-  const label: React.CSSProperties = {
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: "0.08em",
-    color: C.muted,
-    textTransform: "uppercase" as const,
-    marginBottom: 10,
+  const sectionLabel: React.CSSProperties = {
+    fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+    color: C.muted, textTransform: "uppercase" as const, marginBottom: 10,
   }
+
+  // Counts for the strength gauge
+  const smsCount     = corpus.filter(e => e.type === "paste" || e.type === "voice").length
+  const emailCount   = corpus.filter(e => e.type === "email").length
+  const subjectCount = corpus.filter(e => e.type === "email_subject").length
+  const autoCount    = corpus.filter(e => e.isAutoLearned).length
+  const total = corpus.length
+
+  // Strength thresholds: weak < 3, building 3-7, good 8+
+  const strengthLevel = total < 3 ? "weak" : total < 8 ? "building" : "good"
+  const strengthColor = strengthLevel === "good" ? C.green : strengthLevel === "building" ? "#f59e0b" : C.red ?? "#ef4444"
+  const strengthLabel = strengthLevel === "good" ? "Voice well-trained" : strengthLevel === "building" ? "Building up..." : "Add more examples"
+  const strengthPct   = Math.min(100, Math.round((total / 10) * 100))
+
+  const PLACEHOLDERS: Record<TrainingEntry["type"], string> = {
+    paste:         "Hi David, Cameron from Peake. A similar 4-bed on Birkdale just settled at $1.08M. Your place has done really well since 2017. Worth a chat? Cheers, Cam",
+    email:         "Hi David, Cameron from Peake here. Quick update on Thirlmere Court. A comparable property in Berwick has just settled well, and your home is now sitting at around $1.00M...",
+    email_subject: "A quick update on Berwick — your place has done well",
+    voice:         "Voice transcript would appear here...",
+  }
+
+  const TYPE_META: { key: TrainingEntry["type"]; label: string; color: string }[] = [
+    { key: "paste",         label: "SMS",           color: C.green },
+    { key: "email",         label: "Email Body",    color: C.blue },
+    { key: "email_subject", label: "Email Subject", color: "#a78bfa" },
+  ]
+
+  const PERSONA_META: { key: TrainingEntry["persona"]; label: string; emoji: string }[] = [
+    { key: "investor",  label: "Investor",  emoji: "📈" },
+    { key: "family",    label: "Family",    emoji: "🏡" },
+    { key: "downsizer", label: "Downsizer", emoji: "🌿" },
+    { key: "general",   label: "General",   emoji: "👋" },
+  ]
+
+  const canAdd = pasteText.trim().length > 10
+
+  function handleAdd() {
+    if (!canAdd) return
+    onAdd({
+      text: pasteText,
+      type: msgType,
+      persona: persona || undefined,
+      label: labelText.trim() || undefined,
+    })
+    setPasteText("")
+    setLabelText("")
+  }
+
+  const typeBadgeStyle = (type: TrainingEntry["type"]): React.CSSProperties => {
+    const meta = TYPE_META.find(t => t.key === type)
+    const color = meta?.color ?? C.muted
+    return {
+      fontSize: 9, fontWeight: 800, letterSpacing: "0.07em",
+      color, background: color + "18", border: `1px solid ${color}33`,
+      borderRadius: 4, padding: "2px 6px", flexShrink: 0,
+      textTransform: "uppercase" as const,
+    }
+  }
+
+  const personaBadgeStyle = (_p: TrainingEntry["persona"]): React.CSSProperties => ({
+    fontSize: 9, fontWeight: 700, color: C.muted,
+    background: C.bg3, border: `1px solid ${C.border}`,
+    borderRadius: 4, padding: "2px 6px", flexShrink: 0,
+    textTransform: "capitalize" as const,
+  })
 
   return (
     <div>
-      {/* Explainer */}
-      <div style={{ ...card, borderColor: "rgba(166,218,255,0.2)", background: "rgba(166,218,255,0.05)" }}>
-        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6 }}>
-          <strong style={{ color: C.blue }}>How this works:</strong> Paste 2-5 real texts or emails you've sent to leads. The AI reads these and matches your exact tone, vocabulary, and sign-off style in every generated message. The more specific and real these are, the better the output.
-        </div>
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
-          Examples are stored locally on this device only. They are never sent to any server except during outreach generation.
+      {/* Header + title */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Writing Style</div>
+        <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.5 }}>
+          Paste real texts and emails you have sent. PropOS reads these to match your exact tone, vocabulary, and sign-off in every generated message.
         </div>
       </div>
 
-      {/* Paste area */}
+      {/* Corpus strength gauge */}
+      <div style={{ ...card, borderColor: strengthColor + "33", background: strengthColor + "08", marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{strengthLabel}</div>
+          <div style={{ fontSize: 12, color: C.muted }}>{total} example{total !== 1 ? "s" : ""}</div>
+        </div>
+        {/* Progress bar */}
+        <div style={{ height: 4, background: C.bg3, borderRadius: 2, overflow: "hidden", marginBottom: 10 }}>
+          <div style={{ height: "100%", width: `${strengthPct}%`, background: strengthColor, borderRadius: 2, transition: "width 0.4s" }} />
+        </div>
+        {/* Breakdown pills */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+          {smsCount > 0     && <span style={{ ...typeBadgeStyle("paste"),         fontSize: 11 }}>{smsCount} SMS</span>}
+          {emailCount > 0   && <span style={{ ...typeBadgeStyle("email"),         fontSize: 11 }}>{emailCount} Email body</span>}
+          {subjectCount > 0 && <span style={{ ...typeBadgeStyle("email_subject"), fontSize: 11 }}>{subjectCount} Subject</span>}
+          {autoCount > 0    && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#f59e0b", background: "#f59e0b18", border: "1px solid #f59e0b33", borderRadius: 4, padding: "2px 6px" }}>
+              {autoCount} auto-learned
+            </span>
+          )}
+        </div>
+        {total < 5 && (
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
+            Add {5 - total} more example{5 - total !== 1 ? "s" : ""} for best results. Aim for at least 2 SMS + 2 email body examples.
+          </div>
+        )}
+      </div>
+
+      {/* Add example form */}
       <div style={card}>
-        <div style={label}>Paste an example message</div>
+        <div style={sectionLabel}>Add an example</div>
+
+        {/* Type selector */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+          {TYPE_META.map(({ key, label, color }) => (
+            <button
+              key={key}
+              onClick={() => setMsgType(key)}
+              style={{
+                padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                cursor: "pointer", border: "none", fontFamily: FONT,
+                background: msgType === key ? color + "22" : C.bg3,
+                color: msgType === key ? color : C.muted,
+                outline: msgType === key ? `1.5px solid ${color}55` : "none",
+                transition: "all 0.15s",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Textarea */}
         <textarea
-          value={stylePaste}
-          onChange={e => onPasteChange(e.target.value)}
-          placeholder={"Paste a real SMS or email you've sent to a lead...\n\nExample:\nHey Michelle, Cameron here. Just heard back on the Berwick inspection - they loved it. Wanted to let you know first before it goes to contract. Worth a chat today?"}
+          value={pasteText}
+          onChange={e => setPasteText(e.target.value)}
+          placeholder={PLACEHOLDERS[msgType]}
           style={{
-            width: "100%",
-            minHeight: 130,
-            background: C.bg3,
-            border: `1px solid ${C.border}`,
-            borderRadius: 8,
-            color: C.text,
-            fontSize: 13,
-            padding: "12px 14px",
-            resize: "vertical",
-            fontFamily: FONT,
-            lineHeight: 1.5,
-            boxSizing: "border-box",
+            width: "100%", minHeight: msgType === "email_subject" ? 48 : 120,
+            background: C.bg3, border: `1px solid ${C.border}`,
+            borderRadius: 8, color: C.text, fontSize: 13,
+            padding: "12px 14px", resize: "vertical", fontFamily: FONT,
+            lineHeight: 1.5, boxSizing: "border-box",
           }}
         />
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <button
-            onClick={() => { if (stylePaste.trim().length > 10) onAdd(stylePaste, "paste") }}
-            disabled={stylePaste.trim().length <= 10}
-            style={{
-              background: stylePaste.trim().length > 10 ? C.blue : C.bg3,
-              color: stylePaste.trim().length > 10 ? C.bg : C.muted,
-              border: "none",
-              borderRadius: 8,
-              padding: "9px 18px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: stylePaste.trim().length > 10 ? "pointer" : "not-allowed",
-            }}
-          >
-            + Add as SMS / Short message
-          </button>
-          <button
-            onClick={() => { if (stylePaste.trim().length > 10) onAdd(stylePaste, "email") }}
-            disabled={stylePaste.trim().length <= 10}
-            style={{
-              background: stylePaste.trim().length > 10 ? "rgba(166,218,255,0.12)" : C.bg3,
-              color: stylePaste.trim().length > 10 ? C.blue : C.muted,
-              border: `1px solid ${stylePaste.trim().length > 10 ? "rgba(166,218,255,0.3)" : C.border}`,
-              borderRadius: 8,
-              padding: "9px 18px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: stylePaste.trim().length > 10 ? "pointer" : "not-allowed",
-            }}
-          >
-            + Add as Email
-          </button>
-        </div>
-      </div>
 
-      {/* Bulk import toggle */}
-      <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: bulkMode ? 12 : 0 }}>
-          <div style={label}>Bulk import</div>
-          <button
-            onClick={() => setBulkMode(!bulkMode)}
-            style={{
-              fontSize: 12, fontWeight: 600, color: C.blue,
-              background: "none", border: "none", cursor: "pointer", padding: 0,
-            }}
-          >
-            {bulkMode ? "Hide" : "Paste multiple messages at once →"}
-          </button>
-        </div>
-        {bulkMode && (
-          <>
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>
-              Paste multiple messages separated by a blank line. Each block becomes a separate training example.
-              Prefix with <code style={{ color: C.text, background: C.bg3, padding: "1px 4px", borderRadius: 3 }}>EMAIL:</code> or{" "}
-              <code style={{ color: C.text, background: C.bg3, padding: "1px 4px", borderRadius: 3 }}>TEXT:</code> to tag type (default: SMS).
-            </div>
-            <textarea
-              value={bulkText}
-              onChange={e => setBulkText(e.target.value)}
-              placeholder={"EMAIL: Hi James, thank you for attending...\n\nTEXT: No problem, chat then!\n\nTEXT: Hi Vinuth, I am out of the office..."}
-              style={{
-                width: "100%", minHeight: 160, background: C.bg3,
-                border: `1px solid ${C.border}`, borderRadius: 8,
-                color: C.text, fontSize: 13, padding: "12px 14px",
-                resize: "vertical", fontFamily: FONT, lineHeight: 1.5, boxSizing: "border-box",
-              }}
-            />
-            <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+        {/* Persona selector (optional) */}
+        <div style={{ marginTop: 12, marginBottom: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: "0.07em", textTransform: "uppercase" as const, marginBottom: 6 }}>
+            Persona tag (optional)
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
+            {PERSONA_META.map(({ key, label, emoji }) => (
               <button
-                onClick={() => {
-                  const blocks = bulkText.split(/\n\s*\n/).map(b => b.trim()).filter(b => b.length > 10)
-                  if (blocks.length === 0) return
-                  const entries = blocks.map(block => {
-                    const isEmail = /^EMAIL:\s*/i.test(block)
-                    const cleaned = block.replace(/^(EMAIL|TEXT):\s*/i, "").trim()
-                    return { text: cleaned, type: (isEmail ? "email" : "paste") as "email" | "paste" }
-                  })
-                  onBulkAdd(entries)
-                  setBulkText("")
-                  setBulkMode(false)
-                }}
-                disabled={bulkText.trim().length <= 10}
+                key={key}
+                onClick={() => setPersona(persona === key ? "" : key)}
                 style={{
-                  background: bulkText.trim().length > 10 ? C.blue : C.bg3,
-                  color: bulkText.trim().length > 10 ? C.bg : C.muted,
-                  border: "none", borderRadius: 8, padding: "9px 18px",
-                  fontSize: 13, fontWeight: 600,
-                  cursor: bulkText.trim().length > 10 ? "pointer" : "not-allowed",
+                  padding: "5px 12px", borderRadius: 16, fontSize: 11, fontWeight: 600,
+                  cursor: "pointer", border: "none", fontFamily: FONT,
+                  background: persona === key ? "rgba(167,139,250,0.18)" : C.bg3,
+                  color: persona === key ? "#a78bfa" : C.muted,
+                  outline: persona === key ? "1.5px solid rgba(167,139,250,0.4)" : "none",
+                  transition: "all 0.15s",
                 }}
               >
-                Import all
+                {emoji} {label}
               </button>
-              {bulkText.trim().length > 10 && (
-                <span style={{ fontSize: 11, color: C.muted }}>
-                  {bulkText.split(/\n\s*\n/).map(b => b.trim()).filter(b => b.length > 10).length} messages detected
-                </span>
-              )}
-            </div>
-          </>
-        )}
+            ))}
+          </div>
+        </div>
+
+        {/* Optional label */}
+        <input
+          value={labelText}
+          onChange={e => setLabelText(e.target.value)}
+          placeholder="Optional label, e.g. first contact after appraisal"
+          style={{
+            width: "100%", background: C.bg3, border: `1px solid ${C.border}`,
+            borderRadius: 8, color: C.text, fontSize: 12,
+            padding: "9px 12px", fontFamily: FONT, boxSizing: "border-box",
+            marginBottom: 12,
+          }}
+        />
+
+        {/* Add button */}
+        <button
+          onClick={handleAdd}
+          disabled={!canAdd}
+          style={{
+            background: canAdd ? C.blue : C.bg3,
+            color: canAdd ? C.bg : C.muted,
+            border: "none", borderRadius: 8, padding: "10px 20px",
+            fontSize: 13, fontWeight: 700, cursor: canAdd ? "pointer" : "not-allowed",
+            fontFamily: FONT, transition: "background 0.15s",
+          }}
+        >
+          + Add to voice corpus
+        </button>
       </div>
 
       {/* Saved examples */}
       <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <div style={label}>Saved examples ({corpus.length} / 20)</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={sectionLabel}>Saved examples ({corpus.length})</div>
           {corpus.length > 0 && (
             <button
               onClick={onClearAll}
@@ -1369,45 +1405,50 @@ function VoiceStylePanel({ corpus, stylePaste, onPasteChange, onAdd, onBulkAdd, 
             No examples yet. Paste a message above to get started.
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {[...corpus].reverse().map(entry => (
               <div
                 key={entry.id}
                 style={{
-                  background: C.bg3,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 8,
-                  padding: "12px 14px",
-                  display: "flex",
-                  gap: 12,
-                  alignItems: "flex-start",
+                  background: C.bg3, border: `1px solid ${C.border}`,
+                  borderRadius: 8, padding: "12px 14px",
+                  display: "flex", gap: 10, alignItems: "flex-start",
                 }}
               >
-                <span style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: "0.06em",
-                  color: entry.type === "email" ? C.blue : C.green,
-                  background: entry.type === "email" ? "rgba(166,218,255,0.1)" : "rgba(100,220,130,0.1)",
-                  border: `1px solid ${entry.type === "email" ? "rgba(166,218,255,0.2)" : "rgba(100,220,130,0.2)"}`,
-                  borderRadius: 4,
-                  padding: "2px 7px",
-                  flexShrink: 0,
-                  marginTop: 1,
-                }}>
-                  {entry.type === "email" ? "EMAIL" : "SMS"}
+                {/* Type badge */}
+                <span style={typeBadgeStyle(entry.type)}>
+                  {entry.type === "email" ? "EMAIL" : entry.type === "email_subject" ? "SUBJ" : "SMS"}
                 </span>
+
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, wordBreak: "break-word" }}>
-                    {entry.text.length > 160 ? entry.text.slice(0, 160) + "..." : entry.text}
+                  {/* Badges row */}
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" as const, marginBottom: 4 }}>
+                    {entry.persona && (
+                      <span style={personaBadgeStyle(entry.persona)}>
+                        {entry.persona}
+                      </span>
+                    )}
+                    {entry.isAutoLearned && (
+                      <span style={{ fontSize: 9, fontWeight: 700, color: "#f59e0b", background: "#f59e0b18", border: "1px solid #f59e0b33", borderRadius: 4, padding: "2px 6px" }}>
+                        auto-learned
+                      </span>
+                    )}
+                    {entry.label && (
+                      <span style={{ fontSize: 9, color: C.faint, fontStyle: "italic" }}>{entry.label}</span>
+                    )}
                   </div>
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                  {/* Preview text */}
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, wordBreak: "break-word" }}>
+                    {entry.text.length > 180 ? entry.text.slice(0, 180) + "..." : entry.text}
+                  </div>
+                  <div style={{ fontSize: 10, color: C.faint, marginTop: 4 }}>
                     {entry.wordCount} words · {new Date(entry.timestamp).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
                   </div>
                 </div>
+
                 <button
                   onClick={() => onRemove(entry.id)}
-                  style={{ fontSize: 14, color: C.muted, background: "none", border: "none", cursor: "pointer", padding: "0 4px", flexShrink: 0 }}
+                  style={{ fontSize: 15, color: C.muted, background: "none", border: "none", cursor: "pointer", padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
                 >
                   ×
                 </button>
@@ -1415,6 +1456,10 @@ function VoiceStylePanel({ corpus, stylePaste, onPasteChange, onAdd, onBulkAdd, 
             ))}
           </div>
         )}
+      </div>
+
+      <div style={{ fontSize: 11, color: C.faint, lineHeight: 1.6 }}>
+        Examples are stored locally on this device only. They are sent to the AI only during message generation, never stored on any server.
       </div>
     </div>
   )

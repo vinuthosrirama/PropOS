@@ -21,12 +21,15 @@ import type { VoiceProfile } from "../data"
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface TrainingEntry {
-  id:        string
-  type:      "voice" | "paste" | "email"
-  text:      string
-  timestamp: string    // ISO date
-  wordCount: number
-  source:    string    // display label e.g. "Voice clip 1"
+  id:           string
+  type:         "voice" | "paste" | "email" | "email_subject"
+  text:         string
+  timestamp:    string    // ISO date
+  wordCount:    number
+  source:       string    // display label e.g. "Voice clip 1"
+  label?:       string    // user-supplied context e.g. "first contact investor"
+  persona?:     "investor" | "family" | "downsizer" | "general"
+  isAutoLearned?: boolean // true when captured automatically from a HUMAN_EDIT
 }
 
 // ── LocalStorage persistence ──────────────────────────────────────────────────
@@ -44,8 +47,8 @@ export function loadCorpus(): TrainingEntry[] {
 
 export function saveCorpus(entries: TrainingEntry[]): void {
   try {
-    // Keep max 20 entries — older ones evicted (corpus stays fresh + prompt stays short)
-    const trimmed = entries.slice(-20)
+    // Keep max 50 entries — older ones evicted (corpus stays fresh + prompt stays short)
+    const trimmed = entries.slice(-50)
     localStorage.setItem(CORPUS_KEY, JSON.stringify(trimmed))
   } catch {
     // localStorage full or unavailable — silently skip
@@ -67,49 +70,83 @@ export function clearCorpus(): void {
 }
 
 /**
- * Cameron Knoll's real messages — used as seed corpus so the demo
- * starts with a trained voice from day one. 5 emails + 4 texts.
+ * Cameron Knoll's real-style outreach messages — seed corpus so the demo
+ * starts with a trained voice from day one. Mix of SMS texts + email bodies.
  */
-const CAMERON_SEED: Array<{ type: "email" | "paste"; text: string; source: string }> = [
+interface SeedEntry {
+  type: "email" | "paste" | "email_subject"
+  text: string
+  source: string
+  label: string
+  persona: "investor" | "family" | "downsizer" | "general"
+}
+
+const CAMERON_SEED: SeedEntry[] = [
+  // ── SMS examples ──────────────────────────────────────────────────────────
+  {
+    type: "paste",
+    persona: "investor",
+    label: "CGT deadline nudge",
+    source: "SMS to investor: CGT angle",
+    text: "Hi Michael, Cameron from Peake. Your Cedarwood place has grown to around $1.23M since 2016. Worth a look before the CGT discount window closes mid-2027. Happy to run through the numbers? Cheers, Cameron",
+  },
+  {
+    type: "paste",
+    persona: "family",
+    label: "Upsizer equity nudge",
+    source: "SMS to upsizer: equity angle",
+    text: "Hi David, Cameron here. A similar 4-bed on Birkdale just settled at $1.08M. Your place has done really well since 2017. Might be the right time if you're thinking about that next step. Worth a chat? Cheers, Cam",
+  },
+  {
+    type: "paste",
+    persona: "downsizer",
+    label: "Downsizer lifestyle pitch",
+    source: "SMS to downsizer: lifestyle angle",
+    text: "Hi Sandra, Cameron from Peake. Berwick's been strong lately. A comparable sold at $840K this month. If a move to something smaller is on your radar, your equity position is really good right now. Happy to have a friendly chat. Cam",
+  },
+  {
+    type: "paste",
+    persona: "general",
+    label: "Market update opener",
+    source: "SMS: market update",
+    text: "Hi James, Cameron here from Peake. Just a quick heads up — a nearby home sold at $1.2M last week, which puts your place in a great spot. Worth a quick chat to see where you stand? No pressure at all. Cheers, Cameron",
+  },
+  // ── Email body examples ────────────────────────────────────────────────────
   {
     type: "email",
-    text: "Hi Vinuth and Aneesha, Thank you for your attendance today. Great to see some familiar faces in the crowd! Rental appraisal attached and will keep in touch for any other suitable properties. Happy to arrange a time to work through a demo of the product you have created. Let me know when suits. Enjoy the weekend and chat soon! Best",
-    source: "Email: post open home follow-up",
+    persona: "investor",
+    label: "Investor equity + CGT email",
+    source: "Email to investor: CGT + equity",
+    text: "Hi Michael, Cameron from Peake here. Quick update on Cedarwood Crescent. The Berwick market has had a strong run lately and a comparable investment property in the area recently sold above expectations. Your property has grown to approximately $1.23M since you purchased in 2016. That is $685K in equity, and with the 50% CGT discount still available if you sell before July 2027, the tax savings alone are worth understanding. I would love to run through a complimentary appraisal and show you what your options look like. No obligation at all, just a clear picture of where things stand. Happy to come to you. Cheers, Cameron",
   },
   {
     type: "email",
-    text: "Hi Vinuth, Apologies for the delayed response. Saturday mornings are okay. Can't do this Saturday, how about next week the 16th? Cheers",
-    source: "Email: scheduling reply",
+    persona: "family",
+    label: "Upsizer equity funding email",
+    source: "Email to upsizer: lifestyle + equity",
+    text: "Hi David, Cameron from Peake here. Thought you would appreciate a quick market update on Thirlmere Court. A comparable property in Berwick has just settled well, and your home is now sitting at around $1.00M. That is $380K in equity since 2017. For families thinking about more space or a bigger backyard, that kind of equity position makes the next move a lot more achievable than most people expect. I would be happy to walk through the numbers with you over a coffee, no pressure and no obligation. Let me know if you are curious. Cheers, Cameron",
   },
   {
     type: "email",
-    text: "Hi Vinuth and Aneesha, Apologies for the delayed response. I won't be available this Saturday at that time. Saturday's can be tricky due to open homes and auctions. Can we take it week-by-week and I can let you know if we could make this work on a Saturday which may have less open homes? Thank you",
-    source: "Email: scheduling reply",
+    persona: "downsizer",
+    label: "Downsizer release equity email",
+    source: "Email to downsizer: equity release",
+    text: "Hi Sandra, Cameron from Peake here. Hope you are well. Just wanted to touch base with a quick market update. A comparable Berwick home recently sold at $840K, which is really positive for your position. Your property has grown nicely since you purchased and the equity you have built up is substantial. For people thinking about right-sizing, whether it is freeing up capital, reducing maintenance, or just a fresh chapter, now is actually a really good time to understand your options. I am happy to do a no-pressure appraisal and talk through what the numbers would look like for you. Just let me know. Cheers, Cameron",
+  },
+  // ── Email subject lines ────────────────────────────────────────────────────
+  {
+    type: "email_subject",
+    persona: "investor",
+    label: "Subject: investor update",
+    source: "Email subject: investor",
+    text: "A quick update on your Berwick investment",
   },
   {
-    type: "paste",
-    text: "No problem, chat then!",
-    source: "SMS: casual reply",
-  },
-  {
-    type: "paste",
-    text: "No problem, Vinuth. Are you wanting to register for the auction? Yes please send a demo. Thank you",
-    source: "SMS: auction inquiry reply",
-  },
-  {
-    type: "paste",
-    text: "Hi Vinuth, No need to apologise! Appreciate you doing your due diligence. I can let you know if this changes. If I can provide more confidence and clarity around this, let me know. Thank you for the demo. I tried to play around. Might be user error 😊",
-    source: "SMS: feedback reply",
-  },
-  {
-    type: "paste",
-    text: "How is early afternoon for you?",
-    source: "SMS: scheduling",
-  },
-  {
-    type: "paste",
-    text: "Hi Vinuth, I am out of the office at the moment. Are you available around 1pm?",
-    source: "SMS: scheduling reply",
+    type: "email_subject",
+    persona: "general",
+    label: "Subject: market update",
+    source: "Email subject: general",
+    text: "What's been happening in Berwick — quick update for you",
   },
 ]
 
@@ -128,6 +165,8 @@ export function seedCorpusIfEmpty(): TrainingEntry[] {
     timestamp: new Date(Date.now() - (CAMERON_SEED.length - i) * 86400000).toISOString(),
     wordCount: s.text.split(/\s+/).length,
     source:    s.source,
+    label:     s.label,
+    persona:   s.persona,
   }))
 
   saveCorpus(seeded)
