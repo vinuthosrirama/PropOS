@@ -31,6 +31,8 @@ import replyAgentRouter from "./routes/reply-agent.js"
 import slmAnswerRouter from "./routes/slm-answer.js"
 import slmAnswerBatchRouter from "./routes/slm-answer-batch.js"
 import addContactRouter from "./routes/add-contact.js"
+import addLeadRouter from "./routes/add-lead.js"
+import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
 import { loadConversations } from "./lib/conversations.js"
 import { initDb, isDbConnected } from "./lib/db.js"
@@ -99,6 +101,8 @@ app.use("/api/boxdice",          boxdiceRouter)
 app.use("/api/conversations",    conversationsRouter)
 app.use("/api/reply-agent",      replyAgentRouter)
 app.use("/api/add-contact",      addContactRouter)
+app.use("/api/add-lead",         addLeadRouter)
+app.use("/api/parse-notes",      parseNotesRouter)
 
 // ── AVM route ─────────────────────────────────────────────────────────────────
 app.get("/api/avm", async (req, res) => {
