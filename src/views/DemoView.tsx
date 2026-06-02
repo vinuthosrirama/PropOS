@@ -7355,7 +7355,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           emailBody: [
             `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
             `You've held ${shortAddrRV} since ${purchaseYearRV} and the 50% CGT discount applies right now. Selling before 1 July 2027 saves you roughly ${fmtDollar(fin.cgtSavingsBy2027)} in tax. Your property is currently estimated at around ${estStrRV}.`,
-            `Happy to run a quick, no-obligation appraisal. Twenty minutes — I'll come to you. No pressure.\n\nKind regards,\n${agentFirstRV}`,
+            `Happy to run a quick, no-obligation appraisal. Twenty minutes, I'll come to you. No pressure.\n\nKind regards,\n${agentFirstRV}`,
           ],
         })
       }
@@ -7374,7 +7374,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       // Downsizer: lifestyle + equity release, no CGT jargon
       variants.push({
         label: "Equity release",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place in ${buyer.suburb} has come a long way since ${purchaseYearRV} — you've built ${equityStrRV} in equity. Worth a chat about your options? ${signoffRV}, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place in ${buyer.suburb} has come a long way since ${purchaseYearRV}, you've built ${equityStrRV} in equity. Worth a chat about your options? ${signoffRV}, ${agentFirstRV}`)),
         emailSubject: `Great time to explore your options, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
@@ -7384,29 +7384,29 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       })
       variants.push({
         label: "Local market",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${buyer.suburb} is very active right now — properties are moving well and demand is strong. Thought it was worth letting you know. ${signoffRV}, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${buyer.suburb} is very active right now, properties are moving well and demand is strong. Thought it was worth letting you know. ${signoffRV}, ${agentFirstRV}`)),
         emailSubject: `${buyer.suburb} market update, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
           `Quick market update for ${buyer.suburb}: demand has been strong and comparable properties are achieving great results. With ${shortAddrRV} valued at around ${estStrRV}, the timing looks really good if you've been thinking about making a move.`,
-          `Happy to have an informal chat — no pressure, just want to make sure you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
+          `Happy to have an informal chat, no pressure, just want to make sure you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
         ],
       })
     } else if (isUpsizer) {
       // Upsizer family: focus on equity to fund next home, not financial jargon
       variants.push({
         label: "Ready to upsize",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place has grown to ~${estStrRV} — the equity you've built could go a long way toward your next home. Happy to chat. ${signoffRV}, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place has grown to ~${estStrRV} and the equity you've built could go a long way toward your next home. Happy to chat. ${signoffRV}, ${agentFirstRV}`)),
         emailSubject: `Your equity could fund your next move, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
-          `Just wanted to share that ${shortAddrRV} has grown to around ${estStrRV} — that's ${equityStrRV} in equity built since ${purchaseYearRV}. For families thinking about upsizing, that kind of position makes a real difference when it comes to your next purchase.`,
-          `Happy to walk through what the numbers look like for you — no obligation, just a friendly chat.\n\n${signoffRV},\n${agentFirstRV}`,
+          `Just wanted to share that ${shortAddrRV} has grown to around ${estStrRV}, that's ${equityStrRV} in equity built since ${purchaseYearRV}. For families thinking about upsizing, that kind of position makes a real difference when it comes to your next purchase.`,
+          `Happy to walk through what the numbers look like for you. No obligation, just a friendly chat.\n\n${signoffRV},\n${agentFirstRV}`,
         ],
       })
       variants.push({
         label: "Recent nearby sale",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. A similar home in ${buyer.suburb} recently sold well — your place at ${shortAddrRV} is in great shape. Thought you'd want to know. ${signoffRV}, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. A similar home in ${buyer.suburb} recently sold well. Your place at ${shortAddrRV} is in great shape. Thought you'd want to know. ${signoffRV}, ${agentFirstRV}`)),
         emailSubject: `What's happening in ${buyer.suburb}, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
@@ -7418,12 +7418,12 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       // General owner-occupier: friendly, lifestyle-focused, no financial jargon
       variants.push({
         label: "Property value update",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. ${shortAddrRV} is now estimated at around ${estStrRV} — great to see how far it's come since ${purchaseYearRV}. Worth a quick chat? ${signoffRV}, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. ${shortAddrRV} is now estimated at around ${estStrRV}, great to see how far it's come since ${purchaseYearRV}. Worth a quick chat? ${signoffRV}, ${agentFirstRV}`)),
         emailSubject: `Your property update, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
           `Just a quick update on ${shortAddrRV}. The property is now worth around ${estStrRV}, which is a great result from when you purchased in ${purchaseYearRV}.`,
-          `I'd love to pop over for a complimentary appraisal if you're curious. Completely no-obligation — just so you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
+          `I'd love to pop over for a complimentary appraisal if you're curious. Completely no-obligation, just so you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
         ],
       })
       variants.push({
