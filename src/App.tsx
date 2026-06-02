@@ -5,12 +5,15 @@ import {
   type AgentProfile, type AgencyTheme, type ViewId, type DemoMode, type VendorDisplaySettings,
 } from "./data"
 import Nav from "./components/Nav"
+import BillingBanner from "./components/BillingBanner"
 import { seedCorpusIfEmpty } from "./lib/voiceContext"
+import { clearAccessToken } from "./lib/authFetch"
 
 // Code-split heavy views — only loaded when needed
-const AgentLogin   = lazy(() => import("./views/AgentLogin"))
-const DemoView     = lazy(() => import("./views/DemoView"))
-const SettingsView = lazy(() => import("./views/SettingsView"))
+const AgentLogin     = lazy(() => import("./views/AgentLogin"))
+const DemoView       = lazy(() => import("./views/DemoView"))
+const SettingsView   = lazy(() => import("./views/SettingsView"))
+const PrincipalView  = lazy(() => import("./views/PrincipalView"))
 
 function LoadingSpinner() {
   return (
@@ -52,12 +55,24 @@ export default function App() {
     setMode(newMode)
     setLoggedIn(true)
     seedCorpusIfEmpty()
+    // Principals land on their office dashboard, not the buyer demo
+    if (newAgent.role === "principal") {
+      setView("principal")
+    }
   }
 
   const handleLogout = () => {
+    clearAccessToken()
     setLoggedIn(false)
     setView("demo")
   }
+
+  // Listen for auth expiry events dispatched by authFetch
+  useEffect(() => {
+    const handler = () => handleLogout()
+    window.addEventListener("propos:logout", handler)
+    return () => window.removeEventListener("propos:logout", handler)
+  }, [])
 
   // Ping Sheet URL on login to drive the Nav "Sheet live" indicator
   useEffect(() => {
@@ -95,6 +110,7 @@ export default function App() {
       <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn}
            onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge}
            mode={mode} onSwitchMode={setMode} />
+      <BillingBanner />
 
       <Suspense fallback={<LoadingSpinner />}>
         <AnimatePresence mode="wait">
@@ -104,10 +120,11 @@ export default function App() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}>
 
-            {view === "demo"  && <DemoView agent={agent} theme={theme} mode={mode} onSettings={() => navigate("setup")} onRegisterBack={fn => setDemoBack(fn ? { fn } : null)}
-                                          showInbox={inboxOpen} onShowInboxChange={setInboxOpen} onBadgeChange={setInboxBadge}
-                                          vendorSettings={vendorSettings} />}
-            {view === "setup" && <SettingsView agent={agent} vendorSettings={vendorSettings} onVendorSettingsChange={handleVendorSettings} />}
+            {view === "demo"      && <DemoView agent={agent} theme={theme} mode={mode} onSettings={() => navigate("setup")} onRegisterBack={fn => setDemoBack(fn ? { fn } : null)}
+                                              showInbox={inboxOpen} onShowInboxChange={setInboxOpen} onBadgeChange={setInboxBadge}
+                                              vendorSettings={vendorSettings} />}
+            {view === "setup"     && <SettingsView agent={agent} vendorSettings={vendorSettings} onVendorSettingsChange={handleVendorSettings} />}
+            {view === "principal" && <PrincipalView agent={agent} theme={theme} />}
           </motion.div>
         </AnimatePresence>
       </Suspense>

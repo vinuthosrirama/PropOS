@@ -151,6 +151,42 @@ async function migrate(): Promise<void> {
       updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS agents (
+      id                  SERIAL PRIMARY KEY,
+      email               TEXT UNIQUE NOT NULL,
+      name                TEXT NOT NULL DEFAULT '',
+      agency              TEXT NOT NULL DEFAULT '',
+      phone               TEXT,
+      tagline             TEXT,
+      suburb              TEXT,
+      role                TEXT NOT NULL DEFAULT 'agent',
+      office_id           INTEGER,
+      password_hash       TEXT,
+      stripe_customer_id  TEXT,
+      subscription_status TEXT NOT NULL DEFAULT 'trialing',
+      trial_ends_at       TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '14 days',
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS milestones (
+      id               SERIAL PRIMARY KEY,
+      agent_id         INTEGER NOT NULL,
+      contact_phone    TEXT NOT NULL,
+      contact_name     TEXT NOT NULL DEFAULT '',
+      type             TEXT NOT NULL CHECK (type IN ('appraisal_booked','listing_won')),
+      property_address TEXT,
+      listing_price    INTEGER,
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- Unique constraint so CSV re-import is idempotent
+    DO $$ BEGIN
+      BEGIN
+        ALTER TABLE contacts ADD CONSTRAINT contacts_agent_address_unique UNIQUE (agent_id, purchase_address);
+      EXCEPTION WHEN duplicate_table THEN NULL;
+      END;
+    END $$;
+
     -- Indexes for common queries
     CREATE INDEX IF NOT EXISTS idx_outreach_agent    ON outreach_log(agent_id);
     CREATE INDEX IF NOT EXISTS idx_outreach_phone    ON outreach_log(contact_phone);
@@ -159,6 +195,7 @@ async function migrate(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_nurture_phone     ON nurture_queue(contact_phone);
     CREATE INDEX IF NOT EXISTS idx_contacts_agent    ON contacts(agent_id);
     CREATE INDEX IF NOT EXISTS idx_contacts_pipeline ON contacts(agent_id, pipeline);
+    CREATE INDEX IF NOT EXISTS idx_milestones_agent  ON milestones(agent_id);
   `)
 }
 

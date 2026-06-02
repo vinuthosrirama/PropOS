@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { C, FONT, getAgencyTheme, isCamKnoll, isPasSunilchandra, isManpreetSingh, MANPREET_DEFAULT_AGENT, type AgentProfile, type AgencyTheme, type DemoMode } from "../data"
 import { readAgentProfileFromSheet, sheetsConnected } from "../lib/sheet"
+import { apiUrl } from "../lib/api"
+import { setAccessToken } from "../lib/authFetch"
 
 // Returns true if the hex colour is perceptually dark (luminance < 128)
 function isDarkHex(hex: string): boolean {
@@ -186,6 +188,128 @@ function SuburbAutocomplete({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Auth login panel ──────────────────────────────────────────────────────────
+
+function AuthLoginPanel({ onSuccess }: {
+  onSuccess: (agent: AgentProfile, theme: AgencyTheme, mode: DemoMode) => void
+}) {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [tab, setTab] = useState<"login" | "register">("login")
+  const [regForm, setRegForm] = useState({ name: "", agency: "", email: "", password: "" })
+  const [regError, setRegError] = useState("")
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(""); setLoading(true)
+    try {
+      const res = await fetch(apiUrl("/api/auth/login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await res.json() as { accessToken?: string; agent?: { name: string; agency: string; email: string; phone: string; suburb: string; tagline: string; role?: string }; error?: string }
+      if (!res.ok) { setError(data.error ?? "Login failed"); setLoading(false); return }
+      if (data.accessToken) setAccessToken(data.accessToken)
+      const a = data.agent!
+      const agent: AgentProfile = {
+        name: a.name, agency: a.agency, email: a.email,
+        phone: a.phone ?? "", suburb: a.suburb ?? "",
+        tagline: a.tagline ?? `${a.suburb ?? ""} specialist.`,
+        role: (a.role === "principal" ? "principal" : "agent") as "agent" | "principal",
+        voiceProfile: { greeting: "Hi", closing: "Cheers", lengthStyle: "short", formalityScore: 2, aussieIndex: 2, specificity: 3, emojiUsage: "occasional", examplesCount: 0, confidence: 0, detectedTraits: [] },
+        trainingCorpus: [],
+      }
+      onSuccess(agent, getAgencyTheme(a.agency), a.role === "principal" ? "vendor" : "vendor")
+    } catch { setError("Network error — please try again"); setLoading(false) }
+  }
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setRegError(""); setLoading(true)
+    try {
+      const res = await fetch(apiUrl("/api/auth/register"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(regForm),
+      })
+      const data = await res.json() as { accessToken?: string; agent?: { name: string; agency: string; email: string; phone: string; suburb: string; tagline: string }; error?: string }
+      if (!res.ok) { setRegError(data.error ?? "Registration failed"); setLoading(false); return }
+      if (data.accessToken) setAccessToken(data.accessToken)
+      const a = data.agent!
+      const agent: AgentProfile = {
+        name: a.name, agency: a.agency || regForm.agency, email: a.email,
+        phone: a.phone ?? "", suburb: a.suburb ?? "",
+        tagline: a.tagline ?? `${a.agency ?? ""} specialist.`,
+        voiceProfile: { greeting: "Hi", closing: "Cheers", lengthStyle: "short", formalityScore: 2, aussieIndex: 2, specificity: 3, emojiUsage: "occasional", examplesCount: 0, confidence: 0, detectedTraits: [] },
+        trainingCorpus: [],
+      }
+      onSuccess(agent, getAgencyTheme(a.agency || regForm.agency), "vendor")
+    } catch { setRegError("Network error — please try again"); setLoading(false) }
+  }
+
+  const inputStyle = {
+    width: "100%", background: C.bg3, border: `1px solid ${C.border}`,
+    borderRadius: 10, padding: "11px 14px", color: C.text, fontSize: 14,
+    fontFamily: FONT, outline: "none", boxSizing: "border-box" as const,
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Tab switcher */}
+      <div style={{ display: "flex", background: C.bg3, borderRadius: 10, padding: 3, border: `1px solid ${C.border}` }}>
+        {(["login", "register"] as const).map(t => (
+          <button key={t} type="button" onClick={() => setTab(t)} style={{
+            flex: 1, padding: "8px 0", borderRadius: 8, border: "none",
+            background: tab === t ? C.bg2 : "transparent",
+            color: tab === t ? C.text : C.faint,
+            fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+            outline: tab === t ? `1px solid ${C.border}` : "none",
+          }}>
+            {t === "login" ? "Sign in" : "Create account"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "login" ? (
+        <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required style={inputStyle} />
+          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required style={inputStyle} />
+          {error && <div style={{ fontSize: 12, color: C.red }}>{error}</div>}
+          <button type="submit" disabled={loading} style={{
+            padding: "12px", borderRadius: 10, border: "none",
+            background: "linear-gradient(135deg, #4fa3e0, #64d090)",
+            color: C.bg, fontSize: 14, fontWeight: 700, cursor: loading ? "default" : "pointer", fontFamily: FONT,
+          }}>
+            {loading ? "Signing in…" : "Sign in →"}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <input type="text" placeholder="Full name" value={regForm.name} onChange={e => setRegForm(f => ({ ...f, name: e.target.value }))} required style={inputStyle} />
+          <input type="text" placeholder="Agency" value={regForm.agency} onChange={e => setRegForm(f => ({ ...f, agency: e.target.value }))} style={inputStyle} />
+          <input type="email" placeholder="Email" value={regForm.email} onChange={e => setRegForm(f => ({ ...f, email: e.target.value }))} required style={inputStyle} />
+          <input type="password" placeholder="Password (min 8 chars)" value={regForm.password} onChange={e => setRegForm(f => ({ ...f, password: e.target.value }))} required style={inputStyle} />
+          {regError && <div style={{ fontSize: 12, color: C.red }}>{regError}</div>}
+          <button type="submit" disabled={loading} style={{
+            padding: "12px", borderRadius: 10, border: "none",
+            background: "linear-gradient(135deg, #4fa3e0, #64d090)",
+            color: C.bg, fontSize: 14, fontWeight: 700, cursor: loading ? "default" : "pointer", fontFamily: FONT,
+          }}>
+            {loading ? "Creating account…" : "Create account & start →"}
+          </button>
+        </form>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface Props {
   onLogin: (agent: AgentProfile, theme: AgencyTheme, mode: DemoMode) => void
 }
@@ -195,6 +319,7 @@ type Phase = "form" | "welcoming" | "done"
 export default function AgentLogin({ onLogin }: Props) {
   const [phase, setPhase] = useState<Phase>("form")
   const [mode, setMode] = useState<DemoMode>("buyer")
+  const [showAuth, setShowAuth] = useState(false)
   const [form, setForm] = useState({
     firstName: "", lastName: "", agency: "", suburb: "", email: "", phone: "",
   })
@@ -386,6 +511,40 @@ export default function AgentLogin({ onLogin }: Props) {
                   })}
                 </div>
               </div>
+
+              {/* Sign in with account */}
+              {showAuth ? (
+                <div style={{ marginBottom: 20 }}>
+                  <AuthLoginPanel onSuccess={(agent, t, m) => {
+                    setPhase("welcoming")
+                    setTimeout(() => onLogin(agent, t, m), 2800)
+                  }} />
+                  <button type="button" onClick={() => setShowAuth(false)} style={{
+                    background: "none", border: "none", color: C.faint,
+                    fontSize: 11, cursor: "pointer", marginTop: 10, fontFamily: FONT,
+                  }}>
+                    ← Continue as guest instead
+                  </button>
+                  <div style={{ height: 1, background: C.border, margin: "16px 0" }} />
+                </div>
+              ) : (
+                <div style={{ marginBottom: 20 }}>
+                  <button type="button" onClick={() => setShowAuth(true)} style={{
+                    width: "100%", padding: "10px 14px", borderRadius: 10,
+                    border: `1px solid ${C.border}`, background: C.bg3,
+                    color: C.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                  }}>
+                    <span>🔑 Sign in with your PropOS account</span>
+                    <span style={{ color: C.faint, fontSize: 11 }}>→</span>
+                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, marginBottom: 14 }}>
+                    <div style={{ flex: 1, height: 1, background: C.border }} />
+                    <span style={{ fontSize: 11, color: C.faint }}>or continue as guest</span>
+                    <div style={{ flex: 1, height: 1, background: C.border }} />
+                  </div>
+                </div>
+              )}
 
               <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 20 }}>
                 Agent Details

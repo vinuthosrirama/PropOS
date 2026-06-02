@@ -1,4 +1,5 @@
 import { Router } from "express"
+import { isDbConnected, execute } from "../lib/db.js"
 
 const router = Router()
 
@@ -51,6 +52,35 @@ router.post("/", async (req, res) => {
       console.error("[add-contact] Sheet write error:", err)
       // fail silently — contact is already added in frontend state
     }
+  }
+
+  // Also persist to DB when connected (makes CSV import survive server restarts)
+  if (isDbConnected()) {
+    const agentId = (req as unknown as { agentId?: number }).agentId ?? 0
+    await execute(
+      `INSERT INTO contacts (agent_id, name, phone, email, purchase_address, suburb,
+       purchase_date, purchase_price, deposit, property_type, beds, baths, land, status, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       ON CONFLICT ON CONSTRAINT contacts_agent_address_unique
+       DO UPDATE SET notes=EXCLUDED.notes, phone=EXCLUDED.phone, email=EXCLUDED.email`,
+      [
+        String(agentId),
+        contact.name,
+        contact.phone ?? "",
+        contact.email ?? "",
+        contact.purchaseAddress,
+        contact.suburb ?? "",
+        contact.purchaseDate ?? null,
+        contact.purchasePrice ?? null,
+        contact.deposit ?? null,
+        contact.propertyType ?? "House",
+        contact.beds ?? null,
+        contact.baths ?? null,
+        contact.land ?? null,
+        contact.status ?? "owner-occupier",
+        contact.notes ?? "",
+      ],
+    ).catch(err => console.error("[add-contact] DB write error:", err))
   }
 
   console.log(`[add-contact] New contact added: ${contact.name} at ${contact.purchaseAddress}`)

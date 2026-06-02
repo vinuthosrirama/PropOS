@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PropOS — The Listing Machine</title>
+  <style>
+    :root {
+      --bg:       #04070d;
+      --bg2:      #0a0f1a;
+      --bg3:      #0e1525;
+      --border:   rgba(166,218,255,0.10);
+      --primary:  #4fa3e0;
+      --green:    #64d090;
+      --amber:    #f59e0b;
+      --red:      #f87171;
+      --text:     #d8e7f2;
+      --muted:    #7a91a8;
+      --faint:    #3f5166;
+      --font:     'Inter', system-ui, -apple-system, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(4,7,13,0.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 40px; height: 56px;
+    }
+    .nav-logo {
+      font-size: 18px; font-weight: 800; letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #4fa3e0, #64d090);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .nav-links { display: flex; gap: 8px; }
+    .nav-links a {
+      color: var(--muted); text-decoration: none; font-size: 13px;
+      padding: 6px 14px; border-radius: 20px; transition: all .2s;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(166,218,255,0.06); }
+    .nav-cta {
+      background: var(--primary); color: #04070d !important;
+      font-weight: 700 !important; border-radius: 20px !important;
+    }
+    .nav-cta:hover { background: #6fb8f0 !important; }
+
+    /* ── SECTIONS ── */
+    section {
+      min-height: 100vh;
+      padding: 120px 40px 80px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center;
+    }
+    .section-inner { max-width: 960px; width: 100%; }
+
+    /* ── TYPOGRAPHY ── */
+    .eyebrow {
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--primary);
+      margin-bottom: 20px; display: block;
+    }
+    h1 {
+      font-size: clamp(38px, 6vw, 72px);
+      font-weight: 900; letter-spacing: -2px; line-height: 1.05;
+      color: #fff;
+    }
+    h2 {
+      font-size: clamp(28px, 4vw, 48px);
+      font-weight: 800; letter-spacing: -1px; line-height: 1.1;
+      color: #fff;
+    }
+    h3 { font-size: 20px; font-weight: 700; color: #fff; }
+    .lead {
+      font-size: clamp(16px, 2vw, 20px);
+      color: var(--muted); max-width: 680px;
+      line-height: 1.7; margin-top: 24px;
+    }
+    .highlight { color: var(--primary); }
+    .green { color: var(--green); }
+    .amber { color: var(--amber); }
+    .red { color: var(--red); }
+    strong { color: #fff; font-weight: 700; }
+
+    /* ── STAT BLOCKS ── */
+    .stat-grid {
+      display: grid; gap: 20px; margin-top: 48px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+    .stat-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 28px 24px;
+      transition: border-color .2s;
+    }
+    .stat-card:hover { border-color: rgba(79,163,224,0.3); }
+    .stat-number {
+      font-size: 42px; font-weight: 900; letter-spacing: -2px;
+      line-height: 1; color: #fff;
+    }
+    .stat-label {
+      font-size: 13px; color: var(--muted); margin-top: 8px; line-height: 1.4;
+    }
+
+    /* ── COMPARISON TABLE ── */
+    .compare-table {
+      width: 100%; border-collapse: collapse; margin-top: 40px;
+      border: 1px solid var(--border); border-radius: 16px;
+      overflow: hidden;
+    }
+    .compare-table th {
+      padding: 16px 20px; background: var(--bg3);
+      font-size: 12px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--muted); text-align: left;
+    }
+    .compare-table th:last-child { color: var(--primary); }
+    .compare-table td {
+      padding: 14px 20px; border-top: 1px solid var(--border);
+      font-size: 14px; color: var(--muted); vertical-align: middle;
+    }
+    .compare-table td:first-child { color: var(--text); font-weight: 600; }
+    .compare-table td:last-child { color: var(--green); font-weight: 600; }
+    .compare-table tr:hover td { background: rgba(255,255,255,0.015); }
+    .check { color: var(--green); }
+    .cross { color: var(--red); opacity: 0.6; }
+
+    /* ── PIPELINE CARDS ── */
+    .pipeline-grid {
+      display: grid; gap: 16px; margin-top: 40px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .pipeline-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px;
+    }
+    .pipeline-tag {
+      display: inline-block; padding: 4px 12px;
+      border-radius: 20px; font-size: 11px; font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    /* ── ROI CALCULATOR ── */
+    .roi-box {
+      background: linear-gradient(135deg, rgba(79,163,224,0.08), rgba(100,208,144,0.06));
+      border: 1px solid rgba(79,163,224,0.2);
+      border-radius: 20px; padding: 40px; margin-top: 40px;
+    }
+    .roi-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+      font-size: 15px;
+    }
+    .roi-row:last-child { border-bottom: none; }
+    .roi-row .label { color: var(--muted); }
+    .roi-row .value { font-weight: 700; color: #fff; font-size: 18px; }
+    .roi-total {
+      background: rgba(100,208,144,0.1);
+      border: 1px solid rgba(100,208,144,0.25);
+      border-radius: 14px; padding: 24px 28px; margin-top: 24px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .roi-total .label { font-size: 14px; color: var(--muted); }
+    .roi-total .value {
+      font-size: 48px; font-weight: 900; letter-spacing: -2px; color: var(--green);
+    }
+
+    /* ── BUILD STATUS ── */
+    .status-grid {
+      display: grid; gap: 12px; margin-top: 40px;
+    }
+    .status-row {
+      display: flex; align-items: flex-start; gap: 16px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 20px;
+    }
+    .status-icon {
+      width: 24px; height: 24px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; flex-shrink: 0; margin-top: 1px;
+    }
+    .status-icon.done { background: rgba(100,208,144,0.15); color: var(--green); }
+    .status-icon.warn { background: rgba(245,158,11,0.15); color: var(--amber); }
+    .status-icon.todo { background: rgba(248,113,113,0.12); color: var(--red); }
+    .status-text { font-size: 14px; color: var(--text); line-height: 1.5; }
+    .status-text .detail { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+    /* ── PRICING ── */
+    .pricing-grid {
+      display: grid; gap: 20px; margin-top: 40px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+    .price-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 20px; padding: 32px 28px;
+      transition: border-color .2s, transform .2s;
+    }
+    .price-card:hover { border-color: rgba(79,163,224,0.3); transform: translateY(-2px); }
+    .price-card.featured {
+      border-color: rgba(79,163,224,0.4);
+      background: linear-gradient(160deg, rgba(79,163,224,0.06), var(--bg2));
+    }
+    .price-amount {
+      font-size: 48px; font-weight: 900; letter-spacing: -2px;
+      color: #fff; line-height: 1;
+    }
+    .price-period { font-size: 14px; color: var(--muted); margin-left: 4px; }
+    .price-name { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+    .price-feature {
+      display: flex; align-items: flex-start; gap: 10px;
+      font-size: 14px; color: var(--muted); padding: 6px 0;
+    }
+    .price-feature .dot { color: var(--green); font-size: 16px; flex-shrink: 0; }
+    .price-cta {
+      display: block; width: 100%; padding: 14px;
+      border-radius: 12px; font-size: 14px; font-weight: 700;
+      text-align: center; text-decoration: none;
+      margin-top: 24px; cursor: pointer; transition: .2s;
+      border: 1px solid rgba(79,163,224,0.3);
+      color: var(--primary); background: rgba(79,163,224,0.08);
+    }
+    .price-cta:hover { background: rgba(79,163,224,0.15); }
+    .price-cta.featured-cta {
+      background: var(--primary); color: #04070d; border: none;
+    }
+    .price-cta.featured-cta:hover { background: #6fb8f0; }
+
+    /* ── DIVIDER ── */
+    .divider {
+      width: 60px; height: 3px;
+      background: linear-gradient(90deg, var(--primary), var(--green));
+      border-radius: 2px; margin: 24px 0;
+    }
+
+    /* ── QUOTE BLOCK ── */
+    .quote {
+      border-left: 3px solid var(--primary);
+      padding: 20px 28px; margin: 32px 0;
+      background: rgba(79,163,224,0.04);
+      border-radius: 0 12px 12px 0;
+    }
+    .quote p { font-size: 18px; color: var(--text); font-style: italic; line-height: 1.6; }
+    .quote cite { display: block; margin-top: 12px; font-size: 13px; color: var(--muted); font-style: normal; }
+
+    /* ── ROADMAP ── */
+    .roadmap-track {
+      position: relative; margin-top: 40px;
+    }
+    .roadmap-track::before {
+      content: ''; position: absolute; left: 20px; top: 0; bottom: 0;
+      width: 2px; background: var(--border);
+    }
+    .roadmap-item {
+      display: flex; gap: 24px; margin-bottom: 24px; position: relative;
+    }
+    .roadmap-dot {
+      width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; z-index: 1;
+    }
+    .roadmap-dot.p0 { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+    .roadmap-dot.p1 { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.25); }
+    .roadmap-dot.p2 { background: rgba(79,163,224,0.1); color: var(--primary); border: 1px solid rgba(79,163,224,0.2); }
+    .roadmap-body {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 14px; padding: 18px 20px; flex: 1;
+    }
+    .roadmap-body h4 { font-size: 15px; color: #fff; font-weight: 700; margin-bottom: 4px; }
+    .roadmap-body p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .roadmap-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 10px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.8px;
+      text-transform: uppercase; margin-left: 10px; vertical-align: middle;
+    }
+    .badge-p0 { background: rgba(248,113,113,0.15); color: var(--red); }
+    .badge-p1 { background: rgba(245,158,11,0.12); color: var(--amber); }
+    .badge-p2 { background: rgba(79,163,224,0.1); color: var(--primary); }
+    .badge-done { background: rgba(100,208,144,0.1); color: var(--green); }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center; padding: 40px;
+      border-top: 1px solid var(--border);
+      color: var(--faint); font-size: 13px;
+    }
+    footer a { color: var(--muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+
+    /* ── HERO ACCENT ── */
+    .hero-glow {
+      position: absolute; top: -20%; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 400px; pointer-events: none;
+      background: radial-gradient(ellipse at center, rgba(79,163,224,0.08) 0%, transparent 70%);
+    }
+    #page1 { position: relative; overflow: hidden; }
+
+    /* ── SCROLL INDICATOR ── */
+    .scroll-hint {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 8px; margin-top: 56px; color: var(--faint); font-size: 12px;
+    }
+    .scroll-arrow {
+      width: 1px; height: 48px;
+      background: linear-gradient(to bottom, var(--faint), transparent);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════ NAV ═══════════════════════════════════════════ -->
+<nav>
+  <div class="nav-logo">PropOS</div>
+  <div class="nav-links">
+    <a href="#page1">Problem</a>
+    <a href="#page2">Product</a>
+    <a href="#page3">ROI</a>
+    <a href="#page4">Build</a>
+    <a href="#page5" class="nav-cta">Roadmap →</a>
+  </div>
+</nav>
+
+
+<!-- ════════════════════════════════════════ PAGE 1: THE PROBLEM ════════════════════════════ -->
+<section id="page1">
+  <div class="hero-glow"></div>
+  <div class="section-inner">
+    <span class="eyebrow">The $100,000 problem hiding in plain sight</span>
+    <h1>Your agents have<br/><span class="highlight">500 contacts.</span><br/>They call <span class="red">5</span> a month.</h1>
+    <p class="lead">
+      The other 495 have built <strong>$100K–$200K in equity</strong> since their agent sold them their home.
+      They're ready to sell. <strong>Another agent is going to get that listing</strong> because they showed up first with the right numbers.
+    </p>
+
+    <div class="stat-grid" style="margin-top: 56px;">
+      <div class="stat-card">
+        <div class="stat-number" style="color: var(--red)">495</div>
+        <div class="stat-label">Contacts the average agent doesn't reach in a given month</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" style="color: var(--amber)">$190K</div>
+        <div class="stat-label">Average equity gain for SE Melbourne homeowners since 2018</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" style="color: var(--primary)">$17K</div>
+        <div class="stat-label">GCI on a single $850K listing at 2% commission</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" style="color: var(--green)">42×</div>
+        <div class="stat-label">ROI on PropOS if it generates just one extra listing per year</div>
+      </div>
+    </div>
+
+    <div class="quote" style="margin-top: 48px;">
+      <p>"Hi David, thinking of selling? Give me a call."</p>
+      <cite>— Every Zenu/Box+Dice bulk email. Sent to 500 people. Replied to by zero.</cite>
+    </div>
+
+    <p style="font-size: 17px; color: var(--text); max-width: 680px; line-height: 1.7; margin-top: 32px;">
+      The problem isn't that agents don't have the data. They have it.
+      The problem is that <strong>turning 500 contacts into 500 personalised, financially-grounded conversations</strong>
+      takes 200 hours no agent has. So they send a mail merge, get ignored, and wonder why their pipeline is empty.
+    </p>
+
+    <div class="divider"></div>
+
+    <p style="font-size: 22px; font-weight: 700; color: #fff; max-width: 600px; line-height: 1.4;">
+      PropOS is the tool that works through the other 495.<br/>
+      <span style="color: var(--primary);">While the agent sleeps.</span>
+    </p>
+
+    <div class="scroll-hint">
+      <div class="scroll-arrow"></div>
+      <span>See how it works</span>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════ PAGE 2: THE PRODUCT ════════════════════════════ -->
+<section id="page2" style="background: var(--bg2);">
+  <div class="section-inner">
+    <span class="eyebrow">How PropOS works</span>
+    <h2>5 layers of personalisation.<br/><span class="highlight">No other tool does this.</span></h2>
+    <p class="lead">
+      Zenu sends a mail merge. PropOS generates a unique, financially-grounded message for every single contact —
+      in the agent's own voice — in under 3 seconds per contact.
+    </p>
+
+    <div style="display: grid; gap: 16px; margin-top: 48px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));">
+      <div class="stat-card" style="border-left: 3px solid var(--primary);">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--primary); margin-bottom: 12px;">Layer 1 — CRM Intelligence</div>
+        <h3 style="margin-bottom: 8px;">What the agent knows</h3>
+        <p style="color: var(--muted); font-size: 14px; line-height: 1.6;">AI extracts the most personal detail from free-text notes: <em style="color: var(--text)">"Karen mentioned wanting a bigger kitchen"</em> becomes the hook that opens the message.</p>
+      </div>
+      <div class="stat-card" style="border-left: 3px solid var(--green);">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--green); margin-bottom: 12px;">Layer 2 — Life-Stage Inference</div>
+        <h3 style="margin-bottom: 8px;">What the notes imply</h3>
+        <p style="color: var(--muted); font-size: 14px; line-height: 1.6;">AI infers structured context from unstructured notes: kids' ages, school proximity concerns, property pain points, decision-maker. Haiku runs this at ~$0.001 per contact.</p>
+      </div>
+      <div class="stat-card" style="border-left: 3px solid var(--amber);">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--amber); margin-bottom: 12px;">Layer 3 — Suburb Context</div>
+        <h3 style="margin-bottom: 8px;">What the market says</h3>
+        <p style="color: var(--muted); font-size: 14px; line-height: 1.6;">Injects concrete local facts: "3 homes sold on your street in Q1 at $895K average." Grounds the message in data the contact can verify.</p>
+      </div>
+      <div class="stat-card" style="border-left: 3px solid #a78bfa;">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #a78bfa; margin-bottom: 12px;">Layer 4 — Timing Triggers</div>
+        <h3 style="margin-bottom: 8px;">Why now matters</h3>
+        <p style="color: var(--muted); font-size: 14px; line-height: 1.6;">CGT deadlines, EOFY, spring season, rate decisions, school transitions. Each message arrives at the moment the contact is most likely to act.</p>
+      </div>
+      <div class="stat-card" style="border-left: 3px solid #f472b6;">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #f472b6; margin-bottom: 12px;">Layer 5 — Relationship Memory</div>
+        <h3 style="margin-bottom: 8px;">What was said before</h3>
+        <p style="color: var(--muted); font-size: 14px; line-height: 1.6;">Every prior interaction is threaded and referenced. The Day 14 follow-up says <em style="color: var(--text)">"Last time you mentioned the garden was getting on top of you both"</em> — because it does.</p>
+      </div>
+      <div class="stat-card" style="background: linear-gradient(135deg, rgba(79,163,224,0.06), rgba(100,208,144,0.04)); border-color: rgba(79,163,224,0.2);">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--primary); margin-bottom: 12px;">The Gap</div>
+        <h3 style="margin-bottom: 8px;">What Zenu sends</h3>
+        <p style="color: var(--muted); font-size: 14px; line-height: 1.6;">
+          <span style="color: var(--red);">"Hi David, thinking of selling? Call me."</span>
+          <br/><br/>
+          <span style="color: var(--green);">PropOS sends: "Hi David, three places on your street sold in the high-800s this quarter. Your place is worth ~$910K. That's $125K since 2018. Worth a coffee?"</span>
+        </p>
+      </div>
+    </div>
+
+    <div style="margin-top: 56px;">
+      <h3 style="margin-bottom: 24px; color: var(--muted); font-weight: 600; font-size: 16px;">6 vendor pipelines. AI-classified. Priority-scored.</h3>
+      <div class="pipeline-grid">
+        <div class="pipeline-card">
+          <div class="pipeline-tag" style="background: rgba(248,113,113,0.12); color: #f87171;">🔥 Urgent</div>
+          <h3 style="font-size: 16px; margin-bottom: 6px;">CGT Deadline</h3>
+          <p style="font-size: 13px; color: var(--muted);">Owned 5+ years. Sells by July 2027 for the 50% CGT discount. Every week they wait costs them money.</p>
+        </div>
+        <div class="pipeline-card">
+          <div class="pipeline-tag" style="background: rgba(245,158,11,0.1); color: var(--amber);">📈 High Intent</div>
+          <h3 style="font-size: 16px; margin-bottom: 6px;">Investor to Seller</h3>
+          <p style="font-size: 13px; color: var(--muted);">Cash-on-cash return below 3%. Property value up 40%+. The numbers say sell and redeploy.</p>
+        </div>
+        <div class="pipeline-card">
+          <div class="pipeline-tag" style="background: rgba(100,208,144,0.1); color: var(--green);">🏡 Life Stage</div>
+          <h3 style="font-size: 16px; margin-bottom: 6px;">Family Upsizer</h3>
+          <p style="font-size: 13px; color: var(--muted);">Kids in school. 3-bed 1-bath. $150K equity. They've outgrown the house — they just haven't done the maths yet.</p>
+        </div>
+        <div class="pipeline-card">
+          <div class="pipeline-tag" style="background: rgba(79,163,224,0.1); color: var(--primary);">🏖 Downsizer</div>
+          <h3 style="font-size: 16px; margin-bottom: 6px;">Empty Nester</h3>
+          <p style="font-size: 13px; color: var(--muted);">Kids gone. 4-bed house. Garden too big. Equity freed = retirement funded. Best price in years right now.</p>
+        </div>
+        <div class="pipeline-card">
+          <div class="pipeline-tag" style="background: rgba(168,85,247,0.1); color: #a78bfa;">⚡ Triggered</div>
+          <h3 style="font-size: 16px; margin-bottom: 6px;">Recent Comparable Sale</h3>
+          <p style="font-size: 13px; color: var(--muted);">A home on their street just sold above guide. Natural trigger to reach out while anchoring value in their mind.</p>
+        </div>
+        <div class="pipeline-card">
+          <div class="pipeline-tag" style="background: rgba(244,114,182,0.1); color: #f472b6;">📬 Nurture</div>
+          <h3 style="font-size: 16px; margin-bottom: 6px;">Not Yet Ready</h3>
+          <p style="font-size: 13px; color: var(--muted);">Held &lt;3 years or equity gain &lt;10%. Auto-nurture: Day 7 market update, Day 14 social proof, Day 30 check-in.</p>
+        </div>
+      </div>
+    </div>
+
+    <table class="compare-table" style="margin-top: 56px;">
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th>Zenu / Box+Dice / Rex</th>
+          <th>PropOS</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Outreach style</td><td>Mail merge: "Hi {firstName}"</td><td>AI-generated per-contact using CRM notes + financial data + agent voice</td></tr>
+        <tr><td>Financial intelligence</td><td class="cross">None</td><td>Equity gain, CGT modelling, cash-on-cash, net proceeds — per contact</td></tr>
+        <tr><td>Pipeline segmentation</td><td>Manual tags</td><td>6 AI-classified pipelines with trigger events and priority scores</td></tr>
+        <tr><td>Agent voice matching</td><td class="cross">None</td><td>8-field voice profile, Sonnet writes in agent's actual style</td></tr>
+        <tr><td>CGT analysis</td><td class="cross">None</td><td>Automatic 50% discount calc, savings estimate, deadline alerts</td></tr>
+        <tr><td>Nurture sequences</td><td>Same template re-sent on schedule</td><td>Each follow-up unique, references contact's specific situation</td></tr>
+        <tr><td>Reply handling</td><td>Manual inbox</td><td>AI classifies intent, drafts contextual reply with financial data</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════ PAGE 3: THE ROI ════════════════════════════════ -->
+<section id="page3">
+  <div class="section-inner">
+    <span class="eyebrow">The only number that matters</span>
+    <h2>One listing pays for<br/><span class="highlight">3.5 years of PropOS.</span></h2>
+    <p class="lead">
+      This isn't a productivity tool. It's a listing machine. The business case writes itself.
+    </p>
+
+    <div class="roi-box">
+      <h3 style="margin-bottom: 24px; color: var(--muted); font-weight: 600;">Commission economics — SE Melbourne</h3>
+      <div class="roi-row">
+        <span class="label">Average house price (Berwick / Officer / Pakenham)</span>
+        <span class="value">$850,000</span>
+      </div>
+      <div class="roi-row">
+        <span class="label">Standard agent commission rate</span>
+        <span class="value">2.0%</span>
+      </div>
+      <div class="roi-row">
+        <span class="label">GCI per listing</span>
+        <span class="value" style="color: var(--green);">$17,000</span>
+      </div>
+      <div class="roi-row">
+        <span class="label">Agent take-home after agency split (50–70%)</span>
+        <span class="value">$8,500 – $11,900</span>
+      </div>
+      <div class="roi-row">
+        <span class="label">PropOS annual cost (Pro plan)</span>
+        <span class="value" style="color: var(--amber);">$4,788</span>
+      </div>
+      <div class="roi-row">
+        <span class="label">PropOS cost per day</span>
+        <span class="value" style="color: var(--amber);">$13.10</span>
+      </div>
+      <div class="roi-total">
+        <div>
+          <div class="label">ROI if PropOS generates just 1 extra listing per year</div>
+          <div style="font-size: 13px; color: var(--faint); margin-top: 4px;">$17,000 GCI ÷ $4,788 annual cost</div>
+        </div>
+        <div class="value">3.5×</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 48px; display: grid; gap: 20px; grid-template-columns: 1fr 1fr;">
+      <div class="roi-box" style="margin-top: 0;">
+        <h3 style="margin-bottom: 20px;">Conservative case</h3>
+        <div class="roi-row"><span class="label">Database size</span><span class="value">200 contacts</span></div>
+        <div class="roi-row"><span class="label">PropOS conversion (1%)</span><span class="value">2 listings/yr</span></div>
+        <div class="roi-row"><span class="label">Revenue generated</span><span class="value" style="color: var(--green);">$34,000</span></div>
+        <div class="roi-row"><span class="label">PropOS cost</span><span class="value" style="color: var(--amber);">$4,788</span></div>
+        <div class="roi-total" style="padding: 16px 20px;">
+          <span class="label">ROI</span>
+          <span class="value" style="font-size: 36px;">7.1×</span>
+        </div>
+      </div>
+      <div class="roi-box" style="margin-top: 0; background: linear-gradient(135deg, rgba(100,208,144,0.08), rgba(79,163,224,0.05));">
+        <h3 style="margin-bottom: 20px;">Realistic case</h3>
+        <div class="roi-row"><span class="label">Database size</span><span class="value">500 contacts</span></div>
+        <div class="roi-row"><span class="label">PropOS conversion (1.5%)</span><span class="value">7–8 listings/yr</span></div>
+        <div class="roi-row"><span class="label">Revenue generated</span><span class="value" style="color: var(--green);">$119,000</span></div>
+        <div class="roi-row"><span class="label">PropOS cost</span><span class="value" style="color: var(--amber);">$4,788</span></div>
+        <div class="roi-total" style="padding: 16px 20px; background: rgba(100,208,144,0.12); border-color: rgba(100,208,144,0.3);">
+          <span class="label">ROI</span>
+          <span class="value" style="font-size: 36px;">24.8×</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 56px;">
+      <h3 style="color: var(--muted); font-weight: 600; margin-bottom: 24px;">Objection handling</h3>
+      <div style="display: grid; gap: 12px;">
+        <div style="background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
+          <div><div style="font-size: 12px; color: var(--amber); font-weight: 700; margin-bottom: 6px;">OBJECTION</div><p style="font-size: 14px; color: var(--text);">"I already do this manually."</p></div>
+          <div><div style="font-size: 12px; color: var(--green); font-weight: 700; margin-bottom: 6px;">RESPONSE</div><p style="font-size: 14px; color: var(--muted);">How many contacts did you actually call last month? PropOS handles the 90% you never get to.</p></div>
+        </div>
+        <div style="background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
+          <div><div style="font-size: 12px; color: var(--amber); font-weight: 700; margin-bottom: 6px;">OBJECTION</div><p style="font-size: 14px; color: var(--text);">"My CRM sends bulk messages."</p></div>
+          <div><div style="font-size: 12px; color: var(--green); font-weight: 700; margin-bottom: 6px;">RESPONSE</div><p style="font-size: 14px; color: var(--muted);">Show me a Zenu message that references equity gain, CGT position, and the kids finishing school. PropOS does all three.</p></div>
+        </div>
+        <div style="background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
+          <div><div style="font-size: 12px; color: var(--amber); font-weight: 700; margin-bottom: 6px;">OBJECTION</div><p style="font-size: 14px; color: var(--text);">"$399/month is expensive."</p></div>
+          <div><div style="font-size: 12px; color: var(--green); font-weight: 700; margin-bottom: 6px;">RESPONSE</div><p style="font-size: 14px; color: var(--muted);">One listing pays for 3.5 years. That's $13/day. Less than your coffee.</p></div>
+        </div>
+        <div style="background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
+          <div><div style="font-size: 12px; color: var(--amber); font-weight: 700; margin-bottom: 6px;">OBJECTION</div><p style="font-size: 14px; color: var(--text);">"I don't trust AI."</p></div>
+          <div><div style="font-size: 12px; color: var(--green); font-weight: 700; margin-bottom: 6px;">RESPONSE</div><p style="font-size: 14px; color: var(--muted);">You review every message before it sends. Nothing goes out without your click. The AI just does the 3am research you'd never have time for.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════ PAGE 4: WHAT'S BUILT ══════════════════════════ -->
+<section id="page4" style="background: var(--bg2);">
+  <div class="section-inner">
+    <span class="eyebrow">Current build status — June 2026</span>
+    <h2>What's working today.<br/><span class="highlight">What's missing.</span></h2>
+    <p class="lead">
+      PropOS is demo-quality. The core intelligence is fully built. The production scaffolding is not.
+      Here is an honest inventory.
+    </p>
+
+    <div style="margin-top: 48px; display: grid; gap: 32px; grid-template-columns: 1fr 1fr;">
+
+      <!-- BUILT -->
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--green);"></div>
+          <h3 style="font-size: 16px; color: var(--green);">Built &amp; working</h3>
+        </div>
+        <div class="status-grid" style="margin-top: 0; gap: 8px;">
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">6-pipeline AI segmentation <div class="detail">investor-to-seller, upsizer, downsizer, CGT, ready-to-sell, nurture</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">Financial calculator <div class="detail">Equity gain, CGT savings, cash-on-cash return, net proceeds — per contact</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">2-step LLM outreach generation <div class="detail">Haiku personalisation → Sonnet voice-matched SMS + email</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">5 pitch angle carousel <div class="detail">Financial, life-stage, market, timing, relationship angles</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">Twilio SMS + Gmail delivery <div class="detail">Retry logic, SPAM Act compliance, test-mode redirect</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">Email tracking pixel <div class="detail">Open detection via /api/track endpoint</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">Google Sheet integration <div class="detail">Reads past buyers, writes back lastContactDate + lastMessage after send</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">Agent voice profile <div class="detail">8-field capture, persists across sessions via localStorage</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">Reply agent + conversation inbox <div class="detail">AI classifies intent, drafts contextual replies with financial data</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">Comparable sales map (Leaflet) <div class="detail">Live pins, dark CartoDB tiles, popup with match scores</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">Vendor analytics dashboard <div class="detail">Full funnel: sent → opened → replied → appraisals → listings → GCI</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">Cloudflare Pages + Railway deployment <div class="detail">CI/CD via GitHub Actions, propos.addvantage.site</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon done">✓</div>
+            <div class="status-text">Nurture scheduler code <div class="detail">Day 7/14/30 logic complete — awaiting database to activate</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MISSING -->
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--red);"></div>
+          <h3 style="font-size: 16px; color: var(--red);">Missing — blocks revenue</h3>
+        </div>
+        <div class="status-grid" style="margin-top: 0; gap: 8px;">
+          <div class="status-row" style="padding: 12px 16px; border-color: rgba(248,113,113,0.2);">
+            <div class="status-icon todo">!</div>
+            <div class="status-text"><span class="roadmap-badge badge-p0">P0</span> Authentication <div class="detail">No JWT, no per-agent accounts. Anyone with the URL has full access.</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px; border-color: rgba(248,113,113,0.2);">
+            <div class="status-icon todo">!</div>
+            <div class="status-text"><span class="roadmap-badge badge-p0">P0</span> Persistent database <div class="detail">Conversations and nurture queue lost on every Railway restart.</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px; border-color: rgba(248,113,113,0.2);">
+            <div class="status-icon todo">!</div>
+            <div class="status-text"><span class="roadmap-badge badge-p0">P0</span> Subscription billing <div class="detail">No Stripe, no payment wall, no trial management.</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px; border-color: rgba(245,158,11,0.2);">
+            <div class="status-icon warn">~</div>
+            <div class="status-text"><span class="roadmap-badge badge-p1">P1</span> Automated nurture <div class="detail">Code is complete. Blocked by missing DATABASE_URL on Railway.</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px; border-color: rgba(245,158,11,0.2);">
+            <div class="status-icon warn">~</div>
+            <div class="status-text"><span class="roadmap-badge badge-p1">P1</span> CSV import (server-side) <div class="detail">UI exists, parses file. No POST /api/import-csv endpoint yet.</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px; border-color: rgba(245,158,11,0.2);">
+            <div class="status-icon warn">~</div>
+            <div class="status-text"><span class="roadmap-badge badge-p1">P1</span> Batch outreach queue <div class="detail">No "Analyse All → queue → approve/skip" flow. One-by-one only.</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px; border-color: rgba(245,158,11,0.2);">
+            <div class="status-icon warn">~</div>
+            <div class="status-text"><span class="roadmap-badge badge-p1">P1</span> Listings attribution <div class="detail">Analytics shows listingsWon = 0. No way to mark a contact as "listing won".</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon warn">~</div>
+            <div class="status-text"><span class="roadmap-badge badge-p2">P2</span> BoxDice / Rex API <div class="detail">Endpoint exists, returns mock data. Real API integration not built.</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon warn">~</div>
+            <div class="status-text"><span class="roadmap-badge badge-p2">P2</span> Real AVM valuations <div class="detail">Comparable sales hardcoded to SE Melbourne suburbs. No Domain/CoreLogic API.</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon warn">~</div>
+            <div class="status-text"><span class="roadmap-badge badge-p2">P2</span> Mobile responsive UI <div class="detail">Desktop-only. Agents on iOS/Android can't use it in the field.</div></div>
+          </div>
+          <div class="status-row" style="padding: 12px 16px;">
+            <div class="status-icon warn">~</div>
+            <div class="status-text"><span class="roadmap-badge badge-p2">P2</span> Principal dashboard <div class="detail">No multi-agent/office view. Each agent is siloed.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════ PAGE 5: ROADMAP + PRICING ═════════════════════ -->
+<section id="page5">
+  <div class="section-inner">
+    <span class="eyebrow">The path to $10M ARR</span>
+    <h2>Three phases.<br/><span class="highlight">10 weeks to revenue.</span></h2>
+    <p class="lead">
+      The core moat is built. What's missing is the wrapper that lets agents pay, log in, and trust the product with their database.
+    </p>
+
+    <div class="roadmap-track">
+
+      <div style="font-size: 13px; font-weight: 700; color: var(--red); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 16px; padding-left: 56px;">Phase 1 — Production Foundation (Weeks 1–3)</div>
+
+      <div class="roadmap-item">
+        <div class="roadmap-dot p0">P0</div>
+        <div class="roadmap-body">
+          <h4>Authentication <span class="roadmap-badge badge-p0">Blocker</span></h4>
+          <p>JWT + magic link login. Each agent sees only their contacts. Multi-seat support. ~3 days. Supabase Auth or Auth0.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot p0">P0</div>
+        <div class="roadmap-body">
+          <h4>Persistent database <span class="roadmap-badge badge-p0">Blocker</span></h4>
+          <p>Supabase PostgreSQL. Migrations already written in server/lib/db.ts. Add DATABASE_URL to Railway. Unlocks nurture scheduler automatically.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot p0">P0</div>
+        <div class="roadmap-body">
+          <h4>Stripe billing <span class="roadmap-badge badge-p0">Blocker</span></h4>
+          <p>$399/mo Pro plan. Stripe Checkout + webhook. Payment wall on login. Trial period (14 days). ~2 days.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot p0">P0</div>
+        <div class="roadmap-body">
+          <h4>Onboarding wizard <span class="roadmap-badge badge-p0">Blocker</span></h4>
+          <p>5-step guided setup: import contacts → voice profile → send first message → see first reply. Agents who reach this step have 90%+ retention.</p>
+        </div>
+      </div>
+
+      <div style="font-size: 13px; font-weight: 700; color: var(--amber); letter-spacing: 1px; text-transform: uppercase; margin: 32px 0 16px; padding-left: 56px;">Phase 2 — Scale Engine (Weeks 4–8)</div>
+
+      <div class="roadmap-item">
+        <div class="roadmap-dot p1">P1</div>
+        <div class="roadmap-body">
+          <h4>Batch outreach queue <span class="roadmap-badge badge-p1">Scale</span></h4>
+          <p>Generate for all contacts → review queue (approve / edit / skip / schedule). One agent can send 200 personalised messages in 30 minutes.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot p1">P1</div>
+        <div class="roadmap-body">
+          <h4>CSV import (server-side) <span class="roadmap-badge badge-p1">Scale</span></h4>
+          <p>POST /api/import-csv. Accepts Zenu/Rex/AgentBox exports. Maps columns automatically. Bulk upserts to past_buyers table.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot p1">P1</div>
+        <div class="roadmap-body">
+          <h4>Listings attribution <span class="roadmap-badge badge-p1">Retention</span></h4>
+          <p>"Mark as listing won" button on each contact. Feeds the ROI dashboard. This is the retention tool — agents who see their number never cancel.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot p1">P1</div>
+        <div class="roadmap-body">
+          <h4>Automated nurture fires <span class="roadmap-badge badge-done">Code done</span></h4>
+          <p>Scheduler is written. Just needs DATABASE_URL. Day 7 / 14 / 30 personalised follow-ups fire automatically if contact hasn't replied.</p>
+        </div>
+      </div>
+
+      <div style="font-size: 13px; font-weight: 700; color: var(--primary); letter-spacing: 1px; text-transform: uppercase; margin: 32px 0 16px; padding-left: 56px;">Phase 3 — Moat (Weeks 9–16)</div>
+
+      <div class="roadmap-item">
+        <div class="roadmap-dot p2">P2</div>
+        <div class="roadmap-body">
+          <h4>Agency dashboard <span class="roadmap-badge badge-p2">ARR unlock</span></h4>
+          <p>Principal sees all agents' pipelines, leaderboard, aggregate GCI. Drives multi-seat purchase. $299/agent/month × 10-agent office = $35,880/yr per account.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot p2">P2</div>
+        <div class="roadmap-body">
+          <h4>Domain / CoreLogic AVM API <span class="roadmap-badge badge-p2">Moat</span></h4>
+          <p>Replace hardcoded suburb estimates with real-time automated valuations. Makes the financial snapshot accurate enough for agents to share directly with vendors.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot p2">P2</div>
+        <div class="roadmap-body">
+          <h4>Mobile-responsive UI <span class="roadmap-badge badge-p2">Retention</span></h4>
+          <p>Agents use phones in the field. A mobile UI means they can review and approve outreach from the car, from opens, from auctions.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-dot p2">P2</div>
+        <div class="roadmap-body">
+          <h4>WhatsApp Business channel <span class="roadmap-badge badge-p2">Moat</span></h4>
+          <p>98% open rate vs 82% SMS. Dominant channel for multicultural SE Melbourne communities. Twilio WhatsApp API already supported in infra.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PRICING -->
+    <div style="margin-top: 72px;">
+      <h2 style="margin-bottom: 8px;">Pricing</h2>
+      <p style="color: var(--muted); font-size: 16px; margin-bottom: 0;">Simple. The math justifies itself at every tier.</p>
+    </div>
+
+    <div class="pricing-grid">
+      <div class="price-card">
+        <div class="price-name">Starter</div>
+        <div style="display: flex; align-items: baseline; gap: 4px;">
+          <div class="price-amount">$799</div>
+          <div class="price-period">/ listing won</div>
+        </div>
+        <p style="font-size: 13px; color: var(--faint); margin-top: 8px; margin-bottom: 20px;">Zero upfront. Pay on results.</p>
+        <div class="price-feature"><span class="dot">·</span> Pipeline segmentation</div>
+        <div class="price-feature"><span class="dot">·</span> Financial snapshots</div>
+        <div class="price-feature"><span class="dot">·</span> AI outreach (20 contacts/mo)</div>
+        <div class="price-feature"><span class="dot">·</span> SMS + email delivery</div>
+        <a href="#" class="price-cta">Start free trial →</a>
+      </div>
+
+      <div class="price-card featured">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div class="price-name" style="color: var(--primary);">Pro</div>
+          <div style="font-size: 10px; font-weight: 800; letter-spacing: 1px; padding: 4px 10px; background: var(--primary); color: #04070d; border-radius: 10px;">BEST VALUE</div>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 4px;">
+          <div class="price-amount">$399</div>
+          <div class="price-period">/ agent / month</div>
+        </div>
+        <p style="font-size: 13px; color: var(--faint); margin-top: 8px; margin-bottom: 20px;">$13/day. Less than your coffee.</p>
+        <div class="price-feature"><span class="dot">·</span> Unlimited contacts</div>
+        <div class="price-feature"><span class="dot">·</span> Automated Day 7/14/30 nurture</div>
+        <div class="price-feature"><span class="dot">·</span> CRM import (CSV / BoxDice)</div>
+        <div class="price-feature"><span class="dot">·</span> Reply agent with financial context</div>
+        <div class="price-feature"><span class="dot">·</span> Full analytics + ROI dashboard</div>
+        <div class="price-feature"><span class="dot">·</span> Sonnet AI for all outreach</div>
+        <a href="#" class="price-cta featured-cta">Start 14-day free trial →</a>
+      </div>
+
+      <div class="price-card">
+        <div class="price-name">Agency</div>
+        <div style="display: flex; align-items: baseline; gap: 4px;">
+          <div class="price-amount">$299</div>
+          <div class="price-period">/ agent / month</div>
+        </div>
+        <p style="font-size: 13px; color: var(--faint); margin-top: 8px; margin-bottom: 20px;">Min 3 seats. $35,880/yr for a 10-seat office.</p>
+        <div class="price-feature"><span class="dot">·</span> Everything in Pro</div>
+        <div class="price-feature"><span class="dot">·</span> Principal dashboard</div>
+        <div class="price-feature"><span class="dot">·</span> Agency leaderboard</div>
+        <div class="price-feature"><span class="dot">·</span> White-label templates</div>
+        <div class="price-feature"><span class="dot">·</span> Shared opt-out registry</div>
+        <a href="#" class="price-cta">Talk to us →</a>
+      </div>
+    </div>
+
+    <!-- ARR TARGET -->
+    <div style="margin-top: 56px; background: var(--bg2); border: 1px solid var(--border); border-radius: 20px; padding: 40px;">
+      <h3 style="margin-bottom: 8px; font-size: 18px;">The ARR math</h3>
+      <p style="color: var(--muted); font-size: 14px; margin-bottom: 28px;">What it takes to reach $10M ARR at the Pro plan price.</p>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+        <div style="text-align: center;">
+          <div style="font-size: 32px; font-weight: 900; color: #fff; letter-spacing: -1px;">210</div>
+          <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">agents at $399/mo</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="font-size: 32px; font-weight: 900; color: #fff; letter-spacing: -1px;">21</div>
+          <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">offices at Agency rate (10 seats each)</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="font-size: 32px; font-weight: 900; color: var(--primary); letter-spacing: -1px;">$1M</div>
+          <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">ARR target Year 1</div>
+        </div>
+        <div style="text-align: center;">
+          <div style="font-size: 32px; font-weight: 900; color: var(--green); letter-spacing: -1px;">$10M</div>
+          <div style="font-size: 12px; color: var(--muted); margin-top: 4px;">ARR target Year 3</div>
+        </div>
+      </div>
+      <div style="margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border);">
+        <p style="font-size: 15px; color: var(--text); line-height: 1.7; max-width: 680px;">
+          There are <strong>16,500 licensed real estate agents in Victoria alone.</strong>
+          PropOS needs <strong>0.5% of that market</strong> to hit $1M ARR.
+          The product generates listings from contacts agents already have.
+          The sales call sells itself.
+        </p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════ FOOTER ════════════════════════════════════════ -->
+<footer>
+  <p style="margin-bottom: 8px;">
+    <strong style="color: var(--text);">PropOS</strong> — Built by
+    <a href="https://addvantage.site">AddVantage</a>
+  </p>
+  <p>Deployed at <a href="https://propos.addvantage.site">propos.addvantage.site</a></p>
+</footer>
+
+</body>
+</html>
