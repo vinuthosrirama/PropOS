@@ -376,6 +376,7 @@ export default function AgentLogin({ onLogin }: Props) {
     if (isCamKnoll(agent)) {
       if (!form.phone) agent.phone = "0428 762 148"
       if (!form.email) agent.email = "cameronk@peakere.com.au"
+      agent.photoUrl = "https://www.peakere.com.au/our-team/cameron-knoll"
     } else if (isPasSunilchandra(agent)) {
       if (!form.phone) agent.phone = "0430 366 649"
       if (!form.email) agent.email = "pass@areaspecialist.com.au"

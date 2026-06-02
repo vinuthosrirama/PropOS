@@ -159,6 +159,7 @@ export interface AgentProfile {
   suburb:  string
   tagline: string
   role?:   "agent" | "principal"
+  photoUrl?: string        // headshot for appraisal report footer
   voiceProfile:    VoiceProfile
   trainingCorpus:  TrainingEntry[]
 }
