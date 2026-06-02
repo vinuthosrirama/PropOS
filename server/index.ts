@@ -24,7 +24,6 @@ import nurtureRouter from "./routes/nurture.js"
 import analyticsRouter from "./routes/analytics.js"
 import boxdiceRouter from "./routes/boxdice.js"
 import authRouter from "./routes/auth.js"
-import billingRouter from "./routes/billing.js"
 import { loadOptOuts } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
 import conversationsRouter from "./routes/conversations.js"
@@ -49,9 +48,6 @@ app.use(cors({
 app.use(compression())
 app.use(cookieParser())
 
-// Stripe webhook needs raw body for signature verification — must come BEFORE express.json()
-app.use("/api/billing/webhook", express.raw({ type: "application/json" }))
-
 app.use(express.json())
 // Twilio webhook sends URL-encoded body
 app.use("/api/webhook/sms", express.urlencoded({ extended: false }))
@@ -75,7 +71,6 @@ app.use("/api/vendor-bulk-send", sendLimiter)
 
 // ── Public routes (no auth required) ─────────────────────────────────────────
 app.use("/api/auth",        authRouter)
-app.use("/api/billing",     billingRouter)
 app.use("/unsubscribe",     unsubscribeRouter)
 app.use("/api/track",       trackRouter)
 app.use("/api/webhook",     webhookRouter)
@@ -127,7 +122,6 @@ app.get("/api/health", (_req, res) => {
     gmail:      gmailConfigured(),
     boxdice:    !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
     domainAvm:  !!process.env.DOMAIN_API_KEY,
-    stripe:     !!process.env.STRIPE_SECRET_KEY,
     database:   isDbConnected(),
     testMode:   !!(testPhone || testEmail),
     testPhone,
