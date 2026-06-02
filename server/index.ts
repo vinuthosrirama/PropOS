@@ -6,7 +6,7 @@ import dotenv from "dotenv"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.resolve(__dirname, ".env") })
 
-import express from "express"
+import express, { type Request, type Response, type NextFunction } from "express"
 import cors from "cors"
 import compression from "compression"
 import cookieParser from "cookie-parser"
@@ -83,10 +83,13 @@ app.use("/api/webhook",     webhookRouter)
 app.use("/api/slm-answer",        slmAnswerRouter)
 app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
 
-// ── Protected routes (require valid JWT) ─────────────────────────────────────
-// Uncomment the line below to enable auth enforcement in production.
-// In demo mode (no DATABASE_URL) auth is a no-op since agents table won't exist.
-// app.use("/api", requireAuth)
+// ── Protected routes (require valid JWT when DB is connected) ─────────────────
+// Auto-enforces when DATABASE_URL is set (production).
+// No-op when DATABASE_URL is missing (demo/dev mode) so the demo runs without accounts.
+app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  if (!isDbConnected()) return next()
+  return requireAuth(req, res, next)
+})
 
 app.use("/api/generate",         generateRouter)
 app.use("/api/vendor-generate",  vendorGenerateRouter)
