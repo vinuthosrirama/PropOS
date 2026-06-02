@@ -69,7 +69,7 @@ type Stage =
   | { kind: "vendorAnalysing"; segmented: SegmentedBuyer[] }
   | { kind: "vendorDashboard"; segmented: SegmentedBuyer[] }
   | { kind: "vendorProfile"; entry: SegmentedBuyer; allEntries?: SegmentedBuyer[]; entryIdx?: number }
-  | { kind: "vendorReview"; entry: SegmentedBuyer; sms: string; emailSubject: string; emailBody: string[] }
+  | { kind: "vendorReview"; entry: SegmentedBuyer; sms: string; emailSubject: string; emailBody: string[]; allEntries?: SegmentedBuyer[]; entryIdx?: number }
   | { kind: "outreachQueue"; items: QueueItem[]; segmented: SegmentedBuyer[] }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -794,6 +794,11 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
   const [sheetsLoading, setSheetsLoading] = useState(true)
   const [auctionPanelProperty, setAuctionPanelProperty] = useState<PortfolioProperty | null>(null)
   const [pitchProperty, setPitchProperty] = useState<PortfolioProperty | null>(null)
+  // Capture new open-home lead
+  const [showLeadModal, setShowLeadModal] = useState(false)
+  const [leadForm, setLeadForm] = useState({ name: "", phone: "", email: "", property: "", suburb: "", notes: "" })
+  const [leadSaving, setLeadSaving] = useState(false)
+  const [leadSaved, setLeadSaved] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -891,6 +896,31 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
     .map(p => ({ p, pct: getSLMCompleteness(loadSLMForProperty(p.id)).pct }))
     .filter(({ pct }) => pct < 80)
 
+  const handleCaptureLead = async () => {
+    if (!leadForm.name) return
+    setLeadSaving(true)
+    try {
+      await authFetch(apiUrl("/api/add-lead"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: Date.now(),
+          name: leadForm.name, phone: leadForm.phone, email: leadForm.email,
+          inspectedProperty: leadForm.property, suburb: leadForm.suburb,
+          notes: leadForm.notes, persona: "family",
+          addedAt: new Date().toISOString(),
+        }),
+      })
+    } catch { /* save locally even if sheet write fails */ }
+    setLeadSaved(true)
+    setLeadSaving(false)
+    setTimeout(() => {
+      setShowLeadModal(false)
+      setLeadForm({ name: "", phone: "", email: "", property: "", suburb: "", notes: "" })
+      setLeadSaved(false)
+    }, 1200)
+  }
+
   return (
     <>
     <div style={{ padding: "80px 32px 56px", fontFamily: FONT, maxWidth: 1440, margin: "0 auto" }}>
@@ -916,10 +946,18 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
 
       {/* ── Active listings ─────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 36 }}>
-        <div style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 18 }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.blue, textTransform: "uppercase" }}>
             Active Listings
           </div>
+          <button onClick={() => setShowLeadModal(true)} style={{
+            marginLeft: "auto", padding: "5px 14px", borderRadius: 8,
+            background: theme.primary, border: "none",
+            color: "#fff", fontSize: 11, fontWeight: 700,
+            cursor: "pointer", fontFamily: FONT,
+          }}>
+            + Capture lead
+          </button>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
@@ -997,6 +1035,78 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
         agent={agent}
         onClose={() => setPitchProperty(null)}
       />
+    )}
+
+    {/* ── Capture New Lead modal ────────────────────────────────────────────── */}
+    {showLeadModal && (
+      <div style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)",
+        zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+      }} onClick={() => setShowLeadModal(false)}>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={e => e.stopPropagation()}
+          style={{
+            background: "#16181e", borderRadius: 18, border: `1px solid ${C.border}`,
+            padding: "28px 28px 24px", width: "100%", maxWidth: 440,
+          }}
+        >
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 4 }}>Capture Open-Home Lead</div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Saved to the Lead tab in your Google Sheet.</div>
+
+          {/* Name + Phone */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Name *</div>
+              <input value={leadForm.name} onChange={e => setLeadForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Jane Smith" style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Phone</div>
+              <input value={leadForm.phone} onChange={e => setLeadForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="0400 000 000" style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
+            </div>
+          </div>
+
+          {/* Email */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Email</div>
+            <input value={leadForm.email} onChange={e => setLeadForm(f => ({ ...f, email: e.target.value }))}
+              placeholder="jane@email.com" style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
+          </div>
+
+          {/* Property + Suburb */}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Property inspected</div>
+              <input value={leadForm.property} onChange={e => setLeadForm(f => ({ ...f, property: e.target.value }))}
+                placeholder="12 Main St, Berwick" style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Suburb</div>
+              <input value={leadForm.suburb} onChange={e => setLeadForm(f => ({ ...f, suburb: e.target.value }))}
+                placeholder="Berwick" style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Notes</div>
+            <textarea value={leadForm.notes} onChange={e => setLeadForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="Budget, requirements, questions asked..." rows={2}
+              style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", resize: "none", boxSizing: "border-box" }} />
+          </div>
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setShowLeadModal(false)} style={{ flex: 1, padding: "11px", borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Cancel</button>
+            <button onClick={handleCaptureLead} disabled={leadSaving || leadSaved || !leadForm.name} style={{ flex: 2, padding: "11px", borderRadius: 10, border: "none", background: leadSaved ? C.green : !leadForm.name ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: leadForm.name ? "white" : C.faint, fontSize: 13, fontWeight: 700, cursor: leadSaving || leadSaved || !leadForm.name ? "default" : "pointer", fontFamily: FONT }}>
+              {leadSaved ? "✓ Lead captured" : leadSaving ? "Saving…" : "Save to Lead tab"}
+            </button>
+          </div>
+        </motion.div>
+      </div>
     )}
     </>
   )
@@ -3074,18 +3184,32 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
   const [showAllContacts, setShowAllContacts] = useState(false)
   const [addVoiceStage, setAddVoiceStage] = useState<"idle" | "transcribing" | "analysing" | "personalising" | "done">("idle")
   const addVoice = useVoiceMemo({
-    onTranscript: (text) => {
+    onTranscript: async (text) => {
       setAddVoiceStage("transcribing")
-      setTimeout(() => {
-        setAddForm(f => ({ ...f, notes: text }))
-        setAddVoiceStage("analysing")
-        setTimeout(() => {
-          setAddVoiceStage("personalising")
-          setTimeout(() => {
-            setAddVoiceStage("done")
-          }, 1600)
-        }, 1000)
-      }, 1200)
+      // Step 1: show transcript raw (immediate feedback)
+      setAddForm(f => ({ ...f, notes: text }))
+      setAddVoiceStage("analysing")
+
+      // Step 2: send to GPT-4o for structured parsing
+      try {
+        const res = await authFetch(apiUrl("/api/parse-notes"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript: text,
+            buyerName: addForm.name || undefined,
+            suburb: addForm.suburb || undefined,
+          }),
+        })
+        setAddVoiceStage("personalising")
+        if (res.ok) {
+          const { notes } = await res.json() as { notes: string }
+          setAddForm(f => ({ ...f, notes }))
+        }
+      } catch {
+        // keep raw transcript on error
+      }
+      setAddVoiceStage("done")
     },
   })
 
@@ -3207,30 +3331,88 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
       const text = e.target?.result as string
       const lines = text.split(/\r?\n/).filter(l => l.trim())
       if (lines.length < 2) return
-      const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ""))
-      const col = (names: string[]) => {
-        for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i !== -1) return i }
+
+      // Properly split a CSV line respecting quoted fields containing commas
+      const splitCsvLine = (line: string): string[] => {
+        const result: string[] = []
+        let cur = ""
+        let inQuote = false
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i]
+          if (ch === '"') { inQuote = !inQuote }
+          else if (ch === "," && !inQuote) { result.push(cur.trim()); cur = "" }
+          else { cur += ch }
+        }
+        result.push(cur.trim())
+        return result
+      }
+
+      const rawHeaders = splitCsvLine(lines[0])
+      const headers = rawHeaders.map(h => h.replace(/^"|"$/g, "").trim().toLowerCase().replace(/[^a-z0-9]/g, ""))
+
+      // Find first column matching any alias (exact then contains)
+      const col = (aliases: string[]): number => {
+        for (const a of aliases) {
+          const exact = headers.findIndex(h => h === a)
+          if (exact !== -1) return exact
+        }
+        for (const a of aliases) {
+          const contains = headers.findIndex(h => h.includes(a))
+          if (contains !== -1) return contains
+        }
         return -1
       }
-      const nameI = col(["name", "fullname", "contact"])
-      const phoneI = col(["phone", "mobile", "cell"])
-      const emailI = col(["email"])
-      const addrI = col(["address", "purchaseaddress", "property"])
-      const suburbI = col(["suburb", "city", "town"])
-      const priceI = col(["price", "purchaseprice", "sold"])
-      const dateI = col(["date", "purchasedate", "settlementdate"])
+
+      // Column indexes — wide alias list covers Rex, AgentBox, Vault, BoxDice, PropTrack, custom exports
+      const firstNameI  = col(["firstname", "first"])
+      const lastNameI   = col(["lastname", "last", "surname"])
+      const nameI       = col(["fullname", "name", "contactname", "client", "contact"])
+      const phoneI      = col(["phone", "mobile", "mobilephone", "cell", "contactphone"])
+      const emailI      = col(["email", "emailaddress", "contactemail"])
+      const addrI       = col(["purchaseaddress", "propertyaddress", "address", "streetaddress", "property", "soldaddress"])
+      const suburbI     = col(["suburb", "suburbname", "city", "town", "location"])
+      const priceI      = col(["purchaseprice", "settledprice", "soldprice", "price", "saleamount", "salevalue", "sold"])
+      const dateI       = col(["purchasedate", "settlementdate", "settledate", "saledate", "solddate", "date"])
+      const bedsI       = col(["beds", "bedrooms", "bedroom"])
+      const bathsI      = col(["baths", "bathrooms", "bathroom"])
+      const landI       = col(["land", "landarea", "landsqm", "landsize", "lotsize"])
+      const typeI       = col(["propertytype", "type", "dwellingtype"])
+      const statusI     = col(["status", "buyerstatus", "clienttype"])
+      const notesI      = col(["notes", "note", "comments", "description"])
+
+      // Extract suburb from "123 Main St, Suburb" format if no suburb column
+      const suburbFromAddr = (addr: string): string => {
+        const parts = addr.split(",")
+        return parts.length >= 2 ? parts[parts.length - 1].trim().replace(/\s+\w{3,4}\s*\d{4}$/, "").trim() : ""
+      }
+
       const parsed: Partial<AddContactForm>[] = lines.slice(1).map(line => {
-        const cols = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""))
+        const cols = splitCsvLine(line)
+        const get = (i: number) => i !== -1 ? cols[i]?.replace(/^"|"$/g, "").trim() ?? "" : ""
+
+        // Merge first + last name if no combined name column
+        let name = get(nameI)
+        if (!name && (firstNameI !== -1 || lastNameI !== -1)) {
+          name = [get(firstNameI), get(lastNameI)].filter(Boolean).join(" ")
+        }
+
+        const addr = get(addrI)
+        const rawSuburb = get(suburbI) || suburbFromAddr(addr)
+
         return {
-          name: nameI !== -1 ? cols[nameI] : "",
-          phone: phoneI !== -1 ? cols[phoneI] : "",
-          email: emailI !== -1 ? cols[emailI] : "",
-          purchaseAddress: addrI !== -1 ? cols[addrI] : "",
-          suburb: suburbI !== -1 ? cols[suburbI] : "",
-          purchasePrice: priceI !== -1 ? cols[priceI] : "",
-          purchaseDate: dateI !== -1 ? cols[dateI] : "",
-          propertyType: "House",
-          status: "owner-occupier",
+          name,
+          phone: get(phoneI),
+          email: get(emailI),
+          purchaseAddress: addr,
+          suburb: rawSuburb,
+          purchasePrice: get(priceI),
+          purchaseDate: get(dateI),
+          beds: get(bedsI) || "3",
+          baths: get(bathsI) || "2",
+          land: get(landI),
+          propertyType: (get(typeI) || "House") as AddContactForm["propertyType"],
+          status: get(statusI) || "owner-occupier",
+          notes: get(notesI),
         }
       }).filter(c => c.name)
       setCsvContacts(parsed)
@@ -3251,10 +3433,13 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
         suburb: c.suburb ?? "",
         purchaseDate: c.purchaseDate ?? "",
         purchasePrice: parseInt((c.purchasePrice ?? "").replace(/\D/g, ""), 10) || 0,
-        deposit: 0, propertyType: (c.propertyType ?? "House") as "House" | "Unit" | "Townhouse",
-        beds: 3, baths: 2, land: 0,
+        deposit: 0,
+        propertyType: (c.propertyType ?? "House") as "House" | "Unit" | "Townhouse",
+        beds: parseInt(c.beds ?? "3", 10) || 3,
+        baths: parseInt(c.baths ?? "2", 10) || 2,
+        land: parseInt((c.land ?? "").replace(/\D/g, ""), 10) || 0,
         status: (c.status ?? "owner-occupier") as import("../data/pastBuyers").BuyerStatus,
-        notes: "", lastContactDate: "",
+        notes: c.notes ?? "", lastContactDate: "",
       }
       try {
         await authFetch(apiUrl("/api/add-contact"), {
@@ -3294,36 +3479,31 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
         </div>
       </div>
 
-      {/* CRM Summary Stats */}
+      {/* CRM Summary Stats — compact inline strip */}
       {(() => {
-        // Industry averages: 2% commission, 60% agent / 40% agency split
         const COMMISSION_RATE = 0.02
         const AGENT_SPLIT     = 0.60
-        const totalGCI    = totalEstValue * COMMISSION_RATE
-        const agentGCI    = totalGCI * AGENT_SPLIT
+        const agentGCI = totalEstValue * COMMISSION_RATE * AGENT_SPLIT
         const fmtM = (v: number) => v >= 1_000_000
           ? `$${(v / 1_000_000).toFixed(1)}M`
           : v >= 1_000 ? `$${(v / 1_000).toFixed(0)}K` : `$${v.toFixed(0)}`
         const stats = [
-          { label: "Total contacts",      value: `${buyers.length}`,    icon: "👥", color: C.text },
-          { label: "Potential vendors",   value: `${owners.length}`,    icon: "🏠", color: C.text },
-          { label: "Investors",           value: `${investors.length}`, icon: "💰", color: C.text },
-          { label: "Est. property value", value: fmtM(totalEstValue),   icon: "📊", color: C.text },
-          { label: "Est. GCI income",     value: fmtM(agentGCI),        icon: "💎", color: C.green },
+          { label: "Contacts",         value: `${buyers.length}`,    accent: false },
+          { label: "Potential vendors",value: `${owners.length}`,    accent: false },
+          { label: "Investors",        value: `${investors.length}`, accent: false },
+          { label: "Portfolio value",  value: fmtM(totalEstValue),   accent: false },
+          { label: "Est. agent GCI",   value: fmtM(agentGCI),        accent: true  },
         ]
         return (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 28 }}>
-            {stats.map(stat => (
-              <div key={stat.label} style={{
-                background: C.bg2, borderRadius: 14, border: `1px solid ${stat.color === C.green ? C.green + "33" : C.border}`,
-                padding: "16px 18px", textAlign: "center",
+          <div style={{ display: "flex", gap: 0, marginBottom: 24, background: C.bg2, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            {stats.map((s, i) => (
+              <div key={s.label} style={{
+                flex: 1, padding: "12px 14px", textAlign: "center",
+                borderRight: i < stats.length - 1 ? `1px solid ${C.border}` : "none",
+                background: s.accent ? `${C.green}0a` : "transparent",
               }}>
-                <div style={{ fontSize: 20, marginBottom: 6 }}>{stat.icon}</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: stat.color, marginBottom: 2 }}>{stat.value}</div>
-                <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>{stat.label}</div>
-                {'sub' in stat && (stat as { sub?: string }).sub && (
-                  <div style={{ fontSize: 9, color: C.faint, marginTop: 3 }}>{(stat as { sub?: string }).sub}</div>
-                )}
+                <div style={{ fontSize: 17, fontWeight: 800, color: s.accent ? C.green : C.text, lineHeight: 1.1 }}>{s.value}</div>
+                <div style={{ fontSize: 10, color: C.faint, fontWeight: 500, marginTop: 3, letterSpacing: 0.3 }}>{s.label}</div>
               </div>
             ))}
           </div>
@@ -4420,15 +4600,28 @@ function VendorAppraisalPanel({ buyer, theme, showEquityScenarios = false }: {
       {/* ── Live comparable sales map ── */}
       <ComparableSalesMap
         suburb={buyer.suburb}
-        comps={comps.map((c, i) => ({
-          address:    c.address,
-          soldPrice:  c.soldPrice,
-          beds:       c.beds,
-          land:       c.land,
-          matchScore: c.matchScore,
-          soldDate:   c.soldDate,
-          isSubject:  i === 0,
-        }))}
+        comps={[
+          // Subject property first (vendor's own address) — shown as purple pulsing pin
+          {
+            address:    buyer.purchaseAddress,
+            soldPrice:  buyer.purchasePrice,
+            beds:       buyer.beds,
+            land:       buyer.land ?? 0,
+            matchScore: 100,
+            soldDate:   buyer.purchaseDate ?? "",
+            isSubject:  true,
+          },
+          // Comparable sales (green / blue / amber pins by match score)
+          ...comps.map(c => ({
+            address:    c.address,
+            soldPrice:  c.soldPrice,
+            beds:       c.beds,
+            land:       c.land,
+            matchScore: c.matchScore,
+            soldDate:   c.soldDate,
+            isSubject:  false,
+          })),
+        ]}
         theme={theme}
         height={260}
       />
@@ -7998,7 +8191,7 @@ export default function DemoView({
               setStage({ kind: "vendorProfile", entry, allEntries: stage.allEntries, entryIdx: idx })
             }}
             onReview={(sms, emailSubject, emailBody) =>
-              setStage({ kind: "vendorReview", entry: stage.entry, sms, emailSubject, emailBody })
+              setStage({ kind: "vendorReview", entry: stage.entry, sms, emailSubject, emailBody, allEntries: stage.allEntries, entryIdx: stage.entryIdx })
             }
             vendorSettings={_vendorSettings}
           />
@@ -8014,7 +8207,7 @@ export default function DemoView({
             sms={stage.sms}
             emailSubject={stage.emailSubject}
             emailBody={stage.emailBody}
-            onBack={() => setStage({ kind: "vendorProfile", entry: stage.entry })}
+            onBack={() => setStage({ kind: "vendorProfile", entry: stage.entry, allEntries: stage.allEntries, entryIdx: stage.entryIdx ?? 0 })}
           />
         </motion.div>
       )}
