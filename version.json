@@ -1,14 +1,15 @@
 {
-  "version": "1.3.6",
-  "releasedAt": "2026-06-02T16:00:00+10:00",
+  "version": "1.3.7",
+  "releasedAt": "2026-06-02T18:00:00+10:00",
   "changes": [
-    "Fix 1: CSV parser handles quoted fields with commas; wider CRM column aliases (Rex, AgentBox, Vault, BoxDice); merges First Name + Last Name columns; extracts suburb from address when no suburb column",
-    "Fix 2: Appraisal Report — removed minus prefix from Selling Costs line in equity waterfall",
-    "Fix 3: Add '+ Capture lead' button to Buyer Outreach PortfolioPage; modal saves to Lead tab via /api/add-lead",
-    "Fix 4: Print button — @media print CSS hides dark app shell, forces white background for appraisal report",
-    "Fix 5: Voice notes auto-saved to sheet at start of generate (persist regardless of send)",
-    "Fix 6: Outreach tab auto-triggers generation on mount — skips manual Generate SMS + Email button",
-    "Fix 7: SMS carousel in vendor review — 3 tone variants with ‹ 1/3 › navigation arrows",
-    "Fix 8: After sending, vendor outreach is upserted to Sheets event log and VoiceCorpus tab"
+    "Back nav: vendorProfile → vendorPortfolio when entered from contact list (not Pipeline Dashboard)",
+    "Carousel pitch angles: SMS/email variants now use distinct pitch angles (CGT, equity, lifestyle, market timing) filtered by persona",
+    "Persona hyper-personalisation: investors get CGT/equity angles; families/downsizers/upsizers get lifestyle-first messaging; no CGT jargon for owner-occupiers",
+    "Agent-sold opener: outreach SMS/email starts with reference to agent's most recent nearby sale for social proof",
+    "Edit learning: when agent edits AI-generated text before sending, edited version is written to VoiceCorpus as [HUMAN_EDIT] training example",
+    "Loading spinners: replaced crescent-arc look with proper full-ring circular spinners across Syncing, voice memo, and CRM connect states",
+    "Next buyer navigation: after approving outreach, 'Next buyer →' button advances through the pipeline without returning to list",
+    "Batch send hint: shows 'Send all N leads at once' option when multiple entries are available in the review screen",
+    "Street-level sale alerts: 🔔 badge on contacts where a comparable property sold within 30 days, with address + price shown inline"
   ]
 }
