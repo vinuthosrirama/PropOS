@@ -68,7 +68,7 @@ type Stage =
   | { kind: "vendorPortfolio" }
   | { kind: "vendorAnalysing"; segmented: SegmentedBuyer[] }
   | { kind: "vendorDashboard"; segmented: SegmentedBuyer[] }
-  | { kind: "vendorProfile"; entry: SegmentedBuyer; allEntries?: SegmentedBuyer[]; entryIdx?: number }
+  | { kind: "vendorProfile"; entry: SegmentedBuyer; allEntries?: SegmentedBuyer[]; entryIdx?: number; from?: "vendorPortfolio" | "vendorDashboard" }
   | { kind: "vendorReview"; entry: SegmentedBuyer; sms: string; emailSubject: string; emailBody: string[]; allEntries?: SegmentedBuyer[]; entryIdx?: number }
   | { kind: "outreachQueue"; items: QueueItem[]; segmented: SegmentedBuyer[] }
 
@@ -2886,8 +2886,8 @@ function VendorAnalysingScreen({ segmented, theme, onComplete }: {
               {active && (
                 <div style={{
                   width: 14, height: 14, borderRadius: "50%",
-                  border: `2px solid ${theme.primary}`,
-                  borderTopColor: "transparent",
+                  border: `2px solid ${theme.primary}30`,
+                  borderTopColor: theme.primary,
                   animation: "spin 0.6s linear infinite",
                   flexShrink: 0,
                 }} />
@@ -3539,7 +3539,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{
                 width: 10, height: 10, borderRadius: "50%",
-                border: "2px solid transparent",
+                border: `2px solid ${C.border}`,
                 borderTopColor: C.blue,
                 animation: "spin 0.7s linear infinite",
                 flexShrink: 0,
@@ -3575,18 +3575,26 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
             const equity = est - buyer.purchasePrice
             const equityPct = buyer.purchasePrice > 0 ? (equity / buyer.purchasePrice) * 100 : 0
             const isClickable = !!onSelectBuyer
+            // Street-level sale alert: check if a comp sold in the last 30 days
+            const recentComps = generateComparables({ suburb: buyer.suburb, propertyType: (buyer.propertyType ?? "House") as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id })
+            const now = new Date("2026-06-02")
+            const nearbyAlert = recentComps.find(c => {
+              const d = new Date(c.soldDate.replace(/(\d+) (\w+) (\d+)/, "$2 $1, $3"))
+              return (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24) <= 30
+            })
             return (
               <div
                 key={buyer.id}
                 onClick={() => handleBuyerClick(buyer)}
                 style={{
-                  background: C.bg2, borderRadius: 12, border: `1px solid ${C.border}`,
+                  background: C.bg2, borderRadius: 12,
+                  border: nearbyAlert ? `1px solid #f59e0b55` : `1px solid ${C.border}`,
                   padding: "14px 16px", display: "flex", alignItems: "center", gap: 14,
                   cursor: isClickable ? "pointer" : "default",
                   transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
                 }}
                 onMouseEnter={e => { if (isClickable) { e.currentTarget.style.borderColor = theme.primary + "55"; e.currentTarget.style.background = C.bg3; e.currentTarget.style.boxShadow = `0 4px 16px rgba(0,0,0,0.2)` } }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.bg2; e.currentTarget.style.boxShadow = "none" }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = nearbyAlert ? "#f59e0b55" : C.border; e.currentTarget.style.background = C.bg2; e.currentTarget.style.boxShadow = "none" }}
               >
                 <div style={{
                   width: 38, height: 38, borderRadius: 10, flexShrink: 0,
@@ -3598,8 +3606,21 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
                   {buyer.name.charAt(0)}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>{buyer.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{buyer.name}</div>
+                    {nearbyAlert && (
+                      <div title={`${nearbyAlert.beds}bd nearby sold ${fmtDollar(nearbyAlert.soldPrice)} on ${nearbyAlert.soldDate}`}
+                        style={{ fontSize: 9, fontWeight: 700, color: "#f59e0b", background: "#f59e0b18", border: "1px solid #f59e0b44", borderRadius: 5, padding: "1px 5px", whiteSpace: "nowrap" }}>
+                        🔔 Nearby sale
+                      </div>
+                    )}
+                  </div>
                   <div style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{buyer.purchaseAddress}</div>
+                  {nearbyAlert && (
+                    <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 2 }}>
+                      {nearbyAlert.beds}bd at {nearbyAlert.address} sold {fmtDollar(nearbyAlert.soldPrice)}
+                    </div>
+                  )}
                 </div>
                 {/* Financial summary */}
                 <div style={{ flexShrink: 0, display: "flex", gap: 10, alignItems: "center" }}>
@@ -3880,7 +3901,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
                                   {isDone
                                     ? <span style={{ fontSize: 13, color: C.green }}>✓</span>
                                     : isCurrent
-                                      ? <div style={{ width: 12, height: 12, borderRadius: "50%", border: "2px solid transparent", borderTopColor: theme.primary, animation: "spin 0.7s linear infinite", flexShrink: 0 }} />
+                                      ? <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${theme.primary}30`, borderTopColor: theme.primary, animation: "spin 0.7s linear infinite", flexShrink: 0 }} />
                                       : <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${C.faint}55`, flexShrink: 0 }} />
                                   }
                                   <span style={{ fontSize: 12, color: isCurrent ? C.text : isDone ? C.muted : C.faint, fontWeight: isCurrent ? 600 : 400 }}>{label}</span>
@@ -3990,7 +4011,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
                           const stage = crmApiKeyStage[key] ?? "idle"
                           if (stage === "loading") return (
                             <div style={{ fontSize: 10, color: C.faint, display: "flex", alignItems: "center", gap: 6 }}>
-                              <div style={{ width: 8, height: 8, borderRadius: "50%", border: "1.5px solid transparent", borderTopColor: theme.primary, animation: "spin 0.7s linear infinite" }} />
+                              <div style={{ width: 8, height: 8, borderRadius: "50%", border: `1.5px solid ${theme.primary}30`, borderTopColor: theme.primary, animation: "spin 0.7s linear infinite" }} />
                               Connecting…
                             </div>
                           )
@@ -7248,7 +7269,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
 
 // ── Vendor Review Panel ───────────────────────────────────────────────────────
 
-function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: initSubject, emailBody: initBody, onBack }: {
+function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: initSubject, emailBody: initBody, onBack, onNext, allEntries }: {
   entry: SegmentedBuyer
   agent: AgentProfile
   theme: AgencyTheme
@@ -7256,6 +7277,8 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   emailSubject: string
   emailBody: string[]
   onBack: () => void
+  onNext?: () => void
+  allEntries?: SegmentedBuyer[]
 }) {
   const [subject, setSubject] = useState(initSubject)
   const [bodyText, setBodyText] = useState(initBody.join("\n\n"))
@@ -7281,7 +7304,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const bubbleColor = theme?.primary ?? "rgb(0,122,255)"
   const avatarGrad = `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
 
-  // Build 3 SMS variants (first = AI-generated, rest = local tone alternatives)
+  // ── Pitch-angle carousel ─────────────────────────────────────────────────────
   const agentFirstRV = agent.name.split(" ")[0]
   const purchaseYearRV = buyer.purchaseDate?.slice(0, 4) ?? "2020"
   const estStrRV = fmtDollar(fin.currentEstimate)
@@ -7290,16 +7313,144 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const signoffRV = buyer.status === "investor" ? "Kind regards" : "Cheers"
   const trim160 = (t: string) => t.length > 160 ? t.slice(0, 157) + "..." : t
   const noEmDash = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
-  const smsVariants: string[] = [
-    initSMS,
-    trim160(noEmDash(`Hi ${fname}, just a quick update from ${agentFirstRV} at ${agent.agency}. ${shortAddrRV} has grown to ~${estStrRV} since ${purchaseYearRV}, that's ${equityStrRV} in equity. Worth a chat? ${signoffRV}, ${agentFirstRV}`)),
-    trim160(noEmDash(`Hi ${fname}, ${agentFirstRV} here. Your property is now worth around ${estStrRV}, up ${equityStrRV} since you bought. Happy to pop over for a free appraisal if you're curious. ${signoffRV}, ${agentFirstRV}`)),
-  ]
+
+  // Persona detection — used to filter / adapt angles
+  const isInvestor = buyer.status === "investor"
+  const notesLower = (buyer.notes ?? "").toLowerCase()
+  void(!isInvestor && (
+    buyer.status === "owner-occupier" ||
+    /family|kids|school|upsize|downsize|retire|retirement|downsiz/i.test(notesLower)
+  )) // computed via isDownsizer/isUpsizer checks below
+  const isDownsizer = /downsize|downsi|retire|retirement|empty.nest/i.test(notesLower)
+  const isUpsizer = /upsize|upsi|growing|kids|school|room/i.test(notesLower)
+
+  // Agent-sold opener: find most recent agent sold in same suburb
+  const agentSoldInSuburb = (() => {
+    const { sold } = getPortfolioForAgent(agent)
+    const match = sold.find(p => p.suburb.toLowerCase() === buyer.suburb.toLowerCase() && p.soldDate)
+    return match ? `Following the sale of ${shortAddr(match.address)} in ${buyer.suburb}` : null
+  })()
+  const soldOpener = agentSoldInSuburb ? `${agentSoldInSuburb}, ` : ""
+
+  // Build pitch-angle SMS variants based on persona (investors get financial angles; families get lifestyle)
+  interface SmsVariant { label: string; sms: string; emailSubject: string; emailBody: string[] }
+  const buildVariants = (): SmsVariant[] => {
+    const variants: SmsVariant[] = []
+
+    // Variant A: AI-generated (always first)
+    variants.push({
+      label: "AI personalised",
+      sms: initSMS,
+      emailSubject: initSubject,
+      emailBody: initBody,
+    })
+
+    if (isInvestor) {
+      // Investor angle 1: CGT deadline (high value)
+      if (fin.cgtSavingsBy2027 > 5000) {
+        variants.push({
+          label: "CGT deadline",
+          sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Selling before July 2027 saves you ~${fmtDollar(fin.cgtSavingsBy2027)} in CGT. Happy to run the numbers. Kind regards, ${agentFirstRV}`)),
+          emailSubject: `Your CGT window is closing, ${fname}`,
+          emailBody: [
+            `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+            `You've held ${shortAddrRV} since ${purchaseYearRV} and the 50% CGT discount applies right now. Selling before 1 July 2027 saves you roughly ${fmtDollar(fin.cgtSavingsBy2027)} in tax. Your property is currently estimated at around ${estStrRV}.`,
+            `Happy to run a quick, no-obligation appraisal. Twenty minutes — I'll come to you. No pressure.\n\nKind regards,\n${agentFirstRV}`,
+          ],
+        })
+      }
+      // Investor angle 2: equity / ROI
+      variants.push({
+        label: "Equity & ROI",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${shortAddrRV} is now worth ~${estStrRV}, that's ${equityStrRV} in equity since ${purchaseYearRV}. Good time to review your position. Kind regards, ${agentFirstRV}`)),
+        emailSubject: `Your equity position at ${shortAddrRV}, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `Ran the numbers on ${shortAddrRV}. You've built roughly ${equityStrRV} in equity since ${purchaseYearRV} and the property is sitting at around ${estStrRV}. With current market conditions in ${buyer.suburb}, now is a strong time to review your portfolio position.`,
+          `Happy to do a complimentary appraisal and walk through your options. No obligation at all.\n\nKind regards,\n${agentFirstRV}`,
+        ],
+      })
+    } else if (isDownsizer) {
+      // Downsizer: lifestyle + equity release, no CGT jargon
+      variants.push({
+        label: "Equity release",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place in ${buyer.suburb} has come a long way since ${purchaseYearRV} — you've built ${equityStrRV} in equity. Worth a chat about your options? ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `Great time to explore your options, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `Just wanted to share that ${shortAddrRV} is now worth around ${estStrRV}. Since ${purchaseYearRV} you've built up ${equityStrRV} in equity. A lot of people in your position are finding this a great moment to right-size and free up that equity for the next chapter.`,
+          `I'd love to offer a complimentary, no-pressure appraisal. Happy to come to you and walk through what the market looks like.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+      variants.push({
+        label: "Local market",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${buyer.suburb} is very active right now — properties are moving well and demand is strong. Thought it was worth letting you know. ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `${buyer.suburb} market update, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `Quick market update for ${buyer.suburb}: demand has been strong and comparable properties are achieving great results. With ${shortAddrRV} valued at around ${estStrRV}, the timing looks really good if you've been thinking about making a move.`,
+          `Happy to have an informal chat — no pressure, just want to make sure you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+    } else if (isUpsizer) {
+      // Upsizer family: focus on equity to fund next home, not financial jargon
+      variants.push({
+        label: "Ready to upsize",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place has grown to ~${estStrRV} — the equity you've built could go a long way toward your next home. Happy to chat. ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `Your equity could fund your next move, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `Just wanted to share that ${shortAddrRV} has grown to around ${estStrRV} — that's ${equityStrRV} in equity built since ${purchaseYearRV}. For families thinking about upsizing, that kind of position makes a real difference when it comes to your next purchase.`,
+          `Happy to walk through what the numbers look like for you — no obligation, just a friendly chat.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+      variants.push({
+        label: "Recent nearby sale",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. A similar home in ${buyer.suburb} recently sold well — your place at ${shortAddrRV} is in great shape. Thought you'd want to know. ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `What's happening in ${buyer.suburb}, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `A comparable property in ${buyer.suburb} recently sold really well, and your place at ${shortAddrRV} stacks up nicely at around ${estStrRV}. If a bigger home is on your radar, the equity you've built (around ${equityStrRV}) puts you in a strong position.`,
+          `Happy to come by for a complimentary appraisal and a chat. No pressure at all.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+    } else {
+      // General owner-occupier: friendly, lifestyle-focused, no financial jargon
+      variants.push({
+        label: "Property value update",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. ${shortAddrRV} is now estimated at around ${estStrRV} — great to see how far it's come since ${purchaseYearRV}. Worth a quick chat? ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `Your property update, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `Just a quick update on ${shortAddrRV}. The property is now worth around ${estStrRV}, which is a great result from when you purchased in ${purchaseYearRV}.`,
+          `I'd love to pop over for a complimentary appraisal if you're curious. Completely no-obligation — just so you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+      variants.push({
+        label: "Market timing",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${buyer.suburb} is seeing strong demand at the moment. Thought it was worth letting you know given ${shortAddrRV} is in great shape. ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `${buyer.suburb} is moving, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `${buyer.suburb} has been really active lately with strong buyer demand. Your property at ${shortAddrRV} is estimated around ${estStrRV} and would present very well in the current market.`,
+          `Happy to do a free, no-pressure appraisal if you'd like an up-to-date picture. Takes about 20 minutes.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+    }
+
+    return variants.slice(0, 3) // cap at 3 in carousel
+  }
+  const smsVariants = buildVariants()
   const [sms, setSMS] = useState(initSMS)
 
-  // Keep sms in sync with carousel selection (unless user has manually edited)
+  // Sync sms + email to selected carousel variant
   useEffect(() => {
-    setSMS(smsVariants[smsVariantIdx])
+    const v = smsVariants[smsVariantIdx]
+    if (v) {
+      setSMS(v.sms)
+      setSubject(v.emailSubject)
+      setBodyText(v.emailBody.join("\n\n"))
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [smsVariantIdx])
 
@@ -7361,6 +7512,17 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       writeAgentVoiceEntry({ text: sms, type: "sms", channel: "sms", ts }).catch(() => {})
       writeAgentVoiceEntry({ text: subject, type: "email_subject", channel: "email", ts }).catch(() => {})
       writeAgentVoiceEntry({ text: bodyText.split("\n\n")[0], type: "email_body", channel: "email", ts }).catch(() => {})
+
+      // Edit learning: if agent modified the AI text, write the edited version as a high-weight training example
+      const selectedVariant = smsVariants[smsVariantIdx]
+      const smsWasEdited = sms.trim() !== (selectedVariant?.sms ?? initSMS).trim()
+      const emailWasEdited = bodyText.trim() !== (selectedVariant?.emailBody.join("\n\n") ?? initBody.join("\n\n")).trim()
+      if (smsWasEdited) {
+        writeAgentVoiceEntry({ text: `[HUMAN_EDIT] ${sms}`, type: "sms", channel: "sms", ts }).catch(() => {})
+      }
+      if (emailWasEdited) {
+        writeAgentVoiceEntry({ text: `[HUMAN_EDIT] ${bodyText.split("\n\n")[0]}`, type: "email_body", channel: "email", ts }).catch(() => {})
+      }
     } catch {}
     setSending(false)
     setSent(true)
@@ -7417,19 +7579,38 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
             </div>
           )}
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-            <button onClick={onBack} style={{
-              padding: "12px 28px", borderRadius: 12, border: "none",
-              background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
-              color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
-            }}>
-              Back to pipeline
-            </button>
+            {onNext ? (
+              <button onClick={onNext} style={{
+                padding: "12px 28px", borderRadius: 12, border: "none",
+                background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+              }}>
+                Next buyer →
+              </button>
+            ) : (
+              <button onClick={onBack} style={{
+                padding: "12px 28px", borderRadius: 12, border: "none",
+                background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+              }}>
+                Back to pipeline
+              </button>
+            )}
+            {onNext && (
+              <button onClick={onBack} style={{
+                padding: "12px 28px", borderRadius: 12,
+                border: `1px solid ${theme.primary}44`, background: "transparent",
+                color: theme.primary, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+              }}>
+                Pipeline
+              </button>
+            )}
             <a href={`tel:${buyer.phone}`} style={{
               padding: "12px 28px", borderRadius: 12, textDecoration: "none",
               border: `1px solid ${theme.primary}44`,
               color: theme.primary, fontSize: 14, fontWeight: 700, fontFamily: FONT,
             }}>
-              📞 Call {fname} now
+              📞 Call {fname}
             </a>
           </div>
         </motion.div>
@@ -7522,7 +7703,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
                 </div>
               </div>
               {/* Carousel navigation */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 12 }}>
                 <button
                   onClick={() => setSmsVariantIdx(i => Math.max(0, i - 1))}
                   disabled={smsVariantIdx === 0}
@@ -7534,9 +7715,14 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
                     fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center",
                   }}
                 >‹</button>
-                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", minWidth: 36, textAlign: "center" }}>
-                  {smsVariantIdx + 1} / {smsVariants.length}
-                </span>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", fontWeight: 600 }}>
+                    {smsVariants[smsVariantIdx]?.label ?? "Variant"}
+                  </div>
+                  <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>
+                    {smsVariantIdx + 1} / {smsVariants.length}
+                  </div>
+                </div>
                 <button
                   onClick={() => setSmsVariantIdx(i => Math.min(smsVariants.length - 1, i + 1))}
                   disabled={smsVariantIdx === smsVariants.length - 1}
@@ -7655,6 +7841,30 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
         Saves the approved SMS and email to Google Sheets for delivery via Twilio and Gmail.
       </div>
+
+      {/* Batch send — only shown when multiple entries are available */}
+      {allEntries && allEntries.length > 1 && !sent && (
+        <div style={{
+          marginTop: 8, padding: "12px 16px", borderRadius: 12,
+          border: `1px solid ${C.border}`, background: C.bg2,
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+        }}>
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>
+            <strong style={{ color: C.text, display: "block" }}>Send all {allEntries.length} leads at once</strong>
+            AI generates and queues personalised outreach for every lead.
+          </div>
+          <button
+            onClick={onBack}
+            style={{
+              flexShrink: 0, padding: "8px 14px", borderRadius: 10, border: "none",
+              background: `${theme.primary}20`, color: theme.primary,
+              fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap",
+            }}
+          >
+            Batch send →
+          </button>
+        </div>
+      )}
 
       <button
         onClick={handleSendToSelf}
@@ -8241,7 +8451,7 @@ export default function DemoView({
               setStage({ kind: "vendorAnalysing", segmented })
             }
             onSelectBuyer={entry =>
-              setStage({ kind: "vendorProfile", entry })
+              setStage({ kind: "vendorProfile", entry, from: "vendorPortfolio" })
             }
           />
         </motion.div>
@@ -8266,7 +8476,7 @@ export default function DemoView({
             agent={agent}
             onSelectEntry={entry => {
               const idx = stage.segmented.findIndex(e => e.buyer.id === entry.buyer.id)
-              setStage({ kind: "vendorProfile", entry, allEntries: stage.segmented, entryIdx: idx >= 0 ? idx : 0 })
+              setStage({ kind: "vendorProfile", entry, allEntries: stage.segmented, entryIdx: idx >= 0 ? idx : 0, from: "vendorDashboard" })
             }}
             onGenerateAll={items =>
               setStage({ kind: "outreachQueue", items, segmented: stage.segmented })
@@ -8294,21 +8504,25 @@ export default function DemoView({
             agent={agent}
             theme={theme}
             onBack={() => {
-              // Re-run segmentation to go back to dashboard
-              const buyers = getPastBuyersForAgent(agent)
-              const financialsMap = new Map<number, FinancialSnapshot>()
-              for (const b of buyers) {
-                const est = CURRENT_VALUE_ESTIMATES[b.id]
-                if (!est) continue
-                financialsMap.set(b.id, calculateFinancials(b.purchasePrice, b.purchaseDate, est, b.deposit))
+              if (stage.from === "vendorPortfolio") {
+                setStage({ kind: "vendorPortfolio" })
+              } else {
+                // Re-run segmentation to go back to pipeline dashboard
+                const buyers = getPastBuyersForAgent(agent)
+                const financialsMap = new Map<number, FinancialSnapshot>()
+                for (const b of buyers) {
+                  const est = CURRENT_VALUE_ESTIMATES[b.id]
+                  if (!est) continue
+                  financialsMap.set(b.id, calculateFinancials(b.purchasePrice, b.purchaseDate, est, b.deposit))
+                }
+                setStage({ kind: "vendorDashboard", segmented: batchSegment(buyers, financialsMap) })
               }
-              setStage({ kind: "vendorDashboard", segmented: batchSegment(buyers, financialsMap) })
             }}
             allEntries={stage.allEntries}
             entryIdx={stage.entryIdx}
             onNavigate={entry => {
               const idx = stage.allEntries?.findIndex(e => e.buyer.id === entry.buyer.id) ?? 0
-              setStage({ kind: "vendorProfile", entry, allEntries: stage.allEntries, entryIdx: idx })
+              setStage({ kind: "vendorProfile", entry, allEntries: stage.allEntries, entryIdx: idx, from: stage.from })
             }}
             onReview={(sms, emailSubject, emailBody) =>
               setStage({ kind: "vendorReview", entry: stage.entry, sms, emailSubject, emailBody, allEntries: stage.allEntries, entryIdx: stage.entryIdx })
@@ -8327,7 +8541,15 @@ export default function DemoView({
             sms={stage.sms}
             emailSubject={stage.emailSubject}
             emailBody={stage.emailBody}
-            onBack={() => setStage({ kind: "vendorProfile", entry: stage.entry, allEntries: stage.allEntries, entryIdx: stage.entryIdx ?? 0 })}
+            allEntries={stage.allEntries}
+            onBack={() => setStage({ kind: "vendorProfile", entry: stage.entry, allEntries: stage.allEntries, entryIdx: stage.entryIdx ?? 0, from: "vendorDashboard" })}
+            onNext={(() => {
+              if (!stage.allEntries || stage.entryIdx == null) return undefined
+              const nextIdx = stage.entryIdx + 1
+              if (nextIdx >= stage.allEntries.length) return undefined
+              const nextEntry = stage.allEntries[nextIdx]
+              return () => setStage({ kind: "vendorProfile", entry: nextEntry, allEntries: stage.allEntries, entryIdx: nextIdx, from: "vendorDashboard" })
+            })()}
           />
         </motion.div>
       )}
