@@ -38,7 +38,9 @@ function AgencyDropdown({
   value, onChange, error, accentColor,
 }: { value: string; onChange: (v: string) => void; error?: string; accentColor?: string }) {
   const [open, setOpen] = useState(false)
+  const [focusedIdx, setFocusedIdx] = useState(-1)
   const ref = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -48,13 +50,32 @@ function AgencyDropdown({
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
+  useEffect(() => {
+    if (!open) setFocusedIdx(-1)
+  }, [open])
+
   const selectedTheme = value ? getAgencyTheme(value) : null
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) {
+      if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setFocusedIdx(0) }
+      return
+    }
+    if (e.key === "Escape") { e.preventDefault(); setOpen(false) }
+    else if (e.key === "ArrowDown") { e.preventDefault(); setFocusedIdx(i => Math.min(i + 1, AGENCIES.length - 1)) }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusedIdx(i => Math.max(i - 1, 0)) }
+    else if (e.key === "Enter" && focusedIdx >= 0) { e.preventDefault(); onChange(AGENCIES[focusedIdx]); setOpen(false) }
+  }
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
+        onKeyDown={handleKeyDown}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={value ? `Agency: ${value}` : "Select your agency"}
         style={{
           width: "100%", background: C.bg3,
           border: `1px solid ${error ? C.red + "88" : accentColor ? accentColor + "55" : C.border}`,
@@ -65,45 +86,52 @@ function AgencyDropdown({
         }}
       >
         {value && selectedTheme && (
-          <span style={{
+          <span aria-hidden="true" style={{
             width: 10, height: 10, borderRadius: "50%",
             background: selectedTheme.primary, flexShrink: 0,
             boxShadow: `0 0 6px ${selectedTheme.primary}88`,
           }} />
         )}
         <span style={{ flex: 1, textAlign: "left" }}>{value || "Select your agency..."}</span>
-        <span style={{ color: C.faint, fontSize: 10 }}>{open ? "▲" : "▼"}</span>
+        <span aria-hidden="true" style={{ color: C.faint, fontSize: 10 }}>{open ? "▲" : "▼"}</span>
       </button>
       {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-          background: C.bg3, border: `1px solid ${C.border}`,
-          borderRadius: 10, zIndex: 200, overflow: "hidden",
-          boxShadow: "0 12px 32px rgba(0,0,0,0.5)", maxHeight: 280, overflowY: "auto",
-        }}>
-          {AGENCIES.map(agency => {
+        <div
+          ref={listRef}
+          role="listbox"
+          aria-label="Agency options"
+          style={{
+            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+            background: C.bg3, border: `1px solid ${C.border}`,
+            borderRadius: 10, zIndex: 200, overflow: "hidden",
+            boxShadow: "0 12px 32px rgba(0,0,0,0.5)", maxHeight: 280, overflowY: "auto",
+          }}>
+          {AGENCIES.map((agency, idx) => {
             const t = getAgencyTheme(agency)
+            const isFocused = focusedIdx === idx
             return (
               <div
                 key={agency}
+                role="option"
+                aria-selected={agency === value}
+                tabIndex={-1}
                 onClick={() => { onChange(agency); setOpen(false) }}
+                onMouseEnter={() => setFocusedIdx(idx)}
                 style={{
                   display: "flex", alignItems: "center", gap: 12,
                   padding: "10px 14px", cursor: "pointer",
-                  background: agency === value ? C.bg2 : "transparent",
+                  background: isFocused || agency === value ? C.bg2 : "transparent",
                   transition: "background 0.1s",
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = C.bg2 }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = agency === value ? C.bg2 : "transparent" }}
               >
-                <span style={{
+                <span aria-hidden="true" style={{
                   width: 10, height: 10, borderRadius: "50%",
                   background: t.primary, flexShrink: 0,
                   boxShadow: `0 0 5px ${t.primary}66`,
                 }} />
                 <span style={{ fontSize: 14, color: C.text }}>{agency}</span>
                 {agency === value && (
-                  <span style={{ marginLeft: "auto", color: t.primary, fontSize: 12, fontWeight: 700 }}>✓</span>
+                  <span aria-hidden="true" style={{ marginLeft: "auto", color: t.primary, fontSize: 12, fontWeight: 700 }}>✓</span>
                 )}
               </div>
             )
@@ -411,13 +439,16 @@ export default function AgentLogin({ onLogin }: Props) {
     flex?: string
   ) => (
     <div style={{ flex: flex ?? "1", display: "flex", flexDirection: "column", gap: 6 }}>
-      <label style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>
-        {label}{errors[key] && <span style={{ color: C.red, marginLeft: 6, fontSize: 10 }}>{errors[key]}</span>}
+      <label htmlFor={`field-${key}`} style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>
+        {label}{errors[key] && <span id={`field-${key}-error`} role="alert" style={{ color: C.red, marginLeft: 6, fontSize: 10 }}>{errors[key]}</span>}
       </label>
       <input
+        id={`field-${key}`}
         type={type}
         value={form[key]}
         placeholder={placeholder}
+        aria-invalid={!!errors[key]}
+        aria-describedby={errors[key] ? `field-${key}-error` : undefined}
         onChange={e => { setForm(f => ({ ...f, [key]: e.target.value })); setErrors(er => ({ ...er, [key]: "" })) }}
         style={{
           background: C.bg3,

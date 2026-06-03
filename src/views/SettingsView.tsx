@@ -240,7 +240,7 @@ function FieldInput({
             const parsed = JSON.parse(v)
             onChange(fieldKey, parsed)
           } catch {
-            onChange(fieldKey, v as any)
+            onChange(fieldKey, v)
           }
         }}
       />
@@ -659,10 +659,10 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
     const raw = await readPropertySLMFromSheet(selectedPropId)
     if (raw && currentSLM) {
       // Merge returned fields over current SLM
-      const merged = { ...currentSLM } as PropertySLM
+      const merged = { ...currentSLM } as PropertySLM & Record<string, unknown>
       for (const [k, v] of Object.entries(raw)) {
         if (k in merged && v !== null && v !== undefined && v !== "") {
-          (merged as any)[k] = v
+          merged[k] = v
         }
       }
       setEditedSLMs((prev) => ({ ...prev, [selectedPropId]: merged }))
@@ -1097,6 +1097,13 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
           )
         })()}
         </>)}
+      </div>
+
+      {/* Version footer */}
+      <div style={{ marginTop: 48, paddingTop: 20, borderTop: `1px solid ${C.border}`, textAlign: "center" }}>
+        <div style={{ fontSize: 11, color: C.faint }}>
+          PropOS v{__APP_VERSION__} · by AddVantage
+        </div>
       </div>
     </div>
   )

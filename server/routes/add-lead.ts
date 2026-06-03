@@ -1,8 +1,7 @@
 import { Router } from "express"
+import { writeToSheet } from "../lib/sheets.js"
 
 const router = Router()
-
-const SHEET_URL = process.env.SHEET_URL ?? ""
 
 /**
  * POST /api/add-lead
@@ -21,31 +20,22 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "name is required" })
   }
 
-  if (SHEET_URL) {
-    try {
-      await fetch(SHEET_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({
-          type:              "add_lead",
-          id:                lead.id ?? Date.now(),
-          name:              lead.name,
-          phone:             lead.phone ?? "",
-          email:             lead.email ?? "",
-          inspectedProperty: lead.inspectedProperty ?? lead.purchaseAddress ?? "",
-          suburb:            lead.suburb ?? "",
-          budget:            lead.budget ?? "",
-          timeline:          lead.timeline ?? "",
-          persona:           lead.persona ?? "family",
-          notes:             lead.notes ?? "",
-          questions:         lead.questions ?? "",
-          addedAt:           new Date().toISOString(),
-        }),
-      })
-    } catch (err) {
-      console.error("[add-lead] Sheet write error:", err)
-    }
-  }
+  // Fire-and-forget — writeToSheet retries internally and never throws
+  void writeToSheet({
+    type:              "add_lead",
+    id:                lead.id ?? Date.now(),
+    name:              lead.name,
+    phone:             lead.phone ?? "",
+    email:             lead.email ?? "",
+    inspectedProperty: lead.inspectedProperty ?? lead.purchaseAddress ?? "",
+    suburb:            lead.suburb ?? "",
+    budget:            lead.budget ?? "",
+    timeline:          lead.timeline ?? "",
+    persona:           lead.persona ?? "family",
+    notes:             lead.notes ?? "",
+    questions:         lead.questions ?? "",
+    addedAt:           new Date().toISOString(),
+  })
 
   console.log(`[add-lead] New lead added: ${lead.name}`)
   return res.json({ ok: true })

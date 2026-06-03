@@ -45,8 +45,11 @@ router.get("/click/:id", async (req, res) => {
     await updateOutreachStatus(id, "clicked").catch(() => { /* non-fatal */ })
   }
 
-  const dest = raw ? decodeURIComponent(raw) : "/"
-  res.redirect(302, dest)
+  // Validate destination to prevent open redirect — only allow mailto: links or same-origin paths
+  const decoded = raw ? decodeURIComponent(raw) : "/"
+  const BASE    = process.env.BASE_URL ?? "https://propos.addvantage.site"
+  const isSafe  = decoded.startsWith("mailto:") || decoded.startsWith("/") || decoded.startsWith(BASE)
+  res.redirect(302, isSafe ? decoded : "/")
 })
 
 export default router

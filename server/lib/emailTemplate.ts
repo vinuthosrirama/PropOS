@@ -156,7 +156,7 @@ export function buildEmailHTML(params: {
   const lastName    = params.agentName.split(" ").slice(1).join(" ")
 
   // Detect Barry Plant brand
-  const isBarryPlant = params.agencyName.toLowerCase().includes("barry") || params.agencyName.toLowerCase().includes("bp")
+  const isBarryPlant = params.agencyName.toLowerCase().includes("barry plant")
 
   const paragraphsHtml = params.bodyParagraphs
     .map(p => `<p style="margin:0 0 16px 0;font-size:15px;color:#1a1a1a;line-height:1.7;font-family:Georgia,serif;">${p.replace(/\n/g, "<br/>")}</p>`)

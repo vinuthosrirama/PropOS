@@ -1,5 +1,21 @@
 import { Router } from "express"
 import { isDbConnected, query, execute, queryOne } from "../lib/db.js"
+import { writeToSheet } from "../lib/sheets.js"
+
+const SHEET_TIMEOUT_MS = 10_000
+
+/** fetch() with AbortController timeout for Sheets reads */
+async function fetchSheet(url: string): Promise<Response | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), SHEET_TIMEOUT_MS)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 const router = Router()
 
@@ -18,7 +34,8 @@ router.get("/vendor", async (req, res) => {
   }
 
   try {
-    const agentId = (req.query.agentId as string) ?? "default"
+    // Use JWT-authenticated agent ID — prevents IDOR (any agent reading any other agent's analytics)
+    const agentId = req.agentId ? String(req.agentId) : "default"
 
     // Core funnel from outreach_log
     const [funnelRows, pipelineRows, recentRows] = await Promise.all([
@@ -165,7 +182,7 @@ router.post("/milestone", async (req, res) => {
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id`,
     [
-      agentId ?? (req as unknown as { agentId?: number }).agentId ?? 0,
+      req.agentId ?? 0,
       contactPhone ?? "",
       contactName ?? "",
       type,
@@ -273,8 +290,8 @@ router.get("/", async (req, res) => {
 
   try {
     const [outcomesRes, eventsRes] = await Promise.all([
-      fetch(`${sheetUrl}?action=getAuctionOutcomes`).catch(() => null),
-      fetch(`${sheetUrl}?action=getEvents`).catch(() => null),
+      fetchSheet(`${sheetUrl}?action=getAuctionOutcomes`),
+      fetchSheet(`${sheetUrl}?action=getEvents`),
     ])
 
     const outcomes: AuctionOutcome[] = outcomesRes?.ok
@@ -307,21 +324,13 @@ router.post("/auction", async (req, res) => {
     return res.status(400).json({ error: "propertyAddress and hammerPrice required" })
   }
 
-  const sheetUrl = process.env.SHEET_URL
-  if (!sheetUrl) {
+  if (!process.env.SHEET_URL) {
     return res.json({ ok: true, warning: "Sheet not configured — outcome not persisted" })
   }
 
-  try {
-    await fetch(sheetUrl, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ type: "auction_outcome", timestamp: new Date().toISOString(), ...outcome }),
-    })
-    res.json({ ok: true })
-  } catch (err) {
-    res.status(500).json({ error: "Failed to save auction outcome" })
-  }
+  // writeToSheet retries internally and never throws
+  void writeToSheet({ type: "auction_outcome", timestamp: new Date().toISOString(), ...(outcome as unknown as Record<string, unknown>) })
+  res.json({ ok: true })
 })
 
 function buildSummary(outcomes: AuctionOutcome[], events: Array<{ eventType: string }>): AnalyticsSummary {

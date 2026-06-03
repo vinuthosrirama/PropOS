@@ -186,22 +186,22 @@ function normaliseField(field: ScoreableField, value: unknown): number | null {
 function buildDimensionWeights(
   persona: PersonaKey,
   questions: string[]
-): Record<string, number> {
+): Partial<Record<keyof PropertySLM, number>> {
   const questionText = questions.join(" ").toLowerCase()
-  const weights: Record<string, number> = {}
+  const weights: Partial<Record<keyof PropertySLM, number>> = {}
 
   for (const f of SCOREABLE_FIELDS) {
     const personaMult = (f.personaBoost[persona] ?? 1)
     let intentBoost = 1
 
     // Check how many question keywords match this field's KEYWORD_MAP entry
-    const kws = KEYWORD_MAP[f.key as string] ?? []
+    const kws = KEYWORD_MAP[f.key] ?? []
     if (kws.length > 0) {
       const hits = kws.filter(kw => questionText.includes(kw)).length
       intentBoost = 1 + Math.min(hits / kws.length, 0.5) * 1.5  // max +75% from questions
     }
 
-    weights[f.key as string] = f.baseWt * personaMult * intentBoost
+    weights[f.key] = f.baseWt * personaMult * intentBoost
   }
 
   return weights
@@ -235,7 +235,7 @@ function buildVectorScore(
   for (const f of SCOREABLE_FIELDS) {
     const soldVal = normaliseField(f, soldSLM[f.key])
     const activeVal = normaliseField(f, activeSLM[f.key])
-    const w = weights[f.key as string] ?? f.baseWt
+    const w = weights[f.key] ?? f.baseWt
 
     if (soldVal === null || activeVal === null) {
       // Can't compare — don't penalise, don't reward
@@ -790,8 +790,8 @@ function buildComparisons(
           ? `$${active.rentalAppraisalLow}–$${active.rentalAppraisalHigh}/wk`
           : "TBD",
       match: numericCloseness(
-        typeof sold.rentalAppraisalLow === "number" ? sold.rentalAppraisalLow : undefined as unknown as number,
-        typeof active.rentalAppraisalLow === "number" ? active.rentalAppraisalLow : undefined as unknown as number,
+        typeof sold.rentalAppraisalLow === "number" ? sold.rentalAppraisalLow : undefined,
+        typeof active.rentalAppraisalLow === "number" ? active.rentalAppraisalLow : undefined,
         0.15
       ),
       direction: numericDir(sold.rentalAppraisalLow, active.rentalAppraisalLow),
@@ -873,7 +873,7 @@ function priceBandMatch(
 ): "exact" | "close" | "different" {
   if (!soldPrice || priceMin === "TBD" || priceMax === "TBD") return "different"
   if (soldPrice >= priceMin && soldPrice <= priceMax) return "exact"
-  const mid = ((priceMin as number) + (priceMax as number)) / 2
+  const mid = (priceMin + priceMax) / 2
   if (Math.abs(soldPrice - mid) / mid <= 0.15) return "close"
   return "different"
 }

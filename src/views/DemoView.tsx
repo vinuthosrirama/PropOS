@@ -46,6 +46,10 @@ import {
 } from "../lib/appraisalEngine"
 import { computePropertyDNA, type PropertyDNA } from "../lib/propertyDNA"
 import ComparableSalesMap from "../components/ComparableSalesMap"
+import ListingPresentation from "../components/ListingPresentation"
+import CampaignReport from "../components/CampaignReport"
+import NurtureSequence from "../components/NurtureSequence"
+import TriggerFeed from "../components/TriggerFeed"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -94,13 +98,17 @@ function ScoreRing({ score, size = 48, strokeWidth = 3, label }: { score: number
   const gap = circ - dash
   const color = scoreColor(score)
   return (
-    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+    <div
+      role="img"
+      aria-label={label ? `${label}: ${score} out of 100` : `Match score: ${score} out of 100`}
+      style={{ position: "relative", width: size, height: size, flexShrink: 0 }}
+    >
+      <svg aria-hidden="true" width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
         <circle cx={cx} cy={cx} r={r} fill="none" stroke={withAlpha(color, 0.2)} strokeWidth={strokeWidth} />
         <circle cx={cx} cy={cx} r={r} fill="none" stroke={color} strokeWidth={strokeWidth}
           strokeDasharray={`${dash} ${gap}`} strokeLinecap="round" />
       </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         <span style={{ fontSize: Math.round(size * 0.28), fontWeight: 800, color, lineHeight: 1 }}>{score}</span>
         {label && <span style={{ fontSize: Math.round(size * 0.155), color: C.faint, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: 0.5, marginTop: 1 }}>{label}</span>}
       </div>
@@ -255,7 +263,11 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick() } }}
+      aria-label={`View leads for ${property.address}`}
       style={{
         background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`,
         overflow: "hidden", cursor: "pointer",
@@ -288,7 +300,7 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
             background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)",
             fontSize: 10, fontWeight: 700, color: completeness.pct >= 70 ? C.green : "#f59e0b",
           }}>
-            {completeness.pct}% SLM complete
+            {completeness.pct}% info complete
           </div>
         )}
       </div>
@@ -348,7 +360,11 @@ function SoldCard({ property, leads, loading, theme, onClick }: {
 }) {
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick() } }}
+      aria-label={`View attendees for ${property.address}, sold ${fmt(property.price)}`}
       style={{
         borderRadius: 16, border: `1px solid ${withAlpha(theme.primary, 0.25)}`,
         overflow: "hidden", cursor: "pointer", position: "relative",
@@ -421,10 +437,10 @@ function SoldCard({ property, leads, loading, theme, onClick }: {
             ))}
           </div>
           {loading ? (
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2 }}>
-              <span style={{ animation: "blink 1s ease-in-out infinite" }}>.</span>
-              <span style={{ animation: "blink 1s ease-in-out 0.33s infinite" }}>.</span>
-              <span style={{ animation: "blink 1s ease-in-out 0.66s infinite" }}>.</span>
+            <span role="status" aria-label="Loading attendees" style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 2 }}>
+              <span aria-hidden="true" style={{ animation: "blink 1s ease-in-out infinite" }}>.</span>
+              <span aria-hidden="true" style={{ animation: "blink 1s ease-in-out 0.33s infinite" }}>.</span>
+              <span aria-hidden="true" style={{ animation: "blink 1s ease-in-out 0.66s infinite" }}>.</span>
             </span>
           ) : (
             <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
@@ -478,11 +494,11 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
 
   return (
     <div style={{ maxWidth: 860, margin: "0 auto", padding: "110px 28px 48px", fontFamily: FONT }}>
-      <button onClick={onBack} style={{
+      <button onClick={onBack} aria-label="Go back" style={{
         background: "transparent", border: "none", cursor: "pointer",
-        color: theme.primary, fontSize: 18, fontFamily: FONT,
-        display: "flex", alignItems: "center", marginBottom: 20, padding: 0, lineHeight: 1,
-      }}>←</button>
+        color: theme.primary, fontSize: 13, fontWeight: 700, fontFamily: FONT,
+        display: "flex", alignItems: "center", gap: 6, marginBottom: 20, padding: "8px 0", lineHeight: 1, minHeight: 44,
+      }}>← Back</button>
 
       {/* Header — property info */}
       <div style={{ display: "flex", gap: 20, marginBottom: 12, alignItems: "flex-start" }}>
@@ -534,6 +550,9 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
+                role={onSelectLead ? "button" : undefined}
+                tabIndex={onSelectLead ? 0 : undefined}
+                aria-label={onSelectLead ? `View outreach for ${lead.name}, match score ${score}` : undefined}
                 onClick={() => {
                   if (!onSelectLead) return
                   const scoredLead: ScoredLead = {
@@ -544,6 +563,18 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                   }
                   onSelectLead(scoredLead, bestMatch?.property ?? PORTFOLIO_ACTIVE[0])
                 }}
+                onKeyDown={onSelectLead ? (e => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    const scoredLead: ScoredLead = {
+                      ...lead,
+                      matchResult: bestMatch?.result ?? { score: 0, reasons: [] },
+                      fromPropertyId: soldProperty.id,
+                      bedsWanted: inferBedsWanted(lead),
+                    }
+                    onSelectLead(scoredLead, bestMatch?.property ?? PORTFOLIO_ACTIVE[0])
+                  }
+                }) : undefined}
                 style={{
                   background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`,
                   padding: "16px 18px",
@@ -631,8 +662,12 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                         alignItems: "flex-end", gap: 6,
                       }}>
                         {/* Arc score circle */}
-                        <div style={{ position: "relative", width: 48, height: 48 }}>
-                          <svg width={48} height={48} style={{ transform: "rotate(-90deg)" }}>
+                        <div
+                          role="img"
+                          aria-label={`Match score: ${score} out of 100`}
+                          style={{ position: "relative", width: 48, height: 48 }}
+                        >
+                          <svg aria-hidden="true" width={48} height={48} style={{ transform: "rotate(-90deg)" }}>
                             <circle cx={24} cy={24} r={r} fill="none" stroke={color + "44"} strokeWidth={3} />
                             <circle
                               cx={24} cy={24} r={r} fill="none"
@@ -641,7 +676,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                               strokeLinecap="round"
                             />
                           </svg>
-                          <div style={{
+                          <div aria-hidden="true" style={{
                             position: "absolute", inset: 0,
                             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
                           }}>
@@ -1300,11 +1335,11 @@ function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "110px 32px 48px", fontFamily: FONT }}>
-      <button onClick={onBack} style={{
+      <button onClick={onBack} aria-label="Go back" style={{
         background: "transparent", border: "none", cursor: "pointer",
-        color: theme.primary, fontSize: 18, fontFamily: FONT,
-        display: "flex", alignItems: "center", marginBottom: 20, padding: 0, lineHeight: 1,
-      }}>←</button>
+        color: theme.primary, fontSize: 13, fontWeight: 700, fontFamily: FONT,
+        display: "flex", alignItems: "center", gap: 6, marginBottom: 20, padding: "8px 0", lineHeight: 1, minHeight: 44,
+      }}>← Back</button>
 
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 4 }}>
@@ -1522,11 +1557,11 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
 
   return (
     <div style={{ maxWidth: 1060, margin: "0 auto", padding: "110px 32px 48px", fontFamily: FONT }}>
-      <button onClick={onBack} style={{
+      <button onClick={onBack} aria-label="Go back" style={{
         background: "transparent", border: "none", cursor: "pointer",
-        color: theme.primary, fontSize: 18, fontFamily: FONT,
-        display: "flex", alignItems: "center", marginBottom: 24, padding: 0, lineHeight: 1,
-      }}>←</button>
+        color: theme.primary, fontSize: 13, fontWeight: 700, fontFamily: FONT,
+        display: "flex", alignItems: "center", gap: 6, marginBottom: 24, padding: "8px 0", lineHeight: 1, minHeight: 44,
+      }}>← Back</button>
 
       <div style={{ display: "flex", gap: 28 }}>
         {/* LEFT column (60%) */}
@@ -2421,11 +2456,11 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "80px 32px 48px", fontFamily: FONT }}>
-      <button onClick={onBack} style={{
+      <button onClick={onBack} aria-label="Go back" style={{
         background: "transparent", border: "none", cursor: "pointer",
-        color: theme.primary, fontSize: 18, fontFamily: FONT,
-        display: "flex", alignItems: "center", marginBottom: 24, padding: 0, lineHeight: 1,
-      }}>←</button>
+        color: theme.primary, fontSize: 13, fontWeight: 700, fontFamily: FONT,
+        display: "flex", alignItems: "center", gap: 6, marginBottom: 24, padding: "8px 0", lineHeight: 1, minHeight: 44,
+      }}>← Back</button>
 
       {/* Box+Dice vs PropOS comparison */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 28 }}>
@@ -2722,7 +2757,7 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
   if (!rematched.length) {
     return (
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "80px 28px", fontFamily: FONT, textAlign: "center" }}>
-        <button onClick={onBack} style={{ background: "none", border: "none", color: theme.primary, fontSize: 18, cursor: "pointer", marginBottom: 24 }}>←</button>
+        <button onClick={onBack} aria-label="Go back" style={{ background: "none", border: "none", color: theme.primary, fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 24, fontFamily: FONT, padding: "8px 0", minHeight: 44 }}>← Back</button>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 12 }}>No strong re-matches found</div>
         <div style={{ fontSize: 13, color: C.muted }}>Add more active listings or complete their SLM data to improve matching.</div>
       </div>
@@ -2731,7 +2766,7 @@ function MissedOutPage({ auctionProperty, leads, onBack, theme, onSelectLead }: 
 
   return (
     <div style={{ maxWidth: 860, margin: "0 auto", padding: "80px 28px 48px", fontFamily: FONT }}>
-      <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, marginBottom: 20, padding: 0 }}>←</button>
+      <button onClick={onBack} aria-label="Go back" style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 13, fontWeight: 700, fontFamily: FONT, marginBottom: 20, padding: "8px 0", minHeight: 44 }}>← Back</button>
 
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.orange, textTransform: "uppercase", marginBottom: 6 }}>
@@ -3531,6 +3566,19 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
         </div>
       )}
 
+      {/* Market Trigger Feed */}
+      {onSelectBuyer && (
+        <TriggerFeed
+          buyers={buyers}
+          theme={theme}
+          onSelectContact={(id) => {
+            const segmented = buildSegmented()
+            const entry = segmented.find(s => s.buyer.id === id)
+            if (entry) onSelectBuyer(entry)
+          }}
+        />
+      )}
+
       {/* Recent contacts preview */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -4097,7 +4145,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, o
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: isMobile ? "80px 16px 48px" : "88px 28px 48px", fontFamily: FONT }}>
-      <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, marginBottom: 20, padding: 0 }}>←</button>
+      <button onClick={onBack} aria-label="Go back" style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 13, fontWeight: 700, fontFamily: FONT, marginBottom: 20, padding: "8px 0", minHeight: 44 }}>← Back</button>
 
       {/* Header with summary */}
       <div style={{ marginBottom: 24 }}>
@@ -4212,6 +4260,16 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, o
 
       {/* AI Hyper-Personalisation Ideas */}
       <AIIdeasPanel theme={theme} />
+
+      {/* Market Trigger Feed */}
+      <TriggerFeed
+        buyers={segmented.map(s => s.buyer)}
+        theme={theme}
+        onSelectContact={(id) => {
+          const entry = segmented.find(s => s.buyer.id === id)
+          if (entry) onSelectEntry(entry)
+        }}
+      />
 
       {/* Bulk fire modal */}
       <AnimatePresence>
@@ -6361,7 +6419,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [showAllMetrics, setShowAllMetrics] = useState(false)
   const [showInsights, setShowInsights] = useState(true)    // triggers open by default
   const [showPitchAngles, setShowPitchAngles] = useState(false)  // pitch angles collapsed by default
-  const [profileTab, setProfileTab] = useState<"analysis" | "outreach">("analysis")
+  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture">("analysis")
   const [selectedAngleIdx, setSelectedAngleIdx] = useState(0)
   // NotesBridge: populated from API response after generation
   const [extractedHook, setExtractedHook] = useState<string | null>(null)
@@ -6542,7 +6600,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   return (
     <div style={{ maxWidth: 1020, margin: "0 auto", padding: isMobileVP ? "80px 16px 48px" : "88px 28px 48px", fontFamily: FONT }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <button onClick={onBack} style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 18, padding: 0 }}>←</button>
+        <button onClick={onBack} aria-label="Go back" style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 13, fontWeight: 700, fontFamily: FONT, padding: "8px 0", minHeight: 44 }}>← Back</button>
         {allEntries && entryIdx !== undefined && allEntries.length > 1 && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
@@ -6606,17 +6664,23 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: "flex", gap: 0, marginBottom: 20, borderBottom: `1px solid ${C.border}` }}>
-        {(["analysis", "outreach"] as const).map(tab => (
-          <button key={tab} onClick={() => setProfileTab(tab)} style={{
-            padding: "10px 22px", background: "none", border: "none", cursor: "pointer",
-            fontSize: 13, fontWeight: 700, fontFamily: FONT,
-            color: profileTab === tab ? theme.primary : C.faint,
-            borderBottom: `2px solid ${profileTab === tab ? theme.primary : "transparent"}`,
+      <div style={{ display: "flex", gap: 0, marginBottom: 20, borderBottom: `1px solid ${C.border}`, overflowX: "auto", scrollbarWidth: "none" }}>
+        {([
+          { id: "analysis",  label: "Analysis" },
+          { id: "outreach",  label: "Outreach" },
+          { id: "listing",   label: "Listing CMA" },
+          { id: "campaign",  label: "Campaign Report" },
+          { id: "nurture",   label: "Nurture" },
+        ] as { id: typeof profileTab; label: string }[]).map(tab => (
+          <button key={tab.id} onClick={() => setProfileTab(tab.id)} style={{
+            padding: isMobileVP ? "10px 14px" : "10px 22px", background: "none", border: "none", cursor: "pointer",
+            fontSize: isMobileVP ? 12 : 13, fontWeight: 700, fontFamily: FONT, whiteSpace: "nowrap", flexShrink: 0,
+            color: profileTab === tab.id ? theme.primary : C.faint,
+            borderBottom: `2px solid ${profileTab === tab.id ? theme.primary : "transparent"}`,
             marginBottom: -1,
             transition: "color 0.15s, border-color 0.15s",
           }}>
-            {tab === "analysis" ? "Analysis" : "Outreach"}
+            {tab.label}
           </button>
         ))}
       </div>
@@ -7254,6 +7318,27 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         </div>
       </div>
 
+      {/* === LISTING CMA TAB === */}
+      {profileTab === "listing" && (
+        <div style={{ marginTop: 4 }}>
+          <ListingPresentation buyer={buyer} agent={agent} theme={theme} />
+        </div>
+      )}
+
+      {/* === CAMPAIGN REPORT TAB === */}
+      {profileTab === "campaign" && (
+        <div style={{ marginTop: 4 }}>
+          <CampaignReport buyer={buyer} agent={agent} theme={theme} />
+        </div>
+      )}
+
+      {/* === NURTURE SEQUENCE TAB === */}
+      {profileTab === "nurture" && (
+        <div style={{ marginTop: 4 }}>
+          <NurtureSequence buyer={buyer} agent={agent} theme={theme} pipeline={segment.pipeline} />
+        </div>
+      )}
+
       {/* Negotiation Coach Modal */}
       <AnimatePresence>
         {showNegotiationCoach && <NegotiationCoachModal entry={entry} agent={agent} theme={theme} onClose={() => setShowNegotiationCoach(false)} />}
@@ -7620,11 +7705,11 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobileRV ? "76px 16px 48px" : "80px 32px 48px", fontFamily: FONT }}>
-      <button onClick={onBack} style={{
+      <button onClick={onBack} aria-label="Go back" style={{
         background: "transparent", border: "none", cursor: "pointer",
-        color: theme.primary, fontSize: 18, fontFamily: FONT,
-        display: "flex", alignItems: "center", marginBottom: 24, padding: 0, lineHeight: 1,
-      }}>←</button>
+        color: theme.primary, fontSize: 13, fontWeight: 700, fontFamily: FONT,
+        display: "flex", alignItems: "center", gap: 6, marginBottom: 24, padding: "8px 0", lineHeight: 1, minHeight: 44,
+      }}>← Back</button>
 
       {/* Header */}
       <div style={{ marginBottom: 24 }}>

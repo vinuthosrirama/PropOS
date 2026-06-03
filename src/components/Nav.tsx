@@ -108,9 +108,6 @@ export default function Nav({
           {logoBlock}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {sheetChip}
-            <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, opacity: 0.6, letterSpacing: 0.4 }}>
-              v{__APP_VERSION__}
-            </div>
             <div style={{
               fontSize: 11, color: "rgb(225, 205, 255)", fontWeight: 600,
               background: theme.dim, padding: "3px 8px", borderRadius: 12,
@@ -118,11 +115,16 @@ export default function Nav({
             }}>
               {VIEWS.find(v => v.id === view)?.short}
             </div>
-            <button onClick={() => setMenuOpen(!menuOpen)} style={{
-              background: "transparent", border: "none", cursor: "pointer",
-              width: 36, height: 36, display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center", gap: 5, flexShrink: 0,
-            }}>
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+              aria-expanded={menuOpen}
+              style={{
+                background: "transparent", border: "none", cursor: "pointer",
+                width: 36, height: 36, display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center", gap: 5, flexShrink: 0,
+              }}
+            >
               {[0, 1, 2].map(i => (
                 <motion.div key={i}
                   animate={menuOpen ? {
@@ -147,14 +149,16 @@ export default function Nav({
                 padding: "12px 0", maxHeight: "80vh", overflowY: "auto",
               }}>
               {VIEWS.filter(v => !v.principalOnly || agent.role === "principal").map((v, i) => (
-                <button key={v.id} onClick={() => navigate(v.id)} style={{
-                  width: "100%", padding: "14px 20px",
-                  display: "flex", alignItems: "center", gap: 14,
-                  background: view === v.id ? theme.dim : "transparent",
-                  border: "none", cursor: "pointer", fontFamily: FONT,
-                  borderLeft: `3px solid ${view === v.id ? "rgb(225, 205, 255)" : "transparent"}`,
-                  transition: "background 0.15s, border-color 0.15s",
-                }}>
+                <button key={v.id} onClick={() => navigate(v.id)}
+                  aria-current={v.id === view ? "page" : undefined}
+                  style={{
+                    width: "100%", padding: "14px 20px",
+                    display: "flex", alignItems: "center", gap: 14,
+                    background: view === v.id ? theme.dim : "transparent",
+                    border: "none", cursor: "pointer", fontFamily: FONT,
+                    borderLeft: `3px solid ${view === v.id ? "rgb(225, 205, 255)" : "transparent"}`,
+                    transition: "background 0.15s, border-color 0.15s",
+                  }}>
                   <div style={{ textAlign: "left" }}>
                     <div style={{ fontSize: 14, fontWeight: view === v.id ? 700 : 400, color: view === v.id ? "rgb(225, 205, 255)" : C.text }}>
                       {v.label}
@@ -239,16 +243,18 @@ export default function Nav({
           const active = v.id === view
           const past = i < currentIdx
           return (
-            <button key={v.id} onClick={() => navigate(v.id)} style={{
-              padding: bp === "tablet" ? "4px 8px" : "4px 11px",
-              borderRadius: 7, border: "none", cursor: "pointer",
-              fontSize: bp === "tablet" ? 10 : 11,
-              fontWeight: active ? 700 : 400,
-              whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT,
-              background: active ? theme.dim : "transparent",
-              color: active ? "rgb(225, 205, 255)" : past ? C.muted : "rgba(200,160,255,0.45)",
-              transition: "all 0.15s",
-            }}>
+            <button key={v.id} onClick={() => navigate(v.id)}
+              aria-current={active ? "page" : undefined}
+              style={{
+                padding: bp === "tablet" ? "4px 8px" : "4px 11px",
+                borderRadius: 7, border: "none", cursor: "pointer",
+                fontSize: bp === "tablet" ? 10 : 11,
+                fontWeight: active ? 700 : 400,
+                whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT,
+                background: active ? theme.dim : "transparent",
+                color: active ? "rgb(225, 205, 255)" : past ? C.muted : "rgba(200,160,255,0.45)",
+                transition: "all 0.15s",
+              }}>
               {bp === "tablet" ? v.short : v.label}
             </button>
           )
@@ -297,15 +303,6 @@ export default function Nav({
       </div>
 
       {sheetChip && <div style={{ marginLeft: 12 }}>{sheetChip}</div>}
-
-      {/* Version badge */}
-      <div style={{
-        marginLeft: 10, flexShrink: 0,
-        fontSize: 9, fontWeight: 700, color: C.faint,
-        letterSpacing: 0.5, opacity: 0.6,
-      }}>
-        v{__APP_VERSION__}
-      </div>
 
       {onLogout && (
         <button onClick={onLogout} title="Switch profile"

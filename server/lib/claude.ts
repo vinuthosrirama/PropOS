@@ -9,6 +9,23 @@ function getClient(): Anthropic {
   return _client
 }
 
+// ---------------------------------------------------------------------------
+// LLM timeout — prevents hung API calls from blocking the server indefinitely.
+// Anthropic SDK v0.20+ accepts AbortSignal as the second argument.
+// ---------------------------------------------------------------------------
+const LLM_TIMEOUT_MS = 30_000
+
+/**
+ * Wraps an LLM SDK call with a 30-second AbortController timeout.
+ * If the call hangs, the Promise rejects so the caller falls through to its
+ * template fallback instead of waiting forever.
+ */
+function withLLMTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
+  return fn(controller.signal).finally(() => clearTimeout(timer))
+}
+
 export interface LeadContext {
   name: string
   budget: string
@@ -77,6 +94,8 @@ Hard rules:
 - Use the lead's first name at least once
 - Include at least one specific detail from their notes or transcript. No generic templates.
 - No spam words (FREE, URGENT, ACT NOW etc.)
+- NEVER use these AI-writing tells: leverage, utilize, robust, seamless, holistic, actionable, synergy, paradigm, delve, showcasing, cutting-edge, pivotal, "testament to", transformative, elevate, cornerstone, empower, nuanced, multifaceted, paramount, comprehensive. Use plain words.
+- NO hollow openers: never start with "I wanted to reach out", "I hope this finds you well", "I wanted to let you know", "just wanted to touch base", "I came across", or "I wanted to share". Get straight to the point.
 
 LEAD: ${lead.name}
 Budget: ${lead.budget} | Timeline: ${lead.timeline} | Buyer type: ${lead.persona}
@@ -94,11 +113,13 @@ Write personalised SMS and email outreach for ${lead.name}. Rules:
 Respond ONLY with valid JSON, no markdown:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]}}`
 
-  const message = await getClient().messages.create({
-    model: "claude-sonnet-4-5",
-    max_tokens: 600,
-    messages: [{ role: "user", content: prompt }],
-  })
+  const message = await withLLMTimeout(signal =>
+    getClient().messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 600,
+      messages: [{ role: "user", content: prompt }],
+    }, { signal }),
+  )
 
   const raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
   // Strip potential markdown fences
@@ -107,12 +128,12 @@ Respond ONLY with valid JSON, no markdown:
     return sanitiseResult(JSON.parse(cleaned) as GenerateResult)
   } catch {
     return sanitiseResult({
-      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here from ${agentAgency}. Thought of you for a new listing, would love to share the details. When suits a quick chat?`,
+      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here from ${agentAgency}. Got a new listing that fits what you were after. Worth a look, when suits a quick chat?`,
       email: {
-        subject: `New listing, thought of you, ${lead.name.split(" ")[0]}`,
+        subject: `New listing for you, ${lead.name.split(" ")[0]}`,
         body: [
-          `Hi ${lead.name.split(" ")[0]}, hope you're well.`,
-          `I came across a new listing that made me think of you straight away. Given what you were looking for, it's worth a look. Happy to send through the details?`,
+          `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here from ${agentAgency}.`,
+          `Got a new listing that fits what you were after. Happy to send through the details whenever suits.`,
           `Cheers,\n${agentName.split(" ")[0]}`,
         ],
       },
@@ -148,11 +169,13 @@ Return ONLY valid JSON (no markdown):
 
 Grading: A=hot/motivated/pre-approved, B=interested/clear timeline, C=browsing/vague, D=unlikely/wrong budget.`
 
-  const message = await getClient().messages.create({
-    model: "claude-haiku-4-5",
-    max_tokens: 300,
-    messages: [{ role: "user", content: prompt }],
-  })
+  const message = await withLLMTimeout(signal =>
+    getClient().messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 300,
+      messages: [{ role: "user", content: prompt }],
+    }, { signal }),
+  )
 
   const raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
   try {
@@ -160,7 +183,7 @@ Grading: A=hot/motivated/pre-approved, B=interested/clear timeline, C=browsing/v
   } catch {
     return {
       grade: "C", signals: [], bestStrategy: "Life Check-In",
-      bestChannel: "sms", callToAction: "Would love to follow up on your property search.",
+      bestChannel: "sms", callToAction: "When's a good time for a quick call?",
       confidence: 50,
     }
   }
@@ -217,6 +240,8 @@ Rules to check:
 9. PERSONALISATION: the SMS must name the old property (short street form, e.g. "Thirlmere Ct") AND the new property (short street form) with a specific buyer-interest bridge between them — generic phrases like "your property search" or "I thought of you" alone are not acceptable
 10. PERSONALISATION: the email Para 1 must name the old property address specifically. Para 2 must answer at least one of the lead's actual questions using a data point from the property context (a number, zone name, or specific fact — not a vague sentence)
 11. VOICE MATCH: the SMS sign-off must match the agent's closing style from the personalisation context. If the agent uses "Cheers [Name]" in examples, the SMS must end that way — not "Thanks" or "Regards"
+12. NO AI VOCABULARY: reject and rewrite if any of these appear: leverage, utilize, robust, seamless, holistic, actionable, synergy, paradigm, delve, showcasing, cutting-edge, pivotal, "testament to", transformative, elevate, cornerstone, empower, nuanced, multifaceted, paramount, comprehensive
+13. NO HOLLOW OPENERS: reject and rewrite if the message starts with "I wanted to reach out", "I hope this finds you well", "I wanted to let you know", "just wanted to touch base", "I came across", or "I wanted to share"
 
 If any rule fails, rewrite the SMS and full email body using the context above to fix the issue.
 
@@ -232,11 +257,13 @@ Return ONLY valid JSON (no markdown):
   "revisedEmailBody": ["paragraph 1","paragraph 2"] if not personalisationOk or not emailOk, else omit
 }`
 
-  const message = await getClient().messages.create({
-    model: "claude-sonnet-4-5",
-    max_tokens: 800,
-    messages: [{ role: "user", content: prompt }],
-  })
+  const message = await withLLMTimeout(signal =>
+    getClient().messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 800,
+      messages: [{ role: "user", content: prompt }],
+    }, { signal }),
+  )
 
   const raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
   const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
@@ -261,6 +288,7 @@ export async function generateMessageHaiku(params: GenerateParams): Promise<Gene
 
   const prompt = `You are ${agentName}, a real estate agent at ${agentAgency} in ${agentSuburb}.
 Hard rules: first person, SMS under 160 chars, HARD CONSTRAINT no em-dashes (—) or en-dashes (–) use a comma instead, 2 paragraphs max email, use lead's first name.
+NEVER use: leverage, utilize, robust, seamless, holistic, actionable, synergy, pivotal, transformative, cornerstone, empower, nuanced, paramount, comprehensive, "I wanted to reach out", "I hope this finds you well", "just wanted to touch base". Plain words only.
 
 LEAD: ${lead.name} | Budget: ${lead.budget} | Buyer type: ${lead.persona}
 Notes: ${lead.notes || "none"}
@@ -269,11 +297,13 @@ STRATEGY: ${strategy}
 Respond ONLY with valid JSON:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2"]}}`
 
-  const message = await getClient().messages.create({
-    model: "claude-haiku-4-5",
-    max_tokens: 400,
-    messages: [{ role: "user", content: prompt }],
-  })
+  const message = await withLLMTimeout(signal =>
+    getClient().messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 400,
+      messages: [{ role: "user", content: prompt }],
+    }, { signal }),
+  )
 
   const raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
   const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
@@ -281,11 +311,11 @@ Respond ONLY with valid JSON:
     return sanitiseResult(JSON.parse(cleaned) as GenerateResult)
   } catch {
     return sanitiseResult({
-      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here. New listing worth a look, when's a good time?`,
+      sms: `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here. Got a new listing that fits what you're after. When's a good time to chat?`,
       email: {
-        subject: `New listing, ${lead.name.split(" ")[0]}`,
+        subject: `New listing for you, ${lead.name.split(" ")[0]}`,
         body: [
-          `Hi ${lead.name.split(" ")[0]}, hope you're well.`,
+          `Hi ${lead.name.split(" ")[0]}, ${agentName.split(" ")[0]} here.`,
           `Cheers,\n${agentName.split(" ")[0]}`,
         ],
       },

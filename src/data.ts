@@ -6,7 +6,7 @@ export const C = {
   text:        "rgb(213, 219, 230)",
   muted:       "rgba(213, 219, 230, 0.5)",
   faint:       "rgba(213, 219, 230, 0.3)",
-  border:      "rgba(216, 231, 242, 0.08)",
+  border:      "rgba(216, 231, 242, 0.13)",
   borderHover: "rgba(216, 231, 242, 0.18)",
   blue:        "rgb(166, 218, 255)",
   blueDim:     "rgba(166, 218, 255, 0.12)",

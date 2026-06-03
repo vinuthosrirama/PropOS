@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react"
+import { useState, useEffect, lazy, Suspense, type CSSProperties } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, DEFAULT_AGENT, DEFAULT_THEME, DEFAULT_VENDOR_SETTINGS,
@@ -16,11 +16,15 @@ const PrincipalView  = lazy(() => import("./views/PrincipalView"))
 
 function LoadingSpinner() {
   return (
-    <div style={{
-      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: C.bg,
-    }}>
-      <div style={{ width: 32, height: 32, borderRadius: "50%", border: `3px solid rgba(255,255,255,0.1)`, borderTopColor: "rgba(255,255,255,0.6)", animation: "spin 0.7s linear infinite" }} />
+    <div
+      aria-busy="true"
+      aria-label="Loading..."
+      style={{
+        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+        background: C.bg,
+      }}
+    >
+      <div aria-hidden="true" style={{ width: 32, height: 32, borderRadius: "50%", border: `3px solid rgba(255,255,255,0.1)`, borderTopColor: "rgba(255,255,255,0.6)", animation: "spin 0.7s linear infinite" }} />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
@@ -102,17 +106,17 @@ export default function App() {
   return (
     <div style={{
       minHeight: "100vh", background: C.bg, fontFamily: FONT, color: C.text,
-      ["--accent" as string]:      theme.primary,
-      ["--accent-dim" as string]:  theme.dim,
-      ["--accent-glow" as string]: theme.glow,
-    }}>
+      "--accent":     theme.primary,
+      "--accent-dim": theme.dim,
+      "--accent-glow":theme.glow,
+    } as CSSProperties & Record<`--${string}`, string>}>
       <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn}
            onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge}
            mode={mode} onSwitchMode={setMode} />
 
       <Suspense fallback={<LoadingSpinner />}>
         <AnimatePresence mode="wait">
-          <motion.div key={view}
+          <motion.div id="main-content" key={view}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
