@@ -45,8 +45,9 @@ export async function initDb(): Promise<void> {
       connectionString: url,
       ssl: url.includes("localhost") ? false : { rejectUnauthorized: false },
       max: 10,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
+      idleTimeoutMillis:       30_000,
+      connectionTimeoutMillis:  5_000,
+      statement_timeout:       15_000,  // kill runaway queries — prevents pool starvation
     })
 
     // Verify connection
@@ -118,7 +119,7 @@ async function migrate(): Promise<void> {
       pipeline        TEXT,
       step            INTEGER NOT NULL DEFAULT 0,
       scheduled_at    TIMESTAMPTZ NOT NULL,
-      status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'cancelled', 'failed')),
+      status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sending', 'sent', 'cancelled', 'failed')),
       attempts        INTEGER NOT NULL DEFAULT 0,
       last_error      TEXT,
       context         JSONB DEFAULT '{}',
@@ -183,19 +184,32 @@ async function migrate(): Promise<void> {
     DO $$ BEGIN
       BEGIN
         ALTER TABLE contacts ADD CONSTRAINT contacts_agent_address_unique UNIQUE (agent_id, purchase_address);
-      EXCEPTION WHEN duplicate_table THEN NULL;
+      EXCEPTION WHEN duplicate_object THEN NULL;
       END;
     END $$;
 
     -- Indexes for common queries
-    CREATE INDEX IF NOT EXISTS idx_outreach_agent    ON outreach_log(agent_id);
-    CREATE INDEX IF NOT EXISTS idx_outreach_phone    ON outreach_log(contact_phone);
-    CREATE INDEX IF NOT EXISTS idx_outreach_sent_at  ON outreach_log(sent_at);
-    CREATE INDEX IF NOT EXISTS idx_nurture_status    ON nurture_queue(status, scheduled_at);
-    CREATE INDEX IF NOT EXISTS idx_nurture_phone     ON nurture_queue(contact_phone);
-    CREATE INDEX IF NOT EXISTS idx_contacts_agent    ON contacts(agent_id);
-    CREATE INDEX IF NOT EXISTS idx_contacts_pipeline ON contacts(agent_id, pipeline);
-    CREATE INDEX IF NOT EXISTS idx_milestones_agent  ON milestones(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_outreach_agent       ON outreach_log(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_outreach_phone       ON outreach_log(contact_phone);
+    CREATE INDEX IF NOT EXISTS idx_outreach_sent_at     ON outreach_log(sent_at);
+    CREATE INDEX IF NOT EXISTS idx_nurture_status       ON nurture_queue(status, scheduled_at);
+    CREATE INDEX IF NOT EXISTS idx_nurture_phone        ON nurture_queue(contact_phone);
+    CREATE INDEX IF NOT EXISTS idx_contacts_agent       ON contacts(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_contacts_pipeline    ON contacts(agent_id, pipeline);
+    CREATE INDEX IF NOT EXISTS idx_milestones_agent     ON milestones(agent_id);
+    -- Inbox badge: fast unread count
+    CREATE INDEX IF NOT EXISTS idx_conversations_unread ON conversations(unread) WHERE unread = true;
+    -- Inbox list: fast sort by recency
+    CREATE INDEX IF NOT EXISTS idx_conversations_ts     ON conversations(last_reply_at DESC);
+
+    -- Live installs: widen nurture_queue status constraint to include 'sending'.
+    -- The scheduler sets status='sending' to lock jobs; without this the check fails.
+    DO $$ BEGIN
+      ALTER TABLE nurture_queue DROP CONSTRAINT IF EXISTS nurture_queue_status_check;
+      ALTER TABLE nurture_queue ADD CONSTRAINT nurture_queue_status_check
+        CHECK (status IN ('pending', 'sending', 'sent', 'cancelled', 'failed'));
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
   `)
 }
 

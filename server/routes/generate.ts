@@ -10,16 +10,20 @@ function clampSMS(sms: string): string {
   return sms.slice(0, 157).trimEnd() + "..."
 }
 
+// Strip em-dashes and double-hyphens from a single string
+function cleanStr(s: string): string {
+  return s.replace(/—|–/g, ",").replace(/--/g, ",")
+}
+
 // Strip em-dashes from all model output — enforced after every generation path
 function sanitise<T extends { sms: string; email: { subject: string; body: string[] } }>(r: T): T {
-  const clean = (s: string) => s.replace(/—|–/g, ",").replace(/--/g, ",")
   return {
     ...r,
-    sms: clampSMS(clean(r.sms)),
+    sms: clampSMS(cleanStr(r.sms)),
     email: {
       ...r.email,
-      subject: clean(r.email.subject),
-      body: r.email.body.map(clean),
+      subject: cleanStr(r.email.subject),
+      body: r.email.body.map(cleanStr),
     },
   }
 }
@@ -149,11 +153,11 @@ router.post("/", async (req, res) => {
           leadQuestions: params.lead.questions,
           slmContext: params.slmContext,
         })
-        // Auto-apply QA fixes, then re-sanitise and re-clamp
+        // Auto-apply QA fixes — use cleanStr() so —, –, and -- are all stripped
         if (!qa.passed) {
-          if (qa.revisedSMS)       result.sms = clampSMS(qa.revisedSMS.replace(/—|–/g, ","))
-          if (qa.revisedSubject)   result.email.subject = qa.revisedSubject.replace(/—|–/g, ",")
-          if (qa.revisedEmailBody) result.email.body = qa.revisedEmailBody.map(p => p.replace(/—|–/g, ","))
+          if (qa.revisedSMS)       result.sms = clampSMS(cleanStr(qa.revisedSMS))
+          if (qa.revisedSubject)   result.email.subject = cleanStr(qa.revisedSubject)
+          if (qa.revisedEmailBody) result.email.body = qa.revisedEmailBody.map(cleanStr)
         }
         // Always hard-clamp SMS even if QA passed
         result.sms = clampSMS(result.sms)

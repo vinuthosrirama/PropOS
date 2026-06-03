@@ -28,10 +28,32 @@ interface SpeechRecognitionEvent  {
   results: SpeechRecognitionResult[] & { length: number }
 }
 
-const getSR = (): (new () => any) | null =>
+interface SpeechRecognitionConstructor {
+  new(): SpeechRecognitionInstance
+}
+interface SpeechRecognitionInstance {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  maxAlternatives: number
+  onresult: ((e: SpeechRecognitionEvent) => void) | null
+  onerror: ((e: { error: string }) => void) | null
+  onend: (() => void) | null
+  start(): void
+  stop(): void
+  abort(): void
+}
+
+// Extend Window type locally to avoid `as any`
+interface SpeechWindow extends Window {
+  SpeechRecognition?: SpeechRecognitionConstructor
+  webkitSpeechRecognition?: SpeechRecognitionConstructor
+}
+
+const getSR = (): SpeechRecognitionConstructor | null =>
   typeof window === "undefined"
     ? null
-    : (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition ?? null
+    : (window as SpeechWindow).SpeechRecognition ?? (window as SpeechWindow).webkitSpeechRecognition ?? null
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
@@ -66,7 +88,7 @@ export function useVoiceMemo(options: UseVoiceMemoOptions = {}): UseVoiceMemoRes
   const [loading,        setLoading]        = useState(false)
   const [permError,      setPermError]      = useState<string | null>(null)
 
-  const recogRef      = useRef<any>(null)
+  const recogRef      = useRef<SpeechRecognitionInstance | null>(null)
   const committedRef  = useRef("")
   const isStoppingRef = useRef(false)
   const timerRef      = useRef<ReturnType<typeof setInterval> | null>(null)

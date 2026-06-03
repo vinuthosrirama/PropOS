@@ -4,8 +4,8 @@ import { sendSMS, twilioConfigured } from "../lib/twilio.js"
 import { sendEmail, gmailConfigured } from "../lib/gmail.js"
 import { buildEmailHTML } from "../lib/emailTemplate.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"
-import { logOutreach } from "../lib/db.js"
-import { queueNurtureSequence } from "../lib/scheduler.js"
+import { logOutreach, updateOutreachStatus } from "../lib/db.js"
+import { queueNurtureSequence, type NurtureContext } from "../lib/scheduler.js"
 
 const router = Router()
 
@@ -41,7 +41,7 @@ interface SendRequest {
   emailBody:        string   // \n\n-separated plain-text paragraphs
   channel:          "sms" | "email" | "both"
   pipeline?:        string                      // vendor pipeline id — triggers nurture scheduling
-  nurtureContext?:  Record<string, unknown>      // extra context passed to nurture LLM
+  nurtureContext?:  NurtureContext                // extra context passed to nurture LLM
 }
 
 /**
@@ -109,6 +109,7 @@ router.post("/", async (req, res) => {
   }
 
   // ── Pre-log to get outreach ID (for email tracking pixel) ───────────────────
+  // Logged as "sent" optimistically; updated to "failed" below if the send throws.
   let outreachLogId = 0
   if ((channel === "email" || channel === "both") && compliance.emailOk && email) {
     outreachLogId = await logOutreach({
@@ -123,6 +124,8 @@ router.post("/", async (req, res) => {
       propertyAddress: propertyAddr,
     }).catch(() => 0)
   }
+
+  let emailActuallySent = false
 
   // ── Email ────────────────────────────────────────────────────────────────────
   if ((channel === "email" || channel === "both") && compliance.emailOk) {
@@ -147,9 +150,12 @@ router.post("/", async (req, res) => {
       })
       try {
         results.email = await withRetry(() => sendEmail({ to: email, fromName: agentName, subject, htmlBody: html }))
+        emailActuallySent = true
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         results.errors.push(`Email failed: ${msg}`)
+        // Correct the pre-logged "sent" status so analytics show the real outcome
+        if (outreachLogId > 0) updateOutreachStatus(outreachLogId, "failed").catch(() => { /* non-fatal */ })
       }
     }
   }

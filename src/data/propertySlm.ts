@@ -4950,8 +4950,10 @@ function mapSheetRowToSLM(raw: Record<string, unknown>, propertyId: number): Pro
   const fallback = SLM_DATA[propertyId]
   if (!fallback) return raw as unknown as PropertySLM // unknown property, pass through
 
-  // Start from hardcoded as base, overlay any non-empty Sheet values
-  const merged: any = { ...fallback }
+  // Start from hardcoded as base, overlay any non-empty Sheet values.
+  // The intersection with Record<string, unknown> allows dynamic key writes
+  // while keeping the return type as PropertySLM.
+  const merged = { ...fallback } as PropertySLM & Record<string, unknown>
   for (const [k, v] of Object.entries(raw)) {
     if (k.startsWith("qa_")) continue // handle Q&A separately
     if (v === null || v === undefined || v === "") continue

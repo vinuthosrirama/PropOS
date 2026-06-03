@@ -103,8 +103,8 @@ function generateTemplate(contact: BatchContact, agentFirst: string, agentAgency
   const equityPct = Math.round(contact.equityGainPct)
   const signoff   = contact.status === "investor" ? "Kind regards" : "Cheers"
 
-  const sms = `Hi ${fname}, ${agentFirst} from ${agentAgency}. ${addr} is worth ~${estStr} today — ${equityStr} growth (${equityPct}%) since ${contact.purchaseYear}. Worth a chat? ${signoff}, ${agentFirst}`
-    .slice(0, 160)
+  const smsRaw = `Hi ${fname}, ${agentFirst} from ${agentAgency}. ${addr} is worth ~${estStr} today — ${equityStr} growth (${equityPct}%) since ${contact.purchaseYear}. Worth a chat? ${signoff}, ${agentFirst}`
+  const sms = smsRaw.length <= 160 ? smsRaw : smsRaw.slice(0, 157).trimEnd() + "..."
 
   const subject = `Your property update, ${fname}: ${contact.suburb} market insights`
 
@@ -215,7 +215,7 @@ router.post("/send", async (req, res) => {
         contactPhone:    contact.phone,
         contactEmail:    contact.email,
         contactName:     contact.name,
-        channel:         "both",
+        channel:         smsSent && emailSent ? "both" : smsSent ? "sms" : "email",
         smsBody:         sms,
         emailSubject:    subject,
         emailBody,

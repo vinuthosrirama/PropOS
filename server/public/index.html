@@ -24,6 +24,15 @@
       ::-webkit-scrollbar-thumb { background: rgba(216, 231, 242, 0.15); border-radius: 3px; }
       input, textarea, select { font-family: inherit; }
       @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+      .skip-nav {
+        position: absolute; top: -56px; left: 16px;
+        padding: 8px 16px; border-radius: 8px;
+        background: rgb(166, 218, 255); color: rgb(4, 7, 13);
+        font-weight: 700; font-size: 13px;
+        z-index: 9999; text-decoration: none;
+        transition: top 0.15s;
+      }
+      .skip-nav:focus { top: 8px; }
       @media print {
         body > *:not(#buyer-pitch-report) { display: none !important; }
         #buyer-pitch-report { display: block !important; position: static !important;
@@ -33,11 +42,12 @@
         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       }
     </style>
-    <script type="module" crossorigin data-cfasync="false" src="/assets/index-D6_Zsgo6.js"></script>
+    <script type="module" crossorigin data-cfasync="false" src="/assets/index-CUJAKGvI.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-framer-DaUpJ-T_.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-react-BR8h7yyW.js">
   </head>
   <body>
+    <a href="#main-content" class="skip-nav">Skip to main content</a>
     <div id="root"></div>
   </body>
 </html>

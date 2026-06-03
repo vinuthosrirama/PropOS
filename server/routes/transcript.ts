@@ -1,4 +1,5 @@
 import { Router } from "express"
+import { writeToSheet } from "../lib/sheets.js"
 
 const router = Router()
 
@@ -39,45 +40,28 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "leadName and at least one of generatedSMS or generatedEmail are required" })
   }
 
-  const sheetUrl = process.env.SHEET_URL ?? process.env.VITE_SHEET_URL ?? ""
-
-  if (!sheetUrl) {
+  if (!process.env.SHEET_URL && !process.env.VITE_SHEET_URL) {
     return res.json({ ok: true, warning: "No SHEET_URL configured — transcript saved locally only" })
   }
 
-  try {
-    const payload = {
-      // patch_lead_outreach — Apps Script must only update outreach columns,
-      // never touch name/phone/email/budget/notes/persona.
-      // Transcript is appended (separated by \n---\n), not replaced.
-      action:          "patch_lead_outreach",
-      leadId:          leadId ?? "",
-      leadName:        leadName ?? "",
-      phone:           phone ?? "",
-      propertyAddress: propertyAddress ?? "",
-      transcript:      transcript ?? "",
-      generatedSMS:    generatedSMS ?? "",
-      generatedEmail:  generatedEmail ?? "",
-      emailSubject:    emailSubject ?? "",
-      timestamp:       timestamp ?? new Date().toISOString(),
-    }
+  // writeToSheet handles timeout (10s), retry (3×), correct Content-Type, and never throws
+  void writeToSheet({
+    // patch_lead_outreach — Apps Script must only update outreach columns,
+    // never touch name/phone/email/budget/notes/persona.
+    // Transcript is appended (separated by \n---\n), not replaced.
+    action:          "patch_lead_outreach",
+    leadId:          leadId ?? "",
+    leadName:        leadName ?? "",
+    phone:           phone ?? "",
+    propertyAddress: propertyAddress ?? "",
+    transcript:      transcript ?? "",
+    generatedSMS:    generatedSMS ?? "",
+    generatedEmail:  generatedEmail ?? "",
+    emailSubject:    emailSubject ?? "",
+    timestamp:       timestamp ?? new Date().toISOString(),
+  })
 
-    const response = await fetch(sheetUrl, {
-      method:  "POST",
-      headers: { "Content-Type": "text/plain" },
-      body:    JSON.stringify(payload),
-    })
-
-    if (!response.ok) {
-      console.warn("Sheet upsert responded with", response.status)
-      return res.json({ ok: true, warning: `Sheet responded ${response.status}` })
-    }
-
-    return res.json({ ok: true })
-  } catch (err) {
-    console.warn("Sheet upsert failed (non-fatal):", err)
-    return res.json({ ok: true, warning: "Sheet sync failed — message saved locally" })
-  }
+  return res.json({ ok: true })
 })
 
 export default router

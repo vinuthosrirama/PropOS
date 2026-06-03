@@ -11,6 +11,7 @@ import cors from "cors"
 import compression from "compression"
 import cookieParser from "cookie-parser"
 import rateLimit from "express-rate-limit"
+import helmet from "helmet"
 import generateRouter from "./routes/generate.js"
 import vendorGenerateRouter from "./routes/vendor-generate.js"
 import vendorBulkSendRouter from "./routes/vendor-bulk-send.js"
@@ -35,13 +36,21 @@ import addLeadRouter from "./routes/add-lead.js"
 import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
 import { loadConversations } from "./lib/conversations.js"
-import { initDb, isDbConnected } from "./lib/db.js"
+import { initDb, isDbConnected, query } from "./lib/db.js"
 import { startScheduler } from "./lib/scheduler.js"
 import { requireAuth } from "./middleware/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
 
 const app = express()
 const PORT = process.env.PORT ?? 3001
+
+// ── Security headers ──────────────────────────────────────────────────────────
+app.use(helmet({
+  // CSP relaxed for Vite HMR in dev and inline styles (React inline style objects)
+  contentSecurityPolicy: process.env.NODE_ENV === "production" ? undefined : false,
+  // Allow embedding in iframes for demo preview tools only in dev
+  frameguard: process.env.NODE_ENV === "production" ? { action: "deny" } : false,
+}))
 
 app.use(cors({
   origin: ["http://localhost:3001", "http://localhost:3003", "http://localhost:5173", "https://propos.addvantage.site", process.env.BASE_URL].filter(Boolean) as string[],
@@ -50,9 +59,10 @@ app.use(cors({
 app.use(compression())
 app.use(cookieParser())
 
-app.use(express.json())
+// 256 KB body limit — prevents large-payload DoS; no legitimate request exceeds this
+app.use(express.json({ limit: "256kb" }))
 // Twilio webhook sends URL-encoded body
-app.use("/api/webhook/sms", express.urlencoded({ extended: false }))
+app.use("/api/webhook/sms", express.urlencoded({ extended: false, limit: "16kb" }))
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 
@@ -114,22 +124,37 @@ app.get("/api/avm", async (req, res) => {
 })
 
 // Health check — must be before express.static so it's never shadowed by the SPA
-app.get("/api/health", (_req, res) => {
-  const testPhone = process.env.TEST_RECIPIENT_PHONE?.trim() || null
-  const testEmail = process.env.TEST_RECIPIENT_EMAIL?.trim() || null
+// Probes the DB with SELECT 1 so monitoring systems catch pool failures, not just
+// missing env vars. All other services are config-checked only (no token spend).
+app.get("/api/health", async (_req, res) => {
+  // Live DB probe — 3s timeout so this endpoint stays fast
+  let dbLive = false
+  if (isDbConnected()) {
+    try {
+      const rows = await Promise.race<{ ok: number }[]>([
+        query<{ ok: number }>("SELECT 1 AS ok"),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("DB probe timeout")), 3_000),
+        ),
+      ])
+      dbLive = rows.length > 0
+    } catch {
+      dbLive = false
+    }
+  }
+
   res.json({
-    ok: true,
-    openai:     !!process.env.OPENAI_API_KEY,
-    anthropic:  !!process.env.ANTHROPIC_API_KEY,
-    sheet:      !!process.env.SHEET_URL,
-    twilio:     !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
-    gmail:      gmailConfigured(),
-    boxdice:    !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
-    domainAvm:  !!process.env.DOMAIN_API_KEY,
-    database:   isDbConnected(),
-    testMode:   !!(testPhone || testEmail),
-    testPhone,
-    testEmail,
+    ok:        true,
+    openai:    !!process.env.OPENAI_API_KEY,
+    anthropic: !!process.env.ANTHROPIC_API_KEY,
+    sheet:     !!process.env.SHEET_URL,
+    twilio:    !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+    gmail:     gmailConfigured(),
+    boxdice:   !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
+    domainAvm: !!process.env.DOMAIN_API_KEY,
+    database:  dbLive,
+    // testMode is a boolean flag only — never expose actual contact values
+    testMode:  !!(process.env.TEST_RECIPIENT_PHONE?.trim() || process.env.TEST_RECIPIENT_EMAIL?.trim()),
   })
 })
 
@@ -187,6 +212,15 @@ app.listen(PORT, async () => {
   // 2. Load compliance + conversation state
   await loadOptOuts()
   await loadConversations()
+
+  // CHAOS GUARD: warn loudly when running without a DB.
+  // In-memory opt-outs are lost on every restart — a restarted server will
+  // re-contact opted-out leads, which violates the AU SPAM Act 2003.
+  if (!isDbConnected()) {
+    console.warn("  ⚠️  WARNING: No DATABASE_URL — opt-outs held in memory only.")
+    console.warn("  ⚠️  A server restart will lose all opt-out records.")
+    console.warn("  ⚠️  Set DATABASE_URL before enabling the nurture scheduler in production.")
+  }
 
   // 3. Start nurture scheduler (no-ops if no DB)
   startScheduler()

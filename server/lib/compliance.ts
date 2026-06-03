@@ -5,6 +5,7 @@
  */
 
 import { isDbConnected, query, execute } from "./db.js"
+import { writeToSheet } from "./sheets.js"
 
 export interface OptOutEntry {
   identifier: string   // phone or email
@@ -32,7 +33,10 @@ export async function loadOptOuts(): Promise<void> {
   const sheetUrl = process.env.SHEET_URL
   if (!sheetUrl) return
   try {
-    const res = await fetch(`${sheetUrl}?action=getOptOuts`)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 10_000)
+    const res = await fetch(`${sheetUrl}?action=getOptOuts`, { signal: controller.signal })
+      .finally(() => clearTimeout(timer))
     if (!res.ok) return
     const data = await res.json() as { optOuts?: OptOutEntry[] }
     for (const entry of data.optOuts ?? []) {
@@ -67,17 +71,8 @@ export async function addOptOut(
   const entry: OptOutEntry = { identifier: key, type, source, timestamp }
   optOutRegistry.set(key, entry)
 
-  const sheetUrl = process.env.SHEET_URL
-  if (!sheetUrl) return
-  try {
-    await fetch(sheetUrl, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ type: "opt_out", identifier: key, optOutType: type, source, timestamp }),
-    })
-  } catch {
-    console.warn("Could not persist opt-out to Sheets")
-  }
+  // writeToSheet retries internally, has a 10s timeout, and never throws
+  void writeToSheet({ type: "opt_out", identifier: key, optOutType: type, source, timestamp })
 }
 
 /** Check whether a contact can receive messages on each channel */

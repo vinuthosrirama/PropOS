@@ -4,6 +4,7 @@
  */
 
 import { isDbConnected, query, execute } from "./db.js"
+import { writeToSheet } from "./sheets.js"
 
 export interface ConversationMessage {
   role: "agent" | "lead"
@@ -38,16 +39,24 @@ export async function getThread(phone: string): Promise<ConversationThread | und
   return threads.get(key)
 }
 
+/**
+ * Returns all threads sorted by recency.
+ * Messages are stripped from list results — fetch the full thread via getThread()
+ * when you need message bodies. This keeps the inbox payload bounded.
+ */
 export async function getAllThreads(): Promise<ConversationThread[]> {
   if (isDbConnected()) {
     const rows = await query<DbRow>(
-      `SELECT * FROM conversations ORDER BY last_reply_at DESC`,
+      // Return metadata only — callers that need messages should use getThread()
+      `SELECT phone, lead_id, lead_name, property_address, email,
+              '[]'::jsonb AS messages, last_reply_at, unread
+       FROM conversations ORDER BY last_reply_at DESC`,
     )
     return rows.map(fromDbRow)
   }
-  return Array.from(threads.values()).sort(
-    (a, b) => new Date(b.lastReplyAt).getTime() - new Date(a.lastReplyAt).getTime(),
-  )
+  return Array.from(threads.values())
+    .sort((a, b) => new Date(b.lastReplyAt).getTime() - new Date(a.lastReplyAt).getTime())
+    .map(t => ({ ...t, messages: [] }))  // strip messages from list — load on demand
 }
 
 export async function getUnreadCount(): Promise<number> {
@@ -201,25 +210,21 @@ const SHEET_URL = process.env.SHEET_URL
 async function persistThread(thread: ConversationThread): Promise<void> {
   if (isDbConnected()) return // DB handles its own persistence
   if (!SHEET_URL) return
-  try {
-    await fetch(SHEET_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({
-        type: "upsert_conversation",
-        phone: thread.phone,
-        leadId: thread.leadId,
-        leadName: thread.leadName,
-        propertyAddress: thread.propertyAddress,
-        email: thread.email,
-        messages: JSON.stringify(thread.messages),
-        lastReplyAt: thread.lastReplyAt,
-        unread: thread.unread,
-      }),
-    })
-  } catch {
-    // Non-fatal — thread is still held in memory
-  }
+  // Only send the latest message rather than the full array —
+  // avoids O(n) payload growth as threads grow.
+  const latestMsg = thread.messages[thread.messages.length - 1]
+  // writeToSheet handles timeout (10s), retry, correct Content-Type, and never throws
+  void writeToSheet({
+    type:            "upsert_conversation",
+    phone:           thread.phone,
+    leadId:          thread.leadId,
+    leadName:        thread.leadName,
+    propertyAddress: thread.propertyAddress,
+    email:           thread.email,
+    latestMessage:   latestMsg ? JSON.stringify(latestMsg) : "",
+    lastReplyAt:     thread.lastReplyAt,
+    unread:          thread.unread,
+  })
 }
 
 /** Load existing threads from Sheets on server startup (in-memory mode only) */
@@ -233,7 +238,10 @@ export async function loadConversations(): Promise<void> {
 
   if (!SHEET_URL) return
   try {
-    const res = await fetch(`${SHEET_URL}?action=getConversations`)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 10_000)
+    const res = await fetch(`${SHEET_URL}?action=getConversations`, { signal: controller.signal })
+      .finally(() => clearTimeout(timer))
     if (!res.ok) return
     const data = await res.json() as { conversations?: ConversationThread[] }
     for (const t of data.conversations ?? []) {

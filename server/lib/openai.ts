@@ -36,6 +36,14 @@ export interface GenerateResult {
   email: { subject: string; body: string[] }
 }
 
+const LLM_TIMEOUT_MS = 30_000
+
+function withLLMTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
+  return fn(controller.signal).finally(() => clearTimeout(timer))
+}
+
 export async function generateMessage(params: GenerateParams): Promise<GenerateResult> {
   const { agentName, agentAgency, agentSuburb, voiceContext, voiceTraits, slmContext, soldShortAddr, activeShortAddr, lead, strategy, channel } = params
 
@@ -71,7 +79,9 @@ Hard rules — never break these:
 - CRITICAL: Use the detailed notes and questions below. Reference what they specifically asked or observed. No generic phrases.
 - If the lead asked specific questions, answer at least one of them with a real data point from the property context.
 - No spam words (FREE, URGENT, ACT NOW, LIMITED TIME etc.)
-- Match the exact tone and vocabulary from training examples above.`
+- Match the exact tone and vocabulary from training examples above.
+- NEVER use these AI-writing tells — they make messages sound robotic: leverage, utilize, robust, seamless, holistic, actionable, synergy, paradigm, delve, showcasing, cutting-edge, pivotal, "testament to", transformative, elevate, cornerstone, empower, nuanced, multifaceted, paramount, comprehensive. Use plain everyday words.
+- NO hollow openers: never start with "I wanted to reach out", "I hope this finds you well", "I wanted to let you know", "just wanted to touch base", "I wanted to share", or "I came across". Get straight to the point.`
 
   const transcriptBlock = lead.transcript
     ? `\nVoice memo / field notes (use these specific details):\n"${lead.transcript}"`
@@ -93,24 +103,26 @@ Write the message now:
 Respond ONLY with valid JSON, no markdown:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]}}`
 
-  const completion = await getOpenAI().chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-    temperature: 0.7,
-    max_tokens: 600,
-    response_format: { type: "json_object" },
-  })
+  const completion = await withLLMTimeout(signal =>
+    getOpenAI().chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      temperature: 0.7,
+      max_tokens: 600,
+      response_format: { type: "json_object" },
+    }, { signal }),
+  )
 
   const raw = completion.choices[0]?.message?.content ?? "{}"
   try {
     return sanitiseResult(JSON.parse(raw) as GenerateResult)
   } catch {
     return sanitiseResult({
-      sms: "Hi, I wanted to follow up, would love to chat about your property search. When suits?",
-      email: { subject: "Following up from the open home", body: ["Hi, just wanted to touch base."] },
+      sms: "Hi, saw you through the open home. Got something I think suits you, worth a look. When's a good time? Cheers",
+      email: { subject: "From the open home", body: ["Hi, great meeting you at the open home.", "Got a property I think you'd like given what you were after. Happy to send through the details when suits."] },
     })
   }
 }

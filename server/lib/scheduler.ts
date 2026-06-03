@@ -84,6 +84,20 @@ export const BUYER_NURTURE_STEPS: NurtureStep[] = [
 // Public API — called when outreach Day 0 is confirmed sent
 // ---------------------------------------------------------------------------
 
+/** Typed context blob passed to the nurture LLM on each follow-up step. */
+export interface NurtureContext {
+  agentName:     string
+  agentAgency:   string
+  agentEmail:    string
+  agentPhone?:   string
+  agentSuburb?:  string
+  agencyColor?:  string
+  agencyTagline?: string
+  voiceContext?:  string
+  pipeline?:     string
+  notes?:        string
+}
+
 export interface QueueNurtureParams {
   agentId?:        string
   contactPhone:    string
@@ -91,8 +105,7 @@ export interface QueueNurtureParams {
   contactEmail:    string
   propertyAddress: string
   pipeline?:       string   // "vendor" | pipeline id | undefined (buyer mode)
-  // Context blob passed to LLM for each follow-up generation
-  context: Record<string, unknown>
+  context: NurtureContext
 }
 
 /**
@@ -111,11 +124,16 @@ export async function queueNurtureSequence(params: QueueNurtureParams): Promise<
   const now = new Date()
   for (const step of steps) {
     const scheduledAt = new Date(now.getTime() + step.daysAfterInitial * 24 * 60 * 60 * 1000)
+    // WHERE NOT EXISTS prevents double-queuing if called twice for the same contact/step
     await execute(
       `INSERT INTO nurture_queue
          (agent_id, contact_phone, contact_name, contact_email, property_address, pipeline, step, scheduled_at, status, context)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9)
-       ON CONFLICT DO NOTHING`,
+       SELECT $1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9
+       WHERE NOT EXISTS (
+         SELECT 1 FROM nurture_queue
+         WHERE contact_phone = $2 AND step = $7
+           AND status IN ('pending', 'sending', 'sent')
+       )`,
       [
         params.agentId ?? "default",
         params.contactPhone,
@@ -158,6 +176,16 @@ export function startScheduler(): void {
     console.log("  Scheduler: no database — automated nurture disabled (demo mode)")
     return
   }
+
+  // Recover jobs orphaned in 'sending' by a previous crash.
+  // Decrement attempts so the crash doesn't count against the retry budget.
+  execute(
+    `UPDATE nurture_queue
+     SET status = 'pending', attempts = GREATEST(attempts - 1, 0), updated_at = NOW()
+     WHERE status = 'sending'`,
+  ).then(n => {
+    if (n > 0) console.warn(`[scheduler] recovered ${n} orphaned job(s) from previous crash`)
+  }).catch(err => console.error("[scheduler] crash-recovery query failed:", err))
 
   // Run immediately on startup to catch any overdue jobs (e.g. after a restart)
   runNurtureJobs().catch(err => console.error("[scheduler] startup run failed:", err))
@@ -211,7 +239,15 @@ async function runNurtureJobs(): Promise<void> {
 }
 
 async function processJob(job: NurtureJobRow): Promise<void> {
-  const ctx = typeof job.context === "string" ? JSON.parse(job.context) : (job.context ?? {})
+  let ctx: NurtureContext
+  try {
+    ctx = (typeof job.context === "string" ? JSON.parse(job.context) : (job.context ?? {})) as NurtureContext
+  } catch {
+    // Corrupt context blob — fail the job immediately rather than leaving it stuck in 'sending'
+    console.error(`[scheduler] job ${job.id} has unparseable context, marking failed`)
+    await markJob(job.id, "failed", "context JSON parse error")
+    return
+  }
   const step = getStepDefinition(job.pipeline, job.step)
 
   try {
@@ -246,15 +282,15 @@ async function processJob(job: NurtureJobRow): Promise<void> {
 
     if (compliance.emailOk && job.contact_email && gmailConfigured()) {
       try {
-        const agentName  = String(ctx.agentName  ?? "Agent")
-        const agentEmail = String(ctx.agentEmail ?? "")
+        const agentName  = ctx.agentName  || "Agent"
+        const agentEmail = ctx.agentEmail || ""
         const html = buildEmailHTML({
           agentName,
-          agencyName:      String(ctx.agentAgency ?? ""),
+          agencyName:      ctx.agentAgency  || "",
           agentEmail,
-          agentPhone:      ctx.agentPhone as string | undefined,
-          agencyColor:     ctx.agencyColor as string | undefined,
-          agencyTagline:   ctx.agencyTagline as string | undefined,
+          agentPhone:      ctx.agentPhone,
+          agencyColor:     ctx.agencyColor,
+          agencyTagline:   ctx.agencyTagline,
           leadFirstName:   job.contact_name.split(" ")[0],
           propertyAddress: job.property_address,
           bodyParagraphs:  message.email.body,
@@ -324,21 +360,23 @@ interface NurtureMessage {
 
 async function generateNurtureMessage(
   job: NurtureJobRow,
-  ctx: Record<string, unknown>,
+  ctx: NurtureContext,
   step: NurtureStep | undefined,
 ): Promise<NurtureMessage> {
-  const firstName = job.contact_name.split(" ")[0]
-  const agentFirst = String(ctx.agentName ?? "Agent").split(" ")[0]
+  const firstName   = job.contact_name.split(" ")[0]
+  const agentFirst  = (ctx.agentName || "Agent").split(" ")[0]
+  const agentAgency = ctx.agentAgency || ""
+  const fromAgency  = agentAgency ? ` from ${agentAgency}` : ""
   const anchor = step?.anchor ?? "Checking in on your situation."
 
   // Try LLM generation first
   if (process.env.ANTHROPIC_API_KEY) {
     try {
       const params: GenerateParams = {
-        agentName:    String(ctx.agentName   ?? "Agent"),
-        agentAgency:  String(ctx.agentAgency ?? ""),
-        agentSuburb:  String(ctx.agentSuburb ?? ""),
-        voiceContext: String(ctx.voiceContext ?? ""),
+        agentName:    ctx.agentName   || "Agent",
+        agentAgency:  ctx.agentAgency || "",
+        agentSuburb:  ctx.agentSuburb ?? "",
+        voiceContext: ctx.voiceContext ?? "",
         slmContext:   "",
         strategy:     step?.strategyLabel ?? "Check-In",
         channel:      "sms",
@@ -346,8 +384,8 @@ async function generateNurtureMessage(
           name:      job.contact_name,
           budget:    "",
           timeline:  "",
-          persona:   String(ctx.pipeline ?? ""),
-          notes:     `${String(ctx.notes ?? "")}\n[Follow-up step ${job.step} — ${anchor}]`.trim(),
+          persona:   ctx.pipeline ?? "",
+          notes:     `${ctx.notes ?? ""}\n[Follow-up step ${job.step} — ${anchor}]`.trim(),
           transcript: "",
           questions:  "",
         },
@@ -365,36 +403,36 @@ async function generateNurtureMessage(
   // Template fallback
   const templates: NurtureMessage[] = [
     {
-      sms: `Hi ${firstName}, ${agentFirst} here. Quick update. The market in your suburb is moving well right now. Happy to share some recent numbers if you're interested? Cheers`,
+      sms: `Hi ${firstName}, ${agentFirst} here. A couple of strong sales just came through in your suburb. Happy to share the numbers if you're keen? Cheers`,
       email: {
-        subject: `Suburb market update, ${firstName}`,
+        subject: `Recent sales in your suburb, ${firstName}`,
         body: [
-          `Hi ${firstName}, hope you're well.`,
-          `I wanted to share a quick market update for your suburb. There have been some strong sales recently that directly impact your property's value. Happy to walk you through the numbers at a time that suits you.`,
+          `Hi ${firstName},`,
+          `A few strong results have come through in your suburb recently that are worth knowing about. They paint a pretty good picture of where your property sits right now. Happy to walk you through the numbers whenever suits.`,
           `Cheers,\n${agentFirst}`,
         ],
       },
     },
     {
-      sms: `Hi ${firstName}, ${agentFirst} from Peake. Another owner nearby has just decided to go to market. The timing for sellers is looking really good right now. Worth a chat? Cheers`,
+      sms: `Hi ${firstName}, ${agentFirst}${fromAgency} here. Another owner nearby just decided to go to market. Timing for sellers is looking good right now. Worth a quick chat? Cheers`,
       email: {
         subject: `Thought you'd want to know, ${firstName}`,
         body: [
-          `Hi ${firstName}, hope all is well.`,
-          `I wanted to let you know that another owner in your area has just decided to list their home. It's a good indicator of confidence in the current market, and the conditions are similarly strong for your property.`,
-          `Let me know if you'd like to catch up for a coffee to discuss. No pressure at all.`,
+          `Hi ${firstName},`,
+          `Another owner in your area just made the call to list. That's a decent sign of where confidence sits right now, and the same conditions apply to your place.`,
+          `No pressure at all, but if you'd like to catch up for a coffee and talk through your options, I'm happy to do that.`,
           `Cheers,\n${agentFirst}`,
         ],
       },
     },
     {
-      sms: `Hi ${firstName}, ${agentFirst} here. Just checking in. Hope things are going well. If you've had any more thoughts about your property, I'm always happy to chat. Cheers`,
+      sms: `Hi ${firstName}, ${agentFirst} here. Just checking in, no particular agenda. If you've had any thoughts about your property lately, always happy to chat. Cheers`,
       email: {
-        subject: `Just checking in, ${firstName}`,
+        subject: `Checking in, ${firstName}`,
         body: [
-          `Hi ${firstName}, just a quick hello.`,
-          `I hope everything is going well. I'm not reaching out with any particular news, just wanted to check in and see how you're getting on.`,
-          `If you've had any thoughts about your property situation at all, I'm always happy to have a no-obligation chat. Otherwise, have a great week.`,
+          `Hi ${firstName},`,
+          `No particular news, just wanted to see how things are going. If your situation has changed at all or you've been thinking about your property, I'm always happy to have a no-pressure chat.`,
+          `Otherwise, hope all's going well.`,
           `Cheers,\n${agentFirst}`,
         ],
       },

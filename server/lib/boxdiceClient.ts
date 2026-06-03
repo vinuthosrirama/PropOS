@@ -206,11 +206,19 @@ export class BoxDiceClient {
     body?: unknown,
   ): Promise<{ status: number; data: T | null }> {
     const url = `${this.base}${path}`
-    const res = await fetch(url, {
-      method,
-      headers: this.headers,
-      body: body ? JSON.stringify(body) : undefined,
-    })
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15_000)
+    let res: Response
+    try {
+      res = await fetch(url, {
+        method,
+        headers: this.headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timer)
+    }
 
     if (res.status === 204) return { status: 204, data: null }  // end of pagination
 

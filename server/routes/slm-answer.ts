@@ -1,6 +1,21 @@
 import { Router } from "express"
+import OpenAI from "openai"
+import Anthropic from "@anthropic-ai/sdk"
 
 const router = Router()
+
+// Lazy module-level clients — instantiated once, not per request
+let _openai: OpenAI | null = null
+function getOpenAI(): OpenAI {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  return _openai
+}
+
+let _anthropic: Anthropic | null = null
+function getAnthropic(): Anthropic {
+  if (!_anthropic) _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  return _anthropic
+}
 
 /**
  * POST /api/slm-answer
@@ -54,9 +69,7 @@ Rules:
 
   try {
     if (hasOpenAI) {
-      const { default: OpenAI } = await import("openai")
-      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-      const completion = await client.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
@@ -70,9 +83,7 @@ Rules:
     }
 
     // Anthropic fallback
-    const Anthropic = (await import("@anthropic-ai/sdk")).default
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-    const msg = await client.messages.create({
+    const msg = await getAnthropic().messages.create({
       model: "claude-haiku-4-5",
       max_tokens: 200,
       system: systemPrompt,

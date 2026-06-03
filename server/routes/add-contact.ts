@@ -1,9 +1,8 @@
 import { Router } from "express"
 import { isDbConnected, execute } from "../lib/db.js"
+import { writeToSheet } from "../lib/sheets.js"
 
 const router = Router()
-
-const SHEET_URL = process.env.SHEET_URL ?? ""
 
 /**
  * POST /api/add-contact
@@ -23,40 +22,30 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "name and purchaseAddress are required" })
   }
 
-  if (SHEET_URL) {
-    try {
-      await fetch(SHEET_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({
-          type: "add_past_buyer",
-          id:              contact.id ?? Date.now(),
-          name:            contact.name,
-          phone:           contact.phone ?? "",
-          email:           contact.email ?? "",
-          purchaseAddress: contact.purchaseAddress,
-          suburb:          contact.suburb ?? "",
-          purchaseDate:    contact.purchaseDate ?? "",
-          purchasePrice:   contact.purchasePrice ?? 0,
-          deposit:         contact.deposit ?? 0,
-          propertyType:    contact.propertyType ?? "House",
-          beds:            contact.beds ?? 3,
-          baths:           contact.baths ?? 2,
-          land:            contact.land ?? 0,
-          status:          contact.status ?? "owner-occupier",
-          notes:           contact.notes ?? "",
-          lastContactDate: "",
-        }),
-      })
-    } catch (err) {
-      console.error("[add-contact] Sheet write error:", err)
-      // fail silently — contact is already added in frontend state
-    }
-  }
+  // Fire-and-forget — writeToSheet retries internally and never throws
+  void writeToSheet({
+    type:            "add_past_buyer",
+    id:              contact.id ?? Date.now(),
+    name:            contact.name,
+    phone:           contact.phone ?? "",
+    email:           contact.email ?? "",
+    purchaseAddress: contact.purchaseAddress,
+    suburb:          contact.suburb ?? "",
+    purchaseDate:    contact.purchaseDate ?? "",
+    purchasePrice:   contact.purchasePrice ?? 0,
+    deposit:         contact.deposit ?? 0,
+    propertyType:    contact.propertyType ?? "House",
+    beds:            contact.beds ?? 3,
+    baths:           contact.baths ?? 2,
+    land:            contact.land ?? 0,
+    status:          contact.status ?? "owner-occupier",
+    notes:           contact.notes ?? "",
+    lastContactDate: "",
+  })
 
   // Also persist to DB when connected (makes CSV import survive server restarts)
   if (isDbConnected()) {
-    const agentId = (req as unknown as { agentId?: number }).agentId ?? 0
+    const agentId = String(req.agentId ?? 0)
     await execute(
       `INSERT INTO contacts (agent_id, name, phone, email, purchase_address, suburb,
        purchase_date, purchase_price, deposit, property_type, beds, baths, land, status, notes)
@@ -64,7 +53,7 @@ router.post("/", async (req, res) => {
        ON CONFLICT ON CONSTRAINT contacts_agent_address_unique
        DO UPDATE SET notes=EXCLUDED.notes, phone=EXCLUDED.phone, email=EXCLUDED.email`,
       [
-        String(agentId),
+        agentId,
         contact.name,
         contact.phone ?? "",
         contact.email ?? "",
