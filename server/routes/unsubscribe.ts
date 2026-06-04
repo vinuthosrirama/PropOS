@@ -1,9 +1,9 @@
 import { Router } from "express"
-import { addOptOut } from "../lib/compliance.js"
+import { addOptOut, verifyUnsubToken } from "../lib/compliance.js"
 
 const router = Router()
 
-/** GET /unsubscribe?token=leadId&type=email|sms|all */
+/** GET /unsubscribe?token=<hmac-signed-token>&type=email|sms|all */
 router.get("/", async (req, res) => {
   const { token, type } = req.query as { token?: string; type?: string }
 
@@ -11,9 +11,15 @@ router.get("/", async (req, res) => {
     return res.status(400).send(confirmationPage("Invalid unsubscribe link."))
   }
 
+  // Verify HMAC — prevents guessing adjacent leadIds to unsubscribe others
+  const leadId = verifyUnsubToken(token)
+  if (!leadId) {
+    return res.status(400).send(confirmationPage("This unsubscribe link is invalid or has expired."))
+  }
+
   const optOutType = (type === "sms" || type === "all") ? type : "email"
   try {
-    await addOptOut(token, optOutType, "link")
+    await addOptOut(leadId, optOutType, "link")
   } catch (err) {
     console.error("[unsubscribe]", err)
     return res.status(500).send(confirmationPage("Something went wrong. Please try again."))
@@ -23,6 +29,16 @@ router.get("/", async (req, res) => {
     (optOutType === "all" ? "any communications" : `${optOutType} messages`) +
     " from this agent via AddVantage."))
 })
+
+// PT-M2: escape user-controlled text before interpolating into HTML — prevents latent XSS
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
 
 function confirmationPage(message: string): string {
   return `<!DOCTYPE html>
@@ -43,7 +59,7 @@ function confirmationPage(message: string): string {
 <body>
   <div class="card">
     <h1>Unsubscribed</h1>
-    <p>${message}</p>
+    <p>${escapeHtml(message)}</p>
   </div>
 </body>
 </html>`

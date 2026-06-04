@@ -4,6 +4,7 @@
  * All outbound delivery MUST call checkCompliance() before sending.
  */
 
+import crypto from "crypto"
 import { isDbConnected, query, execute } from "./db.js"
 import { writeToSheet } from "./sheets.js"
 
@@ -119,8 +120,40 @@ function buildResult(
   }
 }
 
+/**
+ * Generate a tamper-proof HMAC-SHA256 unsubscribe token.
+ * Uses UNSUBSCRIBE_SECRET env var (falls back to a derived value so dev works
+ * without config, but production MUST set this to a real secret).
+ * Format: <leadId>.<hmac> — the unsubscribe route verifies the HMAC before acting.
+ */
+const UNSUB_SECRET = process.env.UNSUBSCRIBE_SECRET
+  ?? crypto.createHash("sha256").update(process.env.JWT_SECRET ?? "propos-dev").digest("hex")
+
+export function makeUnsubToken(leadId: string): string {
+  const hmac = crypto.createHmac("sha256", UNSUB_SECRET).update(leadId).digest("hex").slice(0, 16)
+  return Buffer.from(`${leadId}.${hmac}`).toString("base64url")
+}
+
+export function verifyUnsubToken(token: string): string | null {
+  try {
+    const decoded = Buffer.from(token, "base64url").toString("utf8")
+    const dot = decoded.lastIndexOf(".")
+    if (dot < 0) return null
+    const leadId = decoded.slice(0, dot)
+    const provided = decoded.slice(dot + 1)
+    const expected = crypto.createHmac("sha256", UNSUB_SECRET).update(leadId).digest("hex").slice(0, 16)
+    // Constant-time comparison to prevent timing attacks
+    if (provided.length !== expected.length) return null
+    const match = crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
+    return match ? leadId : null
+  } catch {
+    return null
+  }
+}
+
 /** Unsubscribe footer for emails */
 export function unsubscribeFooter(leadId: string): string {
-  const base = process.env.BASE_URL ?? "https://propos.addvantage.site"
-  return `<br/><br/><hr style="border:none;border-top:1px solid #ccc;"/><p style="font-size:11px;color:#888;">To unsubscribe from future emails, <a href="${base}/unsubscribe?token=${encodeURIComponent(leadId)}">click here</a>.</p>`
+  const base  = process.env.BASE_URL ?? "https://propos.addvantage.site"
+  const token = makeUnsubToken(leadId)
+  return `<br/><br/><hr style="border:none;border-top:1px solid #ccc;"/><p style="font-size:11px;color:#888;">To unsubscribe from future emails, <a href="${base}/unsubscribe?token=${encodeURIComponent(token)}">click here</a>.</p>`
 }

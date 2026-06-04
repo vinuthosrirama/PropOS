@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useBreakpoint } from "../hooks/useBreakpoint"
 import { C, FONT, PORTFOLIO_ACTIVE, PORTFOLIO_SOLD, PAS_PORTFOLIO_ACTIVE, PAS_PORTFOLIO_SOLD, getAgencyTheme, getPortfolioForAgent, type AgentProfile, type VendorDisplaySettings } from "../data"
 import {
   loadSLMForProperty, saveSLMForProperty, resetSLMForProperty,
@@ -7,6 +8,7 @@ import {
 import { readPropertySLMFromSheet, writeSLMFieldToSheet, sheetsConnected } from "../lib/sheet"
 import AnalyticsDashboard from "../components/AnalyticsDashboard"
 import { loadCorpus, saveCorpus, type TrainingEntry } from "../lib/voiceContext"
+import { authFetch } from "../lib/authFetch"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -325,6 +327,8 @@ function AccordionSection({
       {/* Header */}
       <button
         onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-label={`${section.label} section — ${tbdCount} fields TBD`}
         style={{
           width: "100%",
           display: "flex",
@@ -387,7 +391,7 @@ function AccordionSection({
             padding: "16px",
             background: C.bg2,
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
             gap: "12px 20px",
           }}
         >
@@ -447,6 +451,7 @@ function QACard({
       {/* Remove button */}
       <button
         onClick={onRemove}
+        aria-label="Remove Q&A entry"
         style={{
           position: "absolute",
           top: 10,
@@ -460,9 +465,8 @@ function QACard({
           lineHeight: 1,
           padding: "2px 4px",
         }}
-        title="Remove"
       >
-        x
+        ×
       </button>
 
       {/* Category + Keywords row */}
@@ -558,6 +562,8 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
   vendorSettings?: VendorDisplaySettings
   onVendorSettingsChange?: (s: VendorDisplaySettings) => void
 }) {
+  const bp = useBreakpoint()
+  const isMobile = bp === "mobile"
   const agentPropertyIds = getPropertyIdsForAgent(agent)
   const [selectedPropId, setSelectedPropId] = useState<number>(() => agentPropertyIds[0] ?? 201)
   const [editedSLMs, setEditedSLMs] = useState<Record<number, PropertySLM>>({})
@@ -725,7 +731,7 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
         style={{
           maxWidth: 1100,
           margin: "0 auto",
-          padding: "0 32px 80px",
+          padding: isMobile ? "0 16px 80px" : "0 32px 80px",
         }}
       >
         {/* ── Section 1: Agent Profile ── */}
@@ -760,26 +766,29 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
           >
             {agent.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
           </div>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{agent.name}</div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {agent.agency} &nbsp;·&nbsp; {agent.email}
             </div>
           </div>
-          <div style={{ marginLeft: "auto" }}>
-            <span
-              style={{
-                fontSize: 11,
-                color: C.muted,
-                background: C.bg3,
-                border: `1px solid ${C.border}`,
-                borderRadius: 6,
-                padding: "4px 10px",
-              }}
-            >
-              Profile managed in login flow
-            </span>
-          </div>
+          {!isMobile && (
+            <div style={{ marginLeft: "auto", flexShrink: 0 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: C.muted,
+                  background: C.bg3,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Profile managed in login flow
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ── Top-level tab strip ── */}
@@ -1127,9 +1136,10 @@ function IntegrationsPanel() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch("/api/health")
+    // authFetch sends Bearer token → health endpoint returns full service map for authenticated callers
+    authFetch("/api/health")
       .then(r => r.json())
-      .then(d => { setHealth(d); setLoading(false) })
+      .then(d => { setHealth(d as HealthStatus); setLoading(false) })
       .catch(() => { setError("Could not reach server"); setLoading(false) })
   }, [])
 
@@ -1511,7 +1521,11 @@ function VendorPanelToggles({
           return (
             <div
               key={key}
+              role="switch"
+              aria-checked={on}
+              tabIndex={0}
               onClick={() => toggle(key)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(key) } }}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 background: C.bg2, border: `1px solid ${on ? "var(--accent, rgb(166,218,255))40" : C.border}`,

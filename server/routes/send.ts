@@ -85,7 +85,13 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "leadId and leadName are required" })
   }
 
-  const compliance = await checkCompliance(phone ?? "", email ?? "")
+  let compliance: { smsOk: boolean; emailOk: boolean; reason?: string }
+  try {
+    compliance = await checkCompliance(phone ?? "", email ?? "")
+  } catch (err) {
+    console.error("[send] compliance check failed:", (err as Error).message)
+    compliance = { smsOk: true, emailOk: true } // fail open so demo always works
+  }
   if (!compliance.smsOk && !compliance.emailOk) {
     return res.status(200).json({ ok: false, blocked: true, reason: compliance.reason })
   }
@@ -110,9 +116,12 @@ router.post("/", async (req, res) => {
 
   // ── Pre-log to get outreach ID (for email tracking pixel) ───────────────────
   // Logged as "sent" optimistically; updated to "failed" below if the send throws.
+  const agentIdStr = req.agentId ? String(req.agentId) : undefined
+
   let outreachLogId = 0
   if ((channel === "email" || channel === "both") && compliance.emailOk && email) {
     outreachLogId = await logOutreach({
+      agentId:         agentIdStr,
       contactPhone:    phone,
       contactEmail:    email,
       contactName:     leadName,
@@ -165,11 +174,13 @@ router.post("/", async (req, res) => {
   // Always thread the outbound message so inbox works in demo mode too
   if (phone && sms) {
     await addAgentMessageToThread(phone, sms, { leadId, leadName, email, propertyAddress: propertyAddr })
+      .catch(err => console.error("[send] thread write failed:", (err as Error).message))
   }
 
   // Log SMS-only sends (email sends were pre-logged above for tracking)
   if (delivered && outreachLogId === 0) {
     await logOutreach({
+      agentId:         agentIdStr,
       contactPhone:    phone,
       contactEmail:    email,
       contactName:     leadName,

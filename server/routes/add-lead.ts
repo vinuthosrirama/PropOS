@@ -37,7 +37,7 @@ router.post("/", async (req, res) => {
     addedAt:           new Date().toISOString(),
   })
 
-  console.log(`[add-lead] New lead added: ${lead.name}`)
+  console.log("[add-lead] New lead added")
   return res.json({ ok: true })
 })
 

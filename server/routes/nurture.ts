@@ -16,8 +16,13 @@ router.post("/queue", async (req, res) => {
   if (!params.contactPhone || !params.contactName) {
     return res.status(400).json({ error: "contactPhone and contactName are required" })
   }
-  await queueNurtureSequence(params)
-  res.json({ ok: true, scheduled: 3, note: "Day 7, 14, 30 follow-ups queued" })
+  try {
+    await queueNurtureSequence(params)
+    res.json({ ok: true, scheduled: 3, note: "Day 7, 14, 30 follow-ups queued" })
+  } catch (err) {
+    console.error("[nurture/queue]", (err as Error).message)
+    res.status(500).json({ error: "Failed to queue nurture sequence" })
+  }
 })
 
 const NURTURE_STRATEGIES: Array<{ day: number; strategy: string; anchor: string }> = [

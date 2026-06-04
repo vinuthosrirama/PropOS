@@ -332,7 +332,7 @@ async function processJob(job: NurtureJobRow): Promise<void> {
     })
 
     await markJob(job.id, "sent")
-    console.log(`[scheduler] job ${job.id} sent (step ${job.step}, ${job.contact_name})`)
+    console.log(`[scheduler] job ${job.id} sent (step ${job.step})`)
 
   } catch (err) {
     const msg = (err as Error).message

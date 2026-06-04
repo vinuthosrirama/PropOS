@@ -7,6 +7,7 @@
 
 import { motion } from "framer-motion"
 import { FONT, type PortfolioProperty, type AgentProfile } from "../data"
+import { useBreakpoint } from "../hooks/useBreakpoint"
 import type { PropertySLM } from "../data/propertySlm"
 
 interface Props {
@@ -57,6 +58,8 @@ const Row = ({ label, value, accent = false }: { label: string; value: string; a
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function BuyerPitchReport({ property, slm, agent, onClose }: Props) {
+  const bp = useBreakpoint()
+  const isMobile = bp === "mobile"
   const guideMin = property.priceMin ?? property.price * 0.95
   const guideMax = property.priceMax ?? property.price * 1.05
 
@@ -119,7 +122,7 @@ export default function BuyerPitchReport({ property, slm, agent, onClose }: Prop
         onClick={e => e.stopPropagation()}
         style={{
           background: "#ffffff",
-          width: 700, maxHeight: "92vh", overflowY: "auto",
+          width: "min(700px, calc(100vw - 32px))", maxHeight: "92vh", overflowY: "auto",
           borderRadius: 6,
           boxShadow: "0 32px 96px rgba(63,2,120,0.35), 0 4px 16px rgba(0,0,0,0.25)",
           fontFamily: "'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif",
@@ -220,7 +223,7 @@ export default function BuyerPitchReport({ property, slm, agent, onClose }: Prop
           {/* ── Investment Snapshot ──────────────────────────── */}
           <SectionHead>Investment Snapshot</SectionHead>
           <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+            display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr",
             gap: 10, marginBottom: 28,
           }}>
             {kpiCards.map((card, i) => (

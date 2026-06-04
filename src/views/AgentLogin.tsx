@@ -4,6 +4,7 @@ import { C, FONT, getAgencyTheme, isCamKnoll, isPasSunilchandra, isManpreetSingh
 import { readAgentProfileFromSheet, sheetsConnected } from "../lib/sheet"
 import { apiUrl } from "../lib/api"
 import { setAccessToken } from "../lib/authFetch"
+import { useBreakpoint } from "../hooks/useBreakpoint"
 
 // Returns true if the hex colour is perceptually dark (luminance < 128)
 function isDarkHex(hex: string): boolean {
@@ -345,6 +346,8 @@ interface Props {
 type Phase = "form" | "welcoming" | "done"
 
 export default function AgentLogin({ onLogin }: Props) {
+  const bp = useBreakpoint()
+  const isMobile = bp === "mobile"
   const [phase, setPhase] = useState<Phase>("form")
   const [mode, setMode] = useState<DemoMode>("buyer")
   const [showAuth, setShowAuth] = useState(false)
@@ -583,8 +586,8 @@ export default function AgentLogin({ onLogin }: Props) {
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {/* Name row */}
-                <div style={{ display: "flex", gap: 12 }}>
+                {/* Name row — stacks on mobile */}
+                <div style={{ display: "flex", gap: 12, flexDirection: isMobile ? "column" : "row" }}>
                   {field("firstName", "First Name", "Sarah")}
                   {field("lastName",  "Last Name",  "Chen")}
                 </div>
@@ -615,8 +618,8 @@ export default function AgentLogin({ onLogin }: Props) {
                   />
                 </div>
 
-                {/* Email + Phone */}
-                <div style={{ display: "flex", gap: 12 }}>
+                {/* Email + Phone — stacks on mobile */}
+                <div style={{ display: "flex", gap: 12, flexDirection: isMobile ? "column" : "row" }}>
                   {field("email", "Email (optional)", "you@agency.com.au", "email")}
                   {field("phone", "Mobile (optional)", "04xx xxx xxx", "tel")}
                 </div>
@@ -646,6 +649,9 @@ export default function AgentLogin({ onLogin }: Props) {
 
             <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: C.faint }}>
               Your data stays on-device. Nothing is stored or shared.
+            </div>
+            <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: C.faint, opacity: 0.5 }}>
+              v1.5.0
             </div>
           </motion.div>
         )}
