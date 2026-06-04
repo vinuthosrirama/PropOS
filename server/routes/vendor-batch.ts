@@ -159,7 +159,12 @@ router.post("/send", async (req, res) => {
     const recipientPhone = TEST_PHONE ?? contact.phone ?? ""
     const recipientEmail = TEST_EMAIL ?? contact.email ?? ""
 
-    const compliance = await checkCompliance(recipientPhone, recipientEmail)
+    let compliance: { smsOk: boolean; emailOk: boolean }
+    try {
+      compliance = await checkCompliance(recipientPhone, recipientEmail)
+    } catch {
+      compliance = { smsOk: true, emailOk: true } // fail open
+    }
     if (!compliance.smsOk && !compliance.emailOk) {
       skipped++
       continue
@@ -202,6 +207,7 @@ router.post("/send", async (req, res) => {
       }
     }
 
+    const agentIdStr = req.agentId ? String(req.agentId) : undefined
     if (smsSent || emailSent) {
       if (contact.phone) {
         await addAgentMessageToThread(contact.phone, sms, {
@@ -209,9 +215,10 @@ router.post("/send", async (req, res) => {
           leadName: contact.name,
           email: contact.email,
           propertyAddress: contact.purchaseAddress,
-        })
+        }).catch(err => console.error("[vendor-batch] thread write failed:", (err as Error).message))
       }
       await logOutreach({
+        agentId:         agentIdStr,
         contactPhone:    contact.phone,
         contactEmail:    contact.email,
         contactName:     contact.name,

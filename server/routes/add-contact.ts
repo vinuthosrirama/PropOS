@@ -41,6 +41,7 @@ router.post("/", async (req, res) => {
     status:          contact.status ?? "owner-occupier",
     notes:           contact.notes ?? "",
     lastContactDate: "",
+    agentName:       contact.agentName ?? "",
   })
 
   // Also persist to DB when connected (makes CSV import survive server restarts)
@@ -72,7 +73,7 @@ router.post("/", async (req, res) => {
     ).catch(err => console.error("[add-contact] DB write error:", err))
   }
 
-  console.log(`[add-contact] New contact added: ${contact.name} at ${contact.purchaseAddress}`)
+  console.log("[add-contact] New contact added")
   return res.json({ ok: true })
 })
 

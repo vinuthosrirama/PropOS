@@ -13,7 +13,8 @@ const ACCESS_TTL     = 15 * 60          // 15 minutes in seconds
 const REFRESH_TTL    = 7 * 24 * 60 * 60 // 7 days in seconds
 
 export interface TokenPayload {
-  agentId: number
+  agentId:       number
+  tokenVersion?: number  // included in refresh tokens only; used for server-side revocation
 }
 
 /** Hash a plain-text password with bcrypt (cost 12). */
@@ -31,16 +32,16 @@ export function issueAccessToken(agentId: number): string {
   return jwt.sign({ agentId } satisfies TokenPayload, ACCESS_SECRET, { expiresIn: ACCESS_TTL })
 }
 
-/** Issue a long-lived refresh token. */
-export function issueRefreshToken(agentId: number): string {
-  return jwt.sign({ agentId } satisfies TokenPayload, REFRESH_SECRET, { expiresIn: REFRESH_TTL })
+/** Issue a long-lived refresh token. Embeds tokenVersion so logout can invalidate it. */
+export function issueRefreshToken(agentId: number, tokenVersion = 0): string {
+  return jwt.sign({ agentId, tokenVersion } satisfies TokenPayload, REFRESH_SECRET, { expiresIn: REFRESH_TTL })
 }
 
 /** Issue both tokens at once. */
-export function issueTokens(agentId: number): { accessToken: string; refreshToken: string } {
+export function issueTokens(agentId: number, tokenVersion = 0): { accessToken: string; refreshToken: string } {
   return {
     accessToken:  issueAccessToken(agentId),
-    refreshToken: issueRefreshToken(agentId),
+    refreshToken: issueRefreshToken(agentId, tokenVersion),
   }
 }
 

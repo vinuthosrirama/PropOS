@@ -202,6 +202,9 @@ async function migrate(): Promise<void> {
     -- Inbox list: fast sort by recency
     CREATE INDEX IF NOT EXISTS idx_conversations_ts     ON conversations(last_reply_at DESC);
 
+    -- PT-H3: token_version counter — increment on logout to invalidate outstanding refresh tokens
+    ALTER TABLE agents ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
+
     -- Live installs: widen nurture_queue status constraint to include 'sending'.
     -- The scheduler sets status='sending' to lock jobs; without this the check fails.
     DO $$ BEGIN
@@ -210,6 +213,22 @@ async function migrate(): Promise<void> {
         CHECK (status IN ('pending', 'sending', 'sent', 'cancelled', 'failed'));
     EXCEPTION WHEN others THEN NULL;
     END $$;
+
+    -- ── Data retention (Privacy Act APP 11 / GDPR Art. 5(1)(e)) ──────────────
+    -- outreach_log: message bodies contain PII — keep 90 days for analytics,
+    -- then redact bodies (keep metadata for funnel counts).
+    -- conversations: full SMS threads kept 12 months from last reply.
+    -- nurture_queue: completed jobs pruned after 90 days.
+    -- These are idempotent — safe to re-run on every startup.
+    UPDATE outreach_log
+      SET sms_body = '[redacted]', email_body = '[redacted]', email_subject = '[redacted]'
+      WHERE sent_at < NOW() - INTERVAL '90 days'
+        AND sms_body IS DISTINCT FROM '[redacted]';
+    DELETE FROM conversations
+      WHERE last_reply_at < NOW() - INTERVAL '365 days';
+    DELETE FROM nurture_queue
+      WHERE status IN ('sent', 'cancelled', 'failed')
+        AND updated_at < NOW() - INTERVAL '90 days';
   `)
 }
 

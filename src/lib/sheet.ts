@@ -490,6 +490,7 @@ export interface PastBuyerRow {
   purchaseDate: string
   purchasePrice: number
   deposit?: number
+  agentName?: string            // col T — which agent sold this property
   propertyType: "House" | "Unit" | "Townhouse"
   beds: number
   baths: number
@@ -559,14 +560,17 @@ function mapPastBuyerRow(row: Record<string, unknown>): PastBuyerRow {
     contractTerms:            row.contractTerms ? String(row.contractTerms) : undefined,
     personalisationHook:      row.personalisationHook ? String(row.personalisationHook).trim() : undefined,
     currentEstimateOverride:  row.currentEstimateOverride ? Number(row.currentEstimateOverride) : undefined,
+    agentName:                row.agentName ? String(row.agentName) : undefined,
   }
 }
 
 /**
- * Read all rows from the "Past Buyers" sheet tab.
+ * Read rows from the "Past Buyers" sheet tab, filtered by agent name.
+ * Pass agentName (e.g. "Cameron Knoll") to only get that agent's contacts.
+ * Rows without an agentName column are included for backwards compatibility.
  * Returns null on network error, [] if the tab exists but has no data.
  */
-export async function readPastBuyersFromSheet(): Promise<PastBuyerRow[] | null> {
+export async function readPastBuyersFromSheet(agentName?: string): Promise<PastBuyerRow[] | null> {
   if (!SHEET_URL) return null
   const url = `${SHEET_URL}?action=getPastBuyers`
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -576,7 +580,10 @@ export async function readPastBuyersFromSheet(): Promise<PastBuyerRow[] | null> 
       const data = await res.json() as { buyers?: Record<string, unknown>[]; error?: string }
       if (data.error) return null
       if (!data.buyers || !Array.isArray(data.buyers)) { if (attempt === 0) continue; return null }
-      return data.buyers.map(mapPastBuyerRow)
+      const rows = data.buyers.map(mapPastBuyerRow)
+      if (!agentName) return rows
+      // Filter to this agent's contacts; rows missing agentName are legacy and included
+      return rows.filter(r => !r.agentName || r.agentName.toLowerCase() === agentName.toLowerCase())
     } catch {
       if (attempt === 0) continue
       return null

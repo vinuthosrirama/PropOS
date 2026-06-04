@@ -822,6 +822,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
   agent: AgentProfile
   theme: AgencyTheme
 }) {
+  const bpPP = useBreakpoint()
   // Gate portfolio data to Cam Knoll / Peake — other agents see empty
   const { sold: agentSold, active: agentActive } = getPortfolioForAgent(agent)
 
@@ -995,7 +996,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
           </button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bpPP === "mobile" ? "1fr" : bpPP === "tablet" ? "1fr 1fr" : "repeat(3, 1fr)", gap: 16 }}>
           {agentActive.map((p, i) => (
             <motion.div
               key={p.id}
@@ -1025,7 +1026,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bpPP === "mobile" ? "1fr" : bpPP === "tablet" ? "1fr 1fr" : "repeat(3, 1fr)", gap: 16 }}>
           {agentSold.map((p, i) => (
             <motion.div
               key={p.id}
@@ -3196,6 +3197,8 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
   onAnalyse: (segmented: SegmentedBuyer[]) => void
   onSelectBuyer?: (entry: SegmentedBuyer) => void
 }) {
+  const bpVPP = useBreakpoint()
+  const isMobileVPP = bpVPP === "mobile"
   const hardcodedBuyers = getPastBuyersForAgent(agent)
   const [buyers, setBuyers] = useState(hardcodedBuyers)
   const [sheetLoading, setSheetLoading] = useState(false)
@@ -3248,7 +3251,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
   // Try loading real past buyers from the Google Sheet — also callable for manual refresh
   const loadFromSheet = () => {
     setSheetLoading(true)
-    readPastBuyersFromSheet().then(rows => {
+    readPastBuyersFromSheet(agent.name).then(rows => {
       if (rows && rows.length > 0) {
         const hookByName = new Map(
           hardcodedBuyers
@@ -3566,19 +3569,6 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
         </div>
       )}
 
-      {/* Market Trigger Feed */}
-      {onSelectBuyer && (
-        <TriggerFeed
-          buyers={buyers}
-          theme={theme}
-          onSelectContact={(id) => {
-            const segmented = buildSegmented()
-            const entry = segmented.find(s => s.buyer.id === id)
-            if (entry) onSelectBuyer(entry)
-          }}
-        />
-      )}
-
       {/* Recent contacts preview */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -3670,18 +3660,22 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
                     </div>
                   )}
                 </div>
-                {/* Financial summary */}
+                {/* Financial summary — full on tablet+, equity-only on mobile */}
                 <div style={{ flexShrink: 0, display: "flex", gap: 10, alignItems: "center" }}>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 10, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>Bought</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>{fmtDollar(buyer.purchasePrice)}</div>
-                  </div>
-                  <div style={{ width: 1, height: 28, background: C.border }} />
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 10, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>Now</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{est > 0 ? fmtDollar(est) : "—"}</div>
-                  </div>
-                  <div style={{ width: 1, height: 28, background: C.border }} />
+                  {!isMobileVPP && (
+                    <>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 10, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>Bought</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: C.muted }}>{fmtDollar(buyer.purchasePrice)}</div>
+                      </div>
+                      <div style={{ width: 1, height: 28, background: C.border }} />
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 10, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>Now</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{est > 0 ? fmtDollar(est) : "—"}</div>
+                      </div>
+                      <div style={{ width: 1, height: 28, background: C.border }} />
+                    </>
+                  )}
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 10, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>Equity</div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: equity > 0 ? C.green : C.red ?? "#ef4444" }}>
@@ -3717,6 +3711,19 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
           )}
         </div>
       </div>
+
+      {/* Market Trigger Feed */}
+      {onSelectBuyer && (
+        <TriggerFeed
+          buyers={buyers}
+          theme={theme}
+          onSelectContact={(id) => {
+            const segmented = buildSegmented()
+            const entry = segmented.find(s => s.buyer.id === id)
+            if (entry) onSelectBuyer(entry)
+          }}
+        />
+      )}
 
       {/* Analyse button */}
       <motion.button
@@ -5644,7 +5651,13 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {objections.map((obj, i) => (
               <div key={i} style={{ borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
-                <div onClick={() => setExpandedObj(expandedObj === i ? null : i)}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={expandedObj === i}
+                  aria-label={`Objection: ${obj.q}`}
+                  onClick={() => setExpandedObj(expandedObj === i ? null : i)}
+                  onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedObj(expandedObj === i ? null : i) } }}
                   style={{ padding: "11px 14px", background: expandedObj === i ? `${theme.primary}10` : C.bg2, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>"{obj.q}"</span>
                   <span style={{ fontSize: 11, color: C.faint }}>{expandedObj === i ? "▲" : "▼"}</span>
@@ -5951,7 +5964,13 @@ function VoiceBriefCard({ transcript, buyerName, buyerSuburb, theme }: { transcr
       <div style={{ marginBottom: 8 }}>
         <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 }}>Action items</div>
         {brief.actions.map((item, i) => (
-          <div key={i} onClick={() => setChecked(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s })}
+          <div
+            key={i}
+            role="checkbox"
+            aria-checked={checked.has(i)}
+            tabIndex={0}
+            onClick={() => setChecked(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s })}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setChecked(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s }) } }}
             style={{ display: "flex", gap: 7, alignItems: "center", cursor: "pointer", padding: "3px 0" }}>
             <span style={{ fontSize: 13, color: checked.has(i) ? C.green : C.muted }}>{checked.has(i) ? "☑" : "☐"}</span>
             <span style={{ fontSize: 11, color: checked.has(i) ? C.faint : C.muted, textDecoration: checked.has(i) ? "line-through" : "none" }}>{item}</span>

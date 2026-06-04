@@ -46,7 +46,8 @@ router.get("/click/:id", async (req, res) => {
   }
 
   // Validate destination to prevent open redirect — only allow mailto: links or same-origin paths
-  const decoded = raw ? decodeURIComponent(raw) : "/"
+  let decoded = "/"
+  try { if (raw) decoded = decodeURIComponent(raw) } catch { /* malformed URI — fall through to "/" */ }
   const BASE    = process.env.BASE_URL ?? "https://propos.addvantage.site"
   const isSafe  = decoded.startsWith("mailto:") || decoded.startsWith("/") || decoded.startsWith(BASE)
   res.redirect(302, isSafe ? decoded : "/")

@@ -222,6 +222,15 @@ export class BoxDiceClient {
 
     if (res.status === 204) return { status: 204, data: null }  // end of pagination
 
+    if (res.status === 429) {
+      // Honour Retry-After header — Box+Dice rate limits per their docs
+      const retryAfter = res.headers.get("Retry-After")
+      const waitMs = retryAfter ? parseFloat(retryAfter) * 1000 : 5_000
+      await new Promise(r => setTimeout(r, Math.min(waitMs, 30_000)))
+      // Re-throw so callers can decide whether to retry the full operation
+      throw new Error(`Box+Dice rate limited — waited ${Math.round(waitMs / 1000)}s`)
+    }
+
     if (!res.ok) {
       const text = await res.text().catch(() => "")
       throw new Error(`Box+Dice API error ${res.status}: ${text}`)

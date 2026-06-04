@@ -33,6 +33,7 @@ export interface AgentRow {
   stripe_customer_id:  string | null
   subscription_status: string
   trial_ends_at:       Date
+  token_version:       number
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {

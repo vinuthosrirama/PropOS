@@ -159,13 +159,13 @@ function demoVendorAnalytics() {
  * Records an appraisal booking or listing win for a contact.
  */
 router.post("/milestone", async (req, res) => {
-  const { contactPhone, contactName, type, propertyAddress, listingPrice, agentId } = req.body as {
+  // PT-M1: agentId body param removed — agent identity comes from JWT (req.agentId), never from the body
+  const { contactPhone, contactName, type, propertyAddress, listingPrice } = req.body as {
     contactPhone?: string
     contactName?: string
     type?: string
     propertyAddress?: string
     listingPrice?: number
-    agentId?: string | number
   }
 
   if (!type || !["appraisal_booked", "listing_won"].includes(type)) {
@@ -177,20 +177,25 @@ router.post("/milestone", async (req, res) => {
     return res.json({ ok: true, id: null, demo: true })
   }
 
-  const rows = await queryOne<{ id: number }>(
-    `INSERT INTO milestones (agent_id, contact_phone, contact_name, type, property_address, listing_price)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id`,
-    [
-      req.agentId ?? 0,
-      contactPhone ?? "",
-      contactName ?? "",
-      type,
-      propertyAddress ?? "",
-      listingPrice ?? null,
-    ],
-  )
-  return res.json({ ok: true, id: rows?.id ?? null })
+  try {
+    const rows = await queryOne<{ id: number }>(
+      `INSERT INTO milestones (agent_id, contact_phone, contact_name, type, property_address, listing_price)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id`,
+      [
+        req.agentId ?? 0,
+        contactPhone ?? "",
+        contactName ?? "",
+        type,
+        propertyAddress ?? "",
+        listingPrice ?? null,
+      ],
+    )
+    return res.json({ ok: true, id: rows?.id ?? null })
+  } catch (err) {
+    console.error("[analytics/milestone]", (err as Error).message)
+    return res.status(500).json({ error: "Failed to record milestone" })
+  }
 })
 
 /**

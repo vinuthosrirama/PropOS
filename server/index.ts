@@ -35,10 +35,12 @@ import addContactRouter from "./routes/add-contact.js"
 import addLeadRouter from "./routes/add-lead.js"
 import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
+import gdprRouter from "./routes/gdpr.js"
 import { loadConversations } from "./lib/conversations.js"
 import { initDb, isDbConnected, query } from "./lib/db.js"
 import { startScheduler } from "./lib/scheduler.js"
 import { requireAuth } from "./middleware/auth.js"
+import { verifyAccessToken } from "./lib/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
 
 const app = express()
@@ -72,6 +74,11 @@ const aiLimiter = rateLimit({ windowMs: 60_000, max: 20, standardHeaders: true, 
   message: { error: "AI generation rate limit reached. Please wait a moment." } })
 const sendLimiter = rateLimit({ windowMs: 60_000, max: 50, standardHeaders: true, legacyHeaders: false,
   message: { error: "Send rate limit reached" } })
+// PT-C1: dedicated auth limiter — 10 attempts/15min per IP prevents brute-force and account-spam
+const authLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
+  message: { error: "Too many authentication attempts. Please wait 15 minutes." },
+  skipSuccessfulRequests: true,   // only counts failures — legit logins don't eat quota
+})
 
 app.use("/api", generalLimiter)
 app.use("/api/generate",         aiLimiter)
@@ -80,6 +87,10 @@ app.use("/api/slm-answer",       aiLimiter)
 app.use("/api/slm-answer-batch", aiLimiter)
 app.use("/api/send",             sendLimiter)
 app.use("/api/vendor-bulk-send", sendLimiter)
+// Auth routes — tighter limit applied before the router mounts
+app.use("/api/auth/login",    authLimiter)
+app.use("/api/auth/register", authLimiter)
+app.use("/api/auth/refresh",  authLimiter)
 
 // ── Public routes (no auth required) ─────────────────────────────────────────
 app.use("/api/auth",        authRouter)
@@ -113,6 +124,7 @@ app.use("/api/reply-agent",      replyAgentRouter)
 app.use("/api/add-contact",      addContactRouter)
 app.use("/api/add-lead",         addLeadRouter)
 app.use("/api/parse-notes",      parseNotesRouter)
+app.use("/api/gdpr",             gdprRouter)
 
 // ── AVM route ─────────────────────────────────────────────────────────────────
 app.get("/api/avm", async (req, res) => {
@@ -124,9 +136,15 @@ app.get("/api/avm", async (req, res) => {
 })
 
 // Health check — must be before express.static so it's never shadowed by the SPA
-// Probes the DB with SELECT 1 so monitoring systems catch pool failures, not just
-// missing env vars. All other services are config-checked only (no token spend).
-app.get("/api/health", async (_req, res) => {
+// PT-C3: unauthenticated callers get { ok } only — full service map requires a valid JWT
+// so attackers cannot fingerprint the stack before mounting targeted attacks.
+app.get("/api/health", async (req, res) => {
+  // Determine if caller is authenticated (Bearer token present and valid)
+  const authHeader = req.headers["authorization"]
+  const isAuthed = authHeader?.startsWith("Bearer ")
+    ? !!verifyAccessToken(authHeader.slice(7))
+    : false
+
   // Live DB probe — 3s timeout so this endpoint stays fast
   let dbLive = false
   if (isDbConnected()) {
@@ -143,6 +161,12 @@ app.get("/api/health", async (_req, res) => {
     }
   }
 
+  // Unauthenticated: bare liveness signal only
+  if (!isAuthed) {
+    return res.json({ ok: true, database: dbLive })
+  }
+
+  // Authenticated (internal dashboard / monitoring): full service map
   res.json({
     ok:        true,
     openai:    !!process.env.OPENAI_API_KEY,
