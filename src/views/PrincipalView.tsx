@@ -7,6 +7,7 @@ import { useState, useEffect } from "react"
 import { C, FONT, type AgentProfile, type AgencyTheme } from "../data"
 import { apiUrl } from "../lib/api"
 import { authFetch } from "../lib/authFetch"
+import { useBreakpoint } from "../hooks/useBreakpoint"
 
 interface AgentRollup {
   agentId:       number
@@ -44,6 +45,8 @@ function fmtDollar(n: number): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function PrincipalView({ agent, theme }: { agent: AgentProfile; theme: AgencyTheme }) {
+  const bp = useBreakpoint()
+  const isMobile = bp === "mobile"
   const [data, setData] = useState<OfficeData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -67,7 +70,7 @@ export default function PrincipalView({ agent, theme }: { agent: AgentProfile; t
   ]
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "96px 24px 48px", fontFamily: FONT }}>
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: isMobile ? "80px 16px 48px" : "96px 24px 48px", fontFamily: FONT }}>
 
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
@@ -102,44 +105,34 @@ export default function PrincipalView({ agent, theme }: { agent: AgentProfile; t
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {d.agents.map(a => {
           const replyRate = a.outreachSent > 0 ? Math.round((a.replied / a.outreachSent) * 100) : 0
+          const stats = [
+            { label: "Sent",       value: String(a.outreachSent), color: "#4fa3e0" },
+            { label: "Replies",    value: `${replyRate}%`,        color: a.replied > 0 ? C.green : C.faint },
+            { label: "Appraisals", value: String(a.appraisals),   color: "#f59e0b" },
+            { label: "Listings",   value: String(a.listings),     color: C.green },
+            { label: "GCI",        value: a.gci > 0 ? fmtDollar(a.gci) : "—", color: theme.primary },
+          ]
           return (
             <div key={a.agentId} style={{
               background: C.bg2, borderRadius: 14, padding: "16px 20px",
               border: `1px solid ${C.border}`,
-              display: "grid",
-              gridTemplateColumns: "1fr 80px 80px 80px 80px 100px",
-              alignItems: "center",
-              gap: 12,
             }}>
-              {/* Agent name */}
-              <div>
+              {/* Agent name row */}
+              <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{a.agentName}</div>
-                <div style={{ fontSize: 11, color: C.faint }}>{a.agentEmail}</div>
+                <div style={{ fontSize: 11, color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.agentEmail}</div>
               </div>
-              {/* Outreach sent */}
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#4fa3e0" }}>{a.outreachSent}</div>
-                <div style={{ fontSize: 9, color: C.faint, textTransform: "uppercase" }}>Sent</div>
-              </div>
-              {/* Reply rate */}
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: a.replied > 0 ? C.green : C.faint }}>{replyRate}%</div>
-                <div style={{ fontSize: 9, color: C.faint, textTransform: "uppercase" }}>Replies</div>
-              </div>
-              {/* Appraisals */}
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#f59e0b" }}>{a.appraisals}</div>
-                <div style={{ fontSize: 9, color: C.faint, textTransform: "uppercase" }}>Appraisals</div>
-              </div>
-              {/* Listings */}
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: C.green }}>{a.listings}</div>
-                <div style={{ fontSize: 9, color: C.faint, textTransform: "uppercase" }}>Listings</div>
-              </div>
-              {/* GCI */}
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: theme.primary }}>{a.gci > 0 ? fmtDollar(a.gci) : "—"}</div>
-                <div style={{ fontSize: 9, color: C.faint, textTransform: "uppercase" }}>GCI</div>
+              {/* Stats row — wraps naturally on mobile */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {stats.map(s => (
+                  <div key={s.label} style={{
+                    background: C.bg3, borderRadius: 8, padding: "6px 12px",
+                    border: `1px solid ${s.color}22`, textAlign: "center", minWidth: 60,
+                  }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: s.color }}>{s.value}</div>
+                    <div style={{ fontSize: 9, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
+                  </div>
+                ))}
               </div>
             </div>
           )

@@ -41,11 +41,19 @@ export default function BillingBanner() {
   const bgColor  = expired ? "rgba(248,113,113,0.08)" : C.bg
   const border   = expired ? "rgba(248,113,113,0.2)" : C.border
 
+  const [upgrading, setUpgrading] = useState(false)
+
   const handleUpgrade = async () => {
-    const res = await authFetch(apiUrl("/api/billing/checkout"), { method: "POST" })
-    if (res.ok) {
-      const { url } = await res.json() as { url: string }
-      if (url) window.open(url, "_blank")
+    if (upgrading) return
+    setUpgrading(true)
+    try {
+      const res = await authFetch(apiUrl("/api/billing/checkout"), { method: "POST" })
+      if (res.ok) {
+        const { url } = await res.json() as { url: string }
+        if (url) window.open(url, "_blank")
+      }
+    } finally {
+      setUpgrading(false)
     }
   }
 
@@ -59,7 +67,7 @@ export default function BillingBanner() {
       alignItems: "center",
       justifyContent: "space-between",
       gap: 12,
-      margin: "0 16px 0",
+      margin: "64px 16px 0",   // 64 = 56px fixed nav + 8px breathing room
       fontSize: 13,
     }}>
       <span style={{ color }}>
@@ -69,19 +77,21 @@ export default function BillingBanner() {
       </span>
       <button
         onClick={handleUpgrade}
+        disabled={upgrading}
         style={{
-          background: color,
-          color: "#04070d",
+          background: upgrading ? "rgba(0,0,0,0.2)" : color,
+          color: upgrading ? "#888" : "#04070d",
           border: "none",
           borderRadius: 8,
           padding: "6px 14px",
           fontSize: 12,
           fontWeight: 700,
-          cursor: "pointer",
+          cursor: upgrading ? "default" : "pointer",
           whiteSpace: "nowrap",
+          minWidth: 120,
         }}
       >
-        Upgrade → $399/mo
+        {upgrading ? "Opening…" : "Upgrade → $399/mo"}
       </button>
     </div>
   )
