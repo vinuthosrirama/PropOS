@@ -2889,7 +2889,7 @@ function VendorAnalysingScreen({ segmented, theme, onComplete }: {
       <div style={{ fontSize: 13, color: C.muted, marginBottom: 32, textAlign: "center" }}>
         {done
           ? `${segmented.length} contacts segmented, ${readyCount} high-priority leads identified`
-          : `Running AI analysis across ${segmented.length} contacts...`}
+          : `Analysing ${segmented.length} contacts...`}
       </div>
 
       {/* Step list */}
@@ -5593,7 +5593,7 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
   const topTrigger = segment.triggers[0]
 
   const opening = topTrigger?.urgency === "high"
-    ? `Hi ${fname}, ${agentFirst} from ${agent.agency}. I've been looking at your numbers and thought I'd reach out. The timing is looking really good right now. Got 10 minutes for a quick chat?`
+    ? `Hi ${fname}, ${agentFirst} from ${agent.agency}. We've been looking at your numbers and thought we'd reach out. The timing is looking really good right now. Got 10 minutes for a quick chat?`
     : `Hi ${fname}, ${agentFirst} here. Been keeping an eye on ${buyer.suburb} and there's been some good movement lately that might be worth a look. Got a minute?`
 
   const pitches = [
@@ -5607,7 +5607,7 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
     { q: "I'm not ready to sell", a: `Totally fine. My job is just to make sure you have the numbers. You've got ${equityStr} in equity right now.${cgtStr ? ` And selling before July 2027 saves you ${cgtStr} in CGT.` : ""} The decision is completely yours.` },
     { q: "The market feels slow", a: `${buyer.suburb} clearance rate is ${range.clearanceRate}% and average days on market is just ${range.daysOnMarket}. That's ${range.clearanceRate >= 72 ? "above" : "close to"} the long-run average. Genuine buyer demand is still there.` },
     { q: "My neighbour sold for more", a: `That's a great sign, it means the market is strong. At an estimated ${estVal} for your place, you're in a strong bracket. Let me pull the exact comps so you can see how yours stacks up.` },
-    { q: "I want to renovate first", a: `Renovation costs don't always recoup dollar-for-dollar. You already have ${equityStr} in equity. A $50K reno might add $30K in value. I can show you the numbers so you can decide.` },
+    { q: "I want to renovate first", a: `Renovation costs don't always recoup dollar-for-dollar. You already have ${equityStr} in equity. A $50K reno might add $30K in value. We can run the numbers so you can decide.` },
     { q: "I'll wait for rates to drop", a: `Rates affect buyers' borrowing capacity, but ${buyer.suburb} buyers are still active right now. Your property is worth ${estVal} today and the CGT window is running.` },
   ]
 
@@ -5863,7 +5863,7 @@ function NurtureSequencePanel({ entry, agent, theme }: { entry: SegmentedBuyer; 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Automated follow-up sequence</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>30-day follow-up sequence</div>
             <div style={{ fontSize: 10, color: C.faint }}>
               {enabled
                 ? `Active · 4 messages · Day 0, 7, 14, 30 · stops if ${fname} replies`
@@ -5958,7 +5958,7 @@ function VoiceBriefCard({ transcript, buyerName, buyerSuburb, theme }: { transcr
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       style={{ background: `${theme.primary}06`, borderRadius: 12, border: `1px solid ${theme.primary}25`, padding: "12px 14px", marginTop: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ fontSize: 10, fontWeight: 800, color: theme.primary, textTransform: "uppercase", letterSpacing: 1 }}>🤖 AI Brief</div>
+        <div style={{ fontSize: 10, fontWeight: 800, color: theme.primary, textTransform: "uppercase", letterSpacing: 1 }}>✦ Contact Brief</div>
         <div style={{ fontSize: 9, fontWeight: 800, color: uc, background: uc + "18", border: `1px solid ${uc}40`, borderRadius: 6, padding: "2px 8px" }}>{brief.urgency} PRIORITY</div>
       </div>
       <div style={{ marginBottom: 8 }}>
@@ -6190,7 +6190,7 @@ const AI_IDEAS = [
   {
     emoji: "🔁",
     title: "Reply sentiment → next-step classifier",
-    tag: "AI reply agent",
+    tag: "reply draft",
     color: "#a6daff",
     description:
       "When a contact replies to any outreach, Claude Sonnet classifies intent (interested / not now / hot lead / objection) and drafts the ideal next message with their equity snapshot embedded. An \"interested\" reply auto-books an appraisal slot. A \"not yet\" reply schedules a 90-day re-engagement.",
@@ -6230,7 +6230,7 @@ function AIIdeasPanel({ theme }: { theme: AgencyTheme }) {
           display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
         }}>🚀</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>AI Hyper-Personalisation Roadmap</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Personalisation Roadmap</div>
           <div style={{ fontSize: 11, color: C.muted }}>5 ways to deepen the moat — ideas PropOS can build next</div>
         </div>
         <div style={{
@@ -6314,13 +6314,13 @@ function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; t
     },
     {
       icon: "🎙️", title: "Voice Intel Engine",
-      value: "Record → AI extracts",
+      value: "Record → we extract the hook",
       sub: "Personalisation in 10 seconds",
       detail: "Speak a quick note about any contact on your phone ('Jason's tenant just moved out, he seemed frustrated about the vacancy'). AI extracts the personalisation hook and writes the outreach for you.",
     },
     {
-      icon: "💬", title: "Smart Reply AI",
-      value: "Vendor replied? AI drafts it",
+      icon: "💬", title: "Smart Reply",
+      value: "Vendor replied? We draft it",
       sub: "Context-aware follow-up",
       detail: "When a vendor responds to your outreach, PropOS reads the reply and drafts a perfect follow-up that continues the conversation naturally. Matches your voice, references their specific response.",
     },
@@ -6337,7 +6337,7 @@ function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; t
       detail: "Your top-priority past buyers become VIP buyers for new listings in their preferred suburb. Send a pre-market alert 48 hours before Domain/REA. Builds loyalty and creates FOMO that accelerates offers.",
     },
     {
-      icon: "🤝", title: "AI Negotiation Coach",
+      icon: "🤝", title: "Call Coach",
       value: "First-call script, personalised",
       sub: "Handles every objection",
       detail: "For each contact you're about to call, PropOS prepares a personalised call script: opening line based on their CRM notes, three pitch angles from their financial position, and responses to the top 5 objections.",
@@ -6355,7 +6355,7 @@ function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; t
         }}
       >
         <span style={{ fontSize: 10, fontWeight: 800, color: C.faint, letterSpacing: 1.4, textTransform: "uppercase" }}>
-          AI Intelligence Suite
+          Pipeline Intelligence
         </span>
         <span style={{ fontSize: 11, color: C.faint, transition: "transform 0.2s", display: "inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
         {!open && <span style={{ fontSize: 10, color: C.faint, fontWeight: 400 }}>({WOW_ITEMS.length} features)</span>}
@@ -6560,7 +6560,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       const emailBody = [
         `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
         `Your property at ${buyer.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${payload.purchaseYear}. That is ${equityStr} in equity.${cgtLine}`,
-        `I would love to offer a complimentary, no-obligation appraisal if you are curious. Takes about 20 minutes, happy to come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+        `We would love to offer a complimentary, no-obligation appraisal if you are curious. Takes about 20 minutes, happy to come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
       ].map(stripDashes)
       setGenerating(false)
       onReview(sms, emailSubject, emailBody)
@@ -7000,7 +7000,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
             {voiceNotes && (
               <div style={{ fontSize: 12, color: C.text, marginTop: 8, padding: "8px 10px", background: theme.primary + "10", borderRadius: 6, lineHeight: 1.5, border: `1px solid ${theme.primary}20` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: theme.primary, textTransform: "uppercase", letterSpacing: 0.8 }}>🎙️ Voice note · included in AI generation</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: theme.primary, textTransform: "uppercase", letterSpacing: 0.8 }}>🎙️ Voice note · included in outreach</span>
                   <button
                     onClick={async () => {
                       // Append voice transcript to the buyer's notes and save back to sheet
@@ -7185,7 +7185,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
           {/* Voice note hint if none recorded yet */}
           {!voiceNotes && vendorVoice.phase === "idle" && (
             <div style={{ textAlign: "center", fontSize: 10, color: C.faint }}>
-              🎙️ Tap "Add voice note" in CRM Notes above to enrich AI personalisation
+              🎙️ Tap "Add voice note" in CRM Notes above to personalise the outreach
             </div>
           )}
 
@@ -7206,7 +7206,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick one on your numbers at ${shortAddr(buyer.purchaseAddress)}.`,
                     `You've held your place since ${year} and the 50% CGT discount applies right now. Selling before 1 July 2027 saves you roughly ${fmtDollar(fin.cgtSavingsBy2027)} in tax compared to waiting. Your place is estimated at around ${fmtDollar(fin.currentEstimate)}.`,
-                    `Happy to do a quick no-obligation appraisal. Twenty minutes, I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+                    `Happy to do a quick no-obligation appraisal. Twenty minutes, we can come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
                 },
@@ -7222,7 +7222,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here.`,
                     `Ran the numbers on your place at ${shortAddr(buyer.purchaseAddress)}. You've built roughly ${fmtDollar(fin.equityGain)} in equity since ${year}. Your property is sitting at around ${fmtDollar(fin.currentEstimate)} now. A lot of people in ${buyer.suburb} don't realise what position they're in.`,
-                    `Happy to do a complimentary appraisal. Twenty minutes, I'll come to you. No obligation, just so you know your options.\n\n${signoff},\n${agentFirst}`,
+                    `Happy to do a complimentary appraisal. Twenty minutes, we can come to you. No obligation, just so you know your options.\n\n${signoff},\n${agentFirst}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
                 },
@@ -7254,7 +7254,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
                     `Clearance rate is at ${range.clearanceRate}% with properties averaging just ${range.daysOnMarket} days on market. Strong seller conditions. Based on recent sales, your place is estimated at around ${fmtDollar(fin.currentEstimate)}, which is ${fmtDollar(fin.equityGain)} up since you bought in ${year}.`,
-                    `If you've had any thoughts about listing, it's a decent window. Happy to do a quick appraisal, 20 minutes and I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+                    `If you've had any thoughts about listing, it's a decent window. Happy to do a quick appraisal, 20 minutes and we can come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
                 },
@@ -7318,7 +7318,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 {/* ── Full AI generate button — always visible ── */}
                 <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={handleGenerate} disabled={generating}
                   style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${theme.primary}50`, background: generating ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}18, ${theme.gradient[1]}12)`, color: generating ? C.faint : theme.primary, fontSize: 13, fontWeight: 700, cursor: generating ? "default" : "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  {generating ? "✨ Generating SMS + Email..." : "✨ Generate SMS + Email with AI →"}
+                  {generating ? "✨ Writing personalised outreach..." : "✨ Write personalised SMS + Email →"}
                 </motion.button>
                 {voiceNotes && <div style={{ textAlign: "center", fontSize: 10, color: C.green }}>✅ Voice note included in generation</div>}
               </div>
@@ -7443,7 +7443,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
 
     // Variant A: AI-generated (always first)
     variants.push({
-      label: "AI personalised",
+      label: "personalised",
       sms: initSMS,
       emailSubject: initSubject,
       emailBody: initBody,
@@ -7459,7 +7459,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           emailBody: [
             `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
             `You've held ${shortAddrRV} since ${purchaseYearRV} and the 50% CGT discount applies right now. Selling before 1 July 2027 saves you roughly ${fmtDollar(fin.cgtSavingsBy2027)} in tax. Your property is currently estimated at around ${estStrRV}.`,
-            `Happy to run a quick, no-obligation appraisal. Twenty minutes, I'll come to you. No pressure.\n\nKind regards,\n${agentFirstRV}`,
+            `Happy to run a quick, no-obligation appraisal. Twenty minutes, we can come to you. No pressure.\n\nKind regards,\n${agentFirstRV}`,
           ],
         })
       }
@@ -7483,7 +7483,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
           `Just wanted to share that ${shortAddrRV} is now worth around ${estStrRV}. Since ${purchaseYearRV} you've built up ${equityStrRV} in equity. A lot of people in your position are finding this a great moment to right-size and free up that equity for the next chapter.`,
-          `I'd love to offer a complimentary, no-pressure appraisal. Happy to come to you and walk through what the market looks like.\n\n${signoffRV},\n${agentFirstRV}`,
+          `We'd love to offer a complimentary, no-pressure appraisal. Happy to come to you and walk through what the market looks like.\n\n${signoffRV},\n${agentFirstRV}`,
         ],
       })
       variants.push({
@@ -7527,7 +7527,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
           `Just a quick update on ${shortAddrRV}. The property is now worth around ${estStrRV}, which is a great result from when you purchased in ${purchaseYearRV}.`,
-          `I'd love to pop over for a complimentary appraisal if you're curious. Completely no-obligation, just so you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
+          `We'd love to pop over for a complimentary appraisal if you're curious. Completely no-obligation, just so you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
         ],
       })
       variants.push({
@@ -8098,7 +8098,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           </button>
         </div>
         <div style={{ fontSize: 11, color: C.muted }}>
-          Automated follow-up cadence if {fname} doesn't respond to your first outreach.
+          Scheduled follow-ups if {fname} doesn't respond to your first message.
         </div>
         {showNurture && (() => {
           const nurtureSteps = [
@@ -8474,7 +8474,7 @@ export default function DemoView({
                           fontSize: 12, fontWeight: 700, fontFamily: FONT, cursor: draftingReply ? "default" : "pointer",
                         }}
                       >
-                        {draftingReply ? "Drafting AI reply…" : "✦ Draft AI Reply"}
+                        {draftingReply ? "Drafting reply…" : "✦ Draft Reply"}
                       </button>
                     ) : (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
