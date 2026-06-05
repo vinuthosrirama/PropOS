@@ -354,6 +354,7 @@ export default function AgentLogin({ onLogin }: Props) {
   const [phase, setPhase] = useState<Phase>("form")
   const [mode, setMode] = useState<DemoMode>("buyer")
   const [showAuth, setShowAuth] = useState(false)
+  const [welcomeName, setWelcomeName] = useState("")  // set by both guest and auth paths
   const [form, setForm] = useState({
     firstName: "", lastName: "", agency: "", suburb: "", email: "", phone: "",
   })
@@ -384,10 +385,10 @@ export default function AgentLogin({ onLogin }: Props) {
 
   const handleSubmit = () => {
     if (!validate()) return
-    setPhase("welcoming")
-
     const firstName = toProperCase(form.firstName)
     const lastName  = toProperCase(form.lastName)
+    setWelcomeName(firstName)
+    setPhase("welcoming")
     const t = getAgencyTheme(form.agency)
     const agent: AgentProfile = {
       name:    `${firstName} ${lastName}`,
@@ -554,6 +555,7 @@ export default function AgentLogin({ onLogin }: Props) {
               {showAuth ? (
                 <div style={{ marginBottom: 20 }}>
                   <AuthLoginPanel onSuccess={(agent, t, m) => {
+                    setWelcomeName(agent.name.split(" ")[0])
                     setPhase("welcoming")
                     setTimeout(() => onLogin(agent, t, m), 2800)
                   }} />
@@ -710,7 +712,7 @@ export default function AgentLogin({ onLogin }: Props) {
                 filter: theme ? `drop-shadow(0 0 20px ${theme!.glow})` : undefined,
                 lineHeight: 1,
               }}>
-                {toProperCase(form.firstName)}
+                {welcomeName}
               </span>
             </motion.div>
 
@@ -721,7 +723,7 @@ export default function AgentLogin({ onLogin }: Props) {
               transition={{ delay: 0.55, duration: 0.45 }}
               style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 32 }}
             >
-              {form.agency} · {form.suburb}
+              {[form.agency, form.suburb].filter(Boolean).join(" · ")}
             </motion.div>
 
             {/* Loading bar */}
