@@ -264,7 +264,7 @@ export default function OutreachQueue({ items: initial, agentName: _agentName, s
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           style={{
-            position: "sticky", bottom: 20,
+            position: "sticky", bottom: 20, zIndex: 10,
             background: C.bg2, border: `1px solid ${C.border}`,
             borderRadius: 16, padding: "14px 20px",
             display: "flex", alignItems: "center", justifyContent: "space-between",

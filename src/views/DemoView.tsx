@@ -6757,9 +6757,10 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                       style={{
                         background: avmRefreshing ? "none" : C.bg3,
                         border: `1px solid ${C.border}`,
-                        borderRadius: 6, padding: "2px 7px",
-                        fontSize: 9, color: avmRefreshing ? C.faint : theme.primary,
+                        borderRadius: 6, padding: "5px 10px",
+                        fontSize: 11, color: avmRefreshing ? C.faint : theme.primary,
                         cursor: avmRefreshing ? "default" : "pointer", fontFamily: FONT, fontWeight: 600,
+                        minHeight: 28,
                       }}
                     >
                       {avmRefreshing ? "…" : "↻ AVM"}
@@ -7769,19 +7770,25 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
             </button>
           </div>
           {editMode === "sms" ? (
-            <textarea
-              autoFocus
-              value={sms}
-              onChange={e => setSMS(e.target.value)}
-              maxLength={160}
-              style={{
-                width: "100%", minHeight: 120, background: C.bg3,
-                border: `1px solid ${theme.primary}44`, borderRadius: 12,
-                padding: "12px 14px", color: C.text, fontSize: 13,
-                fontFamily: FONT, lineHeight: 1.5, resize: "vertical", outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
+            <>
+              <textarea
+                autoFocus
+                value={sms}
+                onChange={e => setSMS(e.target.value)}
+                maxLength={160}
+                style={{
+                  width: "100%", minHeight: 120, background: C.bg3,
+                  border: `1px solid ${sms.length >= 155 ? "#f87171" : theme.primary + "44"}`, borderRadius: 12,
+                  padding: "12px 14px", color: C.text, fontSize: 13,
+                  fontFamily: FONT, lineHeight: 1.5, resize: "vertical", outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              <div style={{ textAlign: "right", fontSize: 11, marginTop: 4, fontWeight: 600,
+                color: sms.length >= 155 ? "#f87171" : sms.length >= 140 ? "#f59e0b" : C.faint }}>
+                {sms.length}/160
+              </div>
+            </>
           ) : (
             <div style={{ background: "rgb(24,24,24)", borderRadius: 20, padding: 16 }}>
               <div style={{ textAlign: "center", marginBottom: 12 }}>

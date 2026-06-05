@@ -225,14 +225,15 @@ function AuthLoginPanel({ onSuccess }: {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [loginLoading, setLoginLoading] = useState(false)
   const [tab, setTab] = useState<"login" | "register">("login")
   const [regForm, setRegForm] = useState({ name: "", agency: "", email: "", password: "" })
   const [regError, setRegError] = useState("")
+  const [regLoading, setRegLoading] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(""); setLoading(true)
+    setError(""); setLoginLoading(true)
     try {
       const res = await fetch(apiUrl("/api/auth/login"), {
         method: "POST",
@@ -241,7 +242,7 @@ function AuthLoginPanel({ onSuccess }: {
         body: JSON.stringify({ email, password }),
       })
       const data = await res.json() as { accessToken?: string; agent?: { name: string; agency: string; email: string; phone: string; suburb: string; tagline: string; role?: string }; error?: string }
-      if (!res.ok) { setError(data.error ?? "Login failed"); setLoading(false); return }
+      if (!res.ok) { setError(data.error ?? "Login failed"); setLoginLoading(false); return }
       if (data.accessToken) setAccessToken(data.accessToken)
       const a = data.agent!
       const agent: AgentProfile = {
@@ -252,13 +253,13 @@ function AuthLoginPanel({ onSuccess }: {
         voiceProfile: { greeting: "Hi", closing: "Cheers", lengthStyle: "short", formalityScore: 2, aussieIndex: 2, specificity: 3, emojiUsage: "occasional", examplesCount: 0, confidence: 0, detectedTraits: [] },
         trainingCorpus: [],
       }
-      onSuccess(agent, getAgencyTheme(a.agency), a.role === "principal" ? "vendor" : "vendor")
-    } catch { setError("Network error — please try again"); setLoading(false) }
+      onSuccess(agent, getAgencyTheme(a.agency), "vendor")
+    } catch { setError("Network error — please try again"); setLoginLoading(false) }
   }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    setRegError(""); setLoading(true)
+    setRegError(""); setRegLoading(true)
     try {
       const res = await fetch(apiUrl("/api/auth/register"), {
         method: "POST",
@@ -267,7 +268,7 @@ function AuthLoginPanel({ onSuccess }: {
         body: JSON.stringify(regForm),
       })
       const data = await res.json() as { accessToken?: string; agent?: { name: string; agency: string; email: string; phone: string; suburb: string; tagline: string }; error?: string }
-      if (!res.ok) { setRegError(data.error ?? "Registration failed"); setLoading(false); return }
+      if (!res.ok) { setRegError(data.error ?? "Registration failed"); setRegLoading(false); return }
       if (data.accessToken) setAccessToken(data.accessToken)
       const a = data.agent!
       const agent: AgentProfile = {
@@ -278,14 +279,16 @@ function AuthLoginPanel({ onSuccess }: {
         trainingCorpus: [],
       }
       onSuccess(agent, getAgencyTheme(a.agency || regForm.agency), "vendor")
-    } catch { setRegError("Network error — please try again"); setLoading(false) }
+    } catch { setRegError("Network error — please try again"); setRegLoading(false) }
   }
 
-  const inputStyle = {
+  const inputStyle = (id: string) => ({
+    id,
+    "aria-label": id,
     width: "100%", background: C.bg3, border: `1px solid ${C.border}`,
     borderRadius: 10, padding: "11px 14px", color: C.text, fontSize: 14,
     fontFamily: FONT, outline: "none", boxSizing: "border-box" as const,
-  }
+  })
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -306,30 +309,30 @@ function AuthLoginPanel({ onSuccess }: {
 
       {tab === "login" ? (
         <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required style={inputStyle} />
-          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required style={inputStyle} />
-          {error && <div style={{ fontSize: 12, color: C.red }}>{error}</div>}
-          <button type="submit" disabled={loading} style={{
+          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required {...inputStyle("auth-email")} />
+          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required {...inputStyle("auth-password")} />
+          {error && <div role="alert" style={{ fontSize: 12, color: C.red }}>{error}</div>}
+          <button type="submit" disabled={loginLoading} style={{
             padding: "12px", borderRadius: 10, border: "none",
             background: "linear-gradient(135deg, #4fa3e0, #64d090)",
-            color: C.bg, fontSize: 14, fontWeight: 700, cursor: loading ? "default" : "pointer", fontFamily: FONT,
+            color: C.bg, fontSize: 14, fontWeight: 700, cursor: loginLoading ? "default" : "pointer", fontFamily: FONT,
           }}>
-            {loading ? "Signing in…" : "Sign in →"}
+            {loginLoading ? "Signing in…" : "Sign in →"}
           </button>
         </form>
       ) : (
         <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <input type="text" placeholder="Full name" value={regForm.name} onChange={e => setRegForm(f => ({ ...f, name: e.target.value }))} required style={inputStyle} />
-          <input type="text" placeholder="Agency" value={regForm.agency} onChange={e => setRegForm(f => ({ ...f, agency: e.target.value }))} style={inputStyle} />
-          <input type="email" placeholder="Email" value={regForm.email} onChange={e => setRegForm(f => ({ ...f, email: e.target.value }))} required style={inputStyle} />
-          <input type="password" placeholder="Password (min 8 chars)" value={regForm.password} onChange={e => setRegForm(f => ({ ...f, password: e.target.value }))} required style={inputStyle} />
-          {regError && <div style={{ fontSize: 12, color: C.red }}>{regError}</div>}
-          <button type="submit" disabled={loading} style={{
+          <input type="text" placeholder="Full name" value={regForm.name} onChange={e => setRegForm(f => ({ ...f, name: e.target.value }))} required {...inputStyle("auth-name")} />
+          <input type="text" placeholder="Agency" value={regForm.agency} onChange={e => setRegForm(f => ({ ...f, agency: e.target.value }))} {...inputStyle("auth-agency")} />
+          <input type="email" placeholder="Email" value={regForm.email} onChange={e => setRegForm(f => ({ ...f, email: e.target.value }))} required {...inputStyle("auth-reg-email")} />
+          <input type="password" placeholder="Password (min 8 chars)" value={regForm.password} onChange={e => setRegForm(f => ({ ...f, password: e.target.value }))} required {...inputStyle("auth-reg-password")} />
+          {regError && <div role="alert" style={{ fontSize: 12, color: C.red }}>{regError}</div>}
+          <button type="submit" disabled={regLoading} style={{
             padding: "12px", borderRadius: 10, border: "none",
             background: "linear-gradient(135deg, #4fa3e0, #64d090)",
-            color: C.bg, fontSize: 14, fontWeight: 700, cursor: loading ? "default" : "pointer", fontFamily: FONT,
+            color: C.bg, fontSize: 14, fontWeight: 700, cursor: regLoading ? "default" : "pointer", fontFamily: FONT,
           }}>
-            {loading ? "Creating account…" : "Create account & start →"}
+            {regLoading ? "Creating account…" : "Create account & start →"}
           </button>
         </form>
       )}
@@ -581,6 +584,7 @@ export default function AgentLogin({ onLogin }: Props) {
                 </div>
               )}
 
+              {!showAuth && (<>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 20 }}>
                 Agent Details
               </div>
@@ -645,6 +649,7 @@ export default function AgentLogin({ onLogin }: Props) {
                   Start Session →
                 </motion.button>
               </div>
+              </>)}
             </div>
 
             <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: C.faint }}>
