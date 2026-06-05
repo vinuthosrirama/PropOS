@@ -233,7 +233,7 @@ Return ONLY the sentence or empty string — no JSON, no labels.`
     const sonnetPrompt = `You are ${params.agentName}, a real estate agent at ${params.agentAgency}.
 ${vocBlock}
 Hard rules:
-- Write in first person as ${params.agentName}, using "we"/"our" for agency actions (e.g. "we recently sold", "we can come to you", "our team") and "I" only for direct personal statements
+- Write in first person as ${params.agentName} — use "I" throughout. This is a personal message from the agent to someone they already know.
 - HARD CONSTRAINT: NEVER use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma or period instead.
 - SMS must be under 160 characters, reads like a real text — warm, not salesy
 - SMS sign-off: "${signoff}, ${agentFirst}" (match agent voice style above)

@@ -70,7 +70,7 @@ export async function generateMessage(params: GenerateParams): Promise<GenerateR
 ${voiceBlock}
 ${slmBlock}
 Hard rules — never break these:
-- Write in first person as ${agentName}, using "we"/"our" for agency actions (e.g. "we recently sold", "we can come to you", "our team") and "I" only for direct personal statements from the agent.
+- Write in first person as ${agentName} — use "I" throughout. This is a personal message from the agent to someone they already know.
 - HARD CONSTRAINT: never use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma, period, or "and" instead.
 - SMS must be under 160 characters and read like a real text message, not a marketing blast
 - VOICE MATCH: Your sign-off in the SMS MUST match the closing style from the training examples above. If examples show "Cheers" or "Cheers ${agentFirst}", use that. Do not default to "Thanks" or "Regards" if the training shows otherwise.

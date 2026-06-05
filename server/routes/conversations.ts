@@ -85,7 +85,7 @@ router.post("/seed-demo", async (req, res) => {
       propertyAddress: "17 Grand Arch Way, Berwick VIC", email: "demo.buyer.b@example.com",
     }
     await addAgentMessageToThread(phone2,
-      "Hi Sam, Cameron from Peake Real Estate. We spoke at the Thirlmere Court open home. We have a new listing at 17 Grand Arch Way that ticks your boxes, Berwick Primary catchment and a big backyard. Open Saturday 10am. Cheers, Cameron",
+      "Hi Sam, Cameron from Peake Real Estate. We spoke at the Thirlmere Court open home. I have a new listing at 17 Grand Arch Way that ticks your boxes, Berwick Primary catchment and a big backyard. Open Saturday 10am. Cheers, Cameron",
       meta2,
     )
     await addReplyToThread(phone2,
