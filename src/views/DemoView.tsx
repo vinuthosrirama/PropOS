@@ -5593,7 +5593,7 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
   const topTrigger = segment.triggers[0]
 
   const opening = topTrigger?.urgency === "high"
-    ? `Hi ${fname}, ${agentFirst} from ${agent.agency}. We've been looking at your numbers and thought we'd reach out. The timing is looking really good right now. Got 10 minutes for a quick chat?`
+    ? `Hi ${fname}, ${agentFirst} from ${agent.agency}. I've been looking at your numbers and thought I'd reach out. The timing is looking really good right now. Got 10 minutes for a quick chat?`
     : `Hi ${fname}, ${agentFirst} here. Been keeping an eye on ${buyer.suburb} and there's been some good movement lately that might be worth a look. Got a minute?`
 
   const pitches = [
@@ -5607,7 +5607,7 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
     { q: "I'm not ready to sell", a: `Totally fine. My job is just to make sure you have the numbers. You've got ${equityStr} in equity right now.${cgtStr ? ` And selling before July 2027 saves you ${cgtStr} in CGT.` : ""} The decision is completely yours.` },
     { q: "The market feels slow", a: `${buyer.suburb} clearance rate is ${range.clearanceRate}% and average days on market is just ${range.daysOnMarket}. That's ${range.clearanceRate >= 72 ? "above" : "close to"} the long-run average. Genuine buyer demand is still there.` },
     { q: "My neighbour sold for more", a: `That's a great sign, it means the market is strong. At an estimated ${estVal} for your place, you're in a strong bracket. Let me pull the exact comps so you can see how yours stacks up.` },
-    { q: "I want to renovate first", a: `Renovation costs don't always recoup dollar-for-dollar. You already have ${equityStr} in equity. A $50K reno might add $30K in value. We can run the numbers so you can decide.` },
+    { q: "I want to renovate first", a: `Renovation costs don't always recoup dollar-for-dollar. You already have ${equityStr} in equity. A $50K reno might add $30K in value. I can show you the numbers so you can decide.` },
     { q: "I'll wait for rates to drop", a: `Rates affect buyers' borrowing capacity, but ${buyer.suburb} buyers are still active right now. Your property is worth ${estVal} today and the CGT window is running.` },
   ]
 
@@ -6560,7 +6560,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       const emailBody = [
         `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
         `Your property at ${buyer.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${payload.purchaseYear}. That is ${equityStr} in equity.${cgtLine}`,
-        `We would love to offer a complimentary, no-obligation appraisal if you are curious. Takes about 20 minutes, happy to come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+        `I would love to offer a complimentary, no-obligation appraisal if you are curious. Takes about 20 minutes, happy to come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
       ].map(stripDashes)
       setGenerating(false)
       onReview(sms, emailSubject, emailBody)
@@ -7206,7 +7206,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick one on your numbers at ${shortAddr(buyer.purchaseAddress)}.`,
                     `You've held your place since ${year} and the 50% CGT discount applies right now. Selling before 1 July 2027 saves you roughly ${fmtDollar(fin.cgtSavingsBy2027)} in tax compared to waiting. Your place is estimated at around ${fmtDollar(fin.currentEstimate)}.`,
-                    `Happy to do a quick no-obligation appraisal. Twenty minutes, we can come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+                    `Happy to do a quick no-obligation appraisal. Twenty minutes, I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
                 },
@@ -7222,7 +7222,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here.`,
                     `Ran the numbers on your place at ${shortAddr(buyer.purchaseAddress)}. You've built roughly ${fmtDollar(fin.equityGain)} in equity since ${year}. Your property is sitting at around ${fmtDollar(fin.currentEstimate)} now. A lot of people in ${buyer.suburb} don't realise what position they're in.`,
-                    `Happy to do a complimentary appraisal. Twenty minutes, we can come to you. No obligation, just so you know your options.\n\n${signoff},\n${agentFirst}`,
+                    `Happy to do a complimentary appraisal. Twenty minutes, I'll come to you. No obligation, just so you know your options.\n\n${signoff},\n${agentFirst}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
                 },
@@ -7254,7 +7254,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
                     `Clearance rate is at ${range.clearanceRate}% with properties averaging just ${range.daysOnMarket} days on market. Strong seller conditions. Based on recent sales, your place is estimated at around ${fmtDollar(fin.currentEstimate)}, which is ${fmtDollar(fin.equityGain)} up since you bought in ${year}.`,
-                    `If you've had any thoughts about listing, it's a decent window. Happy to do a quick appraisal, 20 minutes and we can come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+                    `If you've had any thoughts about listing, it's a decent window. Happy to do a quick appraisal, 20 minutes and I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
                 },
@@ -7459,7 +7459,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           emailBody: [
             `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
             `You've held ${shortAddrRV} since ${purchaseYearRV} and the 50% CGT discount applies right now. Selling before 1 July 2027 saves you roughly ${fmtDollar(fin.cgtSavingsBy2027)} in tax. Your property is currently estimated at around ${estStrRV}.`,
-            `Happy to run a quick, no-obligation appraisal. Twenty minutes, we can come to you. No pressure.\n\nKind regards,\n${agentFirstRV}`,
+            `Happy to run a quick, no-obligation appraisal. Twenty minutes, I'll come to you. No pressure.\n\nKind regards,\n${agentFirstRV}`,
           ],
         })
       }
@@ -7483,7 +7483,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
           `Just wanted to share that ${shortAddrRV} is now worth around ${estStrRV}. Since ${purchaseYearRV} you've built up ${equityStrRV} in equity. A lot of people in your position are finding this a great moment to right-size and free up that equity for the next chapter.`,
-          `We'd love to offer a complimentary, no-pressure appraisal. Happy to come to you and walk through what the market looks like.\n\n${signoffRV},\n${agentFirstRV}`,
+          `I'd love to offer a complimentary, no-pressure appraisal. Happy to come to you and walk through what the market looks like.\n\n${signoffRV},\n${agentFirstRV}`,
         ],
       })
       variants.push({
@@ -7527,7 +7527,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
           `Just a quick update on ${shortAddrRV}. The property is now worth around ${estStrRV}, which is a great result from when you purchased in ${purchaseYearRV}.`,
-          `We'd love to pop over for a complimentary appraisal if you're curious. Completely no-obligation, just so you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
+          `I'd love to pop over for a complimentary appraisal if you're curious. Completely no-obligation, just so you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
         ],
       })
       variants.push({

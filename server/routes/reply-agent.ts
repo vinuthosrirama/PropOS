@@ -95,11 +95,11 @@ const INTENT_FRAMEWORKS: Record<ReplyIntent, (ctx: {
   auctionDate?: string
 }) => string> = {
   INTEREST:  ({ leadFirst, agentFirst }) =>
-    clampSMS(`Hi ${leadFirst}, great to hear from you! When are you free for a private inspection? We can arrange a viewing at short notice. ${agentFirst}`),
+    clampSMS(`Hi ${leadFirst}, great to hear from you! When are you free for a private inspection? I can arrange a viewing at short notice. ${agentFirst}`),
   QUESTION:  ({ leadFirst, agentFirst, agentPhone }) =>
-    clampSMS(`Hi ${leadFirst}, happy to answer that. Give me a call on ${agentPhone ?? "the office"} or we can arrange a walkthrough this week. ${agentFirst}`),
+    clampSMS(`Hi ${leadFirst}, happy to answer that. Give me a call on ${agentPhone ?? "the office"} or I can arrange a walkthrough this week. ${agentFirst}`),
   OBJECTION: ({ leadFirst, agentFirst }) =>
-    clampSMS(`Hi ${leadFirst}, totally understand — still worth seeing it in person. We can arrange a private viewing on your terms. ${agentFirst}`),
+    clampSMS(`Hi ${leadFirst}, totally understand — still worth seeing it in person. I can arrange a private viewing on your terms. ${agentFirst}`),
   BOOKING:   ({ leadFirst, agentFirst, auctionDate }) =>
     clampSMS(`Hi ${leadFirst}, confirmed${auctionDate ? ` — see you ${auctionDate}` : ""}! Any questions before then, just reply here. ${agentFirst}`),
   OPT_OUT:   () => "",
