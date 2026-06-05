@@ -5011,7 +5011,6 @@ export async function preloadSLMsFromSheet(propertyIds: number[]): Promise<void>
     })
   )
   sheetPreloadDone = true
-  console.log(`[SLM] Preloaded ${Object.keys(sheetSLMCache).length}/${propertyIds.length} from Sheets`)
 }
 
 /** Check if Sheet SLM preload is complete */

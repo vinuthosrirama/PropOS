@@ -2167,10 +2167,10 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       const fname = lead.name.split(" ")[0]
       const aname = agent.name.split(" ")[0]
       setNurtureSeq([
-        { day: 0,  strategy: "New Listing Match",  sms: `Hi ${fname}, ${aname} here. I think ${property.address} is a great match for what you're looking for. Worth a look?`, email: { subject: `New listing match: ${property.address}`, body: [`Hi ${fname}, I wanted to reach out about a listing I think you'll love.`] } },
-        { day: 7,  strategy: "Market Pulse",        sms: `Hi ${fname}, ${aname} here. Interesting week in ${property.suburb} - a comparable home sold well above guide. Worth keeping in touch?`, email: { subject: `Market update: ${property.suburb}`, body: [`Hi ${fname}, quick market update from the week.`] } },
-        { day: 14, strategy: "Social Proof Drop",   sms: `Hi ${fname}, ${aname} here. Another buyer just moved on a similar place in ${property.suburb}. Competition's picking up - happy to chat. ${aname}`, email: { subject: `Moving fast in ${property.suburb}`, body: [`Hi ${fname}, things are moving quickly in this market.`] } },
-        { day: 30, strategy: "Life Check-In",       sms: `Hi ${fname}, ${aname} here. Just checking in - how's the search going? Happy to chat anytime. ${aname}`, email: { subject: `Checking in, ${fname}`, body: [`Hi ${fname}, just wanted to check in on where you're at with your search.`] } },
+        { day: 0,  strategy: "New Listing Match",  sms: `Hi ${fname}, ${aname} here. ${property.address} looks like a strong match for what you're after. Worth a look? ${aname}`, email: { subject: `New listing match: ${property.address}`, body: [`Hi ${fname}, a listing just came up that matches what you've been looking for.`] } },
+        { day: 7,  strategy: "Market Pulse",        sms: `Hi ${fname}, ${aname} here. Interesting week in ${property.suburb} — a comparable home sold well above guide. Worth keeping in touch?`, email: { subject: `Market update: ${property.suburb}`, body: [`Hi ${fname}, quick market update from the week.`] } },
+        { day: 14, strategy: "Social Proof Drop",   sms: `Hi ${fname}, ${aname} here. Another buyer just moved on a similar place in ${property.suburb}. Competition's picking up — happy to chat. ${aname}`, email: { subject: `Moving fast in ${property.suburb}`, body: [`Hi ${fname}, things are moving quickly in this market.`] } },
+        { day: 30, strategy: "Life Check-In",       sms: `Hi ${fname}, ${aname} here. Checking in on the search — how's it going? Happy to chat anytime. ${aname}`, email: { subject: `Checking in, ${fname}`, body: [`Hi ${fname}, checking in on where you're at with your property search.`] } },
       ])
       setShowNurture(true)
     } finally {
@@ -3936,7 +3936,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
                         const STEPS: [typeof addVoiceStage, string][] = [
                           ["transcribing",  "Transcribing audio"],
                           ["analysing",     "Analysing transcript"],
-                          ["personalising", "Personalising using PropOS AI"],
+                          ["personalising", "Personalising outreach"],
                         ]
                         const ORDER = ["transcribing", "analysing", "personalising", "done"]
                         const curIdx = ORDER.indexOf(addVoiceStage)
@@ -4541,7 +4541,7 @@ function NotesBridgeCard({ notes, prewrittenHook, extractedHook, personalisation
                 transition={{ duration: 1.4, repeat: Infinity }}
                 style={{ fontSize: 10, color: theme.primary, fontWeight: 700, letterSpacing: 0.3 }}
               >
-                AI reading between the lines...
+                Reading between the lines...
               </motion.span>
             </div>
           </div>
@@ -4559,7 +4559,7 @@ function NotesBridgeCard({ notes, prewrittenHook, extractedHook, personalisation
               }}>
                 <span style={{ fontSize: 9 }}>⚡</span>
                 <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: "#fff", textTransform: "uppercase" }}>
-                  {prewrittenHook ? "Your insight" : "What AI saw"}
+                  {prewrittenHook ? "Your insight" : "What we found"}
                 </span>
               </div>
               {prewrittenHook && (
@@ -4639,7 +4639,7 @@ function NotesBridgeCard({ notes, prewrittenHook, extractedHook, personalisation
         {/* Footer hint — only when we have no hook yet and not generating */}
         {!hook && !generating && (
           <div style={{ fontSize: 9.5, color: C.faint, marginTop: 6, fontStyle: "italic" }}>
-            Click Generate below to watch AI extract the personalisation hook from these notes
+            Click Write outreach below to extract the personalisation hook from these notes
           </div>
         )}
       </div>
@@ -6316,7 +6316,7 @@ function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; t
       icon: "🎙️", title: "Voice Intel Engine",
       value: "Record → we extract the hook",
       sub: "Personalisation in 10 seconds",
-      detail: "Speak a quick note about any contact on your phone ('Jason's tenant just moved out, he seemed frustrated about the vacancy'). AI extracts the personalisation hook and writes the outreach for you.",
+      detail: "Speak a quick note about any contact on your phone ('Jason's tenant just moved out, he seemed frustrated about the vacancy'). PropOS extracts the personalisation hook and writes the outreach for you.",
     },
     {
       icon: "💬", title: "Smart Reply",
@@ -7955,7 +7955,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         }}>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>
             <strong style={{ color: C.text, display: "block" }}>Send all {allEntries.length} leads at once</strong>
-            AI generates and queues personalised outreach for every lead.
+            PropOS generates personalised outreach for every lead.
           </div>
           <button
             onClick={onBack}
