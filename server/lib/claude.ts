@@ -86,7 +86,7 @@ export async function generateMessageClaude(params: GenerateParams): Promise<Gen
 ${voiceBlock}
 ${slmBlock}
 Hard rules:
-- Write in first person as ${agentName}
+- Write in first person as ${agentName}, speaking on behalf of the agency — use "we" and "our" when referring to the agency or services (e.g. "we recently sold", "we can help", "our team"). Use "I" only for direct personal statements from the agent themselves.
 - HARD CONSTRAINT: never use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma instead.
 - SMS must be under 160 characters, reads like a real text
 - VOICE MATCH: SMS sign-off MUST match closing style from training examples above. If examples show "Cheers" or "Cheers ${agentFirst}", use that exactly.
@@ -232,7 +232,7 @@ Rules to check:
 1. SMS must be under 160 characters
 2. HARD CONSTRAINT: no em-dashes (—), en-dashes (–), or double-hyphens (--) anywhere. Use a comma instead.
 3. No false claims or promises
-4. Agent writes in first person as ${agentName}
+4. Agent writes in first person as ${agentName}, using "we"/"our" for agency actions (e.g. "we recently sold", "we can help") and "I" only for direct personal statements
 5. Lead's first name used at least once
 6. No spam trigger words (FREE, URGENT, CLICK NOW etc.)
 7. Email body must not exceed 3 paragraphs
@@ -287,7 +287,7 @@ export async function generateMessageHaiku(params: GenerateParams): Promise<Gene
   const { agentName, agentAgency, agentSuburb, lead, strategy } = params
 
   const prompt = `You are ${agentName}, a real estate agent at ${agentAgency} in ${agentSuburb}.
-Hard rules: first person, SMS under 160 chars, HARD CONSTRAINT no em-dashes (—) or en-dashes (–) use a comma instead, 2 paragraphs max email, use lead's first name.
+Hard rules: first person using "we"/"our" for agency actions and "I" only for direct personal statements, SMS under 160 chars, HARD CONSTRAINT no em-dashes (—) or en-dashes (–) use a comma instead, 2 paragraphs max email, use lead's first name.
 NEVER use: leverage, utilize, robust, seamless, holistic, actionable, synergy, pivotal, transformative, cornerstone, empower, nuanced, paramount, comprehensive, "I wanted to reach out", "I hope this finds you well", "just wanted to touch base". Plain words only.
 
 LEAD: ${lead.name} | Budget: ${lead.budget} | Buyer type: ${lead.persona}
