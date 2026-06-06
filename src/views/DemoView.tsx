@@ -3503,13 +3503,13 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
   }
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: "88px 28px 48px", fontFamily: FONT }}>
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: isMobileVPP ? "80px 16px 48px" : "88px 28px 48px", fontFamily: FONT }}>
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 8 }}>
           Vendor Prospecting
         </div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: C.text, letterSpacing: -0.6, marginBottom: 8, display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ fontSize: isMobileVPP ? 20 : 26, fontWeight: 800, color: C.text, letterSpacing: -0.6, marginBottom: 8, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           Turn past buyers into new listings
           <span style={{ fontSize: 13, fontWeight: 600, color: C.faint, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "3px 10px", letterSpacing: 0 }}>
             {buyers.length} contacts
@@ -3536,15 +3536,16 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
           { label: "Est. agent GCI",   value: fmtM(agentGCI),        accent: true  },
         ]
         return (
-          <div style={{ display: "flex", gap: 0, marginBottom: 24, background: C.bg2, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+          <div style={{ display: "flex", gap: 0, marginBottom: 24, background: C.bg2, borderRadius: 12, border: `1px solid ${C.border}`, overflow: isMobileVPP ? "auto" : "hidden" }}>
             {stats.map((s, i) => (
               <div key={s.label} style={{
-                flex: 1, padding: "12px 14px", textAlign: "center",
+                flex: isMobileVPP ? "0 0 auto" : 1, padding: isMobileVPP ? "10px 12px" : "12px 14px", textAlign: "center",
                 borderRight: i < stats.length - 1 ? `1px solid ${C.border}` : "none",
                 background: s.accent ? `${C.green}0a` : "transparent",
+                minWidth: isMobileVPP ? 72 : undefined,
               }}>
-                <div style={{ fontSize: 17, fontWeight: 800, color: s.accent ? C.green : C.text, lineHeight: 1.1 }}>{s.value}</div>
-                <div style={{ fontSize: 10, color: C.faint, fontWeight: 500, marginTop: 3, letterSpacing: 0.3 }}>{s.label}</div>
+                <div style={{ fontSize: isMobileVPP ? 14 : 17, fontWeight: 800, color: s.accent ? C.green : C.text, lineHeight: 1.1 }}>{s.value}</div>
+                <div style={{ fontSize: 9, color: C.faint, fontWeight: 500, marginTop: 3, letterSpacing: 0.3 }}>{s.label}</div>
               </div>
             ))}
           </div>
@@ -4049,7 +4050,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
               {importSource === "crm" && (
                 <div>
                   <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Connect your CRM to sync contacts automatically. PropOS maps your fields and upserts new records to your Google Sheet.</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobileVPP ? "1fr" : "1fr 1fr", gap: 10 }}>
                     {([
                       ["RealBase",       "rb", "🏠", true],
                       ["Rex Software",   "rex", "📋", false],

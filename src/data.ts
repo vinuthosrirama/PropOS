@@ -1,13 +1,20 @@
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
+// ── Colour tokens ─────────────────────────────────────────────────────────────
+// All surface/text/border values use CSS custom properties so the light/dark
+// toggle in App.tsx only needs to swap the variable values — no component
+// changes required. Accent colours (blue, green, etc.) are fixed on both modes.
+
 export const C = {
-  bg:          "rgb(4, 7, 13)",
-  bg2:         "rgb(14, 18, 28)",
-  bg3:         "rgb(22, 27, 40)",
-  text:        "rgb(213, 219, 230)",
-  muted:       "rgba(213, 219, 230, 0.5)",
-  faint:       "rgba(213, 219, 230, 0.3)",
-  border:      "rgba(216, 231, 242, 0.13)",
-  borderHover: "rgba(216, 231, 242, 0.18)",
+  // Surfaces & text — resolved at runtime via CSS vars
+  bg:          "var(--c-bg)",
+  bg2:         "var(--c-bg2)",
+  bg3:         "var(--c-bg3)",
+  text:        "var(--c-text)",
+  muted:       "var(--c-muted)",
+  faint:       "var(--c-faint)",
+  border:      "var(--c-border)",
+  borderHover: "var(--c-border-hover)",
+  // Accent colours — unchanged across modes
   blue:        "rgb(166, 218, 255)",
   blueDim:     "rgba(166, 218, 255, 0.12)",
   blueGlow:    "rgba(166, 218, 255, 0.06)",
@@ -20,6 +27,30 @@ export const C = {
   purple:      "rgb(200, 160, 255)",
   purpleDim:   "rgba(200, 160, 255, 0.12)",
 } as const
+
+// ── Theme variable blocks ─────────────────────────────────────────────────────
+
+export const DARK_CSS_VARS = `
+  --c-bg:           rgb(4, 7, 13);
+  --c-bg2:          rgb(14, 18, 28);
+  --c-bg3:          rgb(22, 27, 40);
+  --c-text:         rgb(213, 219, 230);
+  --c-muted:        rgba(213, 219, 230, 0.50);
+  --c-faint:        rgba(213, 219, 230, 0.30);
+  --c-border:       rgba(216, 231, 242, 0.13);
+  --c-border-hover: rgba(216, 231, 242, 0.18);
+`
+
+export const LIGHT_CSS_VARS = `
+  --c-bg:           #f5f7fa;
+  --c-bg2:          #ffffff;
+  --c-bg3:          #edf0f5;
+  --c-text:         #0f172a;
+  --c-muted:        #475569;
+  --c-faint:        #94a3b8;
+  --c-border:       rgba(15, 23, 42, 0.10);
+  --c-border-hover: rgba(15, 23, 42, 0.18);
+`
 
 export const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
 
