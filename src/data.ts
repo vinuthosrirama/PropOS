@@ -109,6 +109,11 @@ export interface VendorDisplaySettings {
   showOutreachAngles:  boolean
   showEquityScenarios: boolean
   showOptimalWindow:   boolean
+  // Added in v2 — UX noise reduction toggles
+  showMarketTriggers:  boolean   // TriggerFeed on vendor portfolio page
+  showComparableMap:   boolean   // Comparable sales Leaflet map
+  showMatchScores:     boolean   // Score rings on lead cards
+  showDNAAnalysis:     boolean   // Property DNA section
 }
 
 export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
@@ -117,6 +122,10 @@ export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
   showOutreachAngles:  false,
   showEquityScenarios: false,
   showOptimalWindow:   false,
+  showMarketTriggers:  false,
+  showComparableMap:   false,
+  showMatchScores:     false,
+  showDNAAnalysis:     false,
 }
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
@@ -504,7 +513,7 @@ export const MANPREET_PORTFOLIO_ACTIVE: PortfolioProperty[] = [
     type: "House", status: "active",
     openDate: "TBD",
     auctionDate: "TBD",
-    image: "/13-jack-william-way.jpg",
+    image: "/13-jack-william-way.png",
     description: "630m² residential property (GRZ1) at Jack William Way, Berwick. Lot 106 PS516565X. Title Vol 10794 Fol 460. Electricity, gas, water and sewerage connected. No planning overlays. Not in bushfire prone area. E-2 drainage and sewerage easement (9m). ANZ mortgage discharged at settlement. City of Casey. Melway 131 A5.",
     leadCount: 0,
   },

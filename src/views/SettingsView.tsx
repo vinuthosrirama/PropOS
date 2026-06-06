@@ -557,10 +557,12 @@ function QACard({
 // Main Component
 // ---------------------------------------------------------------------------
 
-export default function SettingsView({ agent, vendorSettings, onVendorSettingsChange }: {
+export default function SettingsView({ agent, vendorSettings, onVendorSettingsChange, lightMode, onToggleLightMode }: {
   agent: AgentProfile
   vendorSettings?: VendorDisplaySettings
   onVendorSettingsChange?: (s: VendorDisplaySettings) => void
+  lightMode?: boolean
+  onToggleLightMode?: () => void
 }) {
   const bp = useBreakpoint()
   const isMobile = bp === "mobile"
@@ -818,7 +820,12 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
         {settingsTab === "integrations" && <IntegrationsPanel />}
 
         {settingsTab === "display" && vendorSettings && onVendorSettingsChange && (
-          <VendorPanelToggles settings={vendorSettings} onChange={onVendorSettingsChange} />
+          <VendorPanelToggles
+            settings={vendorSettings}
+            onChange={onVendorSettingsChange}
+            lightMode={lightMode}
+            onToggleLightMode={onToggleLightMode}
+          />
         )}
 
         {settingsTab === "voice" && (
@@ -1488,76 +1495,142 @@ const VENDOR_PANEL_META: Array<{
   key: keyof VendorDisplaySettings
   label: string
   description: string
+  group?: string
 }> = [
-  { key: "showCRMNotes",        label: "From Your CRM Notes",      description: "AI-extracted personalisation hooks from contact notes" },
-  { key: "showTriggers",        label: "Triggers & Pitch Angles",   description: "Life-stage triggers and outreach angle suggestions" },
-  { key: "showOutreachAngles",  label: "Choose Outreach Angle",     description: "Equity / lifestyle / CGT / market angle picker cards" },
-  { key: "showEquityScenarios", label: "Equity Release Scenarios",  description: "Low / mid / high sale price breakdown with net proceeds" },
-  { key: "showOptimalWindow",   label: "Optimal Listing Window",    description: "AI-predicted best months to list based on market data" },
+  // ── Vendor profile panels ─────────────────────────────────────────────────
+  { key: "showCRMNotes",        label: "From Your CRM Notes",         description: "AI-extracted personalisation hooks from contact notes",          group: "Vendor Profile" },
+  { key: "showTriggers",        label: "Triggers & Pitch Angles",      description: "Life-stage triggers and outreach angle suggestions",             group: "Vendor Profile" },
+  { key: "showOutreachAngles",  label: "Choose Outreach Angle",        description: "Equity / lifestyle / CGT / market angle picker cards",          group: "Vendor Profile" },
+  { key: "showEquityScenarios", label: "Equity Release Scenarios",     description: "Low / mid / high sale price breakdown with net proceeds",       group: "Vendor Profile" },
+  { key: "showOptimalWindow",   label: "Optimal Listing Window",       description: "AI-predicted best months to list based on market data",         group: "Vendor Profile" },
+  // ── Noise reduction toggles ───────────────────────────────────────────────
+  { key: "showMarketTriggers",  label: "Market Trigger Feed",          description: "Smart alerts on the vendor pipeline page (neighbour sales, CGT windows, life events)", group: "Noise Reduction" },
+  { key: "showComparableMap",   label: "Comparable Sales Map",         description: "Interactive Leaflet map of recent comparable sales in the vendor appraisal panel",     group: "Noise Reduction" },
+  { key: "showMatchScores",     label: "Match Score Rings",            description: "Visual score rings on buyer lead cards",                                                group: "Noise Reduction" },
+  { key: "showDNAAnalysis",     label: "Property DNA Analysis",        description: "AI-generated property DNA tags on vendor profile",                                      group: "Noise Reduction" },
 ]
+
+function TogglePill({ on }: { on: boolean }) {
+  return (
+    <div style={{
+      flexShrink: 0, width: 44, height: 24, borderRadius: 12, marginLeft: 16,
+      background: on ? "var(--accent, rgb(166,218,255))" : C.bg3,
+      border: `1px solid ${on ? "transparent" : C.border}`,
+      position: "relative", transition: "background 0.2s",
+    }}>
+      <div style={{
+        position: "absolute", top: 3, left: on ? 22 : 3,
+        width: 16, height: 16, borderRadius: "50%",
+        background: on ? C.bg : C.muted,
+        transition: "left 0.2s",
+      }} />
+    </div>
+  )
+}
 
 function VendorPanelToggles({
   settings,
   onChange,
+  lightMode,
+  onToggleLightMode,
 }: {
   settings: VendorDisplaySettings
   onChange: (s: VendorDisplaySettings) => void
+  lightMode?: boolean
+  onToggleLightMode?: () => void
 }) {
   const toggle = (key: keyof VendorDisplaySettings) =>
     onChange({ ...settings, [key]: !settings[key] })
 
+  // Group items by "group" key
+  const groups = VENDOR_PANEL_META.reduce<Record<string, typeof VENDOR_PANEL_META>>((acc, item) => {
+    const g = item.group ?? "Other"
+    if (!acc[g]) acc[g] = []
+    acc[g].push(item)
+    return acc
+  }, {})
+
+  const groupOrder = ["Vendor Profile", "Noise Reduction"]
+
+  const groupLabel: React.CSSProperties = {
+    fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
+    color: C.faint, textTransform: "uppercase" as const,
+    marginBottom: 8, marginTop: 20,
+  }
+
   return (
     <div style={{ maxWidth: 600 }}>
       <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>
-        Vendor Profile Panels
+        Display
       </div>
       <div style={{ fontSize: 14, color: C.muted, marginBottom: 24, lineHeight: 1.5 }}>
-        Choose which panels appear on each vendor contact profile. Hidden panels can be re-enabled at any time.
+        Control which panels and UI elements are visible. Changes save instantly to this browser.
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {VENDOR_PANEL_META.map(({ key, label, description }) => {
-          const on = settings[key]
-          return (
-            <div
-              key={key}
-              role="switch"
-              aria-checked={on}
-              tabIndex={0}
-              onClick={() => toggle(key)}
-              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(key) } }}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                background: C.bg2, border: `1px solid ${on ? "var(--accent, rgb(166,218,255))40" : C.border}`,
-                borderRadius: 12, padding: "14px 18px", cursor: "pointer",
-                transition: "border-color 0.15s",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 2 }}>{label}</div>
-                <div style={{ fontSize: 12, color: C.muted }}>{description}</div>
+      {/* ── Day / Night Mode ── */}
+      {onToggleLightMode !== undefined && (
+        <>
+          <div style={{ ...groupLabel, marginTop: 0 }}>Appearance</div>
+          <div
+            role="switch"
+            aria-checked={lightMode}
+            tabIndex={0}
+            onClick={onToggleLightMode}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleLightMode() } }}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              background: C.bg2, border: `1px solid ${lightMode ? "var(--accent, rgb(166,218,255))40" : C.border}`,
+              borderRadius: 12, padding: "14px 18px", cursor: "pointer",
+              transition: "border-color 0.15s", marginBottom: 10,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 2 }}>
+                {lightMode ? "Light mode" : "Dark mode"}
               </div>
-              {/* Toggle pill */}
-              <div style={{
-                flexShrink: 0, width: 44, height: 24, borderRadius: 12, marginLeft: 16,
-                background: on ? "var(--accent, rgb(166,218,255))" : C.bg3,
-                border: `1px solid ${on ? "transparent" : C.border}`,
-                position: "relative", transition: "background 0.2s",
-              }}>
-                <div style={{
-                  position: "absolute", top: 3, left: on ? 22 : 3,
-                  width: 16, height: 16, borderRadius: "50%",
-                  background: on ? C.bg : C.muted,
-                  transition: "left 0.2s",
-                }} />
-              </div>
+              <div style={{ fontSize: 12, color: C.muted }}>Switch between dark and light themes</div>
             </div>
-          )
-        })}
-      </div>
+            <TogglePill on={!!lightMode} />
+          </div>
+        </>
+      )}
+
+      {/* ── Panel groups ── */}
+      {groupOrder.map(g => (
+        <div key={g}>
+          <div style={groupLabel}>{g}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {(groups[g] ?? []).map(({ key, label, description }) => {
+              const on = settings[key]
+              return (
+                <div
+                  key={key}
+                  role="switch"
+                  aria-checked={on}
+                  tabIndex={0}
+                  onClick={() => toggle(key)}
+                  onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(key) } }}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    background: C.bg2, border: `1px solid ${on ? "var(--accent, rgb(166,218,255))40" : C.border}`,
+                    borderRadius: 12, padding: "14px 18px", cursor: "pointer",
+                    transition: "border-color 0.15s",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{description}</div>
+                  </div>
+                  <TogglePill on={on} />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
 
       <div style={{ marginTop: 20, fontSize: 12, color: C.faint, lineHeight: 1.5 }}>
-        Changes apply immediately and are saved to this browser. All panels are hidden by default for a cleaner outreach view.
+        All panels are off by default for a low-noise experience. Toggle on what you need.
       </div>
     </div>
   )

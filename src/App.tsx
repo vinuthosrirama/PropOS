@@ -32,7 +32,35 @@ function LoadingSpinner() {
   )
 }
 
+// ── URL-based product detection ───────────────────────────────────────────────
+// ?product=buyeros  → BuyerOS (buyer outreach module)
+// ?product=vendoros → VendorOS (vendor prospecting module)
+// No param           → PropOS (full, both modes selectable)
+function detectProductMode(): DemoMode | null {
+  try {
+    const p = new URLSearchParams(window.location.search).get("product") ?? ""
+    if (p.toLowerCase().includes("buyer")) return "buyer"
+    if (p.toLowerCase().includes("vendor")) return "vendor"
+    // Also check hash params: /#vendor or /#buyer
+    const hash = window.location.hash.replace("#", "").toLowerCase()
+    if (hash === "buyer" || hash === "buyeros") return "buyer"
+    if (hash === "vendor" || hash === "vendoros") return "vendor"
+  } catch {}
+  return null
+}
+
+export const APP_PRODUCT_MODE = detectProductMode()
+
+export function getProductLabel(mode: DemoMode | null): string {
+  if (mode === "buyer") return "BuyerOS"
+  if (mode === "vendor") return "VendorOS"
+  return "PropOS"
+}
+
 export default function App() {
+  // productMode: null = PropOS (both), "buyer" = BuyerOS only, "vendor" = VendorOS only
+  const productMode = APP_PRODUCT_MODE
+
   const [lightMode, setLightMode] = useState<boolean>(() => {
     try { return localStorage.getItem("propos_light_mode") === "1" } catch { return false }
   })
@@ -45,11 +73,16 @@ export default function App() {
     try { localStorage.setItem("propos_light_mode", lightMode ? "1" : "0") } catch {}
   }, [lightMode])
 
+  // Update page title based on product mode
+  useEffect(() => {
+    document.title = getProductLabel(productMode) + " by AddVantage"
+  }, [productMode])
+
   const [loggedIn, setLoggedIn]       = useState(false)
   const [theme, setTheme]             = useState<AgencyTheme>(DEFAULT_THEME)
   const [view, setView]               = useState<ViewId>("demo")
   const [agent, setAgent]             = useState(DEFAULT_AGENT)
-  const [mode, setMode]               = useState<DemoMode>("buyer")
+  const [mode, setMode]               = useState<DemoMode>(productMode ?? "buyer")
   const [sheetStatus, setSheetStatus] = useState<"idle" | "loading" | "live" | "error">("idle")
   const [demoBack, setDemoBack] = useState<{ fn: () => void } | null>(null)
   const [inboxOpen, setInboxOpen]   = useState(false)
@@ -111,7 +144,7 @@ export default function App() {
     return (
       <Suspense fallback={<LoadingSpinner />}>
         <AnimatePresence mode="wait">
-          <AgentLogin onLogin={handleLogin} />
+          <AgentLogin onLogin={handleLogin} productMode={productMode} />
         </AnimatePresence>
       </Suspense>
     )
@@ -126,8 +159,9 @@ export default function App() {
     } as CSSProperties & Record<`--${string}`, string>}>
       <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn}
            onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge}
-           mode={mode} onSwitchMode={setMode}
-           lightMode={lightMode} onToggleLightMode={() => setLightMode(m => !m)} />
+           mode={mode} onSwitchMode={productMode ? undefined : setMode}
+           lightMode={lightMode} onToggleLightMode={() => setLightMode(m => !m)}
+           productMode={productMode} />
       <BillingBanner />
 
       <Suspense fallback={<LoadingSpinner />}>
@@ -141,7 +175,7 @@ export default function App() {
             {view === "demo"      && <DemoView agent={agent} theme={theme} mode={mode} onSettings={() => navigate("setup")} onRegisterBack={fn => setDemoBack(fn ? { fn } : null)}
                                               showInbox={inboxOpen} onShowInboxChange={setInboxOpen} onBadgeChange={setInboxBadge}
                                               vendorSettings={vendorSettings} />}
-            {view === "setup"     && <SettingsView agent={agent} vendorSettings={vendorSettings} onVendorSettingsChange={handleVendorSettings} />}
+            {view === "setup"     && <SettingsView agent={agent} vendorSettings={vendorSettings} onVendorSettingsChange={handleVendorSettings} lightMode={lightMode} onToggleLightMode={() => setLightMode(m => !m)} />}
             {view === "principal" && <PrincipalView agent={agent} theme={theme} />}
           </motion.div>
         </AnimatePresence>

@@ -344,15 +344,28 @@ function AuthLoginPanel({ onSuccess }: {
 
 interface Props {
   onLogin: (agent: AgentProfile, theme: AgencyTheme, mode: DemoMode) => void
+  productMode?: DemoMode | null  // pre-selected mode from URL param (?product=buyeros/vendoros)
 }
 
 type Phase = "form" | "welcoming" | "done"
 
-export default function AgentLogin({ onLogin }: Props) {
+// Product branding helpers
+function getProductName(pm: DemoMode | null | undefined): string {
+  if (pm === "buyer") return "BuyerOS"
+  if (pm === "vendor") return "VendorOS"
+  return "PropOS"
+}
+function getProductTagline(pm: DemoMode | null | undefined): string {
+  if (pm === "buyer") return "Buyer outreach intelligence · by AddVantage"
+  if (pm === "vendor") return "Vendor prospecting intelligence · by AddVantage"
+  return "by AddVantage · Enter your details to begin"
+}
+
+export default function AgentLogin({ onLogin, productMode }: Props) {
   const bp = useBreakpoint()
   const isMobile = bp === "mobile"
   const [phase, setPhase] = useState<Phase>("form")
-  const [mode, setMode] = useState<DemoMode>("buyer")
+  const [mode, setMode] = useState<DemoMode>(productMode ?? "buyer")
   const [showAuth, setShowAuth] = useState(false)
   const [welcomeName, setWelcomeName] = useState("")  // set by both guest and auth paths
   const [form, setForm] = useState({
@@ -502,10 +515,10 @@ export default function AgentLogin({ onLogin }: Props) {
                 }}
               >AV</motion.div>
               <div style={{ fontSize: 22, fontWeight: 700, color: C.text, letterSpacing: -0.5, marginBottom: 4 }}>
-                PropOS
+                {getProductName(productMode)}
               </div>
               <div style={{ fontSize: 13, color: C.muted }}>
-                by AddVantage · Enter your details to begin
+                {getProductTagline(productMode)}
               </div>
             </div>
 
@@ -517,8 +530,8 @@ export default function AgentLogin({ onLogin }: Props) {
               boxShadow: theme ? `0 0 40px ${theme.glow}` : undefined,
               transition: "border 0.4s, box-shadow 0.4s",
             }}>
-              {/* Mode toggle */}
-              <div style={{ marginBottom: 24 }}>
+              {/* Mode toggle — hidden when productMode is pre-set via URL */}
+              <div style={{ marginBottom: 24, display: productMode ? "none" : "block" }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.5, marginBottom: 8 }}>
                   What do you want to do today?
                 </div>

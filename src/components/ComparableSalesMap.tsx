@@ -1,9 +1,10 @@
 /**
  * ComparableSalesMap
  * Live Leaflet/OpenStreetMap map showing subject property + comparable sales as pins.
- * No API key required — uses free CartoDB Dark Matter tiles.
+ * No API key required — uses free CartoDB tiles.
  */
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
+import "leaflet/dist/leaflet.css"
 import type { Map as LeafletMap } from "leaflet"
 import { C } from "../data"
 
@@ -65,48 +66,107 @@ interface Props {
   height?:    number
 }
 
+// Static fallback — shows comps as cards when Leaflet fails to render
+function StaticCompFallback({ suburb, comps, theme, height }: Props) {
+  const fmtK = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(0)}K` : `$${v}`
+  return (
+    <div style={{
+      height, borderRadius: 12, overflow: "hidden",
+      background: C.bg3, border: `1px solid ${C.border}`,
+      display: "flex", flexDirection: "column",
+    }}>
+      <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.8 }}>
+          Comparable Sales · {suburb}
+        </div>
+        <div style={{ fontSize: 10, color: C.faint, marginLeft: "auto" }}>Map unavailable</div>
+      </div>
+      <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 1 }}>
+        {comps.map((comp, i) => {
+          const isSubj = i === 0 || comp.isSubject
+          const color = isSubj ? theme.primary : comp.matchScore >= 80 ? C.green : C.blue
+          return (
+            <div key={i} style={{
+              padding: "9px 14px", display: "flex", alignItems: "center", gap: 10,
+              borderBottom: `1px solid ${C.border}`,
+              background: isSubj ? `${theme.primary}08` : "transparent",
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {isSubj ? "Subject property" : comp.address}
+                </div>
+                <div style={{ fontSize: 10, color: C.muted }}>
+                  {comp.beds}bd{comp.land > 0 ? ` · ${comp.land}m²` : ""} · {comp.soldDate}
+                </div>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color, flexShrink: 0 }}>{fmtK(comp.soldPrice)}</div>
+              {!isSubj && (
+                <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, flexShrink: 0 }}>{comp.matchScore}%</div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function ComparableSalesMap({ suburb, comps, theme, height = 280 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef       = useRef<LeafletMap | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!containerRef.current) return
-    // Avoid double-init (strict mode / hot reload)
-    if (mapRef.current) { mapRef.current.remove(); mapRef.current = null }
+    if (mapRef.current) { try { mapRef.current.remove() } catch {} mapRef.current = null }
 
     let cancelled = false
-
-    // Two-phase init:
-    // Phase 1 (immediate): render map so something appears quickly.
-    // Phase 2 (300ms): destroy + recreate with the correct container size.
-    // Leaflet reads offsetWidth at L.map() init time. In a flex layout the
-    // container may not have its final width yet, so tiles load only on one side.
-    // Recreating after 300ms guarantees the flex layout has fully settled.
     let recreateTimer: ReturnType<typeof setTimeout> | null = null
 
-    const createMap = (L: typeof import("leaflet"), lat: number, lng: number) => {
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null }
-      if (!containerRef.current) return
+    const createMap = (L: typeof import("leaflet"), lat: number, lng: number): boolean => {
+      if (mapRef.current) { try { mapRef.current.remove() } catch {} mapRef.current = null }
+      if (!containerRef.current || cancelled) return false
 
-      const map = L.map(containerRef.current, {
-        center: [lat, lng],
-        zoom: 14,
-        zoomControl: true,
-        scrollWheelZoom: false,
-        attributionControl: false,
-      })
+      // Guard: container must have positive dimensions before initialising
+      const w = containerRef.current.offsetWidth
+      const h = containerRef.current.offsetHeight
+      if (w < 10 || h < 10) return false
+
+      let map: LeafletMap
+      try {
+        map = L.map(containerRef.current, {
+          center: [lat, lng],
+          zoom: 14,
+          zoomControl: true,
+          scrollWheelZoom: false,
+          attributionControl: false,
+        })
+      } catch {
+        if (!cancelled) setFailed(true)
+        return false
+      }
       mapRef.current = map
 
-      // Use light or dark tiles depending on current colour scheme
       const isLight = document.documentElement.classList.contains("light-mode")
       const tileUrl = isLight
         ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-      L.tileLayer(tileUrl, {
+
+      let tileErrorCount = 0
+      const tileLayer = L.tileLayer(tileUrl, {
         maxZoom: 19,
         subdomains: "abcd",
         opacity: 0.95,
-      }).addTo(map)
+      })
+      tileLayer.on("tileload", () => { if (!cancelled) setLoading(false) })
+      tileLayer.on("tileerror", () => {
+        tileErrorCount++
+        // If 3+ tiles fail, switch to static fallback
+        if (tileErrorCount >= 3 && !cancelled) setFailed(true)
+      })
+      tileLayer.addTo(map)
 
       const fmtK = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(0)}K` : `$${v}`
 
@@ -119,63 +179,48 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
           : "#f59e0b"
         const compLat = isSubject ? lat : lat + seededOffset(comp.address.length + i * 7, 0.012)
         const compLng = isSubject ? lng : lng + seededOffset(comp.address.length + i * 13, 0.016)
-        const svgSize = isSubject ? 18 : 14
-        const svgIcon = L.divIcon({
-          className: "",
-          iconSize:  [svgSize, svgSize],
-          iconAnchor:[svgSize / 2, svgSize / 2],
-          html: `
-            <div style="
-              width:${svgSize}px; height:${svgSize}px; border-radius:50%;
-              background:${color}; border:2px solid ${isSubject ? "#fff" : color + "cc"};
-              box-shadow: 0 0 0 4px ${color}33, 0 0 12px ${color}66;
-              ${isSubject ? `animation: pulse-pin 2s ease-out infinite;` : ""}
-            "></div>
-            <style>
-              @keyframes pulse-pin {
-                0%, 100% { box-shadow: 0 0 0 4px ${color}44, 0 0 12px ${color}55; }
-                50%       { box-shadow: 0 0 0 8px ${color}22, 0 0 20px ${color}44; }
-              }
-            </style>
-          `,
-        })
+
         const label = isSubject ? "Subject property" : comp.address.split(" ").slice(0, 3).join(" ")
         const popup = `
-          <div style="font-family:system-ui;font-size:12px;min-width:160px">
-            <strong style="font-size:13px">${label}</strong><br/>
+          <div style="font-family:system-ui;font-size:12px;min-width:160px;padding:4px 0">
+            <strong style="font-size:13px;color:#111">${label}</strong><br/>
             <span style="color:${color};font-weight:700;font-size:14px">${fmtK(comp.soldPrice)}</span><br/>
-            <span style="color:#888">${comp.beds}bd · ${comp.land}m² · ${comp.soldDate}</span>
-            ${!isSubject ? `<br/><span style="color:#888">Match: ${comp.matchScore}%</span>` : ""}
+            <span style="color:#666">${comp.beds}bd · ${comp.land > 0 ? comp.land + "m² · " : ""}${comp.soldDate}</span>
+            ${!isSubject ? `<br/><span style="color:#666">Match: ${comp.matchScore}%</span>` : ""}
           </div>
         `
-        L.marker([compLat, compLng], { icon: svgIcon })
-          .bindPopup(popup, { className: "comp-popup" })
-          .addTo(map)
+
+        const circle = L.circleMarker([compLat, compLng], {
+          radius:      isSubject ? 10 : 7,
+          fillColor:   color,
+          fillOpacity: 0.9,
+          color:       "#ffffff",
+          weight:      isSubject ? 3 : 1.5,
+          opacity:     1,
+          className:   "",
+        })
+        circle.bindPopup(popup, { className: "comp-popup" }).addTo(map)
       })
 
-      const bounds = L.latLngBounds(
-        comps.map((c, i) => {
-          const isSubj = i === 0 || c.isSubject
-          return [
-            isSubj ? lat : lat + seededOffset(c.address.length + i * 7, 0.012),
-            isSubj ? lng : lng + seededOffset(c.address.length + i * 13, 0.016),
-          ] as [number, number]
-        })
-      )
-      map.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 })
-      return bounds
+      const pins = comps.map((c, i) => {
+        const isSubj = i === 0 || c.isSubject
+        return [
+          isSubj ? lat : lat + seededOffset(c.address.length + i * 7, 0.012),
+          isSubj ? lng : lng + seededOffset(c.address.length + i * 13, 0.016),
+        ] as [number, number]
+      })
+
+      if (pins.length > 1) {
+        const bounds = L.latLngBounds(pins)
+        try { map.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 }) }
+        catch { map.setView([lat, lng], 14) }
+      } else {
+        map.setView([lat, lng], 14)
+      }
+      return true
     }
 
     const initMap = () => requestAnimationFrame(() => requestAnimationFrame(() => {
-      // Leaflet CSS must be loaded before the map renders — inject once
-      if (!document.getElementById("leaflet-css")) {
-        const link = document.createElement("link")
-        link.id   = "leaflet-css"
-        link.rel  = "stylesheet"
-        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        document.head.appendChild(link)
-      }
-
       import("leaflet").then(L => {
         if (cancelled || !containerRef.current) return
         if (mapRef.current) return
@@ -183,9 +228,9 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
         const [lat, lng] = getSuburbCoords(suburb)
 
         // Phase 1: immediate render
-        createMap(L, lat, lng)
+        const ok = createMap(L, lat, lng)
 
-        // Set up resize observer once — survives phase-2 recreation
+        // Set up resize observer
         if (containerRef.current && typeof ResizeObserver !== "undefined") {
           const ro = new ResizeObserver(() => {
             if (!cancelled && mapRef.current) mapRef.current.invalidateSize()
@@ -194,11 +239,21 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
           ;(containerRef.current as HTMLDivElement & { _ro?: ResizeObserver })._ro = ro
         }
 
-        // Phase 2: destroy + recreate after 300ms so flex layout has settled
-        recreateTimer = setTimeout(() => {
-          if (!cancelled) createMap(L, lat, lng)
-        }, 300)
-      })
+        // Phase 2: recreate after 300ms so flex layout has settled
+        if (ok) {
+          recreateTimer = setTimeout(() => {
+            if (!cancelled) createMap(L, lat, lng)
+          }, 300)
+        } else {
+          // Container had zero dims on phase 1; retry after 500ms
+          recreateTimer = setTimeout(() => {
+            if (!cancelled) {
+              const created = createMap(L, lat, lng)
+              if (!created && !cancelled) setFailed(true)
+            }
+          }, 500)
+        }
+      }).catch(() => { if (!cancelled) setFailed(true) })
     }))
     initMap()
 
@@ -207,13 +262,29 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
       if (recreateTimer) clearTimeout(recreateTimer)
       const el = containerRef.current as (HTMLDivElement & { _ro?: ResizeObserver }) | null
       el?._ro?.disconnect()
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null }
+      if (mapRef.current) { try { mapRef.current.remove() } catch {} mapRef.current = null }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suburb, comps.length])
 
+  // Show static fallback if map failed to render
+  if (failed) {
+    return <StaticCompFallback suburb={suburb} comps={comps} theme={theme} height={height} />
+  }
+
   return (
     <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", height }}>
+      {/* Loading skeleton */}
+      {loading && (
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 2000,
+          background: C.bg3,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{ fontSize: 12, color: C.muted }}>Loading map…</div>
+        </div>
+      )}
+
       {/* Map legend */}
       <div style={{
         position: "absolute", top: 8, left: 8, zIndex: 1000,
@@ -235,7 +306,7 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
 
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
 
-      {/* Leaflet overrides — adapts to light/dark via CSS vars */}
+      {/* Leaflet overrides */}
       <style>{`
         .leaflet-container { background: var(--c-bg3, #0e1220) !important; }
         .comp-popup .leaflet-popup-content-wrapper {
