@@ -183,14 +183,16 @@ export interface TrainingEntry {
 }
 
 export interface AgentProfile {
-  name:    string
-  agency:  string
-  email:   string
-  phone:   string
-  suburb:  string
-  tagline: string
-  role?:   "agent" | "principal"
-  photoUrl?: string        // headshot for appraisal report footer
+  name:         string
+  agency:       string
+  email:        string
+  phone:        string
+  suburb:       string
+  tagline:      string
+  role?:        "agent" | "principal"
+  nickname?:    string    // preferred first name in outreach, e.g. "Manny"
+  agencyShort?: string    // short agency label in outreach, e.g. "BP"
+  photoUrl?:    string    // headshot for appraisal report footer
   voiceProfile:    VoiceProfile
   trainingCorpus:  TrainingEntry[]
 }
@@ -231,23 +233,25 @@ export const PAS_DEFAULT_AGENT: AgentProfile = {
 }
 
 export const MANPREET_DEFAULT_AGENT: AgentProfile = {
-  name:    "Manpreet Singh",
-  agency:  "Barry Plant Berwick",
-  email:   "manpreet.singh@barryplant.com.au",
-  phone:   "0452 275 013",
-  suburb:  "Berwick",
-  tagline: "Berwick specialist. Trusted results.",
+  name:         "Manpreet Singh",
+  agency:       "Barry Plant Berwick",
+  nickname:     "Manny",
+  agencyShort:  "BP",
+  email:        "manpreet.singh@barryplant.com.au",
+  phone:        "0452 275 013",
+  suburb:       "Berwick",
+  tagline:      "Berwick specialist. Trusted results.",
   voiceProfile: {
-    greeting:       "Hi",
-    closing:        "Kind regards",
+    greeting:       "Hey",
+    closing:        "Cheers",
     lengthStyle:    "short",
-    formalityScore: 3,
-    aussieIndex:    2,
-    specificity:    4,
+    formalityScore: 1,
+    aussieIndex:    3,
+    specificity:    3,
     emojiUsage:     "none",
-    examplesCount:  8,
-    confidence:     78,
-    detectedTraits: ["professional", "data-driven", "approachable", "detail-oriented"],
+    examplesCount:  9,
+    confidence:     82,
+    detectedTraits: ["casual", "personal", "upbeat", "neighbourhood-aware", "low-pressure"],
   },
   trainingCorpus: [],
 }

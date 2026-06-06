@@ -223,62 +223,74 @@ const PAS_SEED: SeedEntry[] = [
 
 // ── Manpreet Singh seed corpus (Barry Plant Berwick) ─────────────────────────
 
+// ── Manpreet "Manny" Singh seed corpus (Barry Plant "BP" Berwick) ─────────────
+// Voice: casual, personal, upbeat, neighbourhood-aware, low-pressure.
+// Goes by "Manny". Agency short: "BP". Greeting: "Hey". Sign-off: "Cheers, Manny"
+// References settlement, nearby listings, value as a positive surprise.
+
 const MANPREET_SEED: SeedEntry[] = [
   {
     type: "paste",
-    persona: "investor",
-    label: "CGT deadline — investor",
-    source: "SMS to investor: CGT window",
-    text: "Hi Jason, Manpreet from Barry Plant. Your Tilden Rise tenant is vacating soon and the CGT clock is ticking — selling before July 2027 locks in the 50% discount. Happy to run the numbers. Kind regards, Manpreet",
+    persona: "general",
+    label: "Settlement reference — upsizer check-in",
+    source: "SMS: post-settlement follow-up, Manny voice",
+    text: "Hey Kevin, Manny from BP, hope you've been well since we settled on Van Der Haar! I was just helping with a listing on the next street and you guys are currently sitting on $758K today. Well done! If you'd ever like a chat or a free appraisal, just let me know. Cheers, Manny",
   },
   {
     type: "paste",
-    persona: "family",
-    label: "Upsizer — growing family",
-    source: "SMS to upsizer: equity + space",
-    text: "Hi Kevin, Manpreet here. Van Der Haar Avenue is tracking around $1.06M now — that is $415K up since 2020. With the family growing, the equity you have built up could go a long way toward something bigger. Worth a chat? Kind regards, Manpreet",
+    persona: "investor",
+    label: "CGT window — investor nudge",
+    source: "SMS: investor CGT, Manny voice",
+    text: "Hey Jason, Manny from BP! Hope all's well since Tilden Rise. Quick heads up — your 12-month CGT window just opened, which means any gain is now taxed at half rate. Given the market's holding up well, might be worth a quick chat. Let me know! Cheers, Manny",
   },
   {
     type: "paste",
     persona: "downsizer",
-    label: "Downsizer — empty nest",
-    source: "SMS to downsizer: lifestyle",
-    text: "Hi Bill and Heather, Manpreet from Barry Plant. Royal Crescent is in a strong spot right now. With both kids settled elsewhere, the timing might be right to think about something that better suits where you are at. Happy to pop over for a chat. Kind regards, Manpreet",
+    label: "Downsizer — neighbourhood listing trigger",
+    source: "SMS: downsizer, Manny neighbourhood angle",
+    text: "Hey Bill and Heather, Manny from BP! Hope you're both keeping well since Royal Crescent. I was just out at an appraisal nearby and wanted to touch base. Your place is sitting well in today's market. If you ever want a no-pressure chat about your options, I'm always around. Cheers, Manny",
   },
   {
     type: "paste",
     persona: "general",
-    label: "Market update opener",
-    source: "SMS: general market",
-    text: "Hi Thanh, Manpreet here. Tantallon Boulevard has come a long way since 2021 — tracking around $730K now. The Jack William Way result set a new benchmark for the area. Happy to walk through the numbers if you are ever curious. Kind regards, Manpreet",
+    label: "Nearby listing trigger — equity reveal",
+    source: "SMS: comparable sale trigger, Manny voice",
+    text: "Hey Thanh, Manny from BP! Was just helping with a listing on Tantallon and thought of you guys. You're sitting at around $837K today, well done! If you'd like to know more or just want a catch-up, happy to come over. Cheers, Manny",
+  },
+  {
+    type: "paste",
+    persona: "general",
+    label: "Market pulse — light check-in",
+    source: "SMS: market update, casual Manny style",
+    text: "Hey Sam, Manny from BP, hope you and Rachel have settled in well at Ashfield Drive! Just a quick one — Berwick's been moving really well lately and your place is tracking up nicely. Nothing urgent, just wanted to keep you in the loop. Let me know if you ever want to chat! Cheers, Manny",
   },
   {
     type: "email",
     persona: "investor",
-    label: "Investor — CGT + yield analysis",
-    source: "Email to investor: data-led",
-    text: "Hi Jason, Manpreet Singh from Barry Plant Berwick here. I wanted to share a quick update on 33 Tilden Rise. The property has grown to approximately $820,000 since your 2017 purchase, representing a $230,000 equity gain. With your tenant lease expiring in June and the 50% CGT discount still available before July 2027, the timing is worth understanding carefully. I would be happy to prepare a full financial snapshot including net sale proceeds, estimated CGT liability both before and after the discount date, and current comparable sales in Cranbourne North. No obligation at all — just clear information so you can make the right decision. Happy to come to Toorak or speak by phone at a time that suits. Kind regards, Manpreet Singh",
+    label: "Investor email — CGT + personal touch",
+    source: "Email: investor CGT, Manny voice",
+    text: "Hey Jason, Manny from BP here. Hope you've been well since we settled on Tilden Rise! I was doing some work in Cranbourne North this week and your place came up in the numbers — sitting at around $848K now, which is a solid result since July last year. More importantly, your 12-month CGT window just opened, which means if you ever wanted to sell, any gain is taxed at half rate compared to before. I'm not pushing anything, just wanted to make sure you had the full picture. If you'd like me to put together a proper breakdown of your options, happy to do it at no cost and no obligation. Just reply here or give me a call. Cheers, Manny",
   },
   {
     type: "email",
     persona: "family",
-    label: "Upsizer — growing family equity email",
-    source: "Email to upsizer: equity + motivation",
-    text: "Hi Kevin and Amita, Manpreet Singh from Barry Plant Berwick here. Hope you are both well and congratulations on the upcoming arrival. I wanted to share a quick market update on Van Der Haar Avenue. Based on recent comparable sales in Berwick, your property is now estimated at approximately $1,060,000. That represents around $415,000 in equity since you purchased in 2020, which is a really strong position to be in. For families thinking about more space before a new arrival, that equity can go a long way toward funding a larger home without overextending. I would be happy to walk through the numbers over a coffee — no pressure, just a clear picture of your options. Kind regards, Manpreet Singh",
+    label: "Family email — settlement reference + value reveal",
+    source: "Email: upsizer, Manny warm approach",
+    text: "Hey Kevin and Amita, Manny from BP here. Hope you've all been well since we settled on Van Der Haar, and congrats again on the little one on the way! I was out doing some appraisals in the area this week and wanted to shoot you a quick note — your place is sitting at around $758K today. Well done, you've done really well since we settled. Nothing to do with it right now, but I just wanted to make sure you knew where you stood. If you ever want to chat about your options down the track, I'm always happy to come over and run through the numbers over a coffee. No rush, no pressure. Cheers, Manny",
   },
   {
     type: "email_subject",
     persona: "investor",
-    label: "Subject: investor update",
-    source: "Email subject: data-focused investor",
-    text: "Your Tilden Rise investment — equity snapshot and CGT position",
+    label: "Subject: investor CGT timing",
+    source: "Email subject: casual investor hook",
+    text: "Quick one on Tilden Rise, Jason",
   },
   {
     type: "email_subject",
     persona: "family",
-    label: "Subject: family upsizer",
-    source: "Email subject: upsizer",
-    text: "Van Der Haar Avenue market update — worth a look before the year is out",
+    label: "Subject: family value update",
+    source: "Email subject: warm family check-in",
+    text: "Checking in from Van Der Haar, Kevin and Amita",
   },
 ]
 

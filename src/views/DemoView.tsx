@@ -1956,7 +1956,7 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
         return
       }
       // Final fallback — template strings
-      const agentFirst = agent.name.split(" ")[0]
+      const agentFirst = agent.nickname ?? agent.name.split(" ")[0]
       const mockSMS = `Hey ${fname}, ${agentFirst} here. Thought of you for ${property.address.split(",")[0]}, ${activeSLM.beds !== "TBD" ? activeSLM.beds + "bd" : "similar"}/${activeSLM.baths !== "TBD" ? activeSLM.baths + "ba" : ""}${activeSLM.landSqm !== "TBD" ? ", " + activeSLM.landSqm + "sqm" : ""}. Open ${property.openDate ?? "this weekend"}. Worth a look?`
       const mockSubject = `Hey ${fname}, thought of you for ${property.address.split(",")[0]}`
       const mockBody = [
@@ -4241,7 +4241,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, o
                   const res = await authFetch(apiUrl("/api/vendor-batch/generate"), {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ contacts, agentName: agent.name, agentAgency: agent.agency }),
+                    body: JSON.stringify({ contacts, agentName: agent.name, agentAgency: agent.agency, agentNickname: agent.nickname, agentAgencyShort: agent.agencyShort }),
                   }).then(r => r.json()).catch(() => ({ items: [] }))
                   if (res.items?.length > 0) {
                     onGenerateAll(res.items as QueueItem[])
@@ -5590,7 +5590,7 @@ function NegotiationCoachModal({ entry, agent, theme, onClose }: {
   const [expandedObj, setExpandedObj] = useState<number | null>(null)
   const { buyer, financials: fin, segment } = entry
   const fname = buyer.name.split("&")[0].split(" ")[0].trim()
-  const agentFirst = agent.name.split(" ")[0]
+  const agentFirst = agent.nickname ?? agent.name.split(" ")[0]
 
   const comps = generateComparables({ suburb: buyer.suburb, propertyType: buyer.propertyType as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id })
   const range = buildAppraisalRange(comps, buyer.suburb)
@@ -5839,7 +5839,7 @@ function NurtureSequencePanel({ entry, agent, theme }: { entry: SegmentedBuyer; 
 
   const { buyer, financials: fin } = entry
   const fname     = buyer.name.split("&")[0].split(" ")[0].trim()
-  const agentFirst = agent.name.split(" ")[0]
+  const agentFirst = agent.nickname ?? agent.name.split(" ")[0]
   const signoff   = buyer.status === "investor" ? "Kind regards" : "Cheers"
 
   const templates = [
@@ -6481,7 +6481,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const { buyer, segment } = entry
   const pl = PIPELINE_LABELS[segment.pipeline]
   const fname = buyer.name.split("&")[0].split(" ")[0].trim()
-  const agentFirst = agent.name.split(" ")[0]
+  const agentFirst = agent.nickname ?? agent.name.split(" ")[0]
 
   // Is this a secondary (not-yet-ready) contact? Show relationship strategies instead of just generate.
   const isSecondary = segment.pipeline === "renter-to-buyer" || segment.pipeline === "investor-to-rebalance"
@@ -6530,6 +6530,8 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
     const payload = {
       agentName: agent.name,
       agentAgency: agent.agency,
+      agentNickname: agent.nickname,
+      agentAgencyShort: agent.agencyShort,
       agentPhone: agent.phone,
       voiceContext: buildVoiceContext(agent.voiceProfile, loadCorpus()),
       buyerName: buyer.name,
@@ -7419,7 +7421,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const avatarGrad = `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
 
   // ── Pitch-angle carousel ─────────────────────────────────────────────────────
-  const agentFirstRV = agent.name.split(" ")[0]
+  const agentFirstRV = agent.nickname ?? agent.name.split(" ")[0]
   const purchaseYearRV = buyer.purchaseDate?.slice(0, 4) ?? "2020"
   const estStrRV = fmtDollar(fin.currentEstimate)
   const equityStrRV = fmtDollar(fin.equityGain)
@@ -8304,7 +8306,7 @@ export default function DemoView({
               setReplyDraft(res)
               setReplyText(res.draft ?? "")
             } catch {
-              const fallback = `Hi ${selectedThread.leadName.split(" ")[0]}, thanks for getting back to me. Happy to help - what would you like to know? ${agent.name.split(" ")[0]}`
+              const fallback = `Hi ${selectedThread.leadName.split(" ")[0]}, thanks for getting back to me. Happy to help - what would you like to know? ${agent.nickname ?? agent.name.split(" ")[0]}`
               setReplyDraft({ draft: fallback, intent: "UNKNOWN", reasoning: "Network error - contingency framework used" })
               setReplyText(fallback)
             } finally {
