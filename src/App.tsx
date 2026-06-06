@@ -58,7 +58,7 @@ export default function App() {
     setTheme(newTheme)
     setMode(newMode)
     setLoggedIn(true)
-    seedCorpusIfEmpty()
+    seedCorpusIfEmpty(newAgent.name)
     // Principals land on their office dashboard, not the buyer demo
     if (newAgent.role === "principal") {
       setView("principal")
