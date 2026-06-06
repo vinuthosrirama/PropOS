@@ -32,6 +32,8 @@ function sanitise(s: string): string {
 export interface VendorGenerateParams {
   agentName: string
   agentAgency: string
+  agentNickname?: string   // e.g. "Manny" — used in outreach sign-offs
+  agentAgencyShort?: string // e.g. "BP" — used in outreach intro
   agentPhone?: string
   voiceContext?: string
 
@@ -88,10 +90,14 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "buyerName and agentName are required" })
   }
 
-  const agentFirst  = params.agentName.split(" ")[0]
+  const agentFirst  = params.agentNickname ?? params.agentName.split(" ")[0]
+  const agencyLabel = params.agentAgencyShort ?? params.agentAgency
   const fname       = params.buyerName.split("&")[0].split(" ")[0].trim()
   const isInvestor  = params.buyerStatus === "investor"
-  const signoff     = isInvestor ? "Kind regards" : "Cheers"
+  // Greeting and sign-off match the agent's voice (Manny: "Hey" + "Cheers", others keep "Hi" + appropriate close)
+  const hasNickname = !!params.agentNickname
+  const greeting    = hasNickname ? "Hey" : "Hi"
+  const signoff     = hasNickname ? "Cheers" : (isInvestor ? "Kind regards" : "Cheers")
   const addr        = shortAddr(params.purchaseAddress)
   const estStr      = fmtK(params.currentEstimate)
   const equityStr   = fmtK(params.equityGain)
@@ -111,14 +117,14 @@ router.post("/", async (req, res) => {
       `Your property at ${params.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${params.purchaseYear}. That's ${equityStr} in equity, a ${equityPct}% gain.${cgtLine}` +
       (hookSentence ? ` ${hookSentence}` : "")
     )
-    const smsRaw = `Hi ${fname}, ${agentFirst} from ${params.agentAgency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${params.purchaseYear}). Worth a quick chat? ${signoff}, ${agentFirst}`
+    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${params.purchaseYear}). Worth a quick chat? ${signoff}, ${agentFirst}`
     const sms = clampSMS(sanitise(smsRaw))
     return res.json({
       sms,
       email: {
         subject: sanitise(`Market update on ${params.purchaseAddress}, ${fname}`),
         body: [
-          `Hi ${fname}, ${agentFirst} from ${params.agentAgency} here. Quick market update on ${params.suburb}.`,
+          `${greeting} ${fname}, ${agentFirst} from ${agencyLabel} here. Quick market update on ${params.suburb}.`,
           para2,
           `I'd love to offer a complimentary, no-obligation appraisal if you're curious. Takes about 20 minutes, happy to come to you.\n\n${signoff},\n${agentFirst}`,
         ].map(sanitise),
@@ -230,6 +236,13 @@ Return ONLY the sentence or empty string — no JSON, no labels.`
       .filter(Boolean)
       .join("\n\n")
 
+    const nicknameRule = params.agentNickname
+      ? `- Sign off as "${params.agentNickname}", not "${params.agentName.split(" ")[0]}". Introduce yourself as "${params.agentNickname} from ${agencyLabel}" — never use the full name or full agency name in the message.`
+      : ""
+    const greetingRule = params.agentNickname
+      ? `- Start SMS and email with "${greeting} ${fname}," — never "Hi" or "Dear".`
+      : ""
+
     const sonnetPrompt = `You are ${params.agentName}, a real estate agent at ${params.agentAgency}.
 ${vocBlock}
 Hard rules:
@@ -239,14 +252,16 @@ Hard rules:
 - SMS sign-off: "${signoff}, ${agentFirst}" (match agent voice style above)
 - Email: 2-3 short paragraphs maximum
 - This is vendor prospecting — you sold this person a home and now you're reaching out about their property's value growth. Never say "I remember you from the open home."
-- Reference the property address (short form: "${addr}") naturally
+- Reference the settlement — "hope you've been well since we settled on ${addr}" is a natural opener
+- Reference being nearby or working on another listing in the street as the reason for reaching out
 - Include at least one specific financial number (equity gain or estimated value)
-- Offer a complimentary, no-obligation appraisal — never pressured
-- Warm, empathetic, Australian-colloquial tone. Sounds like a caring check-in, not a pitch.
+- Celebrate the equity position as a positive — "well done" or "great result" style
+- Offer a complimentary, no-obligation appraisal — never pressured, "let me know if you'd like a chat"
+- Warm, casual, Australian-colloquial tone. Sounds like a mate checking in, not a pitch.
 - If life-stage intelligence is provided, weave it in naturally (don't quote it verbatim — feel it)
 - If timing triggers are provided, choose the most natural one to reference in the email (never force both)
 - If suburb data is provided, reference one concrete local fact — makes the message feel informed
-${personalisationBlock}
+${nicknameRule ? nicknameRule + "\n" : ""}${greetingRule ? greetingRule + "\n" : ""}${personalisationBlock}
 
 ${enrichmentBlocks ? enrichmentBlocks + "\n" : ""}VENDOR DETAILS:
 Name: ${params.buyerName}
@@ -300,13 +315,13 @@ Respond ONLY with valid JSON, no markdown:
     const cgtLine = params.cgtSavingsBy2027 > 0
       ? ` The current 50% CGT discount saves you approximately ${fmtK(params.cgtSavingsBy2027)} if you sell before July 2027.`
       : ""
-    const smsRaw = `Hi ${fname}, ${agentFirst} from ${params.agentAgency}. ${addr} is worth ~${estStr} today, ${equityStr} gain since ${params.purchaseYear}. Free appraisal? ${signoff} ${agentFirst}`
+    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. ${addr} is worth ~${estStr} today, ${equityStr} gain since ${params.purchaseYear}. Free appraisal? ${signoff} ${agentFirst}`
     return res.json({
       sms: clampSMS(sanitise(smsRaw)),
       email: {
         subject: sanitise(`Your property update, ${fname}`),
         body: [
-          `Hi ${fname}, ${agentFirst} from ${params.agentAgency} here.`,
+          `${greeting} ${fname}, ${agentFirst} from ${agencyLabel} here.`,
           `Just wanted to give you a quick market update on ${params.purchaseAddress}. The suburb has grown well and your property is now worth approximately ${estStr}, representing ${equityStr} in equity since you purchased in ${params.purchaseYear}.${cgtLine}`,
           `I'd love to provide a complimentary appraisal at no obligation. Happy to call or come by whenever suits.\n\n${signoff},\n${agentFirst}`,
         ].map(sanitise),
