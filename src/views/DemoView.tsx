@@ -291,6 +291,7 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
           src={property.image}
           alt={property.address}
           loading="lazy"
+          onError={e => { (e.target as HTMLImageElement).style.display = "none" }}
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
         {completeness && (
@@ -503,7 +504,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
       {/* Header — property info */}
       <div style={{ display: "flex", gap: 20, marginBottom: 12, alignItems: "flex-start" }}>
         <div style={{ width: 80, height: 60, borderRadius: 10, overflow: "hidden", flexShrink: 0 }}>
-          <img src={soldProperty.image} alt={soldProperty.address} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={soldProperty.image} alt={soldProperty.address} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
         </div>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: C.text, letterSpacing: -0.6, marginBottom: 2 }}>
@@ -3197,11 +3198,12 @@ const EMPTY_FORM: AddContactForm = {
   land: "", status: "owner-occupier", notes: "",
 }
 
-function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
+function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarketTriggers = false }: {
   agent: AgentProfile
   theme: AgencyTheme
   onAnalyse: (segmented: SegmentedBuyer[]) => void
   onSelectBuyer?: (entry: SegmentedBuyer) => void
+  showMarketTriggers?: boolean
 }) {
   const bpVPP = useBreakpoint()
   const isMobileVPP = bpVPP === "mobile"
@@ -3644,13 +3646,29 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
                 onMouseLeave={e => { e.currentTarget.style.borderColor = nearbyAlert ? "#f59e0b55" : C.border; e.currentTarget.style.background = C.bg2; e.currentTarget.style.boxShadow = "none" }}
               >
                 <div style={{
-                  width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-                  background: `linear-gradient(135deg, ${theme.gradient[0]}33, ${theme.gradient[1]}22)`,
+                  width: 52, height: 52, borderRadius: 10, flexShrink: 0,
+                  overflow: "hidden",
                   border: `1px solid ${theme.primary}33`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 14, fontWeight: 700, color: theme.primary,
+                  background: `linear-gradient(135deg, ${theme.gradient[0]}33, ${theme.gradient[1]}22)`,
+                  position: "relative",
                 }}>
-                  {buyer.name.charAt(0)}
+                  <img
+                    src={`https://picsum.photos/seed/${encodeURIComponent(buyer.purchaseAddress.replace(/\s+/g, '-').toLowerCase())}/104/104`}
+                    alt={buyer.purchaseAddress}
+                    loading="lazy"
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    onError={e => {
+                      const img = e.target as HTMLImageElement
+                      img.style.display = "none"
+                      const parent = img.parentElement
+                      if (parent) {
+                        parent.style.display = "flex"
+                        parent.style.alignItems = "center"
+                        parent.style.justifyContent = "center"
+                        parent.innerHTML = `<span style="font-size:16px;font-weight:700;color:${theme.primary}">${buyer.name.charAt(0)}</span>`
+                      }
+                    }}
+                  />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
@@ -3721,8 +3739,8 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
         </div>
       </div>
 
-      {/* Market Trigger Feed */}
-      {onSelectBuyer && (
+      {/* Market Trigger Feed — controlled by Display toggle */}
+      {onSelectBuyer && showMarketTriggers && (
         <TriggerFeed
           buyers={buyers}
           theme={theme}
@@ -4132,13 +4150,14 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
 
 // ── Vendor Prospecting: Pipeline Dashboard ──────────────────────────────────
 
-function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, onGenerateAll }: {
+function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, onGenerateAll, vendorSettings }: {
   segmented: SegmentedBuyer[]
   onBack: () => void
   onSelectEntry: (entry: SegmentedBuyer) => void
   theme: AgencyTheme
   agent: AgentProfile
   onGenerateAll?: (items: QueueItem[]) => void
+  vendorSettings?: import("../data").VendorDisplaySettings
 }) {
   const bp = useBreakpoint()
   const isMobile = bp === "mobile"
@@ -4277,15 +4296,17 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, o
       {/* AI Hyper-Personalisation Ideas */}
       <AIIdeasPanel theme={theme} />
 
-      {/* Market Trigger Feed */}
-      <TriggerFeed
-        buyers={segmented.map(s => s.buyer)}
-        theme={theme}
-        onSelectContact={(id) => {
-          const entry = segmented.find(s => s.buyer.id === id)
-          if (entry) onSelectEntry(entry)
-        }}
-      />
+      {/* Market Trigger Feed — shown only when enabled in Display settings */}
+      {vendorSettings?.showMarketTriggers && (
+        <TriggerFeed
+          buyers={segmented.map(s => s.buyer)}
+          theme={theme}
+          onSelectContact={(id) => {
+            const entry = segmented.find(s => s.buyer.id === id)
+            if (entry) onSelectEntry(entry)
+          }}
+        />
+      )}
 
       {/* Bulk fire modal */}
       <AnimatePresence>
@@ -4347,14 +4368,27 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, o
                 el.style.borderColor = C.border; el.style.boxShadow = "none"
               }}
             >
-              {/* Avatar */}
+              {/* Property thumbnail */}
               <div style={{
-                width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-                background: pl.color + "18", border: `1px solid ${pl.color}33`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 14, fontWeight: 700, color: pl.color,
+                width: 52, height: 52, borderRadius: 10, flexShrink: 0,
+                overflow: "hidden", border: `1px solid ${pl.color}33`,
+                background: pl.color + "18",
               }}>
-                {fname.charAt(0)}
+                <img
+                  src={`https://picsum.photos/seed/${encodeURIComponent(buyer.purchaseAddress.replace(/\s+/g, '-').toLowerCase())}/104/104`}
+                  alt={buyer.purchaseAddress}
+                  loading="lazy"
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  onError={e => {
+                    const img = e.target as HTMLImageElement
+                    const parent = img.parentElement
+                    if (parent) {
+                      img.style.display = "none"
+                      parent.style.display = "flex"; parent.style.alignItems = "center"; parent.style.justifyContent = "center"
+                      parent.innerHTML = `<span style="font-size:16px;font-weight:700;color:${pl.color}">${fname.charAt(0)}</span>`
+                    }
+                  }}
+                />
               </div>
 
               {/* Info */}
@@ -4383,7 +4417,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, o
                 <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>
                   {buyer.purchaseAddress}
                 </div>
-                {topTrigger && (
+                {topTrigger && vendorSettings?.showTriggers && (
                   <div style={{
                     fontSize: 10, padding: "2px 8px", borderRadius: 5, display: "inline-block",
                     background: urgencyColor(topTrigger.urgency) + "15",
@@ -4658,10 +4692,11 @@ function NotesBridgeCard({ notes, prewrittenHook, extractedHook, personalisation
 
 // ── Vendor Appraisal Panel ────────────────────────────────────────────────────
 
-function VendorAppraisalPanel({ buyer, theme, showEquityScenarios = false }: {
+function VendorAppraisalPanel({ buyer, theme, showEquityScenarios = false, showComparableMap = false }: {
   buyer: import("../data/pastBuyers").PastBuyer
   theme: AgencyTheme
   showEquityScenarios?: boolean
+  showComparableMap?: boolean
 }) {
   const comps: CompSale[] = generateComparables({
     suburb: buyer.suburb,
@@ -4689,34 +4724,34 @@ function VendorAppraisalPanel({ buyer, theme, showEquityScenarios = false }: {
         <div style={{ fontSize: 11, color: C.faint }}>{buyer.suburb}</div>
       </div>
 
-      {/* ── Live comparable sales map ── */}
-      <ComparableSalesMap
-        suburb={buyer.suburb}
-        comps={[
-          // Subject property first (vendor's own address) — shown as purple pulsing pin
-          {
-            address:    buyer.purchaseAddress,
-            soldPrice:  buyer.purchasePrice,
-            beds:       buyer.beds,
-            land:       buyer.land ?? 0,
-            matchScore: 100,
-            soldDate:   buyer.purchaseDate ?? "",
-            isSubject:  true,
-          },
-          // Comparable sales (green / blue / amber pins by match score)
-          ...comps.map(c => ({
-            address:    c.address,
-            soldPrice:  c.soldPrice,
-            beds:       c.beds,
-            land:       c.land,
-            matchScore: c.matchScore,
-            soldDate:   c.soldDate,
-            isSubject:  false,
-          })),
-        ]}
-        theme={theme}
-        height={260}
-      />
+      {/* ── Live comparable sales map — shown only when toggled on in Display settings ── */}
+      {showComparableMap && (
+        <ComparableSalesMap
+          suburb={buyer.suburb}
+          comps={[
+            {
+              address:    buyer.purchaseAddress,
+              soldPrice:  buyer.purchasePrice,
+              beds:       buyer.beds,
+              land:       buyer.land ?? 0,
+              matchScore: 100,
+              soldDate:   buyer.purchaseDate ?? "",
+              isSubject:  true,
+            },
+            ...comps.map(c => ({
+              address:    c.address,
+              soldPrice:  c.soldPrice,
+              beds:       c.beds,
+              land:       c.land,
+              matchScore: c.matchScore,
+              soldDate:   c.soldDate,
+              isSubject:  false,
+            })),
+          ]}
+          theme={theme}
+          height={260}
+        />
+      )}
 
       {/* Comp detail cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
@@ -6424,6 +6459,227 @@ function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; t
   )
 }
 
+// ── Vendor Prospect Gauge (JotForm-style Y/N survey included in outreach) ────
+
+const PROSPECT_GAUGE_QUESTIONS: { id: string; question: string }[] = [
+  { id: "q1", question: "Are you currently thinking about selling your property?" },
+  { id: "q2", question: "Have you had a property appraisal in the last 6 months?" },
+  { id: "q3", question: "Are you aware of recent sales in your street?" },
+  { id: "q4", question: "Do you know your property's current market value?" },
+  { id: "q5", question: "Are you considering upsizing, downsizing, or relocating?" },
+  { id: "q6", question: "Would you be open to a free, no-obligation chat about your options?" },
+]
+
+function VendorProspectGauge({
+  buyerName,
+  agentFirst,
+  agencyShort,
+  theme,
+  includeInOutreach,
+  onToggleInclude,
+}: {
+  buyerName: string
+  agentFirst: string
+  agencyShort: string
+  theme: AgencyTheme
+  includeInOutreach: boolean
+  onToggleInclude: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const fname = buyerName.split("&")[0].split(" ")[0].trim()
+
+  // Deterministic survey URL — real JotForm integration would go here
+  const surveyUrl = `https://propos.addvantage.site/survey?contact=${encodeURIComponent(fname)}&agent=${encodeURIComponent(agentFirst)}&via=outreach`
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(surveyUrl).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <div style={{
+      background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 14,
+      padding: "16px 18px", marginBottom: 10,
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase" as const, marginBottom: 1 }}>
+            Prospect Gauge Survey
+          </div>
+          <div style={{ fontSize: 11, color: C.muted }}>6 Y/N questions · sent to {fname} via outreach</div>
+        </div>
+        {/* Include in outreach toggle */}
+        <div
+          role="switch" aria-checked={includeInOutreach} tabIndex={0}
+          onClick={onToggleInclude}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleInclude() } }}
+          style={{
+            display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+            padding: "5px 10px", borderRadius: 20,
+            background: includeInOutreach ? theme.primary + "18" : C.bg3,
+            border: `1px solid ${includeInOutreach ? theme.primary + "50" : C.border}`,
+            transition: "all 0.15s",
+          }}
+        >
+          <div style={{
+            width: 32, height: 18, borderRadius: 9,
+            background: includeInOutreach ? theme.primary : C.bg3,
+            border: `1px solid ${includeInOutreach ? "transparent" : C.border}`,
+            position: "relative", transition: "background 0.15s", flexShrink: 0,
+          }}>
+            <div style={{
+              position: "absolute", top: 2, left: includeInOutreach ? 14 : 2,
+              width: 12, height: 12, borderRadius: "50%",
+              background: includeInOutreach ? "#fff" : C.muted,
+              transition: "left 0.15s",
+            }} />
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 700, color: includeInOutreach ? theme.primary : C.muted, whiteSpace: "nowrap" }}>
+            {includeInOutreach ? "In outreach" : "Add to outreach"}
+          </span>
+        </div>
+      </div>
+
+      {/* Questions preview */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+        {PROSPECT_GAUGE_QUESTIONS.map(({ id, question }, i) => (
+          <div key={id} style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "7px 10px", borderRadius: 8,
+            background: C.bg3, border: `1px solid ${C.border}`,
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, width: 14, flexShrink: 0 }}>{i + 1}.</div>
+            <div style={{ flex: 1, fontSize: 11, color: C.muted }}>{question}</div>
+            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+              <div style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, color: C.green, background: C.green + "15", border: `1px solid ${C.green}30` }}>Y</div>
+              <div style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, color: C.red, background: C.red + "15", border: `1px solid ${C.red + "30"}` }}>N</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Survey link + copy */}
+      <div style={{
+        padding: "8px 10px", borderRadius: 8, background: C.bg3, border: `1px solid ${C.border}`,
+        display: "flex", alignItems: "center", gap: 8,
+      }}>
+        <div style={{ fontSize: 10, color: C.faint, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {surveyUrl}
+        </div>
+        <button
+          onClick={handleCopy}
+          style={{
+            padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700,
+            cursor: "pointer", fontFamily: FONT, flexShrink: 0,
+            background: copied ? C.green + "20" : C.bg2,
+            border: `1px solid ${copied ? C.green + "50" : C.border}`,
+            color: copied ? C.green : C.muted,
+            transition: "all 0.15s",
+          }}
+        >
+          {copied ? "Copied!" : "Copy link"}
+        </button>
+        <div style={{
+          fontSize: 9, fontWeight: 700, color: C.orange, background: C.orange + "15",
+          border: `1px solid ${C.orange}30`, borderRadius: 5, padding: "2px 6px", flexShrink: 0,
+        }}>
+          {agencyShort}
+        </div>
+      </div>
+
+      {includeInOutreach && (
+        <div style={{ marginTop: 8, padding: "6px 10px", borderRadius: 8, background: theme.primary + "10", border: `1px solid ${theme.primary}30`, fontSize: 11, color: theme.primary }}>
+          Survey link will be appended to the outreach SMS and email. Responses notify you in PropOS.
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Vendor Sentiment Check ────────────────────────────────────────────────────
+
+const SENTIMENT_QUESTIONS: { id: string; q: string; yesSignal: string }[] = [
+  { id: "open_to_sell",   q: "Open to selling?",                    yesSignal: "vendor has indicated they are open to selling" },
+  { id: "has_timeline",   q: "Mentioned a timeline?",               yesSignal: "vendor has mentioned a specific timeline or deadline" },
+  { id: "nearby_sale",    q: "Neighbour / nearby home sold recently?", yesSignal: "a nearby comparable has recently sold and they are aware" },
+  { id: "life_event",     q: "Life change (kids moved, divorce, new job)?", yesSignal: "there is a life-stage trigger (empty nest, separation, career change)" },
+  { id: "asked_value",    q: "Asked about property value?",         yesSignal: "vendor has proactively asked about current market value" },
+  { id: "owner_occupied", q: "Primary residence (not investment)?", yesSignal: "property is their primary residence which changes the CGT framing" },
+]
+
+interface SentimentAnswers { [id: string]: boolean | null }
+
+function VendorSentimentPanel({
+  answers,
+  onChange,
+}: {
+  answers: SentimentAnswers
+  onChange: (a: SentimentAnswers) => void
+}) {
+  const yesCount = Object.values(answers).filter(v => v === true).length
+
+  return (
+    <div style={{
+      background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 14,
+      padding: "16px 18px", marginBottom: 10,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase" as const }}>
+          Vendor Readiness Check
+        </div>
+        {yesCount > 0 && (
+          <div style={{
+            fontSize: 10, fontWeight: 700, color: C.green,
+            background: C.green + "18", border: `1px solid ${C.green}30`,
+            borderRadius: 5, padding: "2px 7px",
+          }}>
+            {yesCount} signal{yesCount > 1 ? "s" : ""} detected
+          </div>
+        )}
+        <div style={{ fontSize: 10, color: C.faint, marginLeft: "auto" }}>Informs outreach tone</div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {SENTIMENT_QUESTIONS.map(({ id, q }) => {
+          const val = answers[id] ?? null
+          return (
+            <div key={id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1, fontSize: 12, color: C.muted }}>{q}</div>
+              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                {([true, false] as const).map(v => (
+                  <button
+                    key={String(v)}
+                    onClick={() => onChange({ ...answers, [id]: val === v ? null : v })}
+                    style={{
+                      padding: "3px 11px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                      cursor: "pointer", fontFamily: FONT, border: "none",
+                      background: val === v
+                        ? (v ? C.green + "25" : C.red + "25")
+                        : C.bg3,
+                      color: val === v
+                        ? (v ? C.green : C.red ?? "#ef4444")
+                        : C.faint,
+                      outline: val === v
+                        ? `1.5px solid ${v ? C.green : C.red ?? "#ef4444"}50`
+                        : `1px solid ${C.border}`,
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {v ? "Y" : "N"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Vendor Profile Page ───────────────────────────────────────────────────────
 
 function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettings, allEntries, entryIdx, onNavigate }: {
@@ -6442,6 +6698,8 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [editingValue, setEditingValue] = useState(false)
   const [editValueInput, setEditValueInput] = useState("")
   const [voiceNotes, setVoiceNotes] = useState("")  // appended to CRM notes for generation
+  const [sentimentAnswers, setSentimentAnswers] = useState<SentimentAnswers>({})
+  const [includeProspectGauge, setIncludeProspectGauge] = useState(false)
   const [showNegotiationCoach, setShowNegotiationCoach] = useState(false)
   const [showPrintAppraisal, setShowPrintAppraisal] = useState(false)
   const [showAllMetrics, setShowAllMetrics] = useState(false)
@@ -6551,8 +6809,17 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       netProceeds: fin.netProceeds,
       pipelineLabel: pl.label,
       triggerSummary,
-      // Combine base CRM notes with any voice-dictated notes from this session
-      crmNotes: [buyer.notes ?? "", voiceNotes].filter(Boolean).join("\n\nVoice note: "),
+      // Combine base CRM notes, voice notes, and sentiment answers into one signal block
+      crmNotes: [
+        buyer.notes ?? "",
+        voiceNotes ? `Voice note: ${voiceNotes}` : "",
+        (() => {
+          const signals = SENTIMENT_QUESTIONS
+            .filter(q => sentimentAnswers[q.id] === true)
+            .map(q => q.yesSignal)
+          return signals.length > 0 ? `Agent signals: ${signals.join("; ")}` : ""
+        })(),
+      ].filter(Boolean).join("\n\n"),
       soldComps: suburbComps.join("; "),
       // Sheet col R: if agent pre-wrote the hook, send it directly (bypasses OpenAI extraction)
       parsedPersonalisation: (buyer as { personalisationHook?: string }).personalisationHook ?? undefined,
@@ -6565,7 +6832,6 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       const equityStr = fmtDollar(fin.equityGain)
       const signoff = buyer.status === "investor" ? "Kind regards" : "Cheers"
       const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${payload.purchaseYear}). Worth a quick chat? ${signoff}, ${agentFirst}`
-      const sms = stripDashes(smsRaw.length > 160 ? smsRaw.slice(0, 157) + "..." : smsRaw)
       const emailSubject = stripDashes(`Market update on ${buyer.purchaseAddress}, ${fname}`)
       const cgtLine = fin.cgtSavingsBy2027 > 0 ? ` The current 50% CGT discount saves you approximately ${fmtDollar(fin.cgtSavingsBy2027)} if you sell before July 2027.` : ""
       const emailBody = [
@@ -6573,8 +6839,13 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         `Your property at ${buyer.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${payload.purchaseYear}. That is ${equityStr} in equity.${cgtLine}`,
         `I would love to offer a complimentary, no-obligation appraisal if you are curious. Takes about 20 minutes, happy to come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
       ].map(stripDashes)
+      // Append survey link if toggled on
+      const surveyLink = includeProspectGauge
+        ? ` P.S. Quick question for you: ${`https://propos.addvantage.site/survey?contact=${encodeURIComponent(fname)}&agent=${encodeURIComponent(agentFirst)}`}`
+        : ""
+      const finalSms = stripDashes((smsRaw.length > 140 ? smsRaw.slice(0, 137) + "..." : smsRaw) + (includeProspectGauge ? " bit.ly/propgauge" : ""))
       setGenerating(false)
-      onReview(sms, emailSubject, emailBody)
+      onReview(finalSms, emailSubject, includeProspectGauge ? [...emailBody, surveyLink] : emailBody)
     }
 
     try {
@@ -6606,7 +6877,15 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       // Pause so the user sees the NotesBridge "What AI saw → As written to" animation
       // before the review screen replaces the page (3.5s = typewriter + moment to read)
       await new Promise(r => setTimeout(r, res.personalisationLine ? 3500 : 400))
-      onReview(stripDashes(sms), stripDashes(emailSubject), emailBody.map(stripDashes))
+      const finalEmailBody = emailBody.map(stripDashes)
+      if (includeProspectGauge) {
+        const surveyLink = `https://propos.addvantage.site/survey?contact=${encodeURIComponent(fname)}&agent=${encodeURIComponent(agentFirst)}`
+        finalEmailBody.push(`P.S. I've put together a quick 1-minute survey — just 6 yes/no questions to help me understand your situation: ${surveyLink}`)
+      }
+      const finalSms = includeProspectGauge
+        ? stripDashes(sms.slice(0, 130)) + " Survey: bit.ly/propgauge"
+        : stripDashes(sms)
+      onReview(finalSms, stripDashes(emailSubject), finalEmailBody)
     } catch {
       templateFallback()
     }
@@ -6944,7 +7223,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
 
           {/* Vendor Appraisal */}
           <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
-            <VendorAppraisalPanel buyer={buyer} theme={theme} showEquityScenarios={vendorSettings?.showEquityScenarios} />
+            <VendorAppraisalPanel buyer={buyer} theme={theme} showEquityScenarios={vendorSettings?.showEquityScenarios} showComparableMap={vendorSettings?.showComparableMap} />
             <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => setShowPrintAppraisal(true)}
                 style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${theme.primary}40`, background: `${theme.primary}10`, color: theme.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", gap: 6 }}>
@@ -7327,6 +7606,12 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   </div>
                 )}
 
+                {/* ── Vendor Readiness Check (agent-side signals) ── */}
+                <VendorSentimentPanel
+                  answers={sentimentAnswers}
+                  onChange={setSentimentAnswers}
+                />
+
                 {/* ── Full AI generate button — always visible ── */}
                 <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={handleGenerate} disabled={generating}
                   style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${theme.primary}50`, background: generating ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}18, ${theme.gradient[1]}12)`, color: generating ? C.faint : theme.primary, fontSize: 13, fontWeight: 700, cursor: generating ? "default" : "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
@@ -7344,6 +7629,16 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
 
           {/* Best time to sell */}
           {vendorSettings?.showOptimalWindow && <BestTimeToSellPanel entry={entry} theme={theme} />}
+
+          {/* ── Prospect Gauge Survey — toggle before generating outreach ── */}
+          <VendorProspectGauge
+            buyerName={buyer.name}
+            agentFirst={agentFirst}
+            agencyShort={agent.agencyShort ?? agent.agency.slice(0, 2).toUpperCase()}
+            theme={theme}
+            includeInOutreach={includeProspectGauge}
+            onToggleInclude={() => setIncludeProspectGauge(v => !v)}
+          />
 
           </>)}
         </div>
@@ -8569,6 +8864,7 @@ export default function DemoView({
           <VendorPortfolioPage
             agent={agent}
             theme={theme}
+            showMarketTriggers={_vendorSettings?.showMarketTriggers}
             onAnalyse={segmented =>
               setStage({ kind: "vendorAnalysing", segmented })
             }
@@ -8596,6 +8892,7 @@ export default function DemoView({
             onBack={() => setStage({ kind: "vendorPortfolio" })}
             theme={theme}
             agent={agent}
+            vendorSettings={_vendorSettings}
             onSelectEntry={entry => {
               const idx = stage.segmented.findIndex(e => e.buyer.id === entry.buyer.id)
               setStage({ kind: "vendorProfile", entry, allEntries: stage.segmented, entryIdx: idx >= 0 ? idx : 0, from: "vendorDashboard" })

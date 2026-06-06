@@ -3,6 +3,13 @@ import { AnimatePresence, motion } from "framer-motion"
 import { C, FONT, DEFAULT_THEME, type AgentProfile, type AgencyTheme, type ViewId, type DemoMode } from "../data"
 import { useBreakpoint } from "../hooks/useBreakpoint"
 
+// Get product display name based on mode
+function productLabel(mode: DemoMode | null): string {
+  if (mode === "buyer") return "BuyerOS"
+  if (mode === "vendor") return "VendorOS"
+  return "PropOS"
+}
+
 export const VIEWS: { id: ViewId; label: string; short: string; principalOnly?: boolean }[] = [
   { id: "demo",      label: "Demo",     short: "Demo" },
   { id: "setup",     label: "Settings", short: "Settings" },
@@ -10,7 +17,7 @@ export const VIEWS: { id: ViewId; label: string; short: string; principalOnly?: 
 ]
 
 export default function Nav({
-  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0, mode, onSwitchMode, lightMode = false, onToggleLightMode,
+  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0, mode, onSwitchMode, lightMode = false, onToggleLightMode, productMode,
 }: {
   view: ViewId
   setView: (v: ViewId) => void
@@ -25,6 +32,7 @@ export default function Nav({
   onSwitchMode?: (m: DemoMode) => void
   lightMode?: boolean
   onToggleLightMode?: () => void
+  productMode?: DemoMode | null
 }) {
   const bp = useBreakpoint()
   const [scrolled, setScrolled] = useState(false)
@@ -82,7 +90,9 @@ export default function Nav({
       }}>{theme.logo}</div>
       {bp !== "mobile" && (
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.text, lineHeight: 1 }}>PropOS</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.text, lineHeight: 1 }}>
+            {productLabel(productMode ?? mode ?? null)}
+          </div>
           <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.3 }}>{agent.name} · {agent.agency}</div>
         </div>
       )}
