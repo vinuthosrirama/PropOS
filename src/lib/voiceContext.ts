@@ -150,23 +150,167 @@ const CAMERON_SEED: SeedEntry[] = [
   },
 ]
 
-/**
- * Seeds the training corpus with Cameron's real messages if empty.
- * Called once on app mount — idempotent.
- */
-export function seedCorpusIfEmpty(): TrainingEntry[] {
-  const existing = loadCorpus()
-  if (existing.length > 0) return existing
+// ── Manpreet Singh seed corpus (Barry Plant Berwick) ─────────────────────────
 
-  const seeded: TrainingEntry[] = CAMERON_SEED.map((s, i) => ({
-    id:        `seed_cameron_${i}`,
-    type:      s.type,
+// ── Pas Sunilchandra seed corpus (Area Specialist, SE Melbourne) ──────────────
+// Voice: concise, direct, data-forward, warm closer. Sign-off: "Cheers, Pas"
+
+const PAS_SEED: SeedEntry[] = [
+  {
+    type: "paste",
+    persona: "general",
+    label: "Owner — equity check-in SMS",
+    source: "SMS: equity nudge",
+    text: "Hi Thomas, Pas from Area Specialist. Redwood Avenue is tracking around $690K now — that's $210K up since 2018. Worth a conversation if you're ever curious about your options. Cheers, Pas",
+  },
+  {
+    type: "paste",
+    persona: "owner-occupier" as unknown as "general",
+    label: "Upsizer — commute motivation",
+    source: "SMS: lifestyle pain point",
+    text: "Hi Anna, Pas here. Gleneadie Close has come up well — sitting around $750K now. If the commute is still weighing on you both, your equity position makes a move a lot more doable than you might think. Cheers, Pas",
+  },
+  {
+    type: "paste",
+    persona: "downsizer",
+    label: "Downsizer — soft check-in",
+    source: "SMS: downsizer gentle approach",
+    text: "Hi Chris, Pas from Area Specialist. Just wanted to check in — Saffron Drive is tracking well, up around $330K since 2016. No pressure at all, but whenever the time is right, I'm here. Cheers, Pas",
+  },
+  {
+    type: "paste",
+    persona: "general",
+    label: "Market update opener",
+    source: "SMS: comparable sale trigger",
+    text: "Hi Thomas, Pas here. A comparable Hampton Park home just sold at $695K this week. Redwood Avenue is in the same bracket. If you'd ever like to know exactly where you sit, happy to chat. Cheers, Pas",
+  },
+  {
+    type: "email",
+    persona: "general",
+    label: "Upsizer equity email — commute motivation",
+    source: "Email to upsizer: lifestyle + numbers",
+    text: "Hi Anna and Steve, Pas Sunilchandra from Area Specialist here. Hope you're both well. I wanted to reach out with a quick update on Gleneadie Close. Based on recent comparable sales in Hampton Park, your property is now estimated at approximately $750,000. That's around $210,000 in equity since you purchased in July 2020 — a really solid result. For anyone thinking about a move closer to the city, that kind of equity can make the transition much more affordable than people expect, even in the current market. I'd love to sit down with you both and run through what the numbers actually look like — what you'd walk away with, what a step-up property in an inner suburb might cost, and whether the timing makes sense. No pressure, just good information. Happy to come to you. Cheers, Pas",
+  },
+  {
+    type: "email",
+    persona: "downsizer",
+    label: "Downsizer equity email — gentle approach",
+    source: "Email to downsizer: lifestyle transition",
+    text: "Hi Chris, Pas Sunilchandra from Area Specialist here. Just a quick note to check in and share some market news from Hallam. Saffron Drive is in a really strong spot right now — based on recent sales in the area, your property is sitting at around $790,000. That's approximately $330,000 in equity since 2016. For anyone thinking about a change of pace — whether that's something smaller, something closer to family, or simply less to maintain — that equity position gives you a lot of flexibility. There's absolutely no rush, and I know you'll move when the time is right. I'm just here to make sure you have the full picture whenever that day comes. Happy to put together a quiet appraisal at any stage — just say the word. Cheers, Pas",
+  },
+  {
+    type: "email",
+    persona: "general",
+    label: "Straightforward equity update",
+    source: "Email to owner: direct market update",
+    text: "Hi Thomas, Pas Sunilchandra from Area Specialist here. Quick update on Redwood Avenue. The Hampton Park market has had some solid results lately and your property is tracking at around $690,000 — that's a $210,000 gain since you bought in 2018. I know you've mentioned the place needs some work, but the market isn't waiting on renovations at this price point — buyers are still moving on unrenovated homes in the area. Happy to put together a no-obligation appraisal if you'd like a clearer picture of where things stand. Just reply here or call me on 0430 366 649. Cheers, Pas",
+  },
+  {
+    type: "email_subject",
+    persona: "general",
+    label: "Subject: comparable sale trigger",
+    source: "Email subject: market update",
+    text: "Hampton Park update — a comparable just sold that affects your position",
+  },
+  {
+    type: "email_subject",
+    persona: "downsizer",
+    label: "Subject: downsizer check-in",
+    source: "Email subject: gentle downsizer",
+    text: "Checking in — Saffron Drive market update for you, Chris",
+  },
+]
+
+// ── Manpreet Singh seed corpus (Barry Plant Berwick) ─────────────────────────
+
+const MANPREET_SEED: SeedEntry[] = [
+  {
+    type: "paste",
+    persona: "investor",
+    label: "CGT deadline — investor",
+    source: "SMS to investor: CGT window",
+    text: "Hi Jason, Manpreet from Barry Plant. Your Tilden Rise tenant is vacating soon and the CGT clock is ticking — selling before July 2027 locks in the 50% discount. Happy to run the numbers. Kind regards, Manpreet",
+  },
+  {
+    type: "paste",
+    persona: "family",
+    label: "Upsizer — growing family",
+    source: "SMS to upsizer: equity + space",
+    text: "Hi Kevin, Manpreet here. Van Der Haar Avenue is tracking around $1.06M now — that is $415K up since 2020. With the family growing, the equity you have built up could go a long way toward something bigger. Worth a chat? Kind regards, Manpreet",
+  },
+  {
+    type: "paste",
+    persona: "downsizer",
+    label: "Downsizer — empty nest",
+    source: "SMS to downsizer: lifestyle",
+    text: "Hi Bill and Heather, Manpreet from Barry Plant. Royal Crescent is in a strong spot right now. With both kids settled elsewhere, the timing might be right to think about something that better suits where you are at. Happy to pop over for a chat. Kind regards, Manpreet",
+  },
+  {
+    type: "paste",
+    persona: "general",
+    label: "Market update opener",
+    source: "SMS: general market",
+    text: "Hi Thanh, Manpreet here. Tantallon Boulevard has come a long way since 2021 — tracking around $730K now. The Jack William Way result set a new benchmark for the area. Happy to walk through the numbers if you are ever curious. Kind regards, Manpreet",
+  },
+  {
+    type: "email",
+    persona: "investor",
+    label: "Investor — CGT + yield analysis",
+    source: "Email to investor: data-led",
+    text: "Hi Jason, Manpreet Singh from Barry Plant Berwick here. I wanted to share a quick update on 33 Tilden Rise. The property has grown to approximately $820,000 since your 2017 purchase, representing a $230,000 equity gain. With your tenant lease expiring in June and the 50% CGT discount still available before July 2027, the timing is worth understanding carefully. I would be happy to prepare a full financial snapshot including net sale proceeds, estimated CGT liability both before and after the discount date, and current comparable sales in Cranbourne North. No obligation at all — just clear information so you can make the right decision. Happy to come to Toorak or speak by phone at a time that suits. Kind regards, Manpreet Singh",
+  },
+  {
+    type: "email",
+    persona: "family",
+    label: "Upsizer — growing family equity email",
+    source: "Email to upsizer: equity + motivation",
+    text: "Hi Kevin and Amita, Manpreet Singh from Barry Plant Berwick here. Hope you are both well and congratulations on the upcoming arrival. I wanted to share a quick market update on Van Der Haar Avenue. Based on recent comparable sales in Berwick, your property is now estimated at approximately $1,060,000. That represents around $415,000 in equity since you purchased in 2020, which is a really strong position to be in. For families thinking about more space before a new arrival, that equity can go a long way toward funding a larger home without overextending. I would be happy to walk through the numbers over a coffee — no pressure, just a clear picture of your options. Kind regards, Manpreet Singh",
+  },
+  {
+    type: "email_subject",
+    persona: "investor",
+    label: "Subject: investor update",
+    source: "Email subject: data-focused investor",
+    text: "Your Tilden Rise investment — equity snapshot and CGT position",
+  },
+  {
+    type: "email_subject",
+    persona: "family",
+    label: "Subject: family upsizer",
+    source: "Email subject: upsizer",
+    text: "Van Der Haar Avenue market update — worth a look before the year is out",
+  },
+]
+
+/**
+ * Seeds the training corpus on first login.
+ * Picks the right seed corpus for Cameron, Manpreet, or Pas.
+ * Clears and re-seeds if switching agents (different prefix detected).
+ */
+export function seedCorpusIfEmpty(agentName?: string): TrainingEntry[] {
+  const name = agentName?.toLowerCase() ?? ""
+
+  const isManpreet = name.includes("manpreet")
+  const isPas      = name.includes("pas") || name.includes("sunilchandra")
+
+  const seed   = isManpreet ? MANPREET_SEED : isPas ? PAS_SEED : CAMERON_SEED
+  const prefix = isManpreet ? "manpreet" : isPas ? "pas" : "cameron"
+
+  // If corpus already has entries for this agent, leave it alone
+  const existing = loadCorpus()
+  if (existing.length > 0 && existing[0]?.id?.startsWith(`seed_${prefix}`)) {
+    return existing
+  }
+  // Different agent or empty — re-seed with the right corpus
+  const seeded: TrainingEntry[] = seed.map((s, i) => ({
+    id:        `seed_${prefix}_${i}`,
+    type:      s.type as TrainingEntry["type"],
     text:      s.text,
-    timestamp: new Date(Date.now() - (CAMERON_SEED.length - i) * 86400000).toISOString(),
+    timestamp: new Date(Date.now() - (seed.length - i) * 86400000).toISOString(),
     wordCount: s.text.split(/\s+/).length,
     source:    s.source,
     label:     s.label,
-    persona:   s.persona,
+    persona:   s.persona as TrainingEntry["persona"],
   }))
 
   saveCorpus(seeded)
