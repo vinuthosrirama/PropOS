@@ -3351,6 +3351,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
       status: addForm.status as import("../data/pastBuyers").BuyerStatus,
       notes: addForm.notes,
       lastContactDate: "",
+      agentName: agent.name,  // tag to this agent's column in sheet
     }
     // Try to save to sheet via /api/add-contact
     try {
@@ -3481,6 +3482,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer }: {
         land: parseInt((c.land ?? "").replace(/\D/g, ""), 10) || 0,
         status: (c.status ?? "owner-occupier") as import("../data/pastBuyers").BuyerStatus,
         notes: c.notes ?? "", lastContactDate: "",
+        agentName: agent.name,  // tag contact to this agent's column in the sheet
       }
       try {
         await authFetch(apiUrl("/api/add-contact"), {

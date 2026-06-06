@@ -458,6 +458,36 @@ export const MANPREET_PORTFOLIO_SOLD: PortfolioProperty[] = [
     description: "Immaculate 3-bed home with striking rendered façade. Stylish open plan living, stone kitchen benchtops, alfresco entertaining area, double garage. Steps to Berwick Primary and Timbarra shopping.",
     leadCount: 0,
   },
+  {
+    id: 503,
+    address: "47 Marija Crescent",
+    suburb: "Berwick", state: "VIC", postcode: "3806",
+    price: 920000, beds: 4, baths: 3, cars: 2,
+    type: "House", status: "sold", soldDate: "27 Feb 2026",
+    image: "/47-marija-crescent.jpg",
+    description: "Impressive 4-bed, 3-bath family home with premium inclusions throughout. Double garage, alfresco entertaining, stone kitchen benchtops. Walking distance to Berwick Village and St Margaret Mary's College.",
+    leadCount: 0,
+  },
+  {
+    id: 504,
+    address: "6 Monarch Road",
+    suburb: "Berwick", state: "VIC", postcode: "3806",
+    price: 950000, beds: 4, baths: 2, cars: 2,
+    type: "House", status: "sold", soldDate: "30 Dec 2025",
+    image: "/6-monarch-road.jpg",
+    description: "Elegant 4-bed family residence on generous allotment. Multiple living areas, gourmet kitchen with butler's pantry, alfresco with outdoor kitchen, double remote garage. Premier Berwick address.",
+    leadCount: 0,
+  },
+  {
+    id: 505,
+    address: "4 Riverglen Road",
+    suburb: "Berwick", state: "VIC", postcode: "3806",
+    price: 1035000, beds: 5, baths: 2, cars: 2,
+    type: "House", status: "sold", soldDate: "30 Mar 2026",
+    image: "/4-riverglen-road.jpg",
+    description: "Stunning 5-bed executive home in one of Berwick's most sought-after streets. Grand proportions, home theatre, study, chef's kitchen, master retreat with spa ensuite. Triple garage.",
+    leadCount: 0,
+  },
 ]
 
 export const MANPREET_PORTFOLIO_ACTIVE: PortfolioProperty[] = [

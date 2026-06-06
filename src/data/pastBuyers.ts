@@ -210,7 +210,9 @@ export const PAS_PAST_BUYERS: PastBuyer[] = [
 
 // ---------------------------------------------------------------------------
 // Demo data — Manpreet Singh / Barry Plant Berwick
-// Anchor property: 40 Jack William Way, Berwick (sold $805K — property 501)
+// Real sold properties from REA.com.au profile (June 2026 snapshot)
+// Purchase date = when Manpreet sold it (buyer's settlement date)
+// Purchase price = REA confirmed sold price
 // ---------------------------------------------------------------------------
 
 export const MANPREET_PAST_BUYERS: PastBuyer[] = [
@@ -219,11 +221,11 @@ export const MANPREET_PAST_BUYERS: PastBuyer[] = [
     name: "Kevin & Amita Sharma",
     phone: "0432 881 207", email: "amita.sharma@gmail.com",
     purchaseAddress: "34 Van Der Haar Avenue", suburb: "Berwick",
-    purchaseDate: "2020-08-14", purchasePrice: 645000, deposit: 64500,
+    purchaseDate: "2025-06-25", purchasePrice: 738000, deposit: 73800,
     propertyType: "House", beds: 4, baths: 1, land: 450,
     status: "owner-occupier",
-    notes: "Kevin teaches at Berwick Secondary, Amita is in healthcare admin at Casey Hospital. Two kids — Aryan (4) and Kavya (2). Baby number three due January 2027. The house is already feeling cramped — Amita mentioned the kids are sharing a room and it is getting harder. They want a 4-bed with a proper study. Very motivated but nervous about the market. Kevin follows the Jack William Way sales closely — was really impressed with what Manpreet got for No. 40.",
-    lastContactDate: "2025-04-22",
+    notes: "Kevin teaches at Berwick Secondary, Amita is in healthcare admin at Casey Hospital. Two kids — Aryan and Kavya. Third baby on the way. Bought through Manpreet in June 2025. Kevin was really impressed with Manpreet's results on Jack William Way. Mentioned they're already feeling cramped and have their eye on something bigger in the next 2-3 years. Very warm family, always responsive.",
+    lastContactDate: "2026-01-15",
     contractTerms: "60 day settlement, 10% deposit",
   },
   {
@@ -231,24 +233,24 @@ export const MANPREET_PAST_BUYERS: PastBuyer[] = [
     name: "Jason Nakamura",
     phone: "0418 556 334", email: "jason.nakamura.invest@gmail.com",
     purchaseAddress: "33 Tilden Rise", suburb: "Cranbourne North",
-    purchaseDate: "2017-06-10", purchasePrice: 590000, deposit: 118000,
+    purchaseDate: "2025-07-04", purchasePrice: 825000, deposit: 165000,
     propertyType: "House", beds: 4, baths: 2, land: 510,
     status: "investor",
-    notes: "Jason lives in Toorak. This is one of three IPs. Tenant lease on Tilden Rise expires June 2026. He is very numbers-focused and tracks property values obsessively — sent Manpreet a message after the 40 Jack William Way sale asking if the Berwick market had peaked. Jason has read about the CGT discount changes and mentioned he might want to sell before 2027 to lock in the discount. Responds to data, not emotion.",
-    lastContactDate: "2025-05-02",
+    notes: "Jason lives in Toorak. This is one of three IPs. Bought through Manpreet in July 2025. His 12-month CGT discount window opens July 2026 — right now. Very numbers-focused, tracks values obsessively. Already messaging Manpreet asking about Cranbourne North trends. Would sell in a heartbeat if the net proceeds made sense. Responds to data, not emotion.",
+    lastContactDate: "2026-04-28",
     contractTerms: "30 day settlement, 20% deposit",
-    personalisationHook: "Jason, your Tilden Rise tenant is due to vacate and the CGT clock is ticking — selling now locks in your 50% discount before the July 2027 deadline.",
+    personalisationHook: "Jason, your Tilden Rise 12-month CGT window just opened — selling now locks in your 50% discount. At $825K purchase, a sale around $850K gives you a $25K gain taxed at half rate. Worth running the numbers?",
   },
   {
     id: 7003,
     name: "Bill & Heather McCormack",
     phone: "0411 223 744", email: "hmc.berwick@bigpond.com",
     purchaseAddress: "10 Royal Crescent", suburb: "Beaconsfield",
-    purchaseDate: "2016-03-22", purchasePrice: 570000, deposit: 114000,
+    purchaseDate: "2025-07-07", purchasePrice: 1175000, deposit: 235000,
     propertyType: "House", beds: 5, baths: 2, land: 750,
     status: "owner-occupier",
-    notes: "Lovely couple. Bill is a retired school principal, Heather still does bookkeeping a couple days a week. Both kids have flown the nest — son in Sydney, daughter in London. Five-bed house on Royal Crescent is way too much for the two of them now. Bill told Manpreet at the school fete that he is ready when Heather is. Heather is getting closer — she has started looking at ground-floor apartments in Berwick Village. Garden maintenance is becoming a real issue for Bill's back.",
-    lastContactDate: "2025-03-15",
+    notes: "Bought Royal Crescent through Manpreet in July 2025 — upsized from a smaller Berwick home. Bill is a retired school principal, Heather does bookkeeping. Their youngest just finished Year 12. They mentioned at settlement that this was meant to be their forever home but the kids are already looking at moving out. Five bedrooms for two people. Heather has started casually looking at ground-floor apartments in Berwick Village. Bill says he'd go tomorrow if Heather decided.",
+    lastContactDate: "2026-02-10",
     contractTerms: "90 day settlement, 20% deposit",
   },
   {
@@ -256,23 +258,83 @@ export const MANPREET_PAST_BUYERS: PastBuyer[] = [
     name: "Thanh & Lily Vo",
     phone: "0403 119 865", email: "thanh.vo.property@gmail.com",
     purchaseAddress: "45 Tantallon Boulevard", suburb: "Beaconsfield",
-    purchaseDate: "2021-04-19", purchasePrice: 755000, deposit: 75500,
+    purchaseDate: "2025-07-22", purchasePrice: 815000, deposit: 81500,
     propertyType: "House", beds: 4, baths: 2, land: 560,
     status: "owner-occupier",
-    notes: "Thanh is in logistics management, Lily is a dental hygienist. No kids yet but mentioned they want to start a family in the next year or two. They bought 45 Tantallon Boulevard just before the top of the market. Thanh was a bit worried for a while but the sale at 40 Jack William Way for $805K made him feel much better about the area. He messaged Manpreet the day after settlement to ask what Tantallon would be worth now. Not rushing, but definitely thinking about it.",
-    lastContactDate: "2025-05-26",
+    notes: "Thanh is in logistics management, Lily is a dental hygienist. No kids yet but mentioned starting a family in the next couple of years. Bought Tantallon in July 2025 — Thanh messaged Manpreet the day after the 40 Jack William Way result congratulating him. Very engaged, follows the market closely. Mentioned they might upsize when kids come. Not rushing but worth keeping warm.",
+    lastContactDate: "2026-03-18",
   },
   {
     id: 7005,
     name: "Dan & Carly Crosbie",
     phone: "0427 490 612", email: "dancrosbie@hotmail.com",
     purchaseAddress: "12 Homestead Road", suburb: "Berwick",
-    purchaseDate: "2018-09-03", purchasePrice: 695000, deposit: 139000,
+    purchaseDate: "2025-09-09", purchasePrice: 778000, deposit: 77800,
     propertyType: "House", beds: 3, baths: 2, land: 510,
     status: "investor",
-    notes: "Dan is a builder, Carly is a teacher at Kambrya College. Investment property — they live in Officer. Currently rented at $520/wk. Dan mentioned after the 15 Hartsmere Drive sale that he is thinking about selling to fund a duplex development in Pakenham. He has the skills to build it himself. Very pragmatic — he will move when the numbers make sense. Carly is supportive but wants to understand the tax position first.",
-    lastContactDate: "2025-02-10",
-    contractTerms: "60 day settlement, 20% deposit",
+    notes: "Dan is a builder, Carly a teacher at Kambrya College. Investment property — they live in Officer. Bought Homestead Road in September 2025. Currently rented at $550/wk. Dan has a development block in mind in Pakenham and has mentioned selling the Berwick IP to fund it. His 12-month CGT window opens September 2026. Very pragmatic, moves on numbers. Carly wants to understand the tax position first.",
+    lastContactDate: "2026-03-05",
+    contractTerms: "60 day settlement, 10% deposit",
+  },
+  {
+    id: 7006,
+    name: "Michael & Priya Kapoor",
+    phone: "0449 332 110", email: "mkapoor.property@gmail.com",
+    purchaseAddress: "4 Saintly Grove", suburb: "Berwick",
+    purchaseDate: "2025-09-10", purchasePrice: 847000, deposit: 84700,
+    propertyType: "House", beds: 4, baths: 2, land: 548,
+    status: "investor",
+    notes: "Michael is in IT consulting (remote), Priya is a pharmacist at Fountain Gate. Bought Saintly Grove as investment in September 2025 — their second IP. Tenant already in place on a 12-month lease. Very organised buyers, had their finance pre-approved and settled cleanly. Michael asked Manpreet after settlement whether Berwick was still a buy. CGT discount window opens September 2026.",
+    lastContactDate: "2026-01-22",
+    contractTerms: "30 day settlement, 10% deposit",
+  },
+  {
+    id: 7007,
+    name: "Robert & Jane Nguyen",
+    phone: "0421 774 593", email: "rj.nguyen.berwick@gmail.com",
+    purchaseAddress: "121 Fleetwood Drive", suburb: "Narre Warren",
+    purchaseDate: "2025-09-16", purchasePrice: 804000, deposit: 80400,
+    propertyType: "House", beds: 4, baths: 2, land: 528,
+    status: "owner-occupier",
+    notes: "Robert is in retail management, Jane works part-time in childcare. Two kids at Narre Warren primary. Upsized from a 3-bed unit. Very happy at settlement — Robert sent Manpreet a thank you message. Mentioned they had been outbid on three other homes before Manpreet helped them secure Fleetwood Drive. Loyal clients, likely to come back when they're ready to sell.",
+    lastContactDate: "2026-02-28",
+    contractTerms: "45 day settlement, 10% deposit",
+  },
+  {
+    id: 7008,
+    name: "Sam & Rachel Thompson",
+    phone: "0407 816 241", email: "sthompson.prop@outlook.com",
+    purchaseAddress: "7 Ashfield Drive", suburb: "Berwick",
+    purchaseDate: "2025-11-28", purchasePrice: 768000, deposit: 76800,
+    propertyType: "House", beds: 3, baths: 1, land: 465,
+    status: "owner-occupier",
+    notes: "Sam is an electrician, Rachel is a nurse at Casey Hospital. First home. Very excited buyers — Rachel cried at settlement. Sam has mentioned they want to renovate the kitchen and bathrooms in year one and sell in 3-5 years after the kids start school. Good long-term pipeline contact. First home buyer concession applied.",
+    lastContactDate: "2026-03-10",
+    contractTerms: "60 day settlement, 5% deposit",
+  },
+  {
+    id: 7009,
+    name: "Chris & Sarah Okafor",
+    phone: "0433 205 788", email: "cokafor.invest@gmail.com",
+    purchaseAddress: "6 Monarch Road", suburb: "Berwick",
+    purchaseDate: "2025-12-30", purchasePrice: 950000, deposit: 190000,
+    propertyType: "House", beds: 4, baths: 2, land: 620,
+    status: "investor",
+    notes: "Chris is a senior engineer at a mining company, Sarah runs an online retail business. Bought Monarch Road as a premium IP in December 2025 — paid top dollar and knew it. Their third investment property. Chris has a 5-year hold strategy in mind. Very sophisticated investors, understand capital growth vs yield. Mentioned to Manpreet they might sell the weakest performer in their portfolio by 2027.",
+    lastContactDate: "2026-04-12",
+    contractTerms: "30 day settlement, 20% deposit",
+  },
+  {
+    id: 7010,
+    name: "Paul & Grace Diallo",
+    phone: "0416 948 302", email: "p.diallo.berwick@gmail.com",
+    purchaseAddress: "47 Marija Crescent", suburb: "Berwick",
+    purchaseDate: "2026-02-27", purchasePrice: 920000, deposit: 92000,
+    propertyType: "House", beds: 4, baths: 3, land: 572,
+    status: "owner-occupier",
+    notes: "Paul is an architect, Grace is a physiotherapist. Bought Marija Crescent in February 2026 — downsized from a large acreage in Gembrook. Kids are now adults. Paul already has ideas for a minor renovation. Grace mentioned they love Berwick village and want to be closer to everything. Unlikely to move soon but great lifetime contacts.",
+    lastContactDate: "2026-05-01",
+    contractTerms: "60 day settlement, 10% deposit",
   },
 ]
 
@@ -297,12 +359,17 @@ export const CURRENT_VALUE_ESTIMATES: Record<number, number> = {
   6001: 690000,   // 16 Redwood Avenue, HP — Domain $590K–$790K (mid)
   6002: 750000,   // 11 Gleneadie Close, HP — Domain $640K–$860K (mid)
   6003: 790000,   // 29 Saffron Drive, Hallam — Domain $680K–$900K (mid)
-  // Manpreet's buyers — Domain.com.au estimates scraped May 2026
-  7001: 1060000,  // 34 Van Der Haar Avenue, Berwick — Domain $910K–$1.21M (mid)
-  7002: 820000,   // 33 Tilden Rise, Cranbourne North — Domain $700K–$940K (mid)
-  7003: 1360000,  // 10 Royal Crescent, Beaconsfield — Domain $1.17M–$1.55M (mid)
-  7004: 730000,   // 45 Tantallon Boulevard, Beaconsfield — Domain $630K–$830K (mid)
-  7005: 1020000,  // 12 Homestead Road, Berwick — Domain $880K–$1.16M (mid)
+  // Manpreet's buyers — real sold prices (REA.com.au) + 12-month appreciation
+  7001: 758000,   // 34 Van Der Haar Avenue, Berwick — bought $738K Jun 2025 (+2.7%, 12mo)
+  7002: 848000,   // 33 Tilden Rise, Cranbourne North — bought $825K Jul 2025 (+2.8%, 11mo) ← CGT window OPEN
+  7003: 1207000,  // 10 Royal Crescent, Beaconsfield — bought $1,175K Jul 2025 (+2.7%, 11mo)
+  7004: 837000,   // 45 Tantallon Boulevard, Beaconsfield — bought $815K Jul 2025 (+2.7%, 11mo)
+  7005: 795000,   // 12 Homestead Road, Berwick — bought $778K Sep 2025 (+2.2%, 9mo)
+  7006: 865000,   // 4 Saintly Grove, Berwick — bought $847K Sep 2025 (+2.1%, 9mo)
+  7007: 820000,   // 121 Fleetwood Drive, Narre Warren — bought $804K Sep 2025 (+2.0%, 9mo)
+  7008: 782000,   // 7 Ashfield Drive, Berwick — bought $768K Nov 2025 (+1.8%, 7mo)
+  7009: 965000,   // 6 Monarch Road, Berwick — bought $950K Dec 2025 (+1.6%, 6mo)
+  7010: 928000,   // 47 Marija Crescent, Berwick — bought $920K Feb 2026 (+0.9%, 4mo)
 }
 
 // ---------------------------------------------------------------------------
