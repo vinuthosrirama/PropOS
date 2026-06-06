@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense, type CSSProperties } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, DEFAULT_AGENT, DEFAULT_THEME, DEFAULT_VENDOR_SETTINGS,
+  DARK_CSS_VARS, LIGHT_CSS_VARS,
   type AgentProfile, type AgencyTheme, type ViewId, type DemoMode, type VendorDisplaySettings,
 } from "./data"
 import Nav from "./components/Nav"
@@ -32,6 +33,18 @@ function LoadingSpinner() {
 }
 
 export default function App() {
+  const [lightMode, setLightMode] = useState<boolean>(() => {
+    try { return localStorage.getItem("propos_light_mode") === "1" } catch { return false }
+  })
+
+  // Apply CSS vars and html class whenever mode changes
+  useEffect(() => {
+    const root = document.documentElement
+    root.style.cssText = lightMode ? LIGHT_CSS_VARS : DARK_CSS_VARS
+    root.classList.toggle("light-mode", lightMode)
+    try { localStorage.setItem("propos_light_mode", lightMode ? "1" : "0") } catch {}
+  }, [lightMode])
+
   const [loggedIn, setLoggedIn]       = useState(false)
   const [theme, setTheme]             = useState<AgencyTheme>(DEFAULT_THEME)
   const [view, setView]               = useState<ViewId>("demo")
@@ -113,7 +126,8 @@ export default function App() {
     } as CSSProperties & Record<`--${string}`, string>}>
       <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn}
            onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge}
-           mode={mode} onSwitchMode={setMode} />
+           mode={mode} onSwitchMode={setMode}
+           lightMode={lightMode} onToggleLightMode={() => setLightMode(m => !m)} />
       <BillingBanner />
 
       <Suspense fallback={<LoadingSpinner />}>

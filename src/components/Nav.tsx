@@ -10,7 +10,7 @@ export const VIEWS: { id: ViewId; label: string; short: string; principalOnly?: 
 ]
 
 export default function Nav({
-  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0, mode, onSwitchMode,
+  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0, mode, onSwitchMode, lightMode = false, onToggleLightMode,
 }: {
   view: ViewId
   setView: (v: ViewId) => void
@@ -23,6 +23,8 @@ export default function Nav({
   inboxBadge?: number
   mode?: DemoMode
   onSwitchMode?: (m: DemoMode) => void
+  lightMode?: boolean
+  onToggleLightMode?: () => void
 }) {
   const bp = useBreakpoint()
   const [scrolled, setScrolled] = useState(false)
@@ -192,6 +194,20 @@ export default function Nav({
                   <div style={{ fontSize: 13, fontWeight: 700, color: theme.primary }}>← Portfolio</div>
                 </button>
               )}
+              {onToggleLightMode && (
+                <button onClick={() => { onToggleLightMode(); setMenuOpen(false) }} style={{
+                  width: "100%", padding: "14px 20px",
+                  display: "flex", alignItems: "center", gap: 10,
+                  background: "transparent", border: "none", cursor: "pointer",
+                  fontFamily: FONT, borderLeft: "3px solid transparent",
+                  borderTop: `1px solid ${C.border}`, marginTop: 4,
+                }}>
+                  <span style={{ fontSize: 16 }}>{lightMode ? "🌙" : "☀️"}</span>
+                  <div style={{ fontSize: 13, color: C.muted }}>
+                    {lightMode ? "Switch to dark mode" : "Switch to light mode"}
+                  </div>
+                </button>
+              )}
               {onLogout && (
                 <button onClick={onLogout} style={{
                   width: "100%", padding: "14px 20px",
@@ -303,6 +319,25 @@ export default function Nav({
       </div>
 
       {sheetChip && <div style={{ marginLeft: 12 }}>{sheetChip}</div>}
+
+      {/* Light / dark toggle */}
+      {onToggleLightMode && (
+        <button
+          onClick={onToggleLightMode}
+          title={lightMode ? "Switch to dark mode" : "Switch to light mode"}
+          style={{
+            marginLeft: 8, flexShrink: 0,
+            padding: "4px 8px", borderRadius: 8,
+            border: `1px solid rgba(216,231,242,0.25)`,
+            background: "rgba(216,231,242,0.07)", color: C.muted,
+            fontSize: 14, cursor: "pointer", lineHeight: 1,
+            transition: "color 0.15s",
+          }}
+          aria-label={lightMode ? "Switch to dark mode" : "Switch to light mode"}
+        >
+          {lightMode ? "🌙" : "☀️"}
+        </button>
+      )}
 
       {onLogout && (
         <button onClick={onLogout} title="Switch profile"

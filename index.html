@@ -10,14 +10,26 @@
     <!-- Preload primary Inter weight to prevent FOIT -->
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+    <!-- Apply saved theme before React hydrates to prevent flash -->
+    <script>
+      try {
+        var light = localStorage.getItem("propos_light_mode") === "1"
+        var el = document.documentElement
+        if (light) el.classList.add("light-mode")
+        el.style.cssText = light
+          ? "--c-bg:#f5f7fa;--c-bg2:#ffffff;--c-bg3:#edf0f5;--c-text:#0f172a;--c-muted:#475569;--c-faint:#94a3b8;--c-border:rgba(15,23,42,0.10);--c-border-hover:rgba(15,23,42,0.18)"
+          : "--c-bg:rgb(4,7,13);--c-bg2:rgb(14,18,28);--c-bg3:rgb(22,27,40);--c-text:rgb(213,219,230);--c-muted:rgba(213,219,230,0.50);--c-faint:rgba(213,219,230,0.30);--c-border:rgba(216,231,242,0.13);--c-border-hover:rgba(216,231,242,0.18)"
+      } catch(e) {}
+    </script>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body, #root { height: 100%; }
       body {
-        background: rgb(4, 7, 13);
-        color: rgb(213, 219, 230);
+        background: var(--c-bg, rgb(4, 7, 13));
+        color: var(--c-text, rgb(213, 219, 230));
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         -webkit-font-smoothing: antialiased;
+        transition: background 0.25s, color 0.25s;
       }
       ::-webkit-scrollbar { width: 6px; }
       ::-webkit-scrollbar-track { background: transparent; }

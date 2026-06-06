@@ -97,8 +97,12 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
       })
       mapRef.current = map
 
-      // CartoDB Dark Matter tiles — free, no API key, natively dark
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      // Use light or dark tiles depending on current colour scheme
+      const isLight = document.documentElement.classList.contains("light-mode")
+      const tileUrl = isLight
+        ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+      L.tileLayer(tileUrl, {
         maxZoom: 19,
         subdomains: "abcd",
         opacity: 0.95,
@@ -163,6 +167,15 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
     }
 
     const initMap = () => requestAnimationFrame(() => requestAnimationFrame(() => {
+      // Leaflet CSS must be loaded before the map renders — inject once
+      if (!document.getElementById("leaflet-css")) {
+        const link = document.createElement("link")
+        link.id   = "leaflet-css"
+        link.rel  = "stylesheet"
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        document.head.appendChild(link)
+      }
+
       import("leaflet").then(L => {
         if (cancelled || !containerRef.current) return
         if (mapRef.current) return
@@ -222,15 +235,20 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
 
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
 
-      {/* Leaflet CSS */}
+      {/* Leaflet overrides — adapts to light/dark via CSS vars */}
       <style>{`
-        .leaflet-container { background: #0e1220 !important; }
+        .leaflet-container { background: var(--c-bg3, #0e1220) !important; }
         .comp-popup .leaflet-popup-content-wrapper {
-          background: #0e1220; border: 1px solid rgba(216,231,242,0.12);
-          border-radius: 8px; color: #d5dbe6;
+          background: var(--c-bg2, #0e1220);
+          border: 1px solid var(--c-border, rgba(216,231,242,0.12));
+          border-radius: 8px; color: var(--c-text, #d5dbe6);
         }
-        .comp-popup .leaflet-popup-tip { background: #0e1220; }
-        .leaflet-control-zoom a { background: #161c28 !important; color: #a6daff !important; border-color: rgba(166,218,255,0.2) !important; }
+        .comp-popup .leaflet-popup-tip { background: var(--c-bg2, #0e1220); }
+        .leaflet-control-zoom a {
+          background: var(--c-bg3, #161c28) !important;
+          color: var(--c-blue, #a6daff) !important;
+          border-color: var(--c-border, rgba(166,218,255,0.2)) !important;
+        }
       `}</style>
     </div>
   )
