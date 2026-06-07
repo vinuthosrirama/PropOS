@@ -116,14 +116,14 @@ export default function Nav({
           position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
           height: 52, padding: "0 16px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          background: "rgba(4,7,13,0.97)", backdropFilter: "blur(20px)",
+          background: lightMode ? "rgba(245,247,250,0.97)" : "rgba(4,7,13,0.97)", backdropFilter: "blur(20px)",
           borderBottom: `1px solid ${C.border}`,
         }}>
           {logoBlock}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {sheetChip}
             <div style={{
-              fontSize: 11, color: "rgb(225, 205, 255)", fontWeight: 600,
+              fontSize: 11, color: lightMode ? theme.primary : "rgb(225, 205, 255)", fontWeight: 600,
               background: theme.dim, padding: "3px 8px", borderRadius: 12,
               transition: "color 0.4s, background 0.4s",
             }}>
@@ -158,7 +158,7 @@ export default function Nav({
               initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
               style={{
                 position: "fixed", top: 52, left: 0, right: 0, zIndex: 99,
-                background: "rgba(4,7,13,0.98)", backdropFilter: "blur(20px)",
+                background: lightMode ? "rgba(245,247,250,0.98)" : "rgba(4,7,13,0.98)", backdropFilter: "blur(20px)",
                 borderBottom: `1px solid ${C.border}`,
                 padding: "12px 0", maxHeight: "80vh", overflowY: "auto",
               }}>
@@ -170,11 +170,11 @@ export default function Nav({
                     display: "flex", alignItems: "center", gap: 14,
                     background: view === v.id ? theme.dim : "transparent",
                     border: "none", cursor: "pointer", fontFamily: FONT,
-                    borderLeft: `3px solid ${view === v.id ? "rgb(225, 205, 255)" : "transparent"}`,
+                    borderLeft: `3px solid ${view === v.id ? (lightMode ? theme.primary : "rgb(225, 205, 255)") : "transparent"}`,
                     transition: "background 0.15s, border-color 0.15s",
                   }}>
                   <div style={{ textAlign: "left" }}>
-                    <div style={{ fontSize: 14, fontWeight: view === v.id ? 700 : 400, color: view === v.id ? "rgb(225, 205, 255)" : C.text }}>
+                    <div style={{ fontSize: 14, fontWeight: view === v.id ? 700 : 400, color: view === v.id ? (lightMode ? theme.primary : "rgb(225, 205, 255)") : C.text }}>
                       {v.label}
                     </div>
                     <div style={{ fontSize: 10, color: C.faint }}>Step {i + 1}</div>
@@ -190,7 +190,7 @@ export default function Nav({
                   fontFamily: FONT, borderLeft: `3px solid ${mode === "vendor" ? theme.primary : C.green}`,
                   borderTop: `1px solid ${C.border}`, marginTop: 4,
                 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: mode === "vendor" ? "rgb(225,205,255)" : C.green }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: mode === "vendor" ? (lightMode ? theme.primary : "rgb(225,205,255)") : C.green }}>
                     {mode === "buyer" ? "Switch to Vendor mode" : "Switch to Buyer mode"}
                   </div>
                 </button>
@@ -244,7 +244,7 @@ export default function Nav({
       position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
       height: 56, padding: "0 20px",
       display: "flex", alignItems: "center", gap: 0,
-      background: scrolled ? "rgba(4,7,13,0.97)" : "rgba(4,7,13,0.85)",
+      background: lightMode ? (scrolled ? "rgba(245,247,250,0.97)" : "rgba(245,247,250,0.85)") : (scrolled ? "rgba(4,7,13,0.97)" : "rgba(4,7,13,0.85)"),
       backdropFilter: "blur(20px)",
       borderBottom: `1px solid ${C.border}`,
     }}>
@@ -280,7 +280,7 @@ export default function Nav({
                 fontWeight: active ? 700 : 400,
                 whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT,
                 background: active ? theme.dim : "transparent",
-                color: active ? "rgb(225, 205, 255)" : past ? C.muted : "rgba(200,160,255,0.45)",
+                color: active ? (lightMode ? theme.primary : "rgb(225, 205, 255)") : past ? C.muted : (lightMode ? C.faint : "rgba(200,160,255,0.45)"),
                 transition: "all 0.15s",
               }}>
               {bp === "tablet" ? v.short : v.label}
@@ -294,7 +294,7 @@ export default function Nav({
             padding: bp === "tablet" ? "4px 8px" : "4px 11px",
             borderRadius: 7, border: `1px solid ${mode === "vendor" ? theme.primary + "55" : "rgba(100,208,144,0.3)"}`,
             background: mode === "vendor" ? theme.dim : "rgba(100,208,144,0.08)",
-            color: mode === "vendor" ? "rgb(225, 205, 255)" : C.green,
+            color: mode === "vendor" ? (lightMode ? theme.primary : "rgb(225, 205, 255)") : C.green,
             fontSize: bp === "tablet" ? 10 : 11,
             fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT, cursor: "pointer",
             transition: "all 0.2s",
