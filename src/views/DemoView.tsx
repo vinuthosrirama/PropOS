@@ -26,6 +26,7 @@ import {
   readPastBuyersFromSheet, updateLastContactDate,
   type SheetLead,
 } from "../lib/sheet"
+import { readPastBuyersFromSupabase, supabaseConnected, updatePastBuyerInSupabase } from "../lib/supabase"
 import AuctionOutcomePanel from "../components/AuctionOutcomePanel"
 import BuyerPitchReport from "../components/BuyerPitchReport"
 import OutreachQueue, { type QueueItem } from "../components/OutreachQueue"
@@ -3256,10 +3257,19 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
     },
   })
 
-  // Try loading real past buyers from the Google Sheet — also callable for manual refresh
+  // Try loading past buyers — Supabase first, Google Sheet fallback, then static demo data
   const loadFromSheet = () => {
     setSheetLoading(true)
-    readPastBuyersFromSheet(agent.name).then(rows => {
+    // Priority: Supabase → Google Sheets → static fallback
+    const dataPromise = supabaseConnected()
+      ? readPastBuyersFromSupabase(agent.name).then(sbRows => {
+          if (sbRows && sbRows.length > 0) return sbRows
+          // Supabase returned nothing — fall through to Google Sheets
+          return readPastBuyersFromSheet(agent.name)
+        })
+      : readPastBuyersFromSheet(agent.name)
+
+    dataPromise.then(rows => {
       if (rows && rows.length > 0) {
         const hookByName = new Map(
           hardcodedBuyers
@@ -3556,26 +3566,19 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
         )
       })()}
 
-      {/* Sheet setup guide — shown when falling back to demo data */}
+      {/* Setup guide — shown only when no live data source is connected */}
       {sheetSource === "demo" && !sheetLoading && (
         <div style={{
           marginBottom: 20, background: C.bg2, borderRadius: 12,
           border: `1px solid rgba(166,218,255,0.15)`, padding: "14px 18px",
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.blue, marginBottom: 6 }}>
-            Connect your Google Sheet CRM to load live contacts
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.blue, marginBottom: 4 }}>
+            Using demo data — your live CRM loads automatically once connected
           </div>
-          <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 8 }}>
-            Create a tab called <strong style={{ color: C.text }}>Past Buyers</strong> in your connected Sheet with these columns:
-          </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {["id", "name", "phone", "email", "purchaseAddress", "suburb", "purchaseDate", "purchasePrice", "deposit", "propertyType", "beds", "baths", "land", "status", "notes", "lastContactDate"].map(col => (
-              <span key={col} style={{
-                fontSize: 10, fontFamily: "monospace", padding: "2px 7px",
-                background: C.bg3, border: `1px solid ${C.border}`,
-                borderRadius: 5, color: C.muted,
-              }}>{col}</span>
-            ))}
+          <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>
+            {supabaseConnected()
+              ? "Supabase is connected. Run the migration script to load your contacts: node scripts/supabase-migrate.mjs"
+              : "Connect Supabase or Google Sheets in Settings → Integrations to load your real past buyers."}
           </div>
         </div>
       )}
@@ -6765,7 +6768,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const handleGenerate = async () => {
     setGenerating(true)
 
-    // Auto-save voice notes to sheet before generating (persist regardless of whether agent sends)
+    // Auto-save voice notes to both Sheets and Supabase before generating
     if (voiceNotes) {
       const merged = [buyer.notes, voiceNotes].filter(Boolean).join("\n\nVoice note: ")
       authFetch(apiUrl("/api/sheet"), {
@@ -6773,6 +6776,8 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "updateNotes", id: buyer.id, notes: merged }),
       }).catch(() => {})
+      // Mirror to Supabase so notes persist across sessions
+      updatePastBuyerInSupabase(buyer.id, { notes: merged }).catch(() => {})
       buyer.notes = merged  // optimistic local update
     }
 
@@ -6869,7 +6874,11 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       if (!sms && !emailSubject) throw new Error("empty")
 
       // Capture NotesBridge data — show the transformation BEFORE navigating to review
-      if (res.personalisationHook) setExtractedHook(res.personalisationHook)
+      if (res.personalisationHook) {
+        setExtractedHook(res.personalisationHook)
+        // Persist AI-extracted hook to Supabase so it appears next session
+        updatePastBuyerInSupabase(buyer.id, { personalisationHook: res.personalisationHook }).catch(() => {})
+      }
       if (res.personalisationLine) setPersonalisationLine(res.personalisationLine)
 
       setGenerating(false)
@@ -7294,7 +7303,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   <span style={{ fontSize: 9, fontWeight: 700, color: theme.primary, textTransform: "uppercase", letterSpacing: 0.8 }}>🎙️ Voice note · included in outreach</span>
                   <button
                     onClick={async () => {
-                      // Append voice transcript to the buyer's notes and save back to sheet
+                      // Append voice transcript to notes — save to both Sheets and Supabase
                       const merged = [buyer.notes, voiceNotes].filter(Boolean).join("\n\nVoice note: ")
                       try {
                         await authFetch(apiUrl("/api/sheet"), {
@@ -7302,8 +7311,8 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ action: "updateNotes", id: buyer.id, notes: merged }),
                         })
-                      } catch { /* non-fatal — sheet may not support updates yet */ }
-                      // Optimistically update local display
+                      } catch { /* non-fatal */ }
+                      updatePastBuyerInSupabase(buyer.id, { notes: merged }).catch(() => {})
                       buyer.notes = merged
                       vendorVoice.reset()
                       setVoiceNotes("")
@@ -7902,8 +7911,11 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       const delivered = deliveryRes?.ok === true
       setDeliveryNote(delivered ? "Sent via Twilio + Gmail" : "Saved to Sheets (configure Twilio/Gmail for direct delivery)")
 
-      // Write today's date + last message back to the Past Buyers sheet tab
-      await updateLastContactDate(buyer.id, undefined, sms || bodyText.split("\n\n")[0]?.slice(0, 200))
+      // Write today's date + last message to both Google Sheets AND Supabase
+      const lastMsg = sms || bodyText.split("\n\n")[0]?.slice(0, 200)
+      const today = new Date().toISOString().slice(0, 10)
+      await updateLastContactDate(buyer.id, today, lastMsg)
+      updatePastBuyerInSupabase(buyer.id, { lastContactDate: today, lastMessage: lastMsg }).catch(() => {})
 
       // Log sent outreach to Sheets event log (same as buyer outreach)
       postEvent({

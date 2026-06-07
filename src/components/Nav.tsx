@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { C, FONT, DEFAULT_THEME, type AgentProfile, type AgencyTheme, type ViewId, type DemoMode } from "../data"
 import { useBreakpoint } from "../hooks/useBreakpoint"
+import { getContrastText } from "../lib/contrast"
 
 // Get product display name based on mode
 function productLabel(mode: DemoMode | null): string {
@@ -85,7 +86,8 @@ export default function Nav({
         width: 32, height: 32, borderRadius: 9,
         background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 9, fontWeight: 800, color: C.bg, letterSpacing: -0.5, flexShrink: 0,
+        fontSize: 9, fontWeight: 800, letterSpacing: -0.5, flexShrink: 0,
+        color: getContrastText(theme.gradient[0]),
         transition: "background 0.5s",
       }}>{theme.logo}</div>
       {bp !== "mobile" && (
