@@ -11,7 +11,7 @@
  */
 import { Router } from "express"
 import { checkCompliance } from "../lib/compliance.js"
-import { sendSMS, twilioConfigured } from "../lib/twilio.js"
+import { sendSMS, smsConfigured as twilioConfigured } from "../lib/sms.js"
 import { sendEmail, gmailConfigured } from "../lib/gmail.js"
 import { buildEmailHTML } from "../lib/emailTemplate.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"

@@ -19,7 +19,7 @@
 import cron from "node-cron"
 import { isDbConnected, query, execute } from "./db.js"
 import { checkCompliance } from "./compliance.js"
-import { sendSMS, twilioConfigured } from "./twilio.js"
+import { sendSMS, smsConfigured as twilioConfigured } from "./sms.js"
 import { sendEmail, gmailConfigured } from "./gmail.js"
 import { buildEmailHTML } from "./emailTemplate.js"
 import { addAgentMessageToThread } from "./conversations.js"
