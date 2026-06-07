@@ -1087,7 +1087,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
           transition={{ duration: 0.18 }}
           onClick={e => e.stopPropagation()}
           style={{
-            background: "#16181e", borderRadius: 18, border: `1px solid ${C.border}`,
+            background: C.bg2, borderRadius: 18, border: `1px solid ${C.border}`,
             padding: "28px 28px 24px", width: "100%", maxWidth: 440,
           }}
         >
@@ -1099,12 +1099,12 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
             <div>
               <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Name *</div>
               <input value={leadForm.name} onChange={e => setLeadForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="Jane Smith" style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
+                placeholder="Jane Smith" style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
             </div>
             <div>
               <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Phone</div>
               <input value={leadForm.phone} onChange={e => setLeadForm(f => ({ ...f, phone: e.target.value }))}
-                placeholder="0400 000 000" style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
+                placeholder="0400 000 000" style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
             </div>
           </div>
 
@@ -1112,7 +1112,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Email</div>
             <input value={leadForm.email} onChange={e => setLeadForm(f => ({ ...f, email: e.target.value }))}
-              placeholder="jane@email.com" style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
+              placeholder="jane@email.com" style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
           </div>
 
           {/* Property + Suburb */}
@@ -1120,12 +1120,12 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
             <div>
               <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Property inspected</div>
               <input value={leadForm.property} onChange={e => setLeadForm(f => ({ ...f, property: e.target.value }))}
-                placeholder="12 Main St, Berwick" style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
+                placeholder="12 Main St, Berwick" style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
             </div>
             <div>
               <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Suburb</div>
               <input value={leadForm.suburb} onChange={e => setLeadForm(f => ({ ...f, suburb: e.target.value }))}
-                placeholder="Berwick" style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
+                placeholder="Berwick" style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }} />
             </div>
           </div>
 
@@ -1134,7 +1134,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
             <div style={{ fontSize: 10, color: C.faint, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Notes</div>
             <textarea value={leadForm.notes} onChange={e => setLeadForm(f => ({ ...f, notes: e.target.value }))}
               placeholder="Budget, requirements, questions asked..." rows={2}
-              style={{ width: "100%", background: "#0d0f14", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", resize: "none", boxSizing: "border-box" }} />
+              style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 11px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", resize: "none", boxSizing: "border-box" }} />
           </div>
 
           <div style={{ display: "flex", gap: 10 }}>
@@ -4432,7 +4432,7 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, o
                 )}
                 {buyer.lastContactDate && (
                   <div style={{ fontSize: 9, color: C.faint, marginTop: 3 }}>
-                    Last contacted: {buyer.lastContactDate}
+                    Last contacted: {(() => { try { return new Date(buyer.lastContactDate).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) } catch { return buyer.lastContactDate } })()}
                     {buyer.lastMessage && (
                       <span style={{ marginLeft: 6, color: C.faint, fontStyle: "italic" }}>
                         · "{buyer.lastMessage.slice(0, 60)}{buyer.lastMessage.length > 60 ? "…" : ""}"
@@ -7472,7 +7472,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
             {buyer.email && <a href={`mailto:${buyer.email}`} style={{ fontSize: 13, color: theme.primary, fontWeight: 600, textDecoration: "none" }}>{buyer.email}</a>}
             {buyer.lastContactDate && (
               <div style={{ fontSize: 10, color: C.faint, marginTop: 8 }}>
-                Last contacted: {buyer.lastContactDate}
+                Last contacted: {(() => { try { return new Date(buyer.lastContactDate).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) } catch { return buyer.lastContactDate } })()}
               </div>
             )}
             {buyer.lastMessage && (
