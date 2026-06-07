@@ -25,11 +25,12 @@ import nurtureRouter from "./routes/nurture.js"
 import analyticsRouter from "./routes/analytics.js"
 import boxdiceRouter from "./routes/boxdice.js"
 import authRouter from "./routes/auth.js"
-import { loadOptOuts } from "./lib/compliance.js"
+import { loadOptOuts, addOptOut } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
 import { activeTransport, checkSmsTransport } from "./lib/sms.js"
 import { parseBBWebhook, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
 import { watchIncomingImsg } from "./lib/imsg.js"
+import { writeToSheet } from "./lib/sheets.js"
 import conversationsRouter from "./routes/conversations.js"
 import replyAgentRouter from "./routes/reply-agent.js"
 import slmAnswerRouter from "./routes/slm-answer.js"
@@ -40,9 +41,9 @@ import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
 import gdprRouter from "./routes/gdpr.js"
 import marketUpdateRouter from "./routes/market-update.js"
-import { loadConversations } from "./lib/conversations.js"
+import { loadConversations, addReplyToThread } from "./lib/conversations.js"
 import { initDb, isDbConnected, query } from "./lib/db.js"
-import { startScheduler } from "./lib/scheduler.js"
+import { startScheduler, cancelNurtureJobs } from "./lib/scheduler.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
@@ -132,16 +133,30 @@ app.use("/api/parse-notes",      parseNotesRouter)
 app.use("/api/gdpr",             gdprRouter)
 app.use("/api/market-update",    marketUpdateRouter)
 
+// ── Shared reply handler (BlueBubbles + imsg use the same pipeline as Twilio) ──
+async function handleIncomingReply(from: string, body: string): Promise<void> {
+  const lowerBody = body.toLowerCase().trim()
+  try {
+    if (["stop", "unsubscribe", "cancel", "quit", "end", "stopall"].includes(lowerBody)) {
+      await addOptOut(from, "sms", "reply")
+    } else {
+      await addReplyToThread(from, body)
+      void writeToSheet({ type: "update_lead_status", phone: from, status: "sms_replied", detail: body.slice(0, 200) })
+      await cancelNurtureJobs(from)
+    }
+  } catch (err) {
+    console.error("[reply-handler] error:", (err as Error).message)
+  }
+}
+
 // ── BlueBubbles incoming webhook ──────────────────────────────────────────────
 // POST /api/webhook/bluebubbles — receives incoming iMessage/SMS replies
 // when SMS_TRANSPORT=bluebubbles. Feeds into the existing reply-agent pipeline.
 app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Response) => {
-  res.json({ ok: true })  // ack immediately — BB retries on failure
+  res.json({ ok: true })  // ack immediately — BB retries on 4xx/5xx, not on 200
   const msg = parseBBWebhook(req.body)
-  if (!msg || msg.isGroup) return   // ignore group chats
-  // Route into reply-agent via the same path as Twilio webhook
-  req.body = { Body: msg.body, From: msg.from }
-  webhookRouter(req, res, () => {})
+  if (!msg || msg.isGroup) return
+  void handleIncomingReply(msg.from, msg.body)
 })
 
 // GET /api/sms-transport — returns which transport is active (for settings UI)
@@ -285,11 +300,10 @@ app.listen(PORT, async () => {
   }
 
   if (smsTransport === "imsg") {
-    // Start watching for incoming iMessage/SMS replies via chat.db
+    // Watch chat.db for incoming replies — routes into same pipeline as Twilio/BB
     watchIncomingImsg((msg) => {
       console.log(`  [imsg] Incoming from ${msg.from}: ${msg.body.slice(0, 60)}`)
-      // Route into reply-agent pipeline (same handler as Twilio/BB)
-      // We emit a synthetic express request via the webhookRouter
+      void handleIncomingReply(msg.from, msg.body)
     })
     console.log("  imsg watcher started (polling chat.db for replies)")
   }

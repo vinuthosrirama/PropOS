@@ -26,7 +26,10 @@ import path from "path"
 
 const execAsync = promisify(exec)
 
-const IMSG_BIN = process.env.IMSG_BIN ?? "/opt/homebrew/bin/imsg"
+// Validate IMSG_BIN to prevent shell injection via env var.
+// Only allow absolute paths containing alphanumerics, slashes, hyphens and dots.
+const rawBin = process.env.IMSG_BIN ?? "/opt/homebrew/bin/imsg"
+const IMSG_BIN = /^[a-zA-Z0-9/_.-]+$/.test(rawBin) ? rawBin : "/opt/homebrew/bin/imsg"
 const CHAT_DB  = path.join(homedir(), "Library/Messages/chat.db")
 
 export function imsgConfigured(): boolean {

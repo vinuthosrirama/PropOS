@@ -81,8 +81,9 @@ export async function pingBlueBubbles(): Promise<boolean> {
 export async function registerBlueBubblesWebhook(webhookUrl: string): Promise<void> {
   const url = `${BB_URL()}/api/v1/webhook?password=${encodeURIComponent(BB_PASSWORD())}`
 
-  // List existing webhooks to avoid duplicates
-  const existing = await fetch(url).then(r => r.json()).catch(() => ({ data: [] })) as { data: Array<{ url: string }> }
+  // List existing webhooks to avoid duplicates (must include password)
+  const existing = await fetch(`${BB_URL()}/api/v1/webhook?password=${encodeURIComponent(BB_PASSWORD())}`)
+    .then(r => r.json()).catch(() => ({ data: [] })) as { data: Array<{ url: string }> }
   if (existing.data?.some(w => w.url === webhookUrl)) return   // already registered
 
   await fetch(url, {
