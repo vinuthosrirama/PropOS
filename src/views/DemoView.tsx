@@ -6708,7 +6708,11 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [showAllMetrics, setShowAllMetrics] = useState(false)
   const [showInsights, setShowInsights] = useState(true)    // triggers open by default
   const [showPitchAngles, setShowPitchAngles] = useState(false)  // pitch angles collapsed by default
-  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture">("analysis")
+  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture" | "market-update">("analysis")
+  const [marketUpdatePreview, setMarketUpdatePreview] = useState<{ html: string; sms: string; subject: string } | null>(null)
+  const [marketUpdateSending, setMarketUpdateSending] = useState(false)
+  const [marketUpdateSent, setMarketUpdateSent] = useState(false)
+  const [marketUpdateLoading, setMarketUpdateLoading] = useState(false)
   const [selectedAngleIdx, setSelectedAngleIdx] = useState(0)
   // NotesBridge: populated from API response after generation
   const [extractedHook, setExtractedHook] = useState<string | null>(null)
@@ -6984,6 +6988,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       {/* Tab bar */}
       <div style={{ display: "flex", gap: 0, marginBottom: 20, borderBottom: `1px solid ${C.border}`, overflowX: "auto", scrollbarWidth: "none" }}>
         {([
+          { id: "market-update", label: "Market Update" },
           { id: "analysis",  label: "Analysis" },
           { id: "outreach",  label: "Outreach" },
           { id: "listing",   label: "Listing CMA" },
@@ -7666,6 +7671,233 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
           <CampaignReport buyer={buyer} agent={agent} theme={theme} />
         </div>
       )}
+
+      {/* === MARKET UPDATE TAB === */}
+      {profileTab === "market-update" && (() => {
+        const muComps = generateComparables({ suburb: buyer.suburb, propertyType: (buyer.propertyType ?? "House") as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id + 9000 })
+        const muRange = buildAppraisalRange(muComps, buyer.suburb)
+        const muComps2 = generateComparables({ suburb: buyer.suburb, propertyType: (buyer.propertyType ?? "House") as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id + 7000 })
+        const allComps = [...muComps, ...muComps2].slice(0, 6)
+
+        const handlePreview = async () => {
+          setMarketUpdateLoading(true)
+          try {
+            const res = await authFetch(apiUrl("/api/market-update/preview"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                agentName: agent.name,
+                agencyName: agent.agency,
+                agencyColor: theme.primary,
+                agentPhone: agent.phone,
+                agentEmail: agent.email,
+                vendorName: buyer.name,
+                vendorEmail: buyer.email,
+                vendorPhone: buyer.phone,
+                propertyAddress: buyer.purchaseAddress,
+                suburb: buyer.suburb,
+                beds: buyer.beds,
+                baths: buyer.baths ?? 2,
+                land: buyer.land ?? 500,
+                buyerId: buyer.id,
+                estimateLow: muRange.low,
+                estimateMid: muRange.mid,
+                estimateHigh: muRange.high,
+                equityGain: fin.equityGain > 0 ? fin.equityGain : undefined,
+                annualGrowthPct: muRange.demandScore > 7 ? 6.5 : 5.8,
+                comps: allComps.map(c => ({ address: c.address + ", " + buyer.suburb, beds: c.beds, baths: c.baths, land: c.land, soldPrice: c.soldPrice, soldDate: c.soldDate, matchScore: c.matchScore })),
+                medianHouse: muRange.mid,
+                daysOnMarket: muRange.daysOnMarket,
+                clearanceRate: muRange.clearanceRate,
+                demandScore: muRange.demandScore,
+              }),
+            })
+            const data = await res.json()
+            if (data.ok) setMarketUpdatePreview(data)
+          } catch { /* silent */ }
+          setMarketUpdateLoading(false)
+        }
+
+        const handleSend = async () => {
+          setMarketUpdateSending(true)
+          try {
+            await authFetch(apiUrl("/api/market-update/send"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                agentName: agent.name,
+                agencyName: agent.agency,
+                agencyColor: theme.primary,
+                agentPhone: agent.phone,
+                agentEmail: agent.email,
+                vendorName: buyer.name,
+                vendorEmail: buyer.email,
+                vendorPhone: buyer.phone,
+                propertyAddress: buyer.purchaseAddress,
+                suburb: buyer.suburb,
+                beds: buyer.beds,
+                baths: buyer.baths ?? 2,
+                land: buyer.land ?? 500,
+                buyerId: buyer.id,
+                estimateLow: muRange.low,
+                estimateMid: muRange.mid,
+                estimateHigh: muRange.high,
+                equityGain: fin.equityGain > 0 ? fin.equityGain : undefined,
+                annualGrowthPct: muRange.demandScore > 7 ? 6.5 : 5.8,
+                comps: allComps.map(c => ({ address: c.address + ", " + buyer.suburb, beds: c.beds, baths: c.baths, land: c.land, soldPrice: c.soldPrice, soldDate: c.soldDate, matchScore: c.matchScore })),
+                medianHouse: muRange.mid,
+                daysOnMarket: muRange.daysOnMarket,
+                clearanceRate: muRange.clearanceRate,
+                demandScore: muRange.demandScore,
+                channel: buyer.email ? "email" : "sms",
+              }),
+            })
+            setMarketUpdateSent(true)
+          } catch { /* silent */ }
+          setMarketUpdateSending(false)
+        }
+
+        return (
+        <div style={{ marginTop: 4 }}>
+          {/* Header */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+              MARKET UPDATE
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
+              {buyer.purchaseAddress}
+            </div>
+            <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+              Send {fname} a personalised property market snapshot with {allComps.length} comparable sales, estimated value range, and a CTA to book a free appraisal.
+            </div>
+          </div>
+
+          {/* Value estimate card */}
+          <div style={{ background: C.bg2, borderRadius: 14, padding: 20, border: `1px solid ${theme.primary}30`, marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>ESTIMATED VALUE RANGE</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: theme.primary, letterSpacing: -0.5 }}>
+              {fmtDollar(muRange.low)} – {fmtDollar(muRange.high)}
+            </div>
+            <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
+              {[
+                { v: `${muRange.demandScore > 7 ? "6.5" : "5.8"}%`, l: "Annual growth" },
+                { v: `${muRange.daysOnMarket}d`, l: "Days on market" },
+                { v: `${muRange.clearanceRate}%`, l: "Clearance rate" },
+              ].map(m => (
+                <div key={m.l}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{m.v}</div>
+                  <div style={{ fontSize: 10, color: C.faint }}>{m.l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Comparable sales */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: theme.primary, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>COMPARABLE SALES ({allComps.length})</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {allComps.map((c, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: C.bg2, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{c.address}</div>
+                    <div style={{ fontSize: 11, color: C.faint }}>{c.beds}bd {c.baths}ba{c.land ? ` · ${c.land}m²` : ""}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{fmtDollar(c.soldPrice)}</div>
+                    <div style={{ fontSize: 10, color: C.faint }}>{c.soldDate}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Equity gain callout */}
+          {fin.equityGain > 0 && (
+            <div style={{ background: `linear-gradient(135deg, ${theme.primary}08, ${theme.primary}15)`, borderRadius: 12, padding: 16, border: `1px solid ${theme.primary}25`, marginBottom: 16, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: C.muted }}>Estimated equity gain since purchase</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: C.green, marginTop: 4 }}>+{fmtDollar(fin.equityGain)}</div>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+            <motion.button
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              onClick={handlePreview}
+              disabled={marketUpdateLoading}
+              style={{
+                padding: "12px 24px", borderRadius: 12, border: "none", cursor: marketUpdateLoading ? "default" : "pointer",
+                background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                color: "#fff", fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                boxShadow: `0 4px 16px ${theme.glow}`,
+                opacity: marketUpdateLoading ? 0.7 : 1,
+              }}
+            >
+              {marketUpdateLoading ? "Generating..." : "Preview Market Update"}
+            </motion.button>
+
+            {marketUpdatePreview && !marketUpdateSent && (
+              <motion.button
+                initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                onClick={handleSend}
+                disabled={marketUpdateSending}
+                style={{
+                  padding: "12px 24px", borderRadius: 12, border: `1px solid ${C.green}55`,
+                  cursor: marketUpdateSending ? "default" : "pointer",
+                  background: C.green + "15", color: C.green,
+                  fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                }}
+              >
+                {marketUpdateSending ? "Sending..." : `Send to ${fname} →`}
+              </motion.button>
+            )}
+
+            {marketUpdateSent && (
+              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 12, background: C.green + "15", border: `1px solid ${C.green}40` }}>
+                <span style={{ fontSize: 16 }}>✓</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Market Update sent to {fname}</span>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Email preview iframe */}
+          {marketUpdatePreview && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden", marginBottom: 16 }}>
+              <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>EMAIL PREVIEW</div>
+                <div style={{ fontSize: 11, color: C.faint }}>Subject: {marketUpdatePreview.subject}</div>
+              </div>
+              <iframe
+                srcDoc={marketUpdatePreview.html}
+                style={{ width: "100%", height: 700, border: "none", background: "#fff" }}
+                title="Market Update Preview"
+                sandbox="allow-same-origin"
+              />
+            </motion.div>
+          )}
+
+          {/* SMS preview */}
+          {marketUpdatePreview && (
+            <div style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>SMS PREVIEW</div>
+              </div>
+              <div style={{ padding: 16 }}>
+                <div style={{ background: C.bg2, borderRadius: 12, padding: 14, fontSize: 13, color: C.text, lineHeight: 1.6, maxWidth: 320 }}>
+                  {marketUpdatePreview.sms}
+                </div>
+                <div style={{ fontSize: 10, color: C.faint, marginTop: 6 }}>
+                  {marketUpdatePreview.sms.length}/160 characters
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        )
+      })()}
 
       {/* === NURTURE SEQUENCE TAB === */}
       {profileTab === "nurture" && (

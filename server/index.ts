@@ -36,6 +36,7 @@ import addLeadRouter from "./routes/add-lead.js"
 import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
 import gdprRouter from "./routes/gdpr.js"
+import marketUpdateRouter from "./routes/market-update.js"
 import { loadConversations } from "./lib/conversations.js"
 import { initDb, isDbConnected, query } from "./lib/db.js"
 import { startScheduler } from "./lib/scheduler.js"
@@ -87,6 +88,7 @@ app.use("/api/slm-answer",       aiLimiter)
 app.use("/api/slm-answer-batch", aiLimiter)
 app.use("/api/send",             sendLimiter)
 app.use("/api/vendor-bulk-send", sendLimiter)
+app.use("/api/market-update/send", sendLimiter)
 // Auth routes — tighter limit applied before the router mounts
 app.use("/api/auth/login",    authLimiter)
 app.use("/api/auth/register", authLimiter)
@@ -125,6 +127,7 @@ app.use("/api/add-contact",      addContactRouter)
 app.use("/api/add-lead",         addLeadRouter)
 app.use("/api/parse-notes",      parseNotesRouter)
 app.use("/api/gdpr",             gdprRouter)
+app.use("/api/market-update",    marketUpdateRouter)
 
 // ── AVM route ─────────────────────────────────────────────────────────────────
 app.get("/api/avm", async (req, res) => {
