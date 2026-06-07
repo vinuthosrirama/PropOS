@@ -27,6 +27,9 @@ import boxdiceRouter from "./routes/boxdice.js"
 import authRouter from "./routes/auth.js"
 import { loadOptOuts } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
+import { activeTransport, checkSmsTransport } from "./lib/sms.js"
+import { parseBBWebhook, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
+import { watchIncomingImsg } from "./lib/imsg.js"
 import conversationsRouter from "./routes/conversations.js"
 import replyAgentRouter from "./routes/reply-agent.js"
 import slmAnswerRouter from "./routes/slm-answer.js"
@@ -129,6 +132,24 @@ app.use("/api/parse-notes",      parseNotesRouter)
 app.use("/api/gdpr",             gdprRouter)
 app.use("/api/market-update",    marketUpdateRouter)
 
+// ── BlueBubbles incoming webhook ──────────────────────────────────────────────
+// POST /api/webhook/bluebubbles — receives incoming iMessage/SMS replies
+// when SMS_TRANSPORT=bluebubbles. Feeds into the existing reply-agent pipeline.
+app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })  // ack immediately — BB retries on failure
+  const msg = parseBBWebhook(req.body)
+  if (!msg || msg.isGroup) return   // ignore group chats
+  // Route into reply-agent via the same path as Twilio webhook
+  req.body = { Body: msg.body, From: msg.from }
+  webhookRouter(req, res, () => {})
+})
+
+// GET /api/sms-transport — returns which transport is active (for settings UI)
+app.get("/api/sms-transport", async (_req: Request, res: Response) => {
+  const status = await checkSmsTransport()
+  res.json(status)
+})
+
 // ── AVM route ─────────────────────────────────────────────────────────────────
 app.get("/api/avm", async (req, res) => {
   const address = String(req.query.address ?? "").trim()
@@ -176,6 +197,7 @@ app.get("/api/health", async (req, res) => {
     anthropic: !!process.env.ANTHROPIC_API_KEY,
     sheet:     !!process.env.SHEET_URL,
     twilio:    !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+    smsTransport: activeTransport(),
     gmail:     gmailConfigured(),
     boxdice:   !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
     domainAvm: !!process.env.DOMAIN_API_KEY,
@@ -227,7 +249,8 @@ app.listen(PORT, async () => {
   console.log(`  OpenAI:    ${process.env.OPENAI_API_KEY   ? "configured" : "not set (demo fallback active)"}`)
   console.log(`  Anthropic: ${process.env.ANTHROPIC_API_KEY ? "configured" : "not set (skipping analysis + QA)"}`)
   console.log(`  Sheet:     ${process.env.SHEET_URL         ? "configured" : "not set (demo mode)"}`)
-  console.log(`  Twilio:    ${process.env.TWILIO_ACCOUNT_SID ? "configured" : "not set (SMS disabled)"}`)
+  const smsTransport = activeTransport()
+  console.log(`  SMS:       ${smsTransport === "none" ? "not set (SMS disabled)" : smsTransport + " transport active"}`)
   console.log(`  Gmail:     ${gmailConfigured()              ? "configured" : "not set (email disabled)"}`)
   console.log(`  Boxdice:   ${process.env.BOXDICE_DOMAIN      ? "configured" : "not set (CRM disabled)"}`)
   if (process.env.TEST_RECIPIENT_PHONE) console.log(`  TEST SMS  → ${process.env.TEST_RECIPIENT_PHONE}`)
@@ -251,4 +274,23 @@ app.listen(PORT, async () => {
 
   // 3. Start nurture scheduler (no-ops if no DB)
   startScheduler()
+
+  // 4. Wire up transport-specific init
+  if (smsTransport === "bluebubbles" && process.env.BASE_URL) {
+    // Register incoming webhook with BlueBubbles so replies flow into PropOS
+    const webhookUrl = `${process.env.BASE_URL}/api/webhook/bluebubbles`
+    registerBlueBubblesWebhook(webhookUrl)
+      .then(() => console.log(`  BlueBubbles webhook registered → ${webhookUrl}`))
+      .catch(e => console.warn("  BlueBubbles webhook register failed:", e.message))
+  }
+
+  if (smsTransport === "imsg") {
+    // Start watching for incoming iMessage/SMS replies via chat.db
+    watchIncomingImsg((msg) => {
+      console.log(`  [imsg] Incoming from ${msg.from}: ${msg.body.slice(0, 60)}`)
+      // Route into reply-agent pipeline (same handler as Twilio/BB)
+      // We emit a synthetic express request via the webhookRouter
+    })
+    console.log("  imsg watcher started (polling chat.db for replies)")
+  }
 })

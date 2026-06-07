@@ -8,7 +8,7 @@
 import { Router } from "express"
 import { buildMarketUpdateHTML, buildMarketUpdateSMS, type CompSaleRow, type MarketUpdateParams } from "../lib/marketUpdateTemplate.js"
 import { sendEmail, gmailConfigured } from "../lib/gmail.js"
-import { sendSMS, twilioConfigured } from "../lib/twilio.js"
+import { sendSMS, smsConfigured as twilioConfigured } from "../lib/sms.js"
 import { logOutreach } from "../lib/db.js"
 
 const router = Router()
