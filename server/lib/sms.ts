@@ -12,9 +12,9 @@
  * instead of twilio directly — transport is swapped by env var alone.
  */
 
-import { sendSMS as twilioSend, twilioConfigured }               from "./twilio.js"
-import { sendViaBlueBubbles, blueBubblesConfigured, pingBlueBubbles } from "./bluebubbles.js"
-import { sendViaImsg, imsgConfigured, pingImsg }                  from "./imsg.js"
+import { sendSMS as twilioSend, twilioConfigured as isTwilioConfigured } from "./twilio.js"
+import { sendViaBlueBubbles, blueBubblesConfigured, pingBlueBubbles }    from "./bluebubbles.js"
+import { sendViaImsg, imsgConfigured, pingImsg }                          from "./imsg.js"
 
 export type SmsTransport = "twilio" | "bluebubbles" | "imsg" | "none"
 
@@ -22,7 +22,7 @@ export function activeTransport(): SmsTransport {
   const t = (process.env.SMS_TRANSPORT ?? "twilio").toLowerCase()
   if (t === "bluebubbles" && blueBubblesConfigured()) return "bluebubbles"
   if (t === "imsg"        && imsgConfigured())        return "imsg"
-  if (twilioConfigured())                             return "twilio"
+  if (isTwilioConfigured())                           return "twilio"
   return "none"
 }
 
@@ -34,10 +34,8 @@ export function smsConfigured(): boolean {
   return activeTransport() !== "none"
 }
 
-/** @deprecated use smsConfigured() */
-export function twilioConfigured(): boolean {
-  return smsConfigured()
-}
+/** @deprecated use smsConfigured() — kept for backwards-compat with routes that imported from twilio */
+export { smsConfigured as twilioConfigured }
 
 /**
  * Send an SMS/iMessage via whichever transport is active.
@@ -100,7 +98,7 @@ export async function checkSmsTransport(): Promise<{
   }
 
   if (transport === "twilio") {
-    const ok = twilioConfigured()
+    const ok = isTwilioConfigured()
     return {
       transport,
       ok,
