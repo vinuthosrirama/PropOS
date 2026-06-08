@@ -188,6 +188,47 @@ async function migrate(): Promise<void> {
       END;
     END $$;
 
+    -- Live installs: add columns that may be missing from older schema versions
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS agent_id          TEXT NOT NULL DEFAULT 'default';
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS pipeline          TEXT;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS priority_score    INTEGER;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS current_estimate  NUMERIC;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS source            TEXT DEFAULT 'manual';
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notes             TEXT;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS last_contact_date DATE;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS status            TEXT DEFAULT 'unknown';
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS purchase_address  TEXT;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS purchase_date     DATE;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS purchase_price    NUMERIC;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS deposit           NUMERIC;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS property_type     TEXT;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS beds              INTEGER;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS baths             INTEGER;
+    ALTER TABLE contacts ADD COLUMN IF NOT EXISTS land              NUMERIC;
+
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS lead_id          TEXT NOT NULL DEFAULT '';
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS lead_name        TEXT NOT NULL DEFAULT '';
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS property_address TEXT NOT NULL DEFAULT '';
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS email            TEXT NOT NULL DEFAULT '';
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS unread           BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+    ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS contact_name    TEXT NOT NULL DEFAULT '';
+    ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS contact_email   TEXT NOT NULL DEFAULT '';
+    ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS property_address TEXT NOT NULL DEFAULT '';
+    ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS pipeline        TEXT;
+    ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS attempts        INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS last_error      TEXT;
+    ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS context         JSONB DEFAULT '{}';
+    ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+    ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS pipeline         TEXT;
+    ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS property_address TEXT;
+    ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS metadata         JSONB DEFAULT '{}';
+    ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS opened_at        TIMESTAMPTZ;
+    ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS replied_at       TIMESTAMPTZ;
+
     -- Indexes for common queries
     CREATE INDEX IF NOT EXISTS idx_outreach_agent       ON outreach_log(agent_id);
     CREATE INDEX IF NOT EXISTS idx_outreach_phone       ON outreach_log(contact_phone);
