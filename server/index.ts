@@ -117,6 +117,54 @@ app.use("/api/sms-shortcut", smsShortcutRouter)
 app.use("/api/slm-answer",        slmAnswerRouter)
 app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
 
+// Health check — registered before auth middleware so Railway's unauthenticated healthcheck can reach it.
+// PT-C3: unauthenticated callers get { ok } only — full service map requires a valid JWT
+// so attackers cannot fingerprint the stack before mounting targeted attacks.
+app.get("/api/health", async (req, res) => {
+  // Determine if caller is authenticated (Bearer token present and valid)
+  const authHeader = req.headers["authorization"]
+  const isAuthed = authHeader?.startsWith("Bearer ")
+    ? !!verifyAccessToken(authHeader.slice(7))
+    : false
+
+  // Live DB probe — 3s timeout so this endpoint stays fast
+  let dbLive = false
+  if (isDbConnected()) {
+    try {
+      const rows = await Promise.race<{ ok: number }[]>([
+        query<{ ok: number }>("SELECT 1 AS ok"),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("DB probe timeout")), 3_000),
+        ),
+      ])
+      dbLive = rows.length > 0
+    } catch {
+      dbLive = false
+    }
+  }
+
+  // Unauthenticated: bare liveness signal only
+  if (!isAuthed) {
+    return res.json({ ok: true, database: dbLive })
+  }
+
+  // Authenticated (internal dashboard / monitoring): full service map
+  res.json({
+    ok:        true,
+    openai:    !!process.env.OPENAI_API_KEY,
+    anthropic: !!process.env.ANTHROPIC_API_KEY,
+    sheet:     !!process.env.SHEET_URL,
+    twilio:    !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+    smsTransport: activeTransport(),
+    gmail:     gmailConfigured(),
+    boxdice:   !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
+    domainAvm: !!process.env.DOMAIN_API_KEY,
+    database:  dbLive,
+    // testMode is a boolean flag only — never expose actual contact values
+    testMode:  !!(process.env.TEST_RECIPIENT_PHONE?.trim() || process.env.TEST_RECIPIENT_EMAIL?.trim()),
+  })
+})
+
 // ── Protected routes (require valid JWT when DB is connected) ─────────────────
 // Auto-enforces when DATABASE_URL is set (production).
 // No-op when DATABASE_URL is missing (demo/dev mode) so the demo runs without accounts.
@@ -239,53 +287,7 @@ app.get("/api/avm", async (req, res) => {
   return res.json({ ok: true, estimate })
 })
 
-// Health check — must be before express.static so it's never shadowed by the SPA
-// PT-C3: unauthenticated callers get { ok } only — full service map requires a valid JWT
-// so attackers cannot fingerprint the stack before mounting targeted attacks.
-app.get("/api/health", async (req, res) => {
-  // Determine if caller is authenticated (Bearer token present and valid)
-  const authHeader = req.headers["authorization"]
-  const isAuthed = authHeader?.startsWith("Bearer ")
-    ? !!verifyAccessToken(authHeader.slice(7))
-    : false
 
-  // Live DB probe — 3s timeout so this endpoint stays fast
-  let dbLive = false
-  if (isDbConnected()) {
-    try {
-      const rows = await Promise.race<{ ok: number }[]>([
-        query<{ ok: number }>("SELECT 1 AS ok"),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("DB probe timeout")), 3_000),
-        ),
-      ])
-      dbLive = rows.length > 0
-    } catch {
-      dbLive = false
-    }
-  }
-
-  // Unauthenticated: bare liveness signal only
-  if (!isAuthed) {
-    return res.json({ ok: true, database: dbLive })
-  }
-
-  // Authenticated (internal dashboard / monitoring): full service map
-  res.json({
-    ok:        true,
-    openai:    !!process.env.OPENAI_API_KEY,
-    anthropic: !!process.env.ANTHROPIC_API_KEY,
-    sheet:     !!process.env.SHEET_URL,
-    twilio:    !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
-    smsTransport: activeTransport(),
-    gmail:     gmailConfigured(),
-    boxdice:   !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
-    domainAvm: !!process.env.DOMAIN_API_KEY,
-    database:  dbLive,
-    // testMode is a boolean flag only — never expose actual contact values
-    testMode:  !!(process.env.TEST_RECIPIENT_PHONE?.trim() || process.env.TEST_RECIPIENT_EMAIL?.trim()),
-  })
-})
 
 // Serve Vite production build — must come after all API routes
 // On Railway, Nixpacks snapshots server/ only, so frontend is pre-built into server/public/.
