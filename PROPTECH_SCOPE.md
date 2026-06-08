@@ -150,17 +150,35 @@ curl -X POST https://propos.addvantage.site/api/outreach-targets/trigger-now \
 
 ---
 
-## SMS Transport Decision Tree
+## SMS Transport — 4 Methods (All Free, All Real Numbers)
+
+No virtual numbers. No new SIMs. Every message comes from the agent's real mobile.
 
 ```
 Agent device?
-├── Mac in office (always-on)    → SMS_TRANSPORT=bluebubbles (iMessage, real number, best)
-├── iPhone only (no Mac)         → SMS_TRANSPORT=textingblue (iMessage via iOS shortcut)
-├── Android phone                → SMS_TRANSPORT=android-gateway (real SIM SMS)
-├── Windows PC + Phone Link      → SMS_TRANSPORT=telelink (~12s/msg)
-└── No device / cloud only       → SMS_TRANSPORT=twilio (cloud, generic number)
+├── Mac (always-on)       → Method 1: SMS_TRANSPORT=bluebubbles   iMessage + SMS, ~1s
+│                                     GitHub: BlueBubblesApp/bluebubbles-server
+│
+├── iPhone only (no Mac)  → Method 2: SMS_TRANSPORT=shortcut-relay  Self-hosted polling relay
+│                                     iOS Shortcut polls /api/sms-shortcut/poll every 30s
+│                                     iMessage + SMS, ~30s, $0 (replaces TextingBlue $9/mo)
+│
+├── Android phone         → Method 3: SMS_TRANSPORT=android-gateway  Real SIM, SMS only, ~1s
+│                                     GitHub: capcom6/android-sms-gateway
+│                         OR Method 4: SMS_TRANSPORT=httpsms          Real SIM, SMS only, ~1s
+│                                     GitHub: NdoleStudio/httpsms (free 200/mo + dashboard)
+│
+└── No device / emergency → SMS_TRANSPORT_FALLBACK=twilio            Cloud, generic number
 
-Always set: SMS_TRANSPORT_FALLBACK=twilio
+Vinuth's config (Mac primary):
+  SMS_TRANSPORT=bluebubbles
+  SMS_TRANSPORT_FALLBACK=httpsms
+
+iPhone-only agent config:
+  SMS_TRANSPORT=shortcut-relay
+  SMS_TRANSPORT_FALLBACK=httpsms
+
+Full setup guide: server/SMS_SETUP.md
 ```
 
 ---
@@ -170,24 +188,33 @@ Always set: SMS_TRANSPORT_FALLBACK=twilio
 ```env
 # server/.env
 
-# AI
-ANTHROPIC_API_KEY=sk-ant-...         # Required for reply agent + message generation
-OPENAI_API_KEY=sk-...                # Optional — OpenAI fallback
+# AI — outreach agent uses OpenAI gpt-4o-mini for draft generation
+OPENAI_API_KEY=sk-proj-...           # Required for outreach reply drafts
 
 # Database
 DATABASE_URL=postgresql://...        # Supabase connection string (required for CRM)
 
-# SMS — choose primary + fallback
+# SMS — Method 1: BlueBubbles (Mac, primary)
 SMS_TRANSPORT=bluebubbles
-SMS_TRANSPORT_FALLBACK=twilio
+SMS_TRANSPORT_FALLBACK=httpsms
+# Method 1: BlueBubbles (Mac)
 BLUEBUBBLES_URL=https://xxxx.trycloudflare.com
 BLUEBUBBLES_PASSWORD=your_password
-TEXTINGBLUE_API_KEY=tb_live_xxxx
-ANDROID_GW_URL=https://xxxx.trycloudflare.com
+
+# Method 2: Self-hosted iOS Shortcut Relay (iPhone only, free)
+SHORTCUT_RELAY_SECRET=your_32char_hex_secret   # openssl rand -hex 20
+SHORTCUT_RELAY_DEVICE_ID=iphone-agent-1        # any label, set after /register call
+
+# Method 3: Android SMS Gateway
+ANDROID_GW_URL=https://api.sms-gate.app       # or Cloudflare tunnel
 ANDROID_GW_USER=user
 ANDROID_GW_PASS=pass
-TELELINK_URL=http://localhost:5000
-TELELINK_TOKEN=your_token
+
+# Method 4: httpSMS (Android, free 200/mo)
+HTTPSMS_API_KEY=your_api_key
+HTTPSMS_FROM=+61XXXXXXXXX                      # your Android phone number
+
+# Twilio (emergency fallback only — uses virtual number)
 TWILIO_ACCOUNT_SID=ACxxxx
 TWILIO_AUTH_TOKEN=xxxx
 TWILIO_FROM_NUMBER=+61xxxxx
