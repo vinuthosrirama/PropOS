@@ -1,7 +1,7 @@
 /**
  * PropOS Self-Outreach Agent
  *
- * Claude-powered reply and follow-up generator for Vinuth's campaign pitching PropOS
+ * OpenAI-powered reply and follow-up generator for Vinuth's campaign pitching PropOS
  * to boutique real estate agents. Separate from the main PropOS reply-agent (which
  * handles buyer/vendor lead replies on behalf of agent users).
  *
@@ -9,21 +9,21 @@
  *   1. Inbound SMS from an outreach target arrives via any transport webhook
  *   2. handleOutreachInbound() matches phone to outreach_targets CRM
  *   3. CRM status updated to 'replied'
- *   4. Claude generates a draft reply in Vinuth's voice
+ *   4. OpenAI generates a draft reply in Vinuth's voice
  *   5. Draft saved to outreach_drafts table (status='pending')
  *   6. Vinuth reviews via GET /api/outreach-targets/drafts, approves or edits
  *   7. POST /api/outreach-targets/approve-draft/:id sends and marks 'sent'
  */
 
-import Anthropic from "@anthropic-ai/sdk"
+import OpenAI from "openai"
 import { getThread } from "./conversations.js"
 import { query, execute, isDbConnected } from "./db.js"
 
-// ── Anthropic client (lazy) ───────────────────────────────────────────────────
+// ── OpenAI client (lazy) ──────────────────────────────────────────────────────
 
-let _client: Anthropic | null = null
-function getClient(): Anthropic {
-  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+let _client: OpenAI | null = null
+function getClient(): OpenAI {
+  if (!_client) _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY ?? "not-set" })
   return _client
 }
 
@@ -116,7 +116,7 @@ export async function generateOutreachDraft(
     } catch { /* non-fatal */ }
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     return fallbackReply(target, inboundMessage)
   }
 
@@ -133,17 +133,19 @@ Latest message from ${target.name.split(" ")[0]}:
 Write a reply SMS (max 160 chars). Return ONLY the SMS text, no quotes, no explanation.`
 
   try {
-    const msg = await getClient().messages.create({
-      model: "claude-haiku-4-5-20251001",
+    const completion = await getClient().chat.completions.create({
+      model: "gpt-4o-mini",
       max_tokens: 200,
-      system: VINUTH_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        { role: "system", content: VINUTH_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
     })
-    const raw = msg.content[0]?.type === "text" ? msg.content[0].text : ""
+    const raw = completion.choices[0]?.message?.content ?? ""
     const draft = clampSMS(sanitise(raw))
     return draft || fallbackReply(target, inboundMessage)
   } catch (err) {
-    console.warn("[outreachAgent] Claude failed, using fallback:", (err as Error).message)
+    console.warn("[outreachAgent] OpenAI failed, using fallback:", (err as Error).message)
     return fallbackReply(target, inboundMessage)
   }
 }
@@ -168,7 +170,7 @@ export async function generateFollowUp(
   target: OutreachTargetRow,
   daysSinceContact: number,
 ): Promise<string> {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     return fallbackFollowUp(target, daysSinceContact)
   }
 
@@ -182,13 +184,15 @@ They haven't replied to the initial message. Write a brief follow-up SMS (max 16
 Return ONLY the SMS text.`
 
   try {
-    const msg = await getClient().messages.create({
-      model: "claude-haiku-4-5-20251001",
+    const completion = await getClient().chat.completions.create({
+      model: "gpt-4o-mini",
       max_tokens: 200,
-      system: VINUTH_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        { role: "system", content: VINUTH_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
     })
-    const raw = msg.content[0]?.type === "text" ? msg.content[0].text : ""
+    const raw = completion.choices[0]?.message?.content ?? ""
     const draft = clampSMS(sanitise(raw))
     return draft || fallbackFollowUp(target, daysSinceContact)
   } catch {
