@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useBreakpoint } from "../hooks/useBreakpoint"
-import { C, FONT, PORTFOLIO_ACTIVE, PORTFOLIO_SOLD, PAS_PORTFOLIO_ACTIVE, PAS_PORTFOLIO_SOLD, getAgencyTheme, getPortfolioForAgent, type AgentProfile, type VendorDisplaySettings } from "../data"
+import { C, FONT, PORTFOLIO_ACTIVE, PORTFOLIO_SOLD, PAS_PORTFOLIO_ACTIVE, PAS_PORTFOLIO_SOLD, getAgencyTheme, getPortfolioForAgent, type AgentProfile, type VendorDisplaySettings, type PortfolioProperty } from "../data"
 import {
   loadSLMForProperty, saveSLMForProperty, resetSLMForProperty,
   getSLMCompleteness, type PropertySLM, type PropertyQA
@@ -573,14 +573,24 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
   const [syncing, setSyncing] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [openSections, setOpenSections] = useState<Record<number, Set<number>>>({})
-  const [settingsTab, setSettingsTab] = useState<"slm" | "voice" | "analytics" | "integrations" | "display">("slm")
+  const [settingsTab, setSettingsTab] = useState<"slm" | "voice" | "comms" | "listings" | "analytics" | "integrations" | "display">("slm")
   const [corpus, setCorpus] = useState<TrainingEntry[]>(() => loadCorpus())
 
-  // Load all SLMs on mount
+  // Load all SLMs on mount — seed blank SLMs with portfolio address/suburb
   useEffect(() => {
+    const { sold: agentSold, active: agentActive } = getPortfolioForAgent(agent)
+    const allPortfolio = [...agentSold, ...agentActive]
     const loaded: Record<number, PropertySLM> = {}
     for (const id of agentPropertyIds) {
-      loaded[id] = loadSLMForProperty(id)
+      let slm = loadSLMForProperty(id)
+      // If SLM has no address yet (blank), seed from portfolio metadata
+      if (slm.address === "Unknown") {
+        const meta = allPortfolio.find(p => p.id === id)
+        if (meta) {
+          slm = { ...slm, address: meta.address, suburb: `${meta.suburb} ${meta.state} ${meta.postcode}`, status: meta.status === "sold" ? "sold" : "active" }
+        }
+      }
+      loaded[id] = slm
     }
     setEditedSLMs(loaded)
 
@@ -795,7 +805,7 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
 
         {/* ── Top-level tab strip ── */}
         <div style={{ display: "flex", gap: 2, marginBottom: 28, flexWrap: "wrap" }}>
-          {(["slm", "voice", "display", "analytics", "integrations"] as const).map(tab => (
+          {(["slm", "voice", "comms", "listings", "display", "analytics", "integrations"] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setSettingsTab(tab)}
@@ -811,13 +821,21 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
                 transition: "all 0.15s",
               }}
             >
-              {tab === "slm" ? "SLM Brain" : tab === "voice" ? "Writing Style" : tab === "display" ? "Display" : tab === "analytics" ? "Analytics" : "Integrations"}
+              {tab === "slm" ? "SLM Brain"
+                : tab === "voice" ? "Writing Style"
+                : tab === "comms" ? "Comms"
+                : tab === "listings" ? "Listings"
+                : tab === "display" ? "Display"
+                : tab === "analytics" ? "Analytics"
+                : "Integrations"}
             </button>
           ))}
         </div>
 
         {settingsTab === "analytics" && <AnalyticsDashboard agent={agent} theme={getAgencyTheme(agent.agency)} />}
         {settingsTab === "integrations" && <IntegrationsPanel />}
+        {settingsTab === "comms" && <CommsPanel agent={agent} />}
+        {settingsTab === "listings" && <ListingsPanel agent={agent} />}
 
         {settingsTab === "display" && vendorSettings && onVendorSettingsChange && (
           <VendorPanelToggles
@@ -1489,6 +1507,414 @@ function VoiceStylePanel({ corpus, onAdd, onRemove, onClearAll }: VoiceStylePane
   )
 }
 
+// ─── Comms Panel ──────────────────────────────────────────────────────────────
+
+interface CommSettings {
+  greeting:       string
+  closing:        string
+  lengthStyle:    "short" | "medium" | "detailed"
+  formalityScore: number   // 1-5
+  followUp1Days:  number   // days after first contact for 2nd touch
+  followUp2Days:  number   // days after 2nd touch for 3rd touch
+  smsEnabled:     boolean
+  emailEnabled:   boolean
+  dripEnabled:    boolean  // automated nurture drip
+}
+
+const DEFAULT_COMM_SETTINGS: CommSettings = {
+  greeting:       "Hi",
+  closing:        "Cheers",
+  lengthStyle:    "short",
+  formalityScore: 2,
+  followUp1Days:  3,
+  followUp2Days:  7,
+  smsEnabled:     true,
+  emailEnabled:   true,
+  dripEnabled:    false,
+}
+
+function loadCommSettings(): CommSettings {
+  try {
+    const raw = localStorage.getItem("propos_comm_settings")
+    return raw ? { ...DEFAULT_COMM_SETTINGS, ...JSON.parse(raw) } : DEFAULT_COMM_SETTINGS
+  } catch { return DEFAULT_COMM_SETTINGS }
+}
+
+function saveCommSettings(s: CommSettings) {
+  try { localStorage.setItem("propos_comm_settings", JSON.stringify(s)) } catch {}
+}
+
+function CommsPanel({ agent }: { agent: AgentProfile }) {
+  const [settings, setSettings] = useState<CommSettings>(loadCommSettings)
+  const [saved, setSaved] = useState(false)
+
+  void agent  // used for future personalisation
+
+  function update<K extends keyof CommSettings>(key: K, val: CommSettings[K]) {
+    setSettings(prev => ({ ...prev, [key]: val }))
+  }
+
+  function handleSave() {
+    saveCommSettings(settings)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const card: React.CSSProperties = {
+    background: C.bg2, border: `1px solid ${C.border}`,
+    borderRadius: 12, padding: "20px 24px", marginBottom: 16,
+  }
+  const row: React.CSSProperties = {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "12px 0", borderBottom: `1px solid ${C.border}`,
+  }
+  const label: React.CSSProperties = {
+    fontSize: 13, fontWeight: 600, color: C.text,
+  }
+  const sublabel: React.CSSProperties = {
+    fontSize: 11, color: C.muted, marginTop: 2,
+  }
+  const select: React.CSSProperties = {
+    background: C.bg3, border: `1px solid ${C.border}`,
+    borderRadius: 8, padding: "7px 10px",
+    color: C.text, fontSize: 13, fontFamily: FONT, cursor: "pointer",
+  }
+
+  const GREETINGS = ["Hi", "Hey", "G'day", "Good morning", "Good afternoon", "Hello"]
+  const CLOSINGS  = ["Cheers", "Thanks", "Kind regards", "Best", "Speak soon", "Warm regards"]
+
+  return (
+    <div style={{ maxWidth: 640 }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Comms Style</div>
+      <div style={{ fontSize: 14, color: C.muted, marginBottom: 24, lineHeight: 1.5 }}>
+        Control how PropOS writes outreach on your behalf. These settings apply to all generated SMS, emails, and follow-ups.
+      </div>
+
+      {/* ── Voice defaults ── */}
+      <div style={card}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>
+          Message Defaults
+        </div>
+
+        <div style={{ ...row }}>
+          <div>
+            <div style={label}>Greeting</div>
+            <div style={sublabel}>How you open every message</div>
+          </div>
+          <select style={select} value={settings.greeting} onChange={e => update("greeting", e.target.value)}>
+            {GREETINGS.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </div>
+
+        <div style={{ ...row }}>
+          <div>
+            <div style={label}>Sign-off</div>
+            <div style={sublabel}>How you close every message</div>
+          </div>
+          <select style={select} value={settings.closing} onChange={e => update("closing", e.target.value)}>
+            {CLOSINGS.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+
+        <div style={{ ...row }}>
+          <div>
+            <div style={label}>Message length</div>
+            <div style={sublabel}>Short = 1-2 sentences. Medium = 3-4. Detailed = paragraph.</div>
+          </div>
+          <select style={select} value={settings.lengthStyle} onChange={e => update("lengthStyle", e.target.value as CommSettings["lengthStyle"])}>
+            <option value="short">Short</option>
+            <option value="medium">Medium</option>
+            <option value="detailed">Detailed</option>
+          </select>
+        </div>
+
+        <div style={{ ...row, borderBottom: "none" }}>
+          <div>
+            <div style={label}>Formality</div>
+            <div style={sublabel}>1 = casual mate-style, 5 = professional correspondence</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <input
+              type="range" min={1} max={5} step={1}
+              value={settings.formalityScore}
+              onChange={e => update("formalityScore", Number(e.target.value))}
+              style={{ width: 100, accentColor: "var(--accent, rgb(166,218,255))" }}
+            />
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.blue, minWidth: 16 }}>
+              {settings.formalityScore}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Channel toggles ── */}
+      <div style={card}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>
+          Active Channels
+        </div>
+
+        {([
+          { key: "smsEnabled" as const,   label: "SMS",   desc: "Send text messages to leads" },
+          { key: "emailEnabled" as const, label: "Email", desc: "Send email outreach to leads" },
+          { key: "dripEnabled" as const,  label: "Automated nurture drip", desc: "Auto-send follow-up sequences based on timing below" },
+        ]).map(({ key, label: l, desc }, i, arr) => (
+          <div
+            key={key}
+            role="switch"
+            aria-checked={settings[key] as boolean}
+            tabIndex={0}
+            onClick={() => update(key, !settings[key])}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); update(key, !settings[key]) } }}
+            style={{
+              ...row,
+              cursor: "pointer",
+              borderBottom: i === arr.length - 1 ? "none" : `1px solid ${C.border}`,
+            }}
+          >
+            <div>
+              <div style={label}>{l}</div>
+              <div style={sublabel}>{desc}</div>
+            </div>
+            <TogglePill on={settings[key] as boolean} />
+          </div>
+        ))}
+      </div>
+
+      {/* ── Follow-up timing ── */}
+      <div style={card}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 16 }}>
+          Follow-up Timing
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          When automated drip is enabled, PropOS schedules follow-ups at these intervals after first contact.
+        </div>
+
+        {([
+          { key: "followUp1Days" as const, label: "2nd touch", desc: "Days after initial outreach" },
+          { key: "followUp2Days" as const, label: "3rd touch", desc: "Days after 2nd touch" },
+        ]).map(({ key, label: l, desc }, i, arr) => (
+          <div key={key} style={{ ...row, borderBottom: i === arr.length - 1 ? "none" : `1px solid ${C.border}` }}>
+            <div>
+              <div style={label}>{l}</div>
+              <div style={sublabel}>{desc}</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input
+                type="number" min={1} max={30}
+                value={settings[key] as number}
+                onChange={e => update(key, Math.max(1, Math.min(30, Number(e.target.value))))}
+                style={{ ...select, width: 64, textAlign: "center" }}
+              />
+              <span style={{ fontSize: 12, color: C.muted }}>days</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Save */}
+      <button
+        onClick={handleSave}
+        style={{
+          background: saved ? C.greenDim : C.blueDim,
+          color: saved ? C.green : C.blue,
+          border: saved ? `1px solid rgba(100,208,144,0.4)` : `1px solid rgba(166,218,255,0.3)`,
+          borderRadius: 8, padding: "10px 24px",
+          fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+          transition: "all 0.15s",
+        }}
+      >
+        {saved ? "Saved!" : "Save changes"}
+      </button>
+
+      <div style={{ marginTop: 16, fontSize: 11, color: C.faint, lineHeight: 1.5 }}>
+        These settings are stored locally on this device and applied to all AI-generated messages.
+      </div>
+    </div>
+  )
+}
+
+// ─── Listings Panel ───────────────────────────────────────────────────────────
+
+const FEATURED_LISTING_KEY = "propos_featured_listing_id"
+
+function loadFeaturedId(): number | null {
+  try {
+    const raw = localStorage.getItem(FEATURED_LISTING_KEY)
+    return raw ? Number(raw) : null
+  } catch { return null }
+}
+
+function ListingsPanel({ agent }: { agent: AgentProfile }) {
+  const { sold, active } = getPortfolioForAgent(agent)
+  const all: PortfolioProperty[] = [...active, ...sold]
+  const [featuredId, setFeaturedId] = useState<number | null>(loadFeaturedId)
+  const [flash, setFlash] = useState<number | null>(null)
+
+  function markFeatured(id: number) {
+    const next = featuredId === id ? null : id
+    setFeaturedId(next)
+    try { localStorage.setItem(FEATURED_LISTING_KEY, String(next ?? "")) } catch {}
+    setFlash(id)
+    setTimeout(() => setFlash(null), 1500)
+  }
+
+  function fmtPrice(p: number, min?: number, max?: number) {
+    if (!p && min && max) return `$${(min / 1000).toFixed(0)}k – $${(max / 1000).toFixed(0)}k`
+    if (!p) return "TBD"
+    return `$${(p / 1000).toFixed(0)}k`
+  }
+
+  if (all.length === 0) {
+    return (
+      <div style={{ maxWidth: 640 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Listings</div>
+        <div style={{ fontSize: 14, color: C.muted, marginBottom: 24 }}>
+          No portfolio properties found. Log in as Cameron, Pas, or Manny to see their listings.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Listings</div>
+      <div style={{ fontSize: 14, color: C.muted, marginBottom: 24, lineHeight: 1.5 }}>
+        Your current portfolio. Mark one active listing as <strong style={{ color: C.blue }}>Featured</strong> to use it as the primary property in buyer outreach and demo flows.
+      </div>
+
+      {/* Active */}
+      {active.length > 0 && (
+        <>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
+            Active ({active.length})
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+            {active.map(p => (
+              <ListingCard
+                key={p.id}
+                prop={p}
+                isFeatured={featuredId === p.id}
+                flash={flash === p.id}
+                onToggleFeatured={() => markFeatured(p.id)}
+                fmtPrice={fmtPrice}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Sold */}
+      {sold.length > 0 && (
+        <>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
+            Sold ({sold.length})
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {sold.map(p => (
+              <ListingCard
+                key={p.id}
+                prop={p}
+                isFeatured={false}
+                flash={false}
+                onToggleFeatured={() => {}}
+                fmtPrice={fmtPrice}
+                dimmed
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      <div style={{ marginTop: 20, fontSize: 11, color: C.faint, lineHeight: 1.5 }}>
+        The featured listing is used in buyer outreach messages as the reference property. Only active listings can be featured.
+      </div>
+    </div>
+  )
+}
+
+function ListingCard({
+  prop, isFeatured, flash, onToggleFeatured, fmtPrice, dimmed = false,
+}: {
+  prop: PortfolioProperty
+  isFeatured: boolean
+  flash: boolean
+  onToggleFeatured: () => void
+  fmtPrice: (p: number, min?: number, max?: number) => string
+  dimmed?: boolean
+}) {
+  return (
+    <div style={{
+      background: C.bg2,
+      border: `1px solid ${isFeatured ? "var(--accent, rgb(166,218,255))55" : C.border}`,
+      borderRadius: 12,
+      padding: "16px 20px",
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 16,
+      opacity: dimmed ? 0.7 : 1,
+      transition: "border-color 0.2s",
+    }}>
+      {/* Property image placeholder */}
+      <div style={{
+        width: 72, height: 56, borderRadius: 8, background: C.bg3,
+        flexShrink: 0, overflow: "hidden",
+        border: `1px solid ${C.border}`,
+      }}>
+        <img
+          src={prop.image}
+          alt={prop.address}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none" }}
+        />
+      </div>
+
+      {/* Details */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{prop.address}</span>
+          {prop.status === "sold" && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: C.green, background: C.greenDim,
+              border: `1px solid rgba(100,208,144,0.3)`, borderRadius: 4, padding: "1px 7px",
+            }}>SOLD {prop.soldDate ?? ""}</span>
+          )}
+          {isFeatured && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: "rgb(166,218,255)", background: "rgba(166,218,255,0.12)",
+              border: "1px solid rgba(166,218,255,0.3)", borderRadius: 4, padding: "1px 7px",
+            }}>FEATURED</span>
+          )}
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>
+          {prop.suburb} · {prop.beds}bd {prop.baths}ba {prop.cars}car{prop.land ? ` · ${prop.land}m²` : ""}
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: prop.status === "active" ? "var(--accent, rgb(166,218,255))" : C.muted }}>
+          {fmtPrice(prop.price, prop.priceMin, prop.priceMax)}
+          {prop.auctionDate && <span style={{ fontSize: 11, fontWeight: 400, color: C.faint, marginLeft: 8 }}>Auction {prop.auctionDate}</span>}
+        </div>
+      </div>
+
+      {/* Feature button — only for active listings */}
+      {prop.status === "active" && (
+        <button
+          onClick={onToggleFeatured}
+          style={{
+            flexShrink: 0,
+            background: flash ? C.greenDim : isFeatured ? "rgba(166,218,255,0.1)" : C.bg3,
+            color: flash ? C.green : isFeatured ? C.blue : C.muted,
+            border: `1px solid ${flash ? "rgba(100,208,144,0.4)" : isFeatured ? "rgba(166,218,255,0.3)" : C.border}`,
+            borderRadius: 8, padding: "7px 14px",
+            fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+            transition: "all 0.15s",
+          }}
+        >
+          {flash ? "Done!" : isFeatured ? "Unfeature" : "Set featured"}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── Vendor Panel Toggles ─────────────────────────────────────────────────────
 
 const VENDOR_PANEL_META: Array<{
@@ -1508,6 +1934,7 @@ const VENDOR_PANEL_META: Array<{
   { key: "showComparableMap",   label: "Comparable Sales Map",         description: "Interactive Leaflet map of recent comparable sales in the vendor appraisal panel",     group: "Noise Reduction" },
   { key: "showMatchScores",     label: "Match Score Rings",            description: "Visual score rings on buyer lead cards",                                                group: "Noise Reduction" },
   { key: "showDNAAnalysis",     label: "Property DNA Analysis",        description: "AI-generated property DNA tags on vendor profile",                                      group: "Noise Reduction" },
+  { key: "forceDemoData",       label: "Force demo data",              description: "Always use built-in demo leads for buyer view (ignores Google Sheets). Useful during presentations.", group: "Demo Mode" },
 ]
 
 function TogglePill({ on }: { on: boolean }) {
@@ -1550,7 +1977,7 @@ function VendorPanelToggles({
     return acc
   }, {})
 
-  const groupOrder = ["Vendor Profile", "Noise Reduction"]
+  const groupOrder = ["Vendor Profile", "Noise Reduction", "Demo Mode"]
 
   const groupLabel: React.CSSProperties = {
     fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
