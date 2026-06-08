@@ -180,15 +180,8 @@ async function migrate(): Promise<void> {
       created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    -- Unique constraint so CSV re-import is idempotent
-    DO $$ BEGIN
-      BEGIN
-        ALTER TABLE contacts ADD CONSTRAINT contacts_agent_address_unique UNIQUE (agent_id, purchase_address);
-      EXCEPTION WHEN duplicate_object THEN NULL;
-      END;
-    END $$;
-
     -- Live installs: add columns that may be missing from older schema versions
+    -- MUST run before the UNIQUE constraint below (which references agent_id)
     ALTER TABLE contacts ADD COLUMN IF NOT EXISTS agent_id          TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE contacts ADD COLUMN IF NOT EXISTS pipeline          TEXT;
     ALTER TABLE contacts ADD COLUMN IF NOT EXISTS priority_score    INTEGER;
@@ -228,6 +221,14 @@ async function migrate(): Promise<void> {
     ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS metadata         JSONB DEFAULT '{}';
     ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS opened_at        TIMESTAMPTZ;
     ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS replied_at       TIMESTAMPTZ;
+
+    -- Unique constraint so CSV re-import is idempotent
+    DO $$ BEGIN
+      BEGIN
+        ALTER TABLE contacts ADD CONSTRAINT contacts_agent_address_unique UNIQUE (agent_id, purchase_address);
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END;
+    END $$;
 
     -- Indexes for common queries
     CREATE INDEX IF NOT EXISTS idx_outreach_agent       ON outreach_log(agent_id);
