@@ -34,7 +34,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      15,
     agencySizeEst:    6,
     personalNote:     "Agent of the Year for Monbulk. Sold 130 Old Menzies Creek Rd Selby for $2.5m May 2025. 15+ years local.",
-    smsScript:        "Hi Brad, saw your $2.5m sale in Selby — strong result. Question: are you following up the buyers who missed out? We built a tool that does that automatically, real iPhone number. 5 min demo? — Vinuth, AddVantage",
+    smsScript:        "Hi Brad, saw your $2.5m Selby sale. Buyers who missed out are still looking. PropOS messages them from your real number automatically. 5 min? Vinuth",
     source:           "scraped:ratemyagent",
   },
   {
@@ -47,7 +47,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      23,
     agencySizeEst:    6,
     personalNote:     "Co-founder, 5-generation local family. 53 sales in 12mo averaging $838k. Deep buyer database from long tenure.",
-    smsScript:        "Hi Sharyn, 53 sales last year is exceptional for a boutique agency. Are you systematically following up that buyer database between campaigns? We automate that with personalised SMS. Worth a quick look? — Vinuth",
+    smsScript:        "Hi Sharyn, 53 sales last year is exceptional for a boutique. Are you following up that buyer database between campaigns? We automate it via SMS. 5 min? Vinuth",
     source:           "scraped:ratemyagent",
   },
   {
@@ -60,7 +60,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      20,
     agencySizeEst:    6,
     personalNote:     "Managing director, left franchise model to go independent. Sold Best Street $985k May 2025.",
-    smsScript:        "Hi Glenn, you left the franchise to build something more personal — that's exactly the philosophy behind PropOS. AI buyer reactivation without big-agency overhead. 5 min demo? — Vinuth, AddVantage",
+    smsScript:        "Hi Glenn, you left the franchise to go independent. PropOS gives indie agencies AI buyer reactivation the big brands can't match. 5 min? Vinuth",
     source:           "scraped:domain",
   },
   {
@@ -73,7 +73,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      15,
     agencySizeEst:    9,
     personalNote:     "Director & Auctioneer (REIV). 15+ years Yarra Ranges. Multiple buyers attend every Dandenong Ranges auction.",
-    smsScript:        "Hi Glenn, every auction you run generates registered bidders who missed out. Are you following them up for the next listing? We automate that. Real results, real iPhone number. 5 min? — Vinuth",
+    smsScript:        "Hi Glenn, every auction you run creates registered bidders who missed out. Are you following them up? We automate that. Real iPhone number. 5 min? Vinuth",
     source:           "scraped:fletchers.net.au",
   },
   {
@@ -86,7 +86,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      10,
     agencySizeEst:    9,
     personalNote:     "Director & Auctioneer (REIV). One of most active agents in Tecoma/Belgrave. Deep buyer pool building over time.",
-    smsScript:        "Hi Scott, you're one of the most active agents in Tecoma — which means a large buyer pool going stale between campaigns. We automate the reactivation. Takes 5 min to see. — Vinuth, AddVantage AI",
+    smsScript:        "Hi Scott, you're one of the most active agents in Tecoma, which means a big buyer pool going stale. We reactivate it via SMS automatically. 5 min? Vinuth",
     source:           "scraped:fletchers.net.au",
   },
   {
@@ -99,7 +99,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      10,
     agencySizeEst:    10,
     personalNote:     "500+ negotiated sales. Built GR8 EST8 as anti-franchise model. Valley View Cr Berwick $1.0m April 2025.",
-    smsScript:        "Hi Liron, you built GR8 EST8 to outperform the franchises — PropOS is the same thinking applied to buyer follow-up. AI that messages your old leads in your voice. Demo this week? — Vinuth",
+    smsScript:        "Hi Liron, you built GR8 EST8 to outperform the franchises. PropOS is the same philosophy applied to buyer follow-up. AI messaging in your voice. 5 min? Vinuth",
     source:           "scraped:facebook+domain",
   },
   {
@@ -112,7 +112,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      5,
     agencySizeEst:    10,
     personalNote:     "Mentored by Liron Selimi. April 2025 vendor testimonial: 'made the sale effortless'.",
-    smsScript:        "Hi Chaz, after every sale you close there are buyers who missed out still actively looking. PropOS automatically identifies and messages them for your next listing. Worth 5 min? — Vinuth",
+    smsScript:        "Hi Chaz, after every sale there are buyers who missed out still looking. PropOS messages them automatically for your next listing. 5 min? Vinuth",
     source:           "scraped:ratemyagent",
   },
   {
@@ -125,7 +125,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      8,
     agencySizeEst:    4,
     personalNote:     "Director & Licensed Auctioneer. Billy Buttons Dr sold $815k 2025. 8+ years local.",
-    smsScript:        "Hi Khalid, the buyers who missed out on Billy Buttons Drive are still looking. PropOS identifies them and sends a personal SMS from your number automatically. 5 min demo? — Vinuth, AddVantage",
+    smsScript:        "Hi Khalid, the buyers who missed out on Billy Buttons Drive are still looking. PropOS messages them from your real number automatically. 5 min? Vinuth",
     source:           "scraped:domain",
   },
   {
@@ -138,7 +138,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      6,
     agencySizeEst:    4,
     personalNote:     "Director. 31 sales, 79 avg days on market. Opportunity to shorten DOM by pre-warming buyers pre-launch.",
-    smsScript:        "Hi Sajjad, what if your next listing launched with 10 pre-warmed buyers already messaged before it hit the market? PropOS does that automatically. 5 min to show you? — Vinuth",
+    smsScript:        "Hi Sajjad, 79 days avg on market is a gap we can help close. What if your next listing launched with buyers already warmed up? That's PropOS. 5 min? Vinuth",
     source:           "scraped:domain",
   },
   {
@@ -151,7 +151,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      6,
     agencySizeEst:    4,
     personalNote:     "Co-director. Boutique agency competing against Ray White and Barry Plant in Narre Warren.",
-    smsScript:        "Hi Ghafour, competing against Ray White in Narre Warren means you need tools they don't have. PropOS gives boutique agencies AI buyer reactivation the franchises can't match. 5 min? — Vinuth",
+    smsScript:        "Hi Ghafour, competing against Ray White means you need tools they don't have. PropOS gives boutique agencies AI buyer reactivation. 5 min? Vinuth",
     source:           "scraped:onlyestateagents.com.au",
   },
   {
@@ -164,7 +164,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      20,
     agencySizeEst:    5,
     personalNote:     "Agent since 2004. Sold Bridgewater Blvd $1.035m July 2025. 20+ year Berwick database is massive dormant asset.",
-    smsScript:        "Hi Darren, 20 years in Berwick means one of the deepest buyer databases in the area — most of it dormant. PropOS reactivates it automatically, in your voice. 5 min this week? — Vinuth",
+    smsScript:        "Hi Darren, 20 years in Berwick means one of the deepest buyer databases in the area. PropOS reactivates it automatically in your voice. 5 min? Vinuth",
     source:           "scraped:ratemyagent",
   },
   {
@@ -177,7 +177,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      10,
     agencySizeEst:    5,
     personalNote:     "Director, local resident. Jerilderie Drive $1.3m December 2024. Strong premium buyer pool in Berwick.",
-    smsScript:        "Hi Eddie, your $1.3m Jerilderie Drive result would have drawn serious buyers — those people are still in your database. PropOS identifies and messages them for your next listing. Quick demo? — Vinuth",
+    smsScript:        "Hi Eddie, your $1.3m Jerilderie Drive result would have drawn serious buyers. PropOS identifies them and messages them for your next listing. 5 min? Vinuth",
     source:           "scraped:domain",
   },
   {
@@ -190,7 +190,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      24,
     agencySizeEst:    5,
     personalNote:     "Founded AgentX 2010. 24+ years in Berwick/Narre Warren. One of the longest-serving independent agents in the area.",
-    smsScript:        "Hi Robert, 24 years in Berwick is a remarkable tenure — and a remarkable database. PropOS turns those accumulated buyer records into active leads. Would love to show you in 5 min. — Vinuth",
+    smsScript:        "Hi Robert, 24 years in Berwick is a remarkable tenure, and a remarkable database. PropOS turns those buyer records into active leads. 5 min? Vinuth",
     source:           "scraped:agentx.com.au",
   },
   {
@@ -203,7 +203,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      15,
     agencySizeEst:    4,
     personalNote:     "Principal, 4th-generation family agency. Red Hill Rd $2.7m April 2025. Premium buyer pool with high budgets.",
-    smsScript:        "Hi Amanda, your $2.7m Red Hill Road result attracted premium buyers who are still in your database. PropOS identifies them and messages them for every future high-end listing. 5 min? — Vinuth",
+    smsScript:        "Hi Amanda, your $2.7m Red Hill Road result drew premium buyers still in your database. PropOS messages them for your next high-end listing. 5 min? Vinuth",
     source:           "scraped:kayecharles.com.au",
   },
   {
@@ -216,7 +216,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      5,
     agencySizeEst:    5,
     personalNote:     "Officer/Pakenham growth corridor. Small boutique competing against Ray White and LJ Hooker in same precinct.",
-    smsScript:        "Hi Lorenzo, Officer is one of the fastest-growing corridors in Melbourne's south-east — meaning buyers who registered 6 months ago are still actively looking. PropOS reactivates them automatically. 5 min? — Vinuth",
+    smsScript:        "Hi Lorenzo, Officer is one of the fastest-growing corridors in Melbourne. Buyers from 6 months ago are still active. PropOS reactivates them. 5 min? Vinuth",
     source:           "scraped:uphillofficer.com.au",
   },
   {
@@ -229,7 +229,7 @@ export const OUTREACH_TARGETS_SEED: OutreachTargetSeed[] = [
     yearsInArea:      14,
     agencySizeEst:    20,
     personalNote:     "125 sales in 12 months. Sold Gator Esplanade $1.5m in 13 days April 2026. Large buyer pool from high volume.",
-    smsScript:        "Hi Karan, 125 sales in 12 months means your buyer database is enormous — but most of it goes cold between campaigns. PropOS reactivates it automatically. You'd see results in the first week. 5 min? — Vinuth",
+    smsScript:        "Hi Karan, 125 sales per year means a huge buyer database going cold. PropOS reactivates it automatically. You'd see results in week one. 5 min? Vinuth",
     source:           "scraped:realsearch+domain",
   },
 ]
