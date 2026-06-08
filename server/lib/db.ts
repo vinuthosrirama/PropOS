@@ -298,6 +298,13 @@ async function migrate(): Promise<void> {
     ["ALTER nurture_queue: agent_id",         `ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS agent_id         TEXT NOT NULL DEFAULT 'default'`],
 
     ["ALTER outreach_log: agent_id",          `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS agent_id         TEXT NOT NULL DEFAULT 'default'`],
+    ["ALTER outreach_log: contact_phone",     `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS contact_phone    TEXT`],
+    ["ALTER outreach_log: contact_email",     `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS contact_email    TEXT`],
+    ["ALTER outreach_log: contact_name",      `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS contact_name     TEXT NOT NULL DEFAULT ''`],
+    ["ALTER outreach_log: sms_body",          `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS sms_body         TEXT`],
+    ["ALTER outreach_log: email_subject",     `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS email_subject    TEXT`],
+    ["ALTER outreach_log: email_body",        `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS email_body       TEXT`],
+    ["ALTER outreach_log: status",            `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS status           TEXT NOT NULL DEFAULT 'sent'`],
     ["ALTER outreach_log: pipeline",          `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS pipeline         TEXT`],
     ["ALTER outreach_log: property_address",  `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS property_address TEXT`],
     ["ALTER outreach_log: metadata",          `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS metadata         JSONB DEFAULT '{}'`],
@@ -313,7 +320,7 @@ async function migrate(): Promise<void> {
     ["CONSTRAINT contacts_agent_address_unique", `
       DO $$ BEGIN
         ALTER TABLE contacts ADD CONSTRAINT contacts_agent_address_unique UNIQUE (agent_id, purchase_address);
-      EXCEPTION WHEN duplicate_object THEN NULL;
+      EXCEPTION WHEN others THEN NULL;
       END $$`],
 
     ["CONSTRAINT nurture_queue_status_check", `

@@ -107,27 +107,17 @@ app.use("/api/auth/register", authLimiter)
 app.use("/api/auth/refresh",  authLimiter)
 
 // ── Public routes (no auth required) ─────────────────────────────────────────
-app.use("/api/auth",         authRouter)
-app.use("/unsubscribe",      unsubscribeRouter)
-app.use("/api/track",        trackRouter)
-app.use("/api/webhook",      webhookRouter)
-// iOS Shortcut relay — public, auth via SHORTCUT_RELAY_SECRET query param
-app.use("/api/sms-shortcut", smsShortcutRouter)
-// SLM answer routes also public (called from buyer-facing demo)
-app.use("/api/slm-answer",        slmAnswerRouter)
-app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
 
-// Health check — registered before auth middleware so Railway's unauthenticated healthcheck can reach it.
-// PT-C3: unauthenticated callers get { ok } only — full service map requires a valid JWT
-// so attackers cannot fingerprint the stack before mounting targeted attacks.
+// Health check — MUST be before the JWT auth middleware so Railway's unauthenticated
+// healthcheck probe reaches it. When DB is connected the auth guard blocks all /api/*
+// requests without a Bearer token, including Railway's healthcheck.
+// PT-C3: unauthenticated callers get { ok } only — full service map requires a valid JWT.
 app.get("/api/health", async (req, res) => {
-  // Determine if caller is authenticated (Bearer token present and valid)
   const authHeader = req.headers["authorization"]
   const isAuthed = authHeader?.startsWith("Bearer ")
     ? !!verifyAccessToken(authHeader.slice(7))
     : false
 
-  // Live DB probe — 3s timeout so this endpoint stays fast
   let dbLive = false
   if (isDbConnected()) {
     try {
@@ -143,12 +133,10 @@ app.get("/api/health", async (req, res) => {
     }
   }
 
-  // Unauthenticated: bare liveness signal only
   if (!isAuthed) {
     return res.json({ ok: true, database: dbLive })
   }
 
-  // Authenticated (internal dashboard / monitoring): full service map
   res.json({
     ok:        true,
     openai:    !!process.env.OPENAI_API_KEY,
@@ -160,9 +148,38 @@ app.get("/api/health", async (req, res) => {
     boxdice:   !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
     domainAvm: !!process.env.DOMAIN_API_KEY,
     database:  dbLive,
-    // testMode is a boolean flag only — never expose actual contact values
     testMode:  !!(process.env.TEST_RECIPIENT_PHONE?.trim() || process.env.TEST_RECIPIENT_EMAIL?.trim()),
   })
+})
+
+app.use("/api/auth",         authRouter)
+app.use("/unsubscribe",      unsubscribeRouter)
+app.use("/api/track",        trackRouter)
+app.use("/api/webhook",      webhookRouter)
+// iOS Shortcut relay — public, auth via SHORTCUT_RELAY_SECRET query param
+app.use("/api/sms-shortcut", smsShortcutRouter)
+// SLM answer routes also public (called from buyer-facing demo)
+app.use("/api/slm-answer",        slmAnswerRouter)
+app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
+
+// GET /api/sms-transport — returns which transport is active (for settings UI)
+app.get("/api/sms-transport", async (_req: Request, res: Response) => {
+  const status = await checkSmsTransport()
+  res.json(status)
+})
+
+// POST /api/test-sms — fire a test SMS via the active transport, no DB required
+// Body: { to?: string, message?: string }  (both optional — defaults to TEST_RECIPIENT_PHONE + "Hello World!")
+app.post("/api/test-sms", express.json(), async (req: Request, res: Response) => {
+  const to      = String(req.body?.to      ?? process.env.TEST_RECIPIENT_PHONE ?? "").trim()
+  const message = String(req.body?.message ?? "Hello World!").trim()
+  if (!to) return res.status(400).json({ error: "No 'to' phone number — set TEST_RECIPIENT_PHONE or pass { to } in body" })
+  try {
+    const result = await sendSMS(to, message)
+    res.json({ ok: true, to, message, ...result })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message })
+  }
 })
 
 // ── Protected routes (require valid JWT when DB is connected) ─────────────────
@@ -272,26 +289,6 @@ app.post("/api/webhook/httpsms", express.json(), (req: Request, res: Response) =
   void handleIncomingReply(msg.from, msg.body)
 })
 
-// GET /api/sms-transport — returns which transport is active (for settings UI)
-app.get("/api/sms-transport", async (_req: Request, res: Response) => {
-  const status = await checkSmsTransport()
-  res.json(status)
-})
-
-// POST /api/test-sms — fire a test SMS via the active transport, no DB required
-// Body: { to?: string, message?: string }  (both optional — defaults to TEST_RECIPIENT_PHONE + "Hello World!")
-app.post("/api/test-sms", express.json(), async (req: Request, res: Response) => {
-  const to      = String(req.body?.to      ?? process.env.TEST_RECIPIENT_PHONE ?? "").trim()
-  const message = String(req.body?.message ?? "Hello World!").trim()
-  if (!to) return res.status(400).json({ error: "No 'to' phone number — set TEST_RECIPIENT_PHONE or pass { to } in body" })
-  try {
-    const result = await sendSMS(to, message)
-    res.json({ ok: true, to, message, ...result })
-  } catch (err) {
-    res.status(500).json({ ok: false, error: (err as Error).message })
-  }
-})
-
 // ── AVM route ─────────────────────────────────────────────────────────────────
 app.get("/api/avm", async (req, res) => {
   const address = String(req.query.address ?? "").trim()
@@ -300,8 +297,6 @@ app.get("/api/avm", async (req, res) => {
   if (!estimate) return res.json({ ok: false, estimate: null })
   return res.json({ ok: true, estimate })
 })
-
-
 
 // Serve Vite production build — must come after all API routes
 // On Railway, Nixpacks snapshots server/ only, so frontend is pre-built into server/public/.
