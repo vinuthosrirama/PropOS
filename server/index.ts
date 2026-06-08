@@ -42,6 +42,7 @@ import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
 import gdprRouter from "./routes/gdpr.js"
 import marketUpdateRouter from "./routes/market-update.js"
+import outreachTargetsRouter from "./routes/outreach-targets.js"
 import { loadConversations, addReplyToThread } from "./lib/conversations.js"
 import { initDb, isDbConnected, query } from "./lib/db.js"
 import { startScheduler, cancelNurtureJobs } from "./lib/scheduler.js"
@@ -133,6 +134,7 @@ app.use("/api/add-lead",         addLeadRouter)
 app.use("/api/parse-notes",      parseNotesRouter)
 app.use("/api/gdpr",             gdprRouter)
 app.use("/api/market-update",    marketUpdateRouter)
+app.use("/api/outreach-targets", outreachTargetsRouter)
 
 // ── Shared reply handler (BlueBubbles + imsg use the same pipeline as Twilio) ──
 async function handleIncomingReply(from: string, body: string): Promise<void> {
