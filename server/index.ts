@@ -28,8 +28,9 @@ import authRouter from "./routes/auth.js"
 import { loadOptOuts, addOptOut } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
 import { activeTransport, checkSmsTransport } from "./lib/sms.js"
-import { parseBBWebhook, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
+import { parseBBWebhook, parseBBSendError, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
 import { watchIncomingImsg } from "./lib/imsg.js"
+import { parseTeleLinkWebhook, registerTeleLinkWebhook } from "./lib/telelink.js"
 import { writeToSheet } from "./lib/sheets.js"
 import conversationsRouter from "./routes/conversations.js"
 import replyAgentRouter from "./routes/reply-agent.js"
@@ -154,8 +155,28 @@ async function handleIncomingReply(from: string, body: string): Promise<void> {
 // when SMS_TRANSPORT=bluebubbles. Feeds into the existing reply-agent pipeline.
 app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Response) => {
   res.json({ ok: true })  // ack immediately — BB retries on 4xx/5xx, not on 200
+
+  // Handle incoming reply
   const msg = parseBBWebhook(req.body)
-  if (!msg || msg.isGroup) return
+  if (msg && !msg.isGroup) {
+    void handleIncomingReply(msg.from, msg.body)
+    return
+  }
+
+  // Handle send-error events — log for diagnostics, mark outreach failed
+  const sendErr = parseBBSendError(req.body)
+  if (sendErr) {
+    console.warn(`[bluebubbles] delivery failure guid=${sendErr.guid}: ${sendErr.reason}`)
+  }
+})
+
+// ── TeleLink incoming webhook ─────────────────────────────────────────────────
+// POST /api/webhook/telelink — receives incoming SMS replies from TeleLink
+// (Windows Phone Link bridge). Feeds into the same reply-agent pipeline.
+app.post("/api/webhook/telelink", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })  // ack immediately
+  const msg = parseTeleLinkWebhook(req.body)
+  if (!msg) return
   void handleIncomingReply(msg.from, msg.body)
 })
 
@@ -297,6 +318,13 @@ app.listen(PORT, async () => {
     registerBlueBubblesWebhook(webhookUrl)
       .then(() => console.log(`  BlueBubbles webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  BlueBubbles webhook register failed:", e.message))
+  }
+
+  if (smsTransport === "telelink" && process.env.BASE_URL) {
+    const webhookUrl = `${process.env.BASE_URL}/api/webhook/telelink`
+    registerTeleLinkWebhook(webhookUrl)
+      .then(() => console.log(`  TeleLink webhook registered → ${webhookUrl}`))
+      .catch(e => console.warn("  TeleLink webhook register failed:", e.message))
   }
 
   if (smsTransport === "imsg") {
