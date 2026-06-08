@@ -69,7 +69,7 @@ export async function sendViaBlueBubbles(
 
       if (!res.ok) {
         const text = await res.text().catch(() => "")
-        throw new Error(`BlueBubbles HTTP ${res.status}: ${text.slice(0, 200)}`)
+        throw new Error(`BlueBubbles HTTP ${res.status}: ${text.slice(0, 600)}`)
       }
 
       const json = await res.json() as { data?: { guid?: string }; error?: string }
