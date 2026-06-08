@@ -216,11 +216,14 @@ async function migrate(): Promise<void> {
     ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS context         JSONB DEFAULT '{}';
     ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
+    ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS agent_id         TEXT NOT NULL DEFAULT 'default';
     ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS pipeline         TEXT;
     ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS property_address TEXT;
     ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS metadata         JSONB DEFAULT '{}';
     ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS opened_at        TIMESTAMPTZ;
     ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS replied_at       TIMESTAMPTZ;
+
+    ALTER TABLE nurture_queue ADD COLUMN IF NOT EXISTS agent_id        TEXT NOT NULL DEFAULT 'default';
 
     -- Unique constraint so CSV re-import is idempotent
     DO $$ BEGIN
