@@ -2,17 +2,24 @@
  * BlueBubbles Transport
  *
  * Sends iMessage/SMS via a locally-running BlueBubbles server on the agent's Mac.
- * Messages appear to come from the agent's real iPhone number — no Twilio needed.
+ * Messages appear from the agent's real iPhone number — no Twilio needed.
+ * Automatically routes to iMessage (blue bubble) when possible; falls back to SMS.
  *
  * Setup (one-time, ~20 min):
  *   1. Install: brew install --cask bluebubbles
- *   2. Grant Full Disk Access to BlueBubbles in System Settings
- *   3. Set up Firebase (or skip — optional for push notifications)
- *   4. Start server → set a password → enable Cloudflare proxy
- *   5. Add to server/.env:
+ *   2. Grant Full Disk Access to BlueBubbles: System Settings → Privacy → Full Disk Access
+ *   3. Open BlueBubbles → complete setup:
+ *      - Firebase: skip (optional)
+ *      - Set a password (this is your BLUEBUBBLES_PASSWORD)
+ *      - Proxy: choose Cloudflare (free HTTPS URL, e.g. https://xxxx.trycloudflare.com)
+ *      - Click Start Server
+ *   4. Add to server/.env:
  *        SMS_TRANSPORT=bluebubbles
- *        BLUEBUBBLES_URL=https://your-cloudflare-subdomain.trycloudflare.com
+ *        SMS_TRANSPORT_FALLBACK=twilio        ← always set a fallback
+ *        BLUEBUBBLES_URL=https://xxxx.trycloudflare.com
  *        BLUEBUBBLES_PASSWORD=your_password
+ *   5. Mac must stay awake (screen lock OK, sleep NOT OK).
+ *      iPhone SMS relay: Settings → Messages → Text Message Forwarding → your Mac ON
  *
  * API reference: https://docs.bluebubbles.app/api-reference
  */
@@ -20,52 +27,75 @@
 const BB_URL      = () => process.env.BLUEBUBBLES_URL?.replace(/\/$/, "") ?? ""
 const BB_PASSWORD = () => process.env.BLUEBUBBLES_PASSWORD ?? ""
 
+const SEND_TIMEOUT_MS = 15_000
+const PING_TIMEOUT_MS = 5_000
+
 export function blueBubblesConfigured(): boolean {
   return !!(BB_URL() && BB_PASSWORD())
 }
 
+function bbUrl(path: string): string {
+  return `${BB_URL()}${path}?password=${encodeURIComponent(BB_PASSWORD())}`
+}
+
 /**
- * Send a text message via BlueBubbles.
- * Automatically routes to iMessage when possible, falls back to SMS.
+ * Send a text message via BlueBubbles with retry (max 3 attempts, exponential backoff).
+ * chatGuid prefix "any" lets BB auto-pick iMessage vs SMS.
  */
 export async function sendViaBlueBubbles(
   to: string,
   body: string,
-): Promise<{ guid: string; testMode: boolean }> {
+): Promise<{ sid: string; testMode: boolean }> {
   const testPhone  = process.env.TEST_RECIPIENT_PHONE?.trim()
   const actualTo   = testPhone ?? to
-  const actualBody = testPhone ? `[TEST → ${to}]\n${body}` : body
+  const actualBody = testPhone ? `[TEST to ${to}]\n${body}` : body
 
-  // chatGuid format: "any;-;+61412345678"
-  // "any" lets BlueBubbles decide iMessage vs SMS automatically
-  const chatGuid = `any;-;${actualTo.startsWith("+") ? actualTo : "+" + actualTo.replace(/\D/g, "")}`
-  const tempGuid = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  // "any;-;+number" — BlueBubbles tries iMessage first, falls back to SMS
+  const safeNumber = actualTo.startsWith("+") ? actualTo : "+" + actualTo.replace(/\D/g, "")
+  const chatGuid   = `any;-;${safeNumber}`
+  const tempGuid   = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-  const url = `${BB_URL()}/api/v1/message/text?password=${encodeURIComponent(BB_PASSWORD())}`
-  const res = await fetch(url, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ chatGuid, tempGuid, message: actualBody }),
-  })
+  const MAX_ATTEMPTS = 3
+  let lastErr: unknown
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "")
-    throw new Error(`BlueBubbles send failed (${res.status}): ${text}`)
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(bbUrl("/api/v1/message/text"), {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ chatGuid, tempGuid, message: actualBody }),
+        signal:  AbortSignal.timeout(SEND_TIMEOUT_MS),
+      })
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "")
+        throw new Error(`BlueBubbles HTTP ${res.status}: ${text.slice(0, 200)}`)
+      }
+
+      const json = await res.json() as { data?: { guid?: string }; error?: string }
+      if (json.error) throw new Error(`BlueBubbles server error: ${json.error}`)
+
+      return { sid: json.data?.guid ?? tempGuid, testMode: !!testPhone }
+    } catch (err) {
+      lastErr = err
+      if (attempt < MAX_ATTEMPTS) {
+        const backoff = 500 * Math.pow(2, attempt - 1)   // 500ms, 1000ms
+        console.warn(`[bluebubbles] attempt ${attempt} failed, retrying in ${backoff}ms:`, (err as Error).message)
+        await new Promise(r => setTimeout(r, backoff))
+      }
+    }
   }
 
-  const json = await res.json() as { data?: { guid?: string }; error?: string }
-  if (json.error) throw new Error(`BlueBubbles error: ${json.error}`)
-
-  return { guid: json.data?.guid ?? tempGuid, testMode: !!testPhone }
+  throw lastErr
 }
 
 /**
- * Health check — confirm BlueBubbles server is reachable.
+ * Health check — confirm BlueBubbles server is reachable and authenticated.
  */
 export async function pingBlueBubbles(): Promise<boolean> {
+  if (!BB_URL()) return false
   try {
-    const url = `${BB_URL()}/api/v1/ping?password=${encodeURIComponent(BB_PASSWORD())}`
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    const res = await fetch(bbUrl("/api/v1/ping"), { signal: AbortSignal.timeout(PING_TIMEOUT_MS) })
     return res.ok
   } catch {
     return false
@@ -74,29 +104,31 @@ export async function pingBlueBubbles(): Promise<boolean> {
 
 /**
  * Register a webhook with BlueBubbles so PropOS receives incoming replies.
- * Call this once on server start when BB is the active transport.
- *
- * Events registered: new-message, message-send-error
+ * Idempotent — checks for duplicate before registering.
+ * Events: new-message (incoming reply), message-send-error (delivery failure).
  */
 export async function registerBlueBubblesWebhook(webhookUrl: string): Promise<void> {
-  const url = `${BB_URL()}/api/v1/webhook?password=${encodeURIComponent(BB_PASSWORD())}`
+  try {
+    const existing = await fetch(bbUrl("/api/v1/webhook"), {
+      signal: AbortSignal.timeout(8_000),
+    }).then(r => r.json()).catch(() => ({ data: [] })) as { data: Array<{ url: string }> }
 
-  // List existing webhooks to avoid duplicates (must include password)
-  const existing = await fetch(`${BB_URL()}/api/v1/webhook?password=${encodeURIComponent(BB_PASSWORD())}`)
-    .then(r => r.json()).catch(() => ({ data: [] })) as { data: Array<{ url: string }> }
-  if (existing.data?.some(w => w.url === webhookUrl)) return   // already registered
+    if (existing.data?.some(w => w.url === webhookUrl)) return  // already registered
 
-  await fetch(url, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ url: webhookUrl, events: ["new-message", "message-send-error"] }),
-  })
+    await fetch(bbUrl("/api/v1/webhook"), {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ url: webhookUrl, events: ["new-message", "message-send-error"] }),
+      signal:  AbortSignal.timeout(8_000),
+    })
+  } catch (err) {
+    // Non-fatal — BB may be starting up. Webhook will be re-registered on next server start.
+    throw err
+  }
 }
 
-/**
- * Parse an incoming BlueBubbles webhook payload into a normalised shape.
- * Mount this at POST /api/webhook/bluebubbles in index.ts.
- */
+// ── Webhook parsing ───────────────────────────────────────────────────────────
+
 export interface BBIncomingMessage {
   from:    string   // phone number e.g. "+61412345678"
   body:    string
@@ -104,12 +136,22 @@ export interface BBIncomingMessage {
   chatId:  string
 }
 
+export interface BBSendError {
+  guid:   string
+  reason: string
+}
+
+/**
+ * Parse an incoming BlueBubbles webhook payload.
+ * Returns null for group chats, our own outgoing messages, and send-error events.
+ * Handle send errors separately via parseBBSendError().
+ */
 export function parseBBWebhook(payload: unknown): BBIncomingMessage | null {
   const p = payload as Record<string, unknown>
   if (p.type !== "new-message") return null
 
   const data = p.data as Record<string, unknown>
-  if (data.isFromMe) return null   // ignore our own outgoing messages
+  if (data.isFromMe) return null  // ignore our own sent messages
 
   const handle = data.handle as Record<string, unknown> | undefined
   const from   = (handle?.address as string) ?? ""
@@ -120,4 +162,20 @@ export function parseBBWebhook(payload: unknown): BBIncomingMessage | null {
 
   if (!from || !body) return null
   return { from, body, isGroup, chatId }
+}
+
+/**
+ * Parse a message-send-error event from BlueBubbles.
+ * Log these for diagnostics — they indicate the message was not delivered.
+ */
+export function parseBBSendError(payload: unknown): BBSendError | null {
+  const p = payload as Record<string, unknown>
+  if (p.type !== "message-send-error") return null
+
+  const data = p.data as Record<string, unknown>
+  const guid = (data.guid as string) ?? (data.tempGuid as string) ?? ""
+  const reason = (data.error as string) ?? (data.description as string) ?? "unknown"
+
+  if (!guid) return null
+  return { guid, reason }
 }
