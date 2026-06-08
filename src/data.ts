@@ -114,6 +114,8 @@ export interface VendorDisplaySettings {
   showComparableMap:   boolean   // Comparable sales Leaflet map
   showMatchScores:     boolean   // Score rings on lead cards
   showDNAAnalysis:     boolean   // Property DNA section
+  // Added in v3 — live AI / demo mode
+  forceDemoData:       boolean   // Always use hardcoded DEMO_FALLBACK_LEADS; ignore sheet
 }
 
 export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
@@ -126,6 +128,7 @@ export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
   showComparableMap:   false,
   showMatchScores:     false,
   showDNAAnalysis:     false,
+  forceDemoData:       false,
 }
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
@@ -342,6 +345,16 @@ export function getPortfolioForAgent(agent: AgentProfile): { sold: PortfolioProp
 
 // Sold comparable properties — leads come exclusively from Google Sheets (Leads tab, inspectedProperty column)
 export const PORTFOLIO_SOLD: PortfolioProperty[] = [
+  {
+    id: 107,
+    address: "34 Hartsmere Drive",
+    suburb: "Berwick", state: "VIC", postcode: "3806",
+    price: 850000, beds: 4, baths: 2, cars: 2, land: 621,
+    type: "House", status: "sold", soldDate: "08 Mar 2026",
+    image: "/34-hartsmere-drive.jpg",
+    description: "4-bed family home in the Kingsmere Estate. Open plan living, stone kitchen, alfresco, double garage on a 621sqm lot.",
+    leadCount: 4,
+  },
   {
     id: 102,
     address: "3 Thirlmere Court",

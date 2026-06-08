@@ -870,6 +870,18 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
     const cached = cachedAll ? cachedAll.filter(isRealLead) : null
     if (cached && cached.length > 0) applyLeads(cached)
 
+    // If force-demo-data toggle is on, always use fallback regardless of sheet
+    const forceDemoData = (() => {
+      try {
+        const raw = localStorage.getItem("vendorDisplaySettings")
+        return raw ? !!(JSON.parse(raw) as { forceDemoData?: boolean }).forceDemoData : false
+      } catch { return false }
+    })()
+    if (forceDemoData) {
+      applyLeads(DEMO_FALLBACK_LEADS)
+      return () => { mounted = false }
+    }
+
     // If Sheets not configured, stop here — cache or fallback is sufficient
     if (!sheetsConnected()) {
       if ((!cached || cached.length === 0) && agentSold.length > 0) applyLeads(DEMO_FALLBACK_LEADS)
@@ -8737,7 +8749,7 @@ export default function DemoView({
   showInbox: showInboxProp,
   onShowInboxChange,
   onBadgeChange,
-  vendorSettings: _vendorSettings,
+  vendorSettings,
 }: {
   agent: AgentProfile
   theme?: AgencyTheme
@@ -9108,7 +9120,7 @@ export default function DemoView({
           <VendorPortfolioPage
             agent={agent}
             theme={theme}
-            showMarketTriggers={_vendorSettings?.showMarketTriggers}
+            showMarketTriggers={vendorSettings?.showMarketTriggers}
             onAnalyse={segmented =>
               setStage({ kind: "vendorAnalysing", segmented })
             }
@@ -9136,7 +9148,7 @@ export default function DemoView({
             onBack={() => setStage({ kind: "vendorPortfolio" })}
             theme={theme}
             agent={agent}
-            vendorSettings={_vendorSettings}
+            vendorSettings={vendorSettings}
             onSelectEntry={entry => {
               const idx = stage.segmented.findIndex(e => e.buyer.id === entry.buyer.id)
               setStage({ kind: "vendorProfile", entry, allEntries: stage.segmented, entryIdx: idx >= 0 ? idx : 0, from: "vendorDashboard" })
@@ -9190,7 +9202,7 @@ export default function DemoView({
             onReview={(sms, emailSubject, emailBody) =>
               setStage({ kind: "vendorReview", entry: stage.entry, sms, emailSubject, emailBody, allEntries: stage.allEntries, entryIdx: stage.entryIdx })
             }
-            vendorSettings={_vendorSettings}
+            vendorSettings={vendorSettings}
           />
         </motion.div>
       )}

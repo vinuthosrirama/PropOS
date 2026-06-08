@@ -5022,6 +5022,43 @@ export function isSLMPreloadDone(): boolean { return sheetPreloadDone }
  *   2. localStorage (user edits from SettingsView)
  *   3. Hardcoded SLM_DATA (offline fallback)
  */
+/** Returns a blank PropertySLM with all fields set to "TBD". Used as fallback
+ *  when a property exists in the portfolio but has no hardcoded SLM entry. */
+export function createBlankSLM(propertyId: number, address = "Unknown", suburb = "VIC", status: "active" | "sold" = "active"): PropertySLM {
+  const T = "TBD" as const
+  return {
+    propertyId, address, suburb, status,
+    beds: T, baths: T, cars: T, landSqm: T, houseSqm: T, yearBuilt: T,
+    propertyType: T, frontageMetre: T, depthMetre: T, propertyShape: T,
+    orientation: T, pool: T, gardenSqm: T, shed: T, outdoorEntertaining: T,
+    alfrescoSqm: T, roofType: T, externalCladding: T, construction: T, floorplanConfig: T,
+    titleType: T, easements: T, covenants: T, overlays: T, s32Status: T,
+    encumbrances: T, ownerOccupied: T, zoning: T, rightOfWay: T,
+    sewerEasement: T, contaminatedLand: T, buildingPermitsOutstanding: T,
+    ownerBuilderWork: T, titlesOfficeReady: T, section32CompletionDate: T,
+    priceMin: T, priceMax: T, vendorReserve: T, settlementTermsDays: T,
+    depositPct: T, rentalAppraisalLow: T, rentalAppraisalHigh: T, grossYieldAtAsk: T,
+    councilRates: T, waterRates: T, bodyCorporateFees: T, stampDutyEstimate: T,
+    landTaxThreshold: T, depreciationYear1Est: T, capitalGainsHistory: T,
+    primarySchool: T, primarySchoolRating: T, secondarySchool: T,
+    secondarySchoolRating: T, schoolZoneCatchment: T, distanceToTrainKm: T,
+    trainLine: T, distanceToFreewayKm: T, distanceToShoppingKm: T,
+    nearestHospitalKm: T, suburb5yrGrowthPct: T, suburbMedianPrice: T,
+    daysOnMarketAvg: T, clearanceRatePct: T, comparableSales: T,
+    kitchenRenovated: T, bathroomRenovated: T, flooringType: T, airConType: T,
+    heatingType: T, solarKw: T, batteryStorage: T, evCharging: T, nbnType: T,
+    waterTank: T, alarmSystem: T, smartHome: T, disabilityAccess: T,
+    petsAllowed: T, outdoorFeatures: T,
+    subdivisionPotential: T, dualOccupancyPotential: T, grannyFlatApproved: T,
+    extensionPotential: T, councilDevelopmentHistory: T, neighbourhoodDescription: T,
+    trafficNoiseLevel: T, flightPathFlag: T, futureInfrastructure: T, floodZone: T,
+    vendorMotivation: T, vendorTimelineDays: T, previousOffers: T, daysOnMarket: T,
+    priceReductionHistory: T, tenantInPlace: T, tenantLeaseEndDate: T,
+    vendorPreferredSettlement: T, vendorFlexOnInclusions: T, inclusions: T,
+    qa: [],
+  }
+}
+
 export function loadSLMForProperty(propertyId: number): PropertySLM {
   // 1. Sheet cache (dynamic, live data)
   if (sheetSLMCache[propertyId]) return sheetSLMCache[propertyId]
@@ -5036,8 +5073,8 @@ export function loadSLMForProperty(propertyId: number): PropertySLM {
     // fall through to default
   }
 
-  // 3. Hardcoded fallback
-  return SLM_DATA[propertyId]
+  // 3. Hardcoded fallback — or blank SLM if no data exists for this property
+  return SLM_DATA[propertyId] ?? createBlankSLM(propertyId)
 }
 
 export function saveSLMForProperty(slm: PropertySLM): void {
