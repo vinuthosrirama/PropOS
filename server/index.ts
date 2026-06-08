@@ -30,7 +30,9 @@ import { gmailConfigured } from "./lib/gmail.js"
 import { activeTransport, checkSmsTransport } from "./lib/sms.js"
 import { parseBBWebhook, parseBBSendError, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
 import { watchIncomingImsg } from "./lib/imsg.js"
-import { parseTeleLinkWebhook, registerTeleLinkWebhook } from "./lib/telelink.js"
+import { parseTeleLinkWebhook, registerTeleLinkWebhook }            from "./lib/telelink.js"
+import { parseTextingBlueWebhook }                                   from "./lib/textingblue.js"
+import { parseAndroidGatewayWebhook, registerAndroidGatewayWebhook } from "./lib/androidgateway.js"
 import { writeToSheet } from "./lib/sheets.js"
 import conversationsRouter from "./routes/conversations.js"
 import replyAgentRouter from "./routes/reply-agent.js"
@@ -173,11 +175,27 @@ app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Respons
 })
 
 // ── TeleLink incoming webhook ─────────────────────────────────────────────────
-// POST /api/webhook/telelink — receives incoming SMS replies from TeleLink
-// (Windows Phone Link bridge). Feeds into the same reply-agent pipeline.
 app.post("/api/webhook/telelink", express.json(), (req: Request, res: Response) => {
-  res.json({ ok: true })  // ack immediately
+  res.json({ ok: true })
   const msg = parseTeleLinkWebhook(req.body)
+  if (!msg) return
+  void handleIncomingReply(msg.from, msg.body)
+})
+
+// ── TextingBlue incoming webhook ──────────────────────────────────────────────
+// POST /api/webhook/textingblue — receives iMessage replies via TextingBlue
+app.post("/api/webhook/textingblue", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })
+  const msg = parseTextingBlueWebhook(req.body)
+  if (!msg) return
+  void handleIncomingReply(msg.from, msg.body)
+})
+
+// ── Android SMS Gateway incoming webhook ─────────────────────────────────────
+// POST /api/webhook/android-gateway — receives SMS replies from Android device
+app.post("/api/webhook/android-gateway", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })
+  const msg = parseAndroidGatewayWebhook(req.body)
   if (!msg) return
   void handleIncomingReply(msg.from, msg.body)
 })
@@ -320,6 +338,13 @@ app.listen(PORT, async () => {
     registerBlueBubblesWebhook(webhookUrl)
       .then(() => console.log(`  BlueBubbles webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  BlueBubbles webhook register failed:", e.message))
+  }
+
+  if (smsTransport === "android-gateway" && process.env.BASE_URL) {
+    const webhookUrl = `${process.env.BASE_URL}/api/webhook/android-gateway`
+    registerAndroidGatewayWebhook(webhookUrl)
+      .then(() => console.log(`  AndroidGateway webhook registered → ${webhookUrl}`))
+      .catch(e => console.warn("  AndroidGateway webhook register failed:", e.message))
   }
 
   if (smsTransport === "telelink" && process.env.BASE_URL) {
