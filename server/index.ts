@@ -28,8 +28,11 @@ import authRouter from "./routes/auth.js"
 import { loadOptOuts, addOptOut } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
 import { activeTransport, checkSmsTransport } from "./lib/sms.js"
-import { parseBBWebhook, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
+import { parseBBWebhook, parseBBSendError, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
 import { watchIncomingImsg } from "./lib/imsg.js"
+import { parseTeleLinkWebhook, registerTeleLinkWebhook }            from "./lib/telelink.js"
+import { parseTextingBlueWebhook }                                   from "./lib/textingblue.js"
+import { parseAndroidGatewayWebhook, registerAndroidGatewayWebhook } from "./lib/androidgateway.js"
 import { writeToSheet } from "./lib/sheets.js"
 import conversationsRouter from "./routes/conversations.js"
 import replyAgentRouter from "./routes/reply-agent.js"
@@ -41,9 +44,12 @@ import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
 import gdprRouter from "./routes/gdpr.js"
 import marketUpdateRouter from "./routes/market-update.js"
+import outreachTargetsRouter from "./routes/outreach-targets.js"
 import { loadConversations, addReplyToThread } from "./lib/conversations.js"
 import { initDb, isDbConnected, query } from "./lib/db.js"
 import { startScheduler, cancelNurtureJobs } from "./lib/scheduler.js"
+import { startOutreachScheduler } from "./lib/outreachScheduler.js"
+import { handleOutreachInbound } from "./lib/outreachAgent.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
@@ -132,17 +138,23 @@ app.use("/api/add-lead",         addLeadRouter)
 app.use("/api/parse-notes",      parseNotesRouter)
 app.use("/api/gdpr",             gdprRouter)
 app.use("/api/market-update",    marketUpdateRouter)
+app.use("/api/outreach-targets", outreachTargetsRouter)
 
-// ── Shared reply handler (BlueBubbles + imsg use the same pipeline as Twilio) ──
+// ── Shared reply handler (all transports feed here) ──────────────────────────
 async function handleIncomingReply(from: string, body: string): Promise<void> {
   const lowerBody = body.toLowerCase().trim()
   try {
     if (["stop", "unsubscribe", "cancel", "quit", "end", "stopall"].includes(lowerBody)) {
       await addOptOut(from, "sms", "reply")
     } else {
+      // 1. Store in conversation thread (buyer/vendor lead pipeline)
       await addReplyToThread(from, body)
       void writeToSheet({ type: "update_lead_status", phone: from, status: "sms_replied", detail: body.slice(0, 200) })
       await cancelNurtureJobs(from)
+
+      // 2. Also check if this is one of our outreach targets (Vinuth self-outreach campaign)
+      //    Non-fatal — runs in parallel with the lead pipeline above
+      void handleOutreachInbound(from, body)
     }
   } catch (err) {
     console.error("[reply-handler] error:", (err as Error).message)
@@ -154,8 +166,44 @@ async function handleIncomingReply(from: string, body: string): Promise<void> {
 // when SMS_TRANSPORT=bluebubbles. Feeds into the existing reply-agent pipeline.
 app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Response) => {
   res.json({ ok: true })  // ack immediately — BB retries on 4xx/5xx, not on 200
+
+  // Handle incoming reply
   const msg = parseBBWebhook(req.body)
-  if (!msg || msg.isGroup) return
+  if (msg && !msg.isGroup) {
+    void handleIncomingReply(msg.from, msg.body)
+    return
+  }
+
+  // Handle send-error events — log for diagnostics, mark outreach failed
+  const sendErr = parseBBSendError(req.body)
+  if (sendErr) {
+    console.warn(`[bluebubbles] delivery failure guid=${sendErr.guid}: ${sendErr.reason}`)
+  }
+})
+
+// ── TeleLink incoming webhook ─────────────────────────────────────────────────
+app.post("/api/webhook/telelink", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })
+  const msg = parseTeleLinkWebhook(req.body)
+  if (!msg) return
+  void handleIncomingReply(msg.from, msg.body)
+})
+
+// ── TextingBlue incoming webhook ──────────────────────────────────────────────
+// POST /api/webhook/textingblue — receives iMessage replies via TextingBlue
+app.post("/api/webhook/textingblue", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })
+  const msg = parseTextingBlueWebhook(req.body)
+  if (!msg) return
+  void handleIncomingReply(msg.from, msg.body)
+})
+
+// ── Android SMS Gateway incoming webhook ─────────────────────────────────────
+// POST /api/webhook/android-gateway — receives SMS replies from Android device
+app.post("/api/webhook/android-gateway", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })
+  const msg = parseAndroidGatewayWebhook(req.body)
+  if (!msg) return
   void handleIncomingReply(msg.from, msg.body)
 })
 
@@ -287,8 +335,9 @@ app.listen(PORT, async () => {
     console.warn("  ⚠️  Set DATABASE_URL before enabling the nurture scheduler in production.")
   }
 
-  // 3. Start nurture scheduler (no-ops if no DB)
+  // 3. Start schedulers (both no-op if no DB)
   startScheduler()
+  startOutreachScheduler()
 
   // 4. Wire up transport-specific init
   if (smsTransport === "bluebubbles" && process.env.BASE_URL) {
@@ -297,6 +346,20 @@ app.listen(PORT, async () => {
     registerBlueBubblesWebhook(webhookUrl)
       .then(() => console.log(`  BlueBubbles webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  BlueBubbles webhook register failed:", e.message))
+  }
+
+  if (smsTransport === "android-gateway" && process.env.BASE_URL) {
+    const webhookUrl = `${process.env.BASE_URL}/api/webhook/android-gateway`
+    registerAndroidGatewayWebhook(webhookUrl)
+      .then(() => console.log(`  AndroidGateway webhook registered → ${webhookUrl}`))
+      .catch(e => console.warn("  AndroidGateway webhook register failed:", e.message))
+  }
+
+  if (smsTransport === "telelink" && process.env.BASE_URL) {
+    const webhookUrl = `${process.env.BASE_URL}/api/webhook/telelink`
+    registerTeleLinkWebhook(webhookUrl)
+      .then(() => console.log(`  TeleLink webhook registered → ${webhookUrl}`))
+      .catch(e => console.warn("  TeleLink webhook register failed:", e.message))
   }
 
   if (smsTransport === "imsg") {
