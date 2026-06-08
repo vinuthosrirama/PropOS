@@ -160,9 +160,13 @@ async function sendOutreachMessage(target: OutreachTargetRow, message: string): 
     console.log(`[outreachScheduler] sent to ${target.name} via ${result.transport}${result.testMode ? " (TEST)" : ""}`)
   } catch (err) {
     console.error(`[outreachScheduler] send failed for ${target.name}:`, (err as Error).message)
+    const errNote = `Send failed: ${(err as Error).message.slice(0, 200)}`
     await execute(
-      `UPDATE outreach_targets SET notes = $1, updated_at = NOW() WHERE id = $2`,
-      [`Send failed: ${(err as Error).message.slice(0, 200)}`, target.id],
+      `UPDATE outreach_targets
+       SET notes = CASE WHEN notes IS NULL OR notes = '' THEN $1 ELSE notes || E'\\n' || $1 END,
+           updated_at = NOW()
+       WHERE id = $2`,
+      [errNote, target.id],
     )
   }
 }

@@ -323,6 +323,9 @@ export async function getMorningBrief(): Promise<MorningBrief> {
     return { pendingDrafts: 0, newReplies: [], followUpsDue: [], totalContacted: 0, totalReplied: 0, totalDemoBooked: 0 }
   }
 
+  // Safe: parseInt with default ensures this is always a valid integer, never user input
+  const followupDays = Math.max(1, parseInt(process.env.OUTREACH_FOLLOWUP_DAYS ?? "3", 10))
+
   const [drafts, replies, followUps, stats] = await Promise.all([
     query<{ count: string }>(`SELECT COUNT(*) AS count FROM outreach_drafts WHERE status = 'pending'`),
     query<{ name: string; agency: string; reply_body: string }>(
@@ -336,7 +339,7 @@ export async function getMorningBrief(): Promise<MorningBrief> {
       `SELECT id, name, agency, last_contact_date
        FROM outreach_targets
        WHERE status = 'contacted'
-         AND last_contact_date < NOW() - INTERVAL '3 days'
+         AND last_contact_date < NOW() - INTERVAL '${followupDays} days'
          AND last_contact_date > NOW() - INTERVAL '14 days'
        ORDER BY last_contact_date ASC`,
     ),
