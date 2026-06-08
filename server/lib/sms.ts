@@ -3,11 +3,13 @@
  *
  * Six transports, tried in priority order until one succeeds:
  *
- *   SMS_TRANSPORT=bluebubbles      Mac + real iPhone (iMessage/SMS), best for Mac users
- *   SMS_TRANSPORT=textingblue      iPhone shortcut (iMessage), no Mac needed — best for iPhone agents
+ *   SMS_TRANSPORT=bluebubbles      Mac + real iPhone (iMessage/SMS), best for Mac users  [Method 1]
+ *   SMS_TRANSPORT=shortcut-relay   iPhone only, no Mac — self-hosted polling relay       [Method 2, free]
+ *   SMS_TRANSPORT=android-gateway  Android phone app (SMS), best for Android agents      [Method 3]
+ *   SMS_TRANSPORT=httpsms          Android phone (SMS), httpSMS app + web dashboard      [Method 4]
  *   SMS_TRANSPORT=imsg             Mac + CLI (iMessage/SMS), lightweight Mac option
  *   SMS_TRANSPORT=telelink         Windows + Phone Link, real iPhone/Android number
- *   SMS_TRANSPORT=android-gateway  Android phone app (SMS), best for Android agents
+ *   SMS_TRANSPORT=textingblue      iPhone shortcut (iMessage), paid plan required
  *   SMS_TRANSPORT=twilio           Cloud API, generic number — use as fallback
  *
  * Fallback chain:
@@ -39,6 +41,8 @@ import { sendViaImsg, imsgConfigured, pingImsg }                               f
 import { sendViaTeleLink, teleLinkConfigured, pingTeleLink }                   from "./telelink.js"
 import { sendViaTextingBlue, textingBlueConfigured, pingTextingBlue }          from "./textingblue.js"
 import { sendViaAndroidGateway, androidGatewayConfigured, pingAndroidGateway } from "./androidgateway.js"
+import { sendViaHttpSms, httpSmsConfigured }                                   from "./httpsms.js"
+import { enqueueShortcutMessage, shortcutRelayConfigured }                     from "./shortcutRelay.js"
 
 export type SmsTransport =
   | "twilio"
@@ -47,6 +51,8 @@ export type SmsTransport =
   | "telelink"
   | "textingblue"
   | "android-gateway"
+  | "httpsms"
+  | "shortcut-relay"
   | "none"
 
 export interface SmsSendResult {
@@ -60,11 +66,13 @@ export interface SmsSendResult {
 
 function resolveTransport(name: string): SmsTransport {
   const t = name.toLowerCase().trim()
-  if (t === "bluebubbles"     && blueBubblesConfigured())    return "bluebubbles"
+  if (t === "bluebubbles"     && blueBubblesConfigured())     return "bluebubbles"
+  if (t === "shortcut-relay"  && shortcutRelayConfigured())  return "shortcut-relay"
+  if (t === "android-gateway" && androidGatewayConfigured()) return "android-gateway"
+  if (t === "httpsms"         && httpSmsConfigured())        return "httpsms"
   if (t === "textingblue"     && textingBlueConfigured())    return "textingblue"
   if (t === "imsg"            && imsgConfigured())           return "imsg"
   if (t === "telelink"        && teleLinkConfigured())       return "telelink"
-  if (t === "android-gateway" && androidGatewayConfigured()) return "android-gateway"
   if (t === "twilio"          && isTwilioConfigured())       return "twilio"
   return "none"
 }
@@ -97,9 +105,11 @@ async function dispatchSMS(
     case "textingblue":    return sendViaTextingBlue(to, body)
     case "imsg":           return sendViaImsg(to, body)
     case "telelink":       return sendViaTeleLink(to, body)
-    case "android-gateway":return sendViaAndroidGateway(to, body)
-    case "twilio":         return twilioSend(to, body)
-    default:               throw new Error(`Transport "${transport}" is not configured`)
+    case "android-gateway": return sendViaAndroidGateway(to, body)
+    case "httpsms":         return sendViaHttpSms(to, body)
+    case "shortcut-relay":  return enqueueShortcutMessage(to, body)
+    case "twilio":          return twilioSend(to, body)
+    default:                throw new Error(`Transport "${transport}" is not configured`)
   }
 }
 
@@ -180,6 +190,18 @@ async function checkTransport(transport: SmsTransport): Promise<Omit<TransportSt
       const { ok, version, error } = await pingAndroidGateway()
       return { transport, ok, label: "Android SMS Gateway (real SIM, SMS only)",
         detail: ok ? `Gateway at ${process.env.ANDROID_GW_URL}${version ? ` v${version}` : ""}` : error }
+    }
+    case "httpsms": {
+      const ok = httpSmsConfigured()
+      return { transport, ok, label: "httpSMS (Android, real SIM, SMS only — free tier)",
+        detail: ok ? `From: ${process.env.HTTPSMS_FROM}` : "HTTPSMS_API_KEY or HTTPSMS_FROM missing" }
+    }
+    case "shortcut-relay": {
+      const ok = shortcutRelayConfigured()
+      const deviceId = process.env.SHORTCUT_RELAY_DEVICE_ID?.trim()
+      return { transport, ok, label: "iOS Shortcut Relay (iPhone, iMessage/SMS, self-hosted — free)",
+        detail: ok ? `Device: ${deviceId} — polling ${process.env.BASE_URL ?? ""}/api/sms-shortcut/poll`
+                   : "SHORTCUT_RELAY_SECRET or SHORTCUT_RELAY_DEVICE_ID missing" }
     }
     case "twilio": {
       const ok = isTwilioConfigured()

@@ -274,6 +274,35 @@ async function migrate(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS outreach_drafts_target_idx ON outreach_drafts(target_id);
     CREATE INDEX IF NOT EXISTS outreach_drafts_status_idx ON outreach_drafts(status);
+
+    -- ── Self-hosted iOS Shortcut relay (Method 2 — free TextingBlue replacement) ──
+    -- shortcut_devices: one row per registered iPhone
+    CREATE TABLE IF NOT EXISTS shortcut_devices (
+      device_id   TEXT PRIMARY KEY,
+      phone       TEXT NOT NULL,
+      label       TEXT,
+      last_seen   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    -- shortcut_queue: outbound messages waiting for the Shortcut to pick up
+    CREATE TABLE IF NOT EXISTS shortcut_queue (
+      id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      device_id   TEXT NOT NULL,
+      to_phone    TEXT NOT NULL,
+      body        TEXT NOT NULL,
+      status      TEXT NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending','claimed','sent','failed')),
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      claimed_at  TIMESTAMPTZ,
+      sent_at     TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS shortcut_queue_device ON shortcut_queue(device_id, status, created_at);
+
+    -- Prune sent/failed shortcut queue entries older than 7 days
+    DELETE FROM shortcut_queue
+      WHERE status IN ('sent','failed')
+        AND created_at < NOW() - INTERVAL '7 days';
   `)
 }
 

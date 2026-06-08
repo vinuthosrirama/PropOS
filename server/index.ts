@@ -45,6 +45,8 @@ import trackRouter from "./routes/track.js"
 import gdprRouter from "./routes/gdpr.js"
 import marketUpdateRouter from "./routes/market-update.js"
 import outreachTargetsRouter from "./routes/outreach-targets.js"
+import smsShortcutRouter, { registerReplyHandler } from "./routes/sms-shortcut.js"
+import { parseHttpSmsWebhook } from "./lib/httpsms.js"
 import { loadConversations, addReplyToThread } from "./lib/conversations.js"
 import { initDb, isDbConnected, query } from "./lib/db.js"
 import { startScheduler, cancelNurtureJobs } from "./lib/scheduler.js"
@@ -105,10 +107,12 @@ app.use("/api/auth/register", authLimiter)
 app.use("/api/auth/refresh",  authLimiter)
 
 // ── Public routes (no auth required) ─────────────────────────────────────────
-app.use("/api/auth",        authRouter)
-app.use("/unsubscribe",     unsubscribeRouter)
-app.use("/api/track",       trackRouter)
-app.use("/api/webhook",     webhookRouter)
+app.use("/api/auth",         authRouter)
+app.use("/unsubscribe",      unsubscribeRouter)
+app.use("/api/track",        trackRouter)
+app.use("/api/webhook",      webhookRouter)
+// iOS Shortcut relay — public, auth via SHORTCUT_RELAY_SECRET query param
+app.use("/api/sms-shortcut", smsShortcutRouter)
 // SLM answer routes also public (called from buyer-facing demo)
 app.use("/api/slm-answer",        slmAnswerRouter)
 app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
@@ -161,6 +165,9 @@ async function handleIncomingReply(from: string, body: string): Promise<void> {
   }
 }
 
+// Wire iOS Shortcut relay reply handler (must be after handleIncomingReply is defined)
+registerReplyHandler(handleIncomingReply)
+
 // ── BlueBubbles incoming webhook ──────────────────────────────────────────────
 // POST /api/webhook/bluebubbles — receives incoming iMessage/SMS replies
 // when SMS_TRANSPORT=bluebubbles. Feeds into the existing reply-agent pipeline.
@@ -203,6 +210,16 @@ app.post("/api/webhook/textingblue", express.json(), (req: Request, res: Respons
 app.post("/api/webhook/android-gateway", express.json(), (req: Request, res: Response) => {
   res.json({ ok: true })
   const msg = parseAndroidGatewayWebhook(req.body)
+  if (!msg) return
+  void handleIncomingReply(msg.from, msg.body)
+})
+
+// ── httpSMS incoming webhook ──────────────────────────────────────────────────
+// POST /api/webhook/httpsms — receives SMS replies via httpSMS Android app
+// Payload: { data: { contact, content, owner } }
+app.post("/api/webhook/httpsms", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })
+  const msg = parseHttpSmsWebhook(req.body)
   if (!msg) return
   void handleIncomingReply(msg.from, msg.body)
 })

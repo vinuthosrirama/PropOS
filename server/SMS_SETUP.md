@@ -1,228 +1,261 @@
-# PropOS SMS Transport Setup
+# PropOS SMS Transport Setup — 4 Methods
 
-PropOS supports **four SMS transports** and a fallback chain.
-Set `SMS_TRANSPORT` in `server/.env` to pick your primary, and
-`SMS_TRANSPORT_FALLBACK` for automatic failover.
+All 4 methods send from a **real pre-existing phone number** — no Twilio, no virtual numbers.
+Messages build authentic relationships because recipients see the agent's real mobile.
 
 ---
 
-## Fallback chain (recommended for production)
+## Which method should I use?
 
+| Situation | Method | Cost |
+|-----------|--------|------|
+| Have a Mac (best for iMessage) | **Method 1: BlueBubbles** | Free |
+| iPhone only, no Mac | **Method 2: iOS Shortcut Relay** | Free |
+| Android phone | **Method 3: Android SMS Gateway** | Free |
+| Android phone, want a dashboard | **Method 4: httpSMS** | Free (200/mo) |
+
+**Always set a fallback** so sends never drop:
 ```env
-SMS_TRANSPORT=bluebubbles          # primary — real iPhone number
-SMS_TRANSPORT_FALLBACK=twilio      # emergency backup if Mac goes offline
-```
-
-PropOS will try the primary transport first. On any network or server error it
-automatically retries with the fallback — so messages always get delivered even
-when the agent's Mac or Windows PC is offline.
-
----
-
-## Option A: Twilio (cloud — generic number, always-on)
-
-```env
-SMS_TRANSPORT=twilio
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_AUTH_TOKEN=your_auth_token
-TWILIO_FROM_NUMBER=+61400000000
-```
-
-Cost: ~$0.07 AUD/SMS. Uses a Twilio number (not your real mobile). Best used
-as `SMS_TRANSPORT_FALLBACK` rather than primary — recipients see an unknown number.
-
----
-
-## Option B: BlueBubbles (Mac — real iPhone number, iMessage)
-
-Messages appear from **your real mobile number**. iMessage is auto-detected
-(blue bubble when possible, SMS fallback). Incoming replies are pushed via webhook.
-
-### One-time Mac setup (~20 min)
-
-1. **Install BlueBubbles:**
-   ```bash
-   brew install --cask bluebubbles
-   ```
-
-2. **Grant Full Disk Access:**
-   System Settings → Privacy & Security → Full Disk Access → + BlueBubbles
-
-3. **Open BlueBubbles** → complete setup wizard:
-   - Firebase: skip (optional)
-   - Set a **password** (this becomes `BLUEBUBBLES_PASSWORD`)
-   - Proxy service: choose **Cloudflare** → note the URL `https://xxxx.trycloudflare.com`
-   - Click **Start Server**
-
-4. **Stable URL (recommended):** Cloudflare free URLs reset on Mac restart.
-   Use [Tailscale](https://tailscale.com) (free) for a persistent address,
-   or purchase a BlueBubbles proxy subscription.
-
-5. **iPhone SMS relay:**
-   iPhone → Settings → Messages → Text Message Forwarding → your Mac: ON
-
-6. **Add to server/.env:**
-   ```env
-   SMS_TRANSPORT=bluebubbles
-   SMS_TRANSPORT_FALLBACK=twilio
-   BLUEBUBBLES_URL=https://xxxx.trycloudflare.com
-   BLUEBUBBLES_PASSWORD=your_password
-   ```
-
-### How it works
-- PropOS calls `POST /api/v1/message/text` on your local BlueBubbles server
-- BlueBubbles drives Messages.app to send from your iPhone number
-- Incoming replies: BlueBubbles pushes `POST /api/webhook/bluebubbles` to PropOS
-- Delivery failures: BlueBubbles pushes `message-send-error` events, PropOS logs them
-
-### Requirements
-- Mac must stay awake (screen lock OK; sleep NOT OK — use Energy Saver: never sleep when plugged in)
-- Messages.app must be open and iMessage signed in
-
----
-
-## Option C: TeleLink (Windows — real iPhone/Android number via Phone Link)
-
-TeleLink bridges Microsoft Phone Link to a REST API. Messages appear from your
-real mobile number. Ideal if you're on a Windows PC rather than Mac.
-
-### One-time Windows setup (~20 min)
-
-1. **Pair your phone with Microsoft Phone Link:**
-   - iPhone: install Phone Link on Windows, scan the QR code, allow notifications
-   - Android: same process, or use USB ADB mode for more reliable delivery
-
-2. **Clone and configure TeleLink:**
-   ```powershell
-   git clone https://github.com/nicholasxdavis/telelink
-   cd telelink
-   pip install -r requirements.txt
-   ```
-   Copy `config.example.yaml` → `config.yaml` and edit:
-   ```yaml
-   messaging:
-     method: auto            # auto = pywinauto UI automation
-     auto_timeout_seconds: 12
-   intake:
-     port: 3000
-     token: your_secret_token
-   ```
-
-3. **Start TeleLink:**
-   ```powershell
-   .\start.bat
-   ```
-
-4. **Expose via Cloudflare Tunnel:**
-   ```powershell
-   npx cloudflared tunnel --url http://localhost:3000
-   ```
-   Note the generated URL `https://xxxx.trycloudflare.com`
-
-5. **Add to server/.env:**
-   ```env
-   SMS_TRANSPORT=telelink
-   SMS_TRANSPORT_FALLBACK=twilio
-   TELELINK_URL=https://xxxx.trycloudflare.com
-   TELELINK_TOKEN=your_secret_token
-   ```
-
-### How it works
-- PropOS sends `POST /intake` with `{ to, message, type: "sms" }` to TeleLink's HTTP server
-- TeleLink uses pywinauto to open Phone Link, fill in the recipient and message, click Send
-- Each send takes ~12 seconds (UI automation timeout)
-- Bulk sends are queued and dispatched sequentially — allow ~12s per message
-
-### Important limitations
-- Windows PC must stay awake and Phone Link must be running
-- Phone Link must remain active (do not background or minimise)
-- iPhone requires Apple to confirm delivery (Phone Link sends via SMS relay)
-- Incoming replies: TeleLink pushes `POST /api/webhook/telelink` to PropOS
-
-### Requirements
-- Windows 10/11 with Phone Link installed
-- Python 3.10+, pywinauto
-- Cloudflare Tunnel (free) for remote access
-
----
-
-## Option D: imsg CLI (Mac — real iPhone number, lightweight)
-
-Lighter than BlueBubbles — drives Messages.app via AppleScript. Outgoing only
-(no real-time webhooks; uses 30s polling of chat.db for incoming replies).
-
-### One-time Mac setup (~5 min)
-
-1. **Install imsg:**
-   ```bash
-   brew install steipete/tap/imsg
-   ```
-
-2. **Grant Full Disk Access to Terminal:**
-   System Settings → Privacy & Security → Full Disk Access → + Terminal
-
-3. **Confirm SMS relay on iPhone:**
-   Settings → Messages → Text Message Forwarding → your Mac: ON
-
-4. **Add to server/.env:**
-   ```env
-   SMS_TRANSPORT=imsg
-   SMS_TRANSPORT_FALLBACK=twilio
-   ```
-
-5. **Test:**
-   ```bash
-   /opt/homebrew/bin/imsg send "+61412345678" "Test from PropOS"
-   ```
-
-### Custom binary path (Intel Mac):
-```env
-IMSG_BIN=/usr/local/bin/imsg
+SMS_TRANSPORT=bluebubbles
+SMS_TRANSPORT_FALLBACK=httpsms
 ```
 
 ---
 
-## Switching transports
+## Method 1: BlueBubbles (Mac — iMessage + SMS, ~1s)
 
-Change `SMS_TRANSPORT` in `server/.env` and restart the server. No code changes.
+Messages appear from your real iPhone number. Sends blue bubble iMessages to iPhone
+recipients, falls back to SMS automatically. Replies arrive via webhook instantly.
 
-```env
-SMS_TRANSPORT=bluebubbles    # Mac primary
-SMS_TRANSPORT=telelink       # Windows primary
-SMS_TRANSPORT=imsg           # Mac lightweight
-SMS_TRANSPORT=twilio         # Cloud fallback
-```
+**GitHub:** https://github.com/BlueBubblesApp/bluebubbles-server
 
-Check which transport is active and its health:
+### Setup (~20 min)
+
+**1. Install BlueBubbles on your Mac:**
 ```bash
-curl http://localhost:3001/api/sms-transport
+brew install --cask bluebubbles
+```
+Or download from https://bluebubbles.app/downloads/
+
+**2. Grant Full Disk Access:**
+System Settings → Privacy & Security → Full Disk Access → + BlueBubbles
+
+**3. Enable SMS Relay on iPhone:**
+Settings → Messages → Text Message Forwarding → enable your Mac
+
+**4. Expose via Cloudflare Tunnel (free, permanent URL):**
+```bash
+brew install cloudflare/cloudflare/cloudflared
+cloudflared tunnel --url http://localhost:1234
+# Copy the generated URL: https://xxxx.trycloudflare.com
 ```
 
----
-
-## Transport comparison
-
-| | Twilio | BlueBubbles | TeleLink | imsg |
-|---|---|---|---|---|
-| **Number shown** | Twilio code | Real iPhone | Real iPhone/Android | Real iPhone |
-| **iMessage** | No | Yes (auto) | No (SMS only) | Yes (auto) |
-| **Cost** | ~$0.07/msg | Free | Free | Free |
-| **OS required** | None | Mac (always-on) | Windows (always-on) | Mac |
-| **Incoming replies** | Twilio webhook | BB webhook | TeleLink webhook | 30s polling |
-| **Send latency** | ~1s | ~1s | ~12s (UI automation) | ~2s |
-| **Setup time** | 5 min | 20 min | 20 min | 5 min |
-| **Bulk send** | Parallel | Parallel | Sequential (queued) | Sequential |
-| **Recommended role** | Fallback | Primary (Mac) | Primary (Windows) | Lightweight alt |
-
----
-
-## Testing any transport
-
-Set `TEST_RECIPIENT_PHONE` in `.env` to redirect all sends to your own number:
-
+**5. Set Railway env vars:**
 ```env
-TEST_RECIPIENT_PHONE=+61412345678
+SMS_TRANSPORT=bluebubbles
+BLUEBUBBLES_URL=https://xxxx.trycloudflare.com
+BLUEBUBBLES_PASSWORD=your_bluebubbles_password
 ```
 
-Messages will be prefixed `[TEST to <original number>]` so you see exactly
-what the recipient would receive. Remove this env var to go live.
+**6. Set inbound webhook in BlueBubbles:**
+Server → Webhooks → Add → `https://propos.addvantage.site/api/webhook/bluebubbles`
+
+---
+
+## Method 2: iOS Shortcut Relay (iPhone only — iMessage + SMS, ~30s, free)
+
+A self-hosted replacement for TextingBlue ($9/mo). Your iPhone polls the PropOS
+server for pending messages and sends them via native iMessage. No Mac required.
+No subscription. Latency is polling interval (set iOS automation to 10am, which
+matches the outreach send window perfectly).
+
+### Setup (~30 min)
+
+**Step 1: Generate your secret key**
+```bash
+openssl rand -hex 20
+# Example output: a3f8c2d1e9b7456082af1c3d5e7f9012345678ab
+```
+
+**Step 2: Set Railway env vars:**
+```env
+SMS_TRANSPORT=shortcut-relay
+SHORTCUT_RELAY_SECRET=a3f8c2d1e9b7456082af1c3d5e7f9012345678ab
+SHORTCUT_RELAY_DEVICE_ID=iphone-vinuth-1      # any label you choose
+```
+
+**Step 3: Register your device (one-time):**
+```bash
+curl -X POST https://propos.addvantage.site/api/sms-shortcut/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "iphone-vinuth-1",
+    "phone": "+61412345678",
+    "secret": "a3f8c2d1e9b7456082af1c3d5e7f9012345678ab",
+    "label": "Vinuth iPhone 15 Pro"
+  }'
+```
+
+**Step 4: Create the iOS Shortcut on your iPhone**
+
+Open the Shortcuts app → New Shortcut → add these actions in order:
+
+```
+Action 1: Get contents of URL
+  URL: https://propos.addvantage.site/api/sms-shortcut/poll?device_id=iphone-vinuth-1&secret=YOUR_SECRET
+  Method: GET
+
+Action 2: Repeat with each item in "Contents of URL"
+  (this loops through each pending message)
+
+  Action 2a: Send Message
+    Message: Repeat Item → body
+    Recipients: Repeat Item → to
+    (iOS will send as iMessage if recipient has iPhone, SMS otherwise)
+
+  Action 2b: Get contents of URL
+    URL: https://propos.addvantage.site/api/sms-shortcut/sent/[Repeat Item → id]?secret=YOUR_SECRET
+    Method: POST
+```
+
+**Step 5: Create iOS Automation to run Shortcut daily**
+
+Shortcuts → Automation → + → Time of Day
+- Time: 9:55 AM (5 min before the 10am send window)
+- Repeat: Daily (weekdays)
+- Action: Run Shortcut → [your shortcut name]
+- Run Immediately: ON (no confirmation prompt)
+
+Add a second automation at 2:00 PM for follow-up sends if needed.
+
+**Step 6: Test it:**
+```bash
+# Check device is registered and queue is empty
+curl "https://propos.addvantage.site/api/sms-shortcut/status?device_id=iphone-vinuth-1&secret=YOUR_SECRET"
+
+# Manually trigger a test send (goes to TEST_RECIPIENT_PHONE if set)
+curl -X POST https://propos.addvantage.site/api/outreach-targets/trigger-now \
+  -H "Content-Type: application/json" -d '{"limit": 1}'
+
+# Then trigger the Shortcut manually on iPhone — message should send
+```
+
+### Reply monitoring (optional)
+
+To capture inbound replies via the Shortcut:
+1. Create a second Shortcut: "PropOS Reply Monitor"
+2. Add action: Get contents of URL
+   - URL: `https://propos.addvantage.site/api/sms-shortcut/reply?secret=YOUR_SECRET`
+   - Method: POST
+   - Body: `{ "from": "[Shortcut Input → from]", "body": "[Shortcut Input → body]", "device_id": "iphone-vinuth-1" }`
+3. Create Automation: Personal → When Messages app opens → Run Shortcut
+
+Note: Inbound reply detection via Shortcuts has limitations. BlueBubbles (Method 1)
+provides more reliable inbound webhooks if you have a Mac.
+
+---
+
+## Method 3: Android SMS Gateway (Android — real SIM SMS, ~1s)
+
+Messages appear from your Android phone's real SIM number. SMS only (green bubble
+on iPhone). Free, open source, works with any Android phone.
+
+**GitHub:** https://github.com/capcom6/android-sms-gateway
+**App:** https://sms-gate.app (free)
+
+### Setup (~10 min)
+
+1. Install "SMS Gateway for Android" from Google Play (search "sms-gate.app") or
+   download APK from https://sms-gate.app
+
+2. Open app → tap **Cloud server** → create free account → note your API credentials
+
+3. Dashboard → Webhooks → Add:
+   `https://propos.addvantage.site/api/webhook/android-gateway`
+
+4. Set Railway env vars:
+   ```env
+   SMS_TRANSPORT=android-gateway
+   ANDROID_GW_URL=https://api.sms-gate.app   # or your Cloudflare tunnel if using local mode
+   ANDROID_GW_USER=your_username
+   ANDROID_GW_PASS=your_password
+   ```
+
+Note: Carrier throttling — PropOS enforces a 22s gap between sends (~2.7/min) to
+avoid SIM suspension. For the 10am batch of 5 sends, this takes ~2 minutes total.
+
+---
+
+## Method 4: httpSMS (Android — real SIM SMS, ~1s, free tier 200/mo)
+
+Better than Method 3 for most Android users — cleaner API, no Cloudflare Tunnel
+needed (httpSMS cloud handles routing), and includes a web dashboard at app.httpsms.com.
+
+**GitHub:** https://github.com/NdoleStudio/httpsms
+**App:** https://play.google.com/store/apps/details?id=com.httpsms
+
+### Setup (~10 min)
+
+1. Install "httpSMS" from Google Play
+
+2. Sign up at https://app.httpsms.com (free, Google/GitHub login)
+
+3. In the app, tap **Link Phone** → register your SIM number
+
+4. Dashboard → Settings → **API Key** → copy key
+
+5. Dashboard → Settings → **Webhook** → set to:
+   `https://propos.addvantage.site/api/webhook/httpsms`
+
+6. Set Railway env vars:
+   ```env
+   SMS_TRANSPORT=httpsms
+   HTTPSMS_API_KEY=your_api_key
+   HTTPSMS_FROM=+61412345678     # your Android phone number
+   ```
+
+Free tier: 200 messages/month. For Vinuth's 5/day outreach campaign that's ~110/month.
+
+---
+
+## Recommended production config
+
+**Vinuth's Mac → outreach campaign:**
+```env
+SMS_TRANSPORT=bluebubbles
+SMS_TRANSPORT_FALLBACK=httpsms
+BLUEBUBBLES_URL=https://xxxx.trycloudflare.com
+BLUEBUBBLES_PASSWORD=your_bb_password
+HTTPSMS_API_KEY=your_key
+HTTPSMS_FROM=+61XXXXXXXXX
+```
+
+**iPhone-only agent (no Mac):**
+```env
+SMS_TRANSPORT=shortcut-relay
+SMS_TRANSPORT_FALLBACK=httpsms
+SHORTCUT_RELAY_SECRET=your_secret
+SHORTCUT_RELAY_DEVICE_ID=iphone-agent-1
+HTTPSMS_API_KEY=your_key
+HTTPSMS_FROM=+61XXXXXXXXX
+```
+
+**Android agent:**
+```env
+SMS_TRANSPORT=httpsms
+SMS_TRANSPORT_FALLBACK=android-gateway
+HTTPSMS_API_KEY=your_key
+HTTPSMS_FROM=+61XXXXXXXXX
+ANDROID_GW_URL=https://api.sms-gate.app
+ANDROID_GW_USER=user
+ANDROID_GW_PASS=pass
+```
+
+---
+
+## Health check
+
+```bash
+curl https://propos.addvantage.site/api/sms-transport
+# Returns active transport, fallback, and whether each is reachable
+```
