@@ -45,7 +45,7 @@ function bbUrl(path: string): string {
 export async function sendViaBlueBubbles(
   to: string,
   body: string,
-): Promise<{ guid: string; testMode: boolean }> {
+): Promise<{ sid: string; testMode: boolean }> {
   const testPhone  = process.env.TEST_RECIPIENT_PHONE?.trim()
   const actualTo   = testPhone ?? to
   const actualBody = testPhone ? `[TEST to ${to}]\n${body}` : body
@@ -75,7 +75,7 @@ export async function sendViaBlueBubbles(
       const json = await res.json() as { data?: { guid?: string }; error?: string }
       if (json.error) throw new Error(`BlueBubbles server error: ${json.error}`)
 
-      return { guid: json.data?.guid ?? tempGuid, testMode: !!testPhone }
+      return { sid: json.data?.guid ?? tempGuid, testMode: !!testPhone }
     } catch (err) {
       lastErr = err
       if (attempt < MAX_ATTEMPTS) {
