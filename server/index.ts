@@ -27,7 +27,7 @@ import boxdiceRouter from "./routes/boxdice.js"
 import authRouter from "./routes/auth.js"
 import { loadOptOuts, addOptOut } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
-import { activeTransport, checkSmsTransport } from "./lib/sms.js"
+import { activeTransport, checkSmsTransport, sendSMS } from "./lib/sms.js"
 import { parseBBWebhook, parseBBSendError, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
 import { watchIncomingImsg } from "./lib/imsg.js"
 import { parseTeleLinkWebhook, registerTeleLinkWebhook }            from "./lib/telelink.js"
@@ -276,6 +276,20 @@ app.post("/api/webhook/httpsms", express.json(), (req: Request, res: Response) =
 app.get("/api/sms-transport", async (_req: Request, res: Response) => {
   const status = await checkSmsTransport()
   res.json(status)
+})
+
+// POST /api/test-sms — fire a test SMS via the active transport, no DB required
+// Body: { to?: string, message?: string }  (both optional — defaults to TEST_RECIPIENT_PHONE + "Hello World!")
+app.post("/api/test-sms", express.json(), async (req: Request, res: Response) => {
+  const to      = String(req.body?.to      ?? process.env.TEST_RECIPIENT_PHONE ?? "").trim()
+  const message = String(req.body?.message ?? "Hello World!").trim()
+  if (!to) return res.status(400).json({ error: "No 'to' phone number — set TEST_RECIPIENT_PHONE or pass { to } in body" })
+  try {
+    const result = await sendSMS(to, message)
+    res.json({ ok: true, to, message, ...result })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message })
+  }
 })
 
 // ── AVM route ─────────────────────────────────────────────────────────────────
