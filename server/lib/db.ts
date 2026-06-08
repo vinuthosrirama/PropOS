@@ -229,6 +229,35 @@ async function migrate(): Promise<void> {
     DELETE FROM nurture_queue
       WHERE status IN ('sent', 'cancelled', 'failed')
         AND updated_at < NOW() - INTERVAL '90 days';
+
+    -- ── PropOS self-demo outreach targets (boutique RE agents we are pitching) ──
+    CREATE TABLE IF NOT EXISTS outreach_targets (
+      id                  SERIAL PRIMARY KEY,
+      name                TEXT NOT NULL,
+      agency              TEXT NOT NULL,
+      phone               TEXT,
+      email               TEXT,
+      suburb              TEXT,
+      state               TEXT DEFAULT 'VIC',
+      recent_sale_address TEXT,
+      years_in_area       INTEGER,
+      agency_size_est     INTEGER,
+      personal_note       TEXT,
+      sms_script          TEXT,
+      source              TEXT DEFAULT 'manual',
+      status              TEXT NOT NULL DEFAULT 'new'
+                          CHECK (status IN ('new','contacted','replied','demo_booked','won','not_interested')),
+      last_contact_date   TIMESTAMPTZ,
+      last_message        TEXT,
+      reply_body          TEXT,
+      demo_booked_at      TIMESTAMPTZ,
+      notes               TEXT,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS outreach_targets_phone_idx ON outreach_targets(phone) WHERE phone IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS outreach_targets_email_idx ON outreach_targets(email) WHERE email IS NOT NULL;
+    CREATE INDEX        IF NOT EXISTS outreach_targets_status_idx ON outreach_targets(status);
   `)
 }
 
