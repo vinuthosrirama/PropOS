@@ -258,6 +258,22 @@ async function migrate(): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS outreach_targets_phone_idx ON outreach_targets(phone) WHERE phone IS NOT NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS outreach_targets_email_idx ON outreach_targets(email) WHERE email IS NOT NULL;
     CREATE INDEX        IF NOT EXISTS outreach_targets_status_idx ON outreach_targets(status);
+
+    -- AI-generated reply drafts awaiting Vinuth's approval before sending
+    CREATE TABLE IF NOT EXISTS outreach_drafts (
+      id           SERIAL PRIMARY KEY,
+      target_id    INTEGER NOT NULL,
+      inbound_body TEXT NOT NULL DEFAULT '',
+      draft_body   TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending','approved','rejected','sent')),
+      sent_at      TIMESTAMPTZ,
+      edited_body  TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS outreach_drafts_target_idx ON outreach_drafts(target_id);
+    CREATE INDEX IF NOT EXISTS outreach_drafts_status_idx ON outreach_drafts(status);
   `)
 }
 

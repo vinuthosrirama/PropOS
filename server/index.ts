@@ -48,6 +48,8 @@ import outreachTargetsRouter from "./routes/outreach-targets.js"
 import { loadConversations, addReplyToThread } from "./lib/conversations.js"
 import { initDb, isDbConnected, query } from "./lib/db.js"
 import { startScheduler, cancelNurtureJobs } from "./lib/scheduler.js"
+import { startOutreachScheduler } from "./lib/outreachScheduler.js"
+import { handleOutreachInbound } from "./lib/outreachAgent.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
@@ -138,16 +140,21 @@ app.use("/api/gdpr",             gdprRouter)
 app.use("/api/market-update",    marketUpdateRouter)
 app.use("/api/outreach-targets", outreachTargetsRouter)
 
-// ── Shared reply handler (BlueBubbles + imsg use the same pipeline as Twilio) ──
+// ── Shared reply handler (all transports feed here) ──────────────────────────
 async function handleIncomingReply(from: string, body: string): Promise<void> {
   const lowerBody = body.toLowerCase().trim()
   try {
     if (["stop", "unsubscribe", "cancel", "quit", "end", "stopall"].includes(lowerBody)) {
       await addOptOut(from, "sms", "reply")
     } else {
+      // 1. Store in conversation thread (buyer/vendor lead pipeline)
       await addReplyToThread(from, body)
       void writeToSheet({ type: "update_lead_status", phone: from, status: "sms_replied", detail: body.slice(0, 200) })
       await cancelNurtureJobs(from)
+
+      // 2. Also check if this is one of our outreach targets (Vinuth self-outreach campaign)
+      //    Non-fatal — runs in parallel with the lead pipeline above
+      void handleOutreachInbound(from, body)
     }
   } catch (err) {
     console.error("[reply-handler] error:", (err as Error).message)
@@ -328,8 +335,9 @@ app.listen(PORT, async () => {
     console.warn("  ⚠️  Set DATABASE_URL before enabling the nurture scheduler in production.")
   }
 
-  // 3. Start nurture scheduler (no-ops if no DB)
+  // 3. Start schedulers (both no-op if no DB)
   startScheduler()
+  startOutreachScheduler()
 
   // 4. Wire up transport-specific init
   if (smsTransport === "bluebubbles" && process.env.BASE_URL) {

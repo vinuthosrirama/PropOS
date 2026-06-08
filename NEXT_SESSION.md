@@ -1,5 +1,5 @@
 # PropOS — Session Notes & Ideas Bank
-_Last updated: 8 June 2026 — Session 12 (Cloud/Remote session)_
+_Last updated: 8 June 2026 — Session 13 (Cloud/Remote session)_
 
 ---
 
@@ -43,6 +43,116 @@ npx wrangler pages deploy dist --project-name openhome-engine --commit-dirty=tru
 - Frontend: Cloudflare Pages (openhome-engine project) → propos.addvantage.site
 - Backend: Railway (auto-deploys from main branch)
 - DB: Supabase PostgreSQL (DATABASE_URL in Railway env vars)
+
+---
+
+## Session 13 Summary — What Was Built (8 June 2026)
+
+### Complete Self-Outreach AI Agent — End-to-End
+
+#### 1. Outreach Agent (`server/lib/outreachAgent.ts`) — NEW
+Claude-powered reply and follow-up generator for Vinuth's campaign pitching PropOS to RE agents.
+
+- `generateOutreachDraft(target, inboundMessage)` — Claude haiku generates a reply in Vinuth's voice (<=160 chars, no em-dashes)
+- `generateFollowUp(target, daysSince)` — generates a fresh follow-up angle for non-replied targets
+- `handleOutreachInbound(from, body)` — called from the inbound webhook; matches phone to outreach_targets, updates CRM status, saves draft
+- `getMorningBrief()` — returns overnight replies, pending drafts, follow-ups due, CRM stats
+- `saveOutreachDraft/getPendingDrafts/approveDraft/markDraftSent/rejectDraft` — full draft lifecycle
+
+Vinuth's voice profile embedded as Claude system prompt:
+- Direct, 1-2 sentences, references specific sale prices/data
+- Australian tone, no corporate speak, signs off as "Vinuth"
+- Moves every conversation toward a 5-min demo call
+
+#### 2. Outreach Scheduler (`server/lib/outreachScheduler.ts`) — NEW
+Cron-based daily automation:
+- 9:00am Melbourne (weekdays): morning brief logged to console + follow-up drafts queued
+- 10:00am Melbourne (weekdays): sends up to 5 initial messages to 'new' targets with ±12min jitter
+- Hardened: test mode (TEST_RECIPIENT_PHONE), daily cap (OUTREACH_DAILY_CAP=5), carrier throttle gaps
+- `triggerOutreachNow(limit)` — manual trigger for testing
+- `getSchedulerStatus()` — returns running state, caps, test mode info
+
+#### 3. outreach_drafts table (`server/lib/db.ts` update)
+New DB table auto-created on startup:
+- Stores AI-generated reply drafts with status: pending/approved/rejected/sent
+- Linked to outreach_targets via target_id
+- Indexes on target_id and status for fast inbox queries
+
+#### 4. New API Endpoints (`server/routes/outreach-targets.ts` additions)
+```
+GET  /api/outreach-targets/brief              — morning summary (drafts, replies, follow-ups)
+GET  /api/outreach-targets/drafts             — pending AI drafts awaiting approval
+POST /api/outreach-targets/approve-draft/:id  — approve (+ optional edit) + send immediately
+POST /api/outreach-targets/reject-draft/:id   — discard draft
+POST /api/outreach-targets/trigger-now        — manually fire today's sends (test)
+GET  /api/outreach-targets/:id/thread         — full conversation thread + drafts for one target
+POST /api/outreach-targets/:id/reply          — manually send custom reply
+POST /api/outreach-targets/:id/generate-draft — on-demand AI draft generation
+```
+
+#### 5. Inbound Routing (`server/index.ts` update)
+`handleIncomingReply` now runs both pipelines in parallel:
+1. Existing: addReplyToThread + cancelNurtureJobs (buyer/vendor lead pipeline)
+2. New: handleOutreachInbound (self-outreach CRM pipeline — non-fatal, void)
+
+#### 6. Product Scope Document (`PROPTECH_SCOPE.md`) — NEW
+Complete product vision, architecture diagram, daily workflow, all API endpoints,
+environment variable reference, CRM status flow, roadmap P0-P2, and competitor context.
+This is the source of truth for future sessions.
+
+#### 7. SMS Script Fixes (`server/data/outreachTargetsSeed.ts`)
+All 16 outreach SMS scripts fixed: each now <=160 chars, zero em-dashes, full personalisation retained.
+Simulation test confirms: all scripts 143-158 chars.
+
+---
+
+## Session 13 — P0 Launch Checklist (on your Mac)
+
+### Step 1: Merge and deploy
+```bash
+cd "/Users/vinuthmacbook/Desktop/Claude/AddVantageOS/REA Agents/PropOS"
+git fetch origin
+git checkout main
+git merge claude/prop-os-repo-access-vo46q
+git push origin main           # Railway auto-deploys backend
+npm run build
+npx wrangler pages deploy dist --project-name openhome-engine --commit-dirty=true
+```
+
+### Step 2: Set server env vars on Railway
+Add these to Railway → your service → Variables:
+```
+ANTHROPIC_API_KEY=sk-ant-...   (required for AI drafts)
+TEST_RECIPIENT_PHONE=+61XXXXXXXXX    (YOUR number — redirect all sends to you for testing)
+OUTREACH_DAILY_CAP=5
+OUTREACH_FOLLOWUP_DAYS=3
+```
+Plus whichever SMS transport you're using (see PROPTECH_SCOPE.md).
+
+### Step 3: Seed outreach targets
+```bash
+curl -X POST https://propos.addvantage.site/api/outreach-targets/seed
+# Expected: {"ok":true,"total":16,"upserted":16}
+```
+
+### Step 4: Test the full loop on YOUR number
+```bash
+# Fire one send to yourself (TEST_RECIPIENT_PHONE)
+curl -X POST https://propos.addvantage.site/api/outreach-targets/trigger-now \
+  -H "Content-Type: application/json" -d '{"limit":1}'
+
+# Text yourself a fake reply (simulates what happens when an agent replies)
+# The system will auto-generate a Claude draft for your approval
+
+# Check pending drafts
+curl https://propos.addvantage.site/api/outreach-targets/drafts
+
+# Approve the draft and send it back to yourself
+curl -X POST https://propos.addvantage.site/api/outreach-targets/approve-draft/1
+```
+
+### Step 5: Go live
+Once the loop works end-to-end on your own number, REMOVE TEST_RECIPIENT_PHONE from Railway env vars. The scheduler will start sending to real targets at 10am the next business day.
 
 ---
 

@@ -1,15 +1,37 @@
 /**
- * POST /api/outreach-targets/seed   — upsert the static seed list (one-time setup)
- * GET  /api/outreach-targets        — list all targets (optional ?status= filter)
- * GET  /api/outreach-targets/:id    — single target
- * PUT  /api/outreach-targets/:id    — update status / notes / reply
- * POST /api/outreach-targets/send/:id — fire the SMS script for a target via active transport
+ * Self-outreach campaign management — Vinuth pitching PropOS to boutique RE agents.
+ *
+ * POST /api/outreach-targets/seed              — upsert the 16-agent seed list
+ * GET  /api/outreach-targets                   — list all targets (?status= filter)
+ * GET  /api/outreach-targets/brief             — morning summary (drafts, replies, follow-ups due)
+ * GET  /api/outreach-targets/drafts            — pending AI reply drafts awaiting approval
+ * POST /api/outreach-targets/approve-draft/:id — approve (+ optional edit) + send draft
+ * POST /api/outreach-targets/reject-draft/:id  — discard draft
+ * POST /api/outreach-targets/trigger-now       — manually fire today's outreach (test mode)
+ * GET  /api/outreach-targets/:id               — single target
+ * GET  /api/outreach-targets/:id/thread        — full conversation thread for a target
+ * POST /api/outreach-targets/:id/reply         — manually send a custom reply to a target
+ * PUT  /api/outreach-targets/:id               — update status / notes / reply
+ * POST /api/outreach-targets/send/:id          — fire the pre-written sms_script
+ * POST /api/outreach-targets/send-batch        — fire scripts for all 'new' targets
  */
 
 import { Router } from "express"
 import { query, execute, isDbConnected } from "../lib/db.js"
 import { sendSMS, smsConfigured } from "../lib/sms.js"
+import { addAgentMessageToThread, getThread } from "../lib/conversations.js"
 import { OUTREACH_TARGETS_SEED } from "../data/outreachTargetsSeed.js"
+import {
+  getPendingDrafts,
+  approveDraft,
+  markDraftSent,
+  rejectDraft,
+  getMorningBrief,
+  generateOutreachDraft,
+  saveOutreachDraft,
+  type OutreachTargetRow,
+} from "../lib/outreachAgent.js"
+import { triggerOutreachNow, getSchedulerStatus } from "../lib/outreachScheduler.js"
 
 const router = Router()
 
@@ -125,6 +147,176 @@ router.put("/:id", async (req, res) => {
     params,
   )
   res.json({ ok: true })
+})
+
+// ── Morning brief ─────────────────────────────────────────────────────────────
+
+router.get("/brief", async (_req, res) => {
+  if (!isDbConnected()) return res.json({ demo: true, pendingDrafts: 0 })
+  const brief = await getMorningBrief()
+  const schedulerStatus = getSchedulerStatus()
+  res.json({ ...brief, scheduler: schedulerStatus })
+})
+
+// ── Pending AI drafts ─────────────────────────────────────────────────────────
+
+router.get("/drafts", async (_req, res) => {
+  if (!isDbConnected()) return res.json({ drafts: [], demo: true })
+  const drafts = await getPendingDrafts()
+  res.json({ drafts, total: drafts.length })
+})
+
+// ── Approve draft and send ────────────────────────────────────────────────────
+
+router.post("/approve-draft/:id", async (req, res) => {
+  if (!isDbConnected()) return res.status(503).json({ error: "No database" })
+  if (!smsConfigured())  return res.status(503).json({ error: "No SMS transport configured" })
+
+  const draftId = parseInt(req.params.id, 10)
+  const editedBody = typeof req.body?.editedBody === "string" ? req.body.editedBody.slice(0, 300) : undefined
+
+  // Approve (optionally with edit) — returns body to send
+  const body = await approveDraft(draftId, editedBody)
+  if (!body) return res.status(404).json({ error: "Draft not found or already processed" })
+
+  // Look up the target to get the phone number
+  const rows = await query<{ target_id: number }>(
+    `SELECT target_id FROM outreach_drafts WHERE id = $1`, [draftId],
+  )
+  const targetId = rows[0]?.target_id
+  if (!targetId) return res.status(404).json({ error: "Target not found" })
+
+  const targets = await query<OutreachTargetRow>(
+    `SELECT * FROM outreach_targets WHERE id = $1`, [targetId],
+  )
+  const target = targets[0]
+  if (!target?.phone) return res.status(400).json({ error: "Target has no phone number" })
+
+  try {
+    const result = await sendSMS(target.phone, body)
+    await markDraftSent(draftId)
+
+    // Record in conversation thread
+    await addAgentMessageToThread(target.phone, body, {
+      leadName: target.name,
+      propertyAddress: target.recent_sale_address ?? "",
+    })
+
+    // Update CRM last_message
+    await execute(
+      `UPDATE outreach_targets SET last_message = $1, last_contact_date = NOW(), updated_at = NOW() WHERE id = $2`,
+      [body.slice(0, 300), targetId],
+    )
+
+    res.json({
+      ok:        true,
+      sid:       result.sid,
+      transport: result.transport,
+      testMode:  result.testMode,
+      sent:      body,
+      to:        target.phone,
+      name:      target.name,
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    res.status(502).json({ error: `SMS send failed: ${msg}` })
+  }
+})
+
+// ── Reject draft ──────────────────────────────────────────────────────────────
+
+router.post("/reject-draft/:id", async (req, res) => {
+  if (!isDbConnected()) return res.status(503).json({ error: "No database" })
+  await rejectDraft(parseInt(req.params.id, 10))
+  res.json({ ok: true })
+})
+
+// ── Manual trigger (test mode) ────────────────────────────────────────────────
+
+router.post("/trigger-now", async (req, res) => {
+  if (!isDbConnected()) return res.status(503).json({ error: "No database" })
+  if (!smsConfigured())  return res.status(503).json({ error: "No SMS transport configured" })
+  const limit = Math.min(Number(req.body?.limit ?? 1), 5)
+  const result = await triggerOutreachNow(limit)
+  res.json(result)
+})
+
+// ── Conversation thread for a target ─────────────────────────────────────────
+
+router.get("/:id/thread", async (req, res) => {
+  if (!isDbConnected()) return res.status(503).json({ error: "No database" })
+  const targets = await query<OutreachTargetRow>(
+    `SELECT * FROM outreach_targets WHERE id = $1`, [req.params.id],
+  )
+  const target = targets[0]
+  if (!target) return res.status(404).json({ error: "Target not found" })
+
+  let thread = null
+  if (target.phone) {
+    thread = await getThread(target.phone)
+  }
+
+  const drafts = await query(
+    `SELECT id, inbound_body, draft_body, status, created_at
+     FROM outreach_drafts WHERE target_id = $1 ORDER BY created_at DESC LIMIT 10`,
+    [target.id],
+  )
+
+  res.json({ target, thread, drafts })
+})
+
+// ── Manual custom reply ───────────────────────────────────────────────────────
+
+router.post("/:id/reply", async (req, res) => {
+  if (!isDbConnected()) return res.status(503).json({ error: "No database" })
+  if (!smsConfigured())  return res.status(503).json({ error: "No SMS transport configured" })
+
+  const targets = await query<OutreachTargetRow>(
+    `SELECT * FROM outreach_targets WHERE id = $1`, [req.params.id],
+  )
+  const target = targets[0]
+  if (!target) return res.status(404).json({ error: "Target not found" })
+  if (!target.phone) return res.status(400).json({ error: "No phone number" })
+
+  const body = typeof req.body?.message === "string" ? req.body.message.trim() : ""
+  if (!body) return res.status(400).json({ error: "message is required" })
+  if (body.length > 300) return res.status(400).json({ error: "message too long (max 300 chars)" })
+
+  try {
+    const result = await sendSMS(target.phone, body)
+    await addAgentMessageToThread(target.phone, body, {
+      leadName: target.name,
+      propertyAddress: target.recent_sale_address ?? "",
+    })
+    await execute(
+      `UPDATE outreach_targets
+       SET last_message = $1, last_contact_date = NOW(), updated_at = NOW()
+       WHERE id = $2`,
+      [body.slice(0, 300), target.id],
+    )
+    res.json({ ok: true, sid: result.sid, transport: result.transport, testMode: result.testMode })
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : String(err) })
+  }
+})
+
+// ── Generate AI draft for a target on demand ──────────────────────────────────
+
+router.post("/:id/generate-draft", async (req, res) => {
+  if (!isDbConnected()) return res.status(503).json({ error: "No database" })
+  const targets = await query<OutreachTargetRow>(
+    `SELECT * FROM outreach_targets WHERE id = $1`, [req.params.id],
+  )
+  const target = targets[0]
+  if (!target) return res.status(404).json({ error: "Target not found" })
+
+  const inboundMessage = typeof req.body?.inbound === "string"
+    ? req.body.inbound.slice(0, 500)
+    : "(manual request — no inbound message)"
+
+  const draft = await generateOutreachDraft(target, inboundMessage)
+  const draftId = await saveOutreachDraft(target.id, inboundMessage, draft)
+  res.json({ ok: true, draft, draftId })
 })
 
 // ── Send SMS ──────────────────────────────────────────────────────────────────
