@@ -570,7 +570,14 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
   const [syncing, setSyncing] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [openSections, setOpenSections] = useState<Record<number, Set<number>>>({})
-  const [settingsTab, setSettingsTab] = useState<"slm" | "voice" | "comms" | "listings" | "analytics" | "integrations" | "display">("slm")
+  const SETTINGS_TAB_KEY = `propOS_settingsTab_${agent.name.replace(/\s+/g, "_")}`
+  const [settingsTab, setSettingsTab] = useState<"slm" | "voice" | "comms" | "listings" | "connections" | "display">(() => {
+    try { return (localStorage.getItem(SETTINGS_TAB_KEY) as typeof settingsTab) ?? "slm" } catch { return "slm" }
+  })
+  const navigateTab = (t: typeof settingsTab) => {
+    setSettingsTab(t)
+    try { localStorage.setItem(SETTINGS_TAB_KEY, t) } catch {}
+  }
   const [corpus, setCorpus] = useState<TrainingEntry[]>(() => loadCorpus())
 
   // Load all SLMs on mount — seed blank SLMs with portfolio address/suburb
@@ -785,10 +792,10 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
 
         {/* ── Top-level tab strip ── */}
         <div style={{ display: "flex", gap: 2, marginBottom: 28, flexWrap: "wrap" }}>
-          {(["slm", "voice", "comms", "listings", "display", "analytics", "integrations"] as const).map(tab => (
+          {(["slm", "voice", "comms", "listings", "display", "connections"] as const).map(tab => (
             <button
               key={tab}
-              onClick={() => setSettingsTab(tab)}
+              onClick={() => navigateTab(tab)}
               style={{
                 background: settingsTab === tab ? "var(--accent, rgb(166,218,255))" : C.bg2,
                 border: `1px solid ${settingsTab === tab ? "transparent" : C.border}`,
@@ -806,14 +813,12 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
                 : tab === "comms" ? "Comms"
                 : tab === "listings" ? "Listings"
                 : tab === "display" ? "Display"
-                : tab === "analytics" ? "Analytics"
-                : "Integrations"}
+                : "Connections"}
             </button>
           ))}
         </div>
 
-        {settingsTab === "analytics" && <AnalyticsDashboard agent={agent} theme={getAgencyTheme(agent.agency)} />}
-        {settingsTab === "integrations" && <IntegrationsPanel />}
+        {settingsTab === "connections" && <ConnectionsPanel agent={agent} />}
         {settingsTab === "comms" && <CommsPanel agent={agent} />}
         {settingsTab === "listings" && <ListingsPanel agent={agent} />}
 
@@ -1132,8 +1137,239 @@ interface VoiceStylePanelProps {
   onClearAll: () => void
 }
 
-// ── Integrations health panel ─────────────────────────────────────────────────
+// ── Combined Connections panel (Analytics + Integrations + AgentBox CRM) ───────
 type HealthStatus = { openai: boolean; anthropic: boolean; sheet: boolean; twilio: boolean; gmail: boolean }
+
+const AGENTBOX_KEY_STORE = "propOS_agentbox_creds"
+
+function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
+  const theme = getAgencyTheme(agent.agency)
+  const [health, setHealth] = useState<HealthStatus | null>(null)
+  const [healthLoading, setHealthLoading] = useState(true)
+  const [healthError, setHealthError] = useState<string | null>(null)
+
+  // AgentBox credentials (stored locally — never sent to PropOS server)
+  const [agentBoxCreds, setAgentBoxCreds] = useState<{ apiKey: string; clientId: string; officeId: string }>(() => {
+    try { return JSON.parse(localStorage.getItem(AGENTBOX_KEY_STORE) ?? "{}") } catch { return {} }
+  })
+  const [abTesting, setAbTesting] = useState(false)
+  const [abResult, setAbResult] = useState<"ok" | "error" | null>(null)
+  const [abContactCount, setAbContactCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    authFetch("/api/health")
+      .then(r => r.json())
+      .then(d => { setHealth(d as HealthStatus); setHealthLoading(false) })
+      .catch(() => { setHealthError("Could not reach server"); setHealthLoading(false) })
+  }, [])
+
+  const saveAgentBoxCreds = (creds: typeof agentBoxCreds) => {
+    setAgentBoxCreds(creds)
+    try { localStorage.setItem(AGENTBOX_KEY_STORE, JSON.stringify(creds)) } catch {}
+  }
+
+  const testAgentBoxConnection = async () => {
+    if (!agentBoxCreds.apiKey || !agentBoxCreds.clientId) return
+    setAbTesting(true); setAbResult(null)
+    try {
+      // AgentBox API: GET /contacts returns paginated contact list
+      const res = await fetch("https://api.agentboxcrm.com.au/contacts?limit=1", {
+        headers: {
+          "X-Client-ID": agentBoxCreds.clientId,
+          "X-API-Key":   agentBoxCreds.apiKey,
+          "Accept":      "application/json",
+        },
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      // AgentBox wraps results in response.contacts or response.data
+      const count = data?.response?.contacts?.length ?? data?.response?.totalRecordCount ?? data?.contacts?.length ?? null
+      setAbContactCount(count)
+      setAbResult("ok")
+    } catch {
+      setAbResult("error")
+    }
+    setAbTesting(false)
+  }
+
+  const services: { key: keyof HealthStatus; label: string; description: string; icon: string }[] = [
+    { key: "openai",    label: "OpenAI (GPT-4o)",  description: "Outreach generation engine",    icon: "🤖" },
+    { key: "anthropic", label: "Anthropic Claude",  description: "Lead grading + QA review",      icon: "🧠" },
+    { key: "sheet",     label: "Google Sheets",     description: "Lead data sync",                icon: "📊" },
+    { key: "twilio",    label: "Twilio SMS",        description: "SMS delivery",                  icon: "💬" },
+    { key: "gmail",     label: "Gmail",             description: "Email delivery",                icon: "📧" },
+  ]
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Connections</div>
+      <div style={{ fontSize: 14, color: C.muted, marginBottom: 32, lineHeight: 1.5 }}>
+        Live status of all connected services + CRM integrations.
+      </div>
+
+      {/* ── Service health ───────────────────────────────────────────────────── */}
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
+        Proptech Services
+      </div>
+      {healthLoading && <div style={{ color: C.muted, fontSize: 13, marginBottom: 24 }}>Checking connections…</div>}
+      {healthError  && <div style={{ color: C.red,  fontSize: 13, marginBottom: 24 }}>{healthError}</div>}
+      {health && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 32 }}>
+          {services.map(({ key, label, description, icon }) => {
+            const ok = health[key]
+            return (
+              <div key={key} style={{
+                display: "flex", alignItems: "center", gap: 14,
+                background: C.bg2, border: `1px solid ${ok ? C.green + "33" : C.red + "33"}`,
+                borderRadius: 12, padding: "12px 16px",
+              }}>
+                <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{label}</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{description}</div>
+                </div>
+                <div style={{
+                  fontSize: 11, fontWeight: 700,
+                  color: ok ? C.green : C.red,
+                  background: ok ? C.green + "18" : C.red + "18",
+                  borderRadius: 6, padding: "3px 8px",
+                }}>
+                  {ok ? "Connected" : "Offline"}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── AgentBox CRM ────────────────────────────────────────────────────── */}
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
+        CRM — AgentBox (Reapit ANZ)
+      </div>
+      <div style={{
+        background: C.bg2, border: `1px solid ${agentBoxCreds.apiKey ? theme.primary + "44" : C.border}`,
+        borderRadius: 14, padding: "20px 20px 16px", marginBottom: 32,
+      }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+            background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 20,
+          }}>🏠</div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 3 }}>AgentBox CRM</div>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+              Australia's most widely-deployed real estate CRM. Connect to pull contacts, listings, and inspection data directly into PropOS — eliminating manual Google Sheets exports.
+            </div>
+          </div>
+        </div>
+
+        {/* API endpoint summary */}
+        <div style={{
+          background: C.bg3, borderRadius: 8, padding: "10px 14px", marginBottom: 16,
+          border: `1px solid ${C.border}`,
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
+            What PropOS reads from AgentBox
+          </div>
+          {[
+            { endpoint: "GET /contacts",     desc: "Sync buyer + vendor contacts → VendorOS pipeline" },
+            { endpoint: "GET /listings",     desc: "Pull active + sold listings → Active Listings + Comparable Sales" },
+            { endpoint: "GET /inspections",  desc: "Import open-home attendees → BuyerOS lead database" },
+            { endpoint: "POST /notes",       desc: "Write outreach activity back to contact record" },
+          ].map(r => (
+            <div key={r.endpoint} style={{ display: "flex", gap: 10, marginBottom: 4, alignItems: "flex-start" }}>
+              <code style={{ fontSize: 10, color: theme.primary, background: theme.primary + "12", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                {r.endpoint}
+              </code>
+              <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{r.desc}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Credentials form */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+          {[
+            { key: "apiKey",   label: "X-API-Key",    placeholder: "Issued by AgentBox per agency" },
+            { key: "clientId", label: "X-Client-ID",  placeholder: "Your agency client identifier" },
+            { key: "officeId", label: "Office ID",    placeholder: "Optional — multi-office agencies" },
+          ].map(({ key, label, placeholder }) => (
+            <div key={key}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 4 }}>{label}</div>
+              <input
+                type="password"
+                value={(agentBoxCreds as Record<string, string>)[key] ?? ""}
+                onChange={e => saveAgentBoxCreds({ ...agentBoxCreds, [key]: e.target.value })}
+                placeholder={placeholder}
+                style={{
+                  width: "100%", padding: "9px 12px", borderRadius: 8,
+                  background: C.bg, border: `1px solid ${C.border}`,
+                  color: C.text, fontSize: 13, fontFamily: "inherit",
+                  outline: "none",
+                }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Test connection + status */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            onClick={testAgentBoxConnection}
+            disabled={!agentBoxCreds.apiKey || !agentBoxCreds.clientId || abTesting}
+            style={{
+              padding: "8px 18px", borderRadius: 8, border: "none",
+              background: agentBoxCreds.apiKey ? theme.primary : C.bg3,
+              color: agentBoxCreds.apiKey ? "#fff" : C.faint,
+              fontSize: 12, fontWeight: 700, cursor: agentBoxCreds.apiKey ? "pointer" : "not-allowed",
+              fontFamily: "inherit",
+            }}
+          >
+            {abTesting ? "Testing…" : "Test Connection"}
+          </button>
+          {abResult === "ok" && (
+            <div style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>
+              ✅ Connected{abContactCount !== null ? ` — ${abContactCount} contact${abContactCount === 1 ? "" : "s"} found` : ""}
+            </div>
+          )}
+          {abResult === "error" && (
+            <div style={{ fontSize: 12, color: C.red, fontWeight: 600 }}>
+              ❌ Connection failed — check your API key and Client ID
+            </div>
+          )}
+        </div>
+
+        {/* How to get access */}
+        <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 8, background: C.bg, border: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
+            How to get API access
+          </div>
+          <ol style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 4 }}>
+            {[
+              "Submit an integrator application at agentbox.com.au/integrator-application",
+              "Email salessupportanz@reapit.com to request sandbox credentials",
+              "AgentBox QA-reviews the integration before issuing production keys (2–4 weeks)",
+              "Paste your X-API-Key and X-Client-ID above and click Test Connection",
+            ].map((step, i) => (
+              <li key={i} style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+                {step.includes("agentbox.com.au") ? (
+                  <><a href="https://www.agentbox.com.au/integrator-application" target="_blank" rel="noopener noreferrer" style={{ color: theme.primary }}>agentbox.com.au/integrator-application</a>{step.slice(step.indexOf(" ") + 1)}</>
+                ) : step}
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+
+      {/* ── Analytics ───────────────────────────────────────────────────────── */}
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
+        Analytics
+      </div>
+      <AnalyticsDashboard agent={agent} theme={theme} />
+    </div>
+  )
+}
 
 function IntegrationsPanel() {
   const [health, setHealth] = useState<HealthStatus | null>(null)
@@ -1982,10 +2218,10 @@ const VENDOR_PANEL_META: Array<{
   { key: "showEquityScenarios", label: "Equity Release Scenarios",     description: "Low / mid / high sale price breakdown with net proceeds",       group: "Vendor Profile" },
   { key: "showOptimalWindow",   label: "Optimal Listing Window",       description: "AI-predicted best months to list based on market data",         group: "Vendor Profile" },
   // ── Noise reduction toggles ───────────────────────────────────────────────
-  { key: "showMarketTriggers",  label: "Market Trigger Feed",          description: "Smart alerts on the vendor pipeline page (neighbour sales, CGT windows, life events)", group: "Noise Reduction" },
-  { key: "showComparableMap",   label: "Comparable Sales Map",         description: "Interactive Leaflet map of recent comparable sales in the vendor appraisal panel",     group: "Noise Reduction" },
-  { key: "showMatchScores",     label: "Match Score Rings",            description: "Visual score rings on buyer lead cards",                                                group: "Noise Reduction" },
-  { key: "showDNAAnalysis",     label: "Property DNA Analysis",        description: "AI-generated property DNA tags on vendor profile",                                      group: "Noise Reduction" },
+  { key: "showMarketTriggers",  label: "Market Trigger Feed",          description: "Smart alerts on the vendor pipeline page (neighbour sales, CGT windows, life events)", group: "Interface Controls" },
+  { key: "showComparableMap",   label: "Comparable Sales Map",         description: "Interactive Leaflet map of recent comparable sales in the vendor appraisal panel",     group: "Interface Controls" },
+  { key: "showMatchScores",     label: "Match Score Rings",            description: "Visual score rings on buyer lead cards",                                                group: "Interface Controls" },
+  { key: "showDNAAnalysis",     label: "Property DNA Analysis",        description: "AI-generated property DNA tags on vendor profile",                                      group: "Interface Controls" },
   { key: "forceDemoData",       label: "Force demo data",              description: "Always use built-in demo leads for buyer view (ignores Google Sheets). Useful during presentations.", group: "Demo Mode" },
 ]
 
@@ -2029,7 +2265,7 @@ function VendorPanelToggles({
     return acc
   }, {})
 
-  const groupOrder = ["Vendor Profile", "Noise Reduction", "Demo Mode"]
+  const groupOrder = ["Vendor Profile", "Interface Controls", "Demo Mode"]
 
   const groupLabel: React.CSSProperties = {
     fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
