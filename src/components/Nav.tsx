@@ -12,9 +12,9 @@ function productLabel(mode: DemoMode | null): string {
 }
 
 export const VIEWS: { id: ViewId; label: string; short: string; principalOnly?: boolean }[] = [
-  { id: "demo",      label: "Demo",     short: "Demo" },
-  { id: "setup",     label: "Settings", short: "Settings" },
-  { id: "principal", label: "Office",   short: "Office", principalOnly: true },
+  { id: "demo",      label: "Launchpad", short: "Launchpad" },
+  { id: "setup",     label: "Settings",  short: "Settings" },
+  { id: "principal", label: "Office",    short: "Office", principalOnly: true },
 ]
 
 export default function Nav({
@@ -73,10 +73,6 @@ export default function Nav({
   ) : sheetStatus === "loading" ? (
     <div style={{ padding: "3px 8px", borderRadius: 10, background: "rgba(166,218,255,0.1)", fontSize: 10, color: C.muted, whiteSpace: "nowrap", flexShrink: 0 }}>
       ○ Connecting...
-    </div>
-  ) : sheetStatus === "error" ? (
-    <div style={{ padding: "3px 8px", borderRadius: 10, background: "rgba(255,80,80,0.08)", fontSize: 10, color: C.red, whiteSpace: "nowrap", flexShrink: 0 }}>
-      ○ Demo mode
     </div>
   ) : null
 
@@ -182,6 +178,19 @@ export default function Nav({
                   {i < currentIdx && <span style={{ marginLeft: "auto", color: C.green, fontSize: 12 }}>✓</span>}
                 </button>
               ))}
+              {view === "demo" && mode === "buyer" && (
+                <button onClick={() => { window.dispatchEvent(new CustomEvent("propos:captureLead")); setMenuOpen(false) }} style={{
+                  width: "100%", padding: "14px 20px",
+                  display: "flex", alignItems: "center",
+                  background: theme.dim, border: "none", cursor: "pointer",
+                  fontFamily: FONT, borderLeft: `3px solid ${theme.primary}`,
+                  borderTop: `1px solid ${C.border}`, marginTop: 4,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: lightMode ? theme.primary : "rgb(225,205,255)" }}>
+                    + Capture Lead
+                  </div>
+                </button>
+              )}
               {onSwitchMode && mode && (
                 <button onClick={() => { onSwitchMode(mode === "buyer" ? "vendor" : "buyer"); setMenuOpen(false) }} style={{
                   width: "100%", padding: "14px 20px",
@@ -287,6 +296,25 @@ export default function Nav({
             </button>
           )
         })}
+
+        {/* Capture Lead — only visible on Launchpad in buyer mode */}
+        {view === "demo" && mode === "buyer" && (
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("propos:captureLead"))}
+            style={{
+              padding: bp === "tablet" ? "4px 8px" : "4px 11px",
+              borderRadius: 7,
+              border: `1px solid ${theme.primary}55`,
+              background: theme.dim,
+              color: lightMode ? theme.primary : "rgb(225,205,255)",
+              fontSize: bp === "tablet" ? 10 : 11,
+              fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT, cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            + Capture Lead
+          </button>
+        )}
 
         {/* Mode toggle — Buyer / Vendor */}
         {onSwitchMode && mode && (

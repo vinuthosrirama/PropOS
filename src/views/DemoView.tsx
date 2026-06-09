@@ -394,7 +394,13 @@ function SoldCard({ property, leads, loading, theme, onClick }: {
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
       />
 
-      {/* Layer 2 — agency colour gradient: transparent at top → solid at bottom */}
+      {/* Layer 2a — dark scrim at top for consistent badge/date contrast */}
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.10) 30%, transparent 50%)",
+      }} />
+
+      {/* Layer 2b — agency colour gradient: transparent → solid at bottom */}
       <div style={{
         position: "absolute", inset: 0,
         background: `linear-gradient(180deg, ${withAlpha(theme.primary, 0)} 0%, ${withAlpha(theme.primary, 0)} 28%, ${withAlpha(theme.primary, 0.75)} 62%, ${withAlpha(theme.primary, 1)} 100%)`,
@@ -838,6 +844,13 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
   const [leadSaving, setLeadSaving] = useState(false)
   const [leadSaved, setLeadSaved] = useState(false)
 
+  // Listen for nav-level "Capture Lead" button
+  useEffect(() => {
+    const handler = () => setShowLeadModal(true)
+    window.addEventListener("propos:captureLead", handler)
+    return () => window.removeEventListener("propos:captureLead", handler)
+  }, [])
+
   useEffect(() => {
     let mounted = true
     const CACHE_KEY = "propOS_leads_cache_v3"
@@ -997,17 +1010,9 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
       {/* ── Active listings ─────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 36 }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 18 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.blue, textTransform: "uppercase" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase" }}>
             Active Listings
           </div>
-          <button onClick={() => setShowLeadModal(true)} style={{
-            marginLeft: "auto", padding: "5px 14px", borderRadius: 8,
-            background: theme.primary, border: "none",
-            color: "#fff", fontSize: 11, fontWeight: 700,
-            cursor: "pointer", fontFamily: FONT,
-          }}>
-            + Capture lead
-          </button>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: bpPP === "mobile" ? "1fr" : bpPP === "tablet" ? "1fr 1fr" : "repeat(3, 1fr)", gap: 16 }}>
@@ -1035,7 +1040,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
       {/* ── Sold listings ───────────────────────────────────────────────────── */}
       <div>
         <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 4 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 4 }}>
             Comparable Sales
           </div>
         </div>

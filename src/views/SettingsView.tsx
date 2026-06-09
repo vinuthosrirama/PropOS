@@ -1764,6 +1764,48 @@ function ListingsPanel({ agent }: { agent: AgentProfile }) {
     return `$${(p / 1000).toFixed(0)}k`
   }
 
+  // ── Health check alerts ──────────────────────────────────────────────────────
+  type ListingAlert = { id: number; address: string; type: "missing_image" | "incomplete_slm" | "missing_s32" | "no_price"; detail: string }
+  const alerts: ListingAlert[] = []
+  for (const p of all) {
+    if (!p.image || p.image === "/placeholder.jpg") {
+      alerts.push({ id: p.id, address: p.address, type: "missing_image", detail: "No listing photo — card will render blank" })
+    }
+    if (!p.price && !p.priceMin) {
+      alerts.push({ id: p.id, address: p.address, type: "no_price", detail: "No price or price guide set" })
+    }
+    const slm = loadSLMForProperty(p.id)
+    if (slm) {
+      const { pct } = getSLMCompleteness(slm)
+      if (pct < 50) {
+        alerts.push({ id: p.id, address: p.address, type: "incomplete_slm", detail: `SLM Brain only ${pct}% complete — buyer Q&A answers will be thin` })
+      }
+      const s32 = slm.s32Status ?? ""
+      if (!s32 || s32 === "TBD" || s32.toLowerCase().includes("preparation")) {
+        alerts.push({ id: p.id, address: p.address, type: "missing_s32", detail: `Section 32: "${s32 || "TBD"}" — not yet signed/issued` })
+      }
+    }
+  }
+
+  const alertIcon: Record<ListingAlert["type"], string> = {
+    missing_image:  "🖼️",
+    incomplete_slm: "🧠",
+    missing_s32:    "📄",
+    no_price:       "💰",
+  }
+  const alertColor: Record<ListingAlert["type"], string> = {
+    missing_image:  "rgba(251,146,60,0.15)",
+    incomplete_slm: "rgba(168,85,247,0.12)",
+    missing_s32:    "rgba(251,191,36,0.12)",
+    no_price:       "rgba(239,68,68,0.12)",
+  }
+  const alertBorder: Record<ListingAlert["type"], string> = {
+    missing_image:  "rgba(251,146,60,0.4)",
+    incomplete_slm: "rgba(168,85,247,0.35)",
+    missing_s32:    "rgba(251,191,36,0.35)",
+    no_price:       "rgba(239,68,68,0.35)",
+  }
+
   if (all.length === 0) {
     return (
       <div style={{ maxWidth: 640 }}>
@@ -1781,6 +1823,50 @@ function ListingsPanel({ agent }: { agent: AgentProfile }) {
       <div style={{ fontSize: 14, color: C.muted, marginBottom: 24, lineHeight: 1.5 }}>
         Your current portfolio. Mark one active listing as <strong style={{ color: C.blue }}>Featured</strong> to use it as the primary property in buyer outreach and demo flows.
       </div>
+
+      {/* ── Health alerts ──────────────────────────────────────────────────── */}
+      {alerts.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              Listing Health
+            </div>
+            <div style={{
+              padding: "1px 8px", borderRadius: 10,
+              background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.35)",
+              fontSize: 10, fontWeight: 700, color: "#f87171",
+            }}>
+              {alerts.length} alert{alerts.length !== 1 ? "s" : ""}
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {alerts.map((a, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "flex-start", gap: 10,
+                padding: "10px 14px", borderRadius: 10,
+                background: alertColor[a.type],
+                border: `1px solid ${alertBorder[a.type]}`,
+              }}>
+                <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{alertIcon[a.type]}</span>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 2 }}>{a.address}</div>
+                  <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{a.detail}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {alerts.length === 0 && all.length > 0 && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 24,
+          padding: "10px 14px", borderRadius: 10,
+          background: "rgba(100,208,144,0.08)", border: "1px solid rgba(100,208,144,0.3)",
+        }}>
+          <span style={{ fontSize: 16 }}>✅</span>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.green }}>All listings look healthy — no missing photos, prices, SLM data, or Section 32 issues.</div>
+        </div>
+      )}
 
       {/* Active */}
       {active.length > 0 && (
