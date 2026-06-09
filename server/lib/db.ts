@@ -350,7 +350,71 @@ async function migrate(): Promise<void> {
     ["INDEX outreach_drafts_status",   `CREATE INDEX IF NOT EXISTS outreach_drafts_status_idx ON outreach_drafts(status)`],
     ["INDEX shortcut_queue_device",    `CREATE INDEX IF NOT EXISTS shortcut_queue_device ON shortcut_queue(device_id, status, created_at)`],
 
-    // ── Phase 5: Data maintenance (retention / pruning — safe, idempotent)
+    // ── Phase 5a: Prompt optimisation tables (medallion architecture — silver layer)
+
+    ["CREATE prompt_versions", `
+      CREATE TABLE IF NOT EXISTS prompt_versions (
+        id             SERIAL PRIMARY KEY,
+        context        TEXT NOT NULL,
+        prompt_text    TEXT NOT NULL,
+        is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+        perf_snapshot  JSONB DEFAULT '{}',
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["CREATE prompt_evaluations", `
+      CREATE TABLE IF NOT EXISTS prompt_evaluations (
+        id             SERIAL PRIMARY KEY,
+        version_id     INTEGER NOT NULL,
+        signal         TEXT NOT NULL CHECK (signal IN ('approved','rejected','edited','replied','demo_booked')),
+        signal_weight  INTEGER NOT NULL DEFAULT 1,
+        metadata       JSONB DEFAULT '{}',
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["ALTER outreach_drafts: version_id", `ALTER TABLE outreach_drafts ADD COLUMN IF NOT EXISTS version_id INTEGER`],
+
+    ["INDEX prompt_versions_context", `CREATE INDEX IF NOT EXISTS prompt_versions_context ON prompt_versions(context, is_active)`],
+    ["INDEX prompt_evals_version",    `CREATE INDEX IF NOT EXISTS prompt_evals_version    ON prompt_evaluations(version_id, created_at)`],
+
+    // ── Phase 5b: Gold layer views (auto-refresh on every query — no REFRESH needed)
+
+    ["VIEW v_outreach_funnel", `
+      CREATE OR REPLACE VIEW v_outreach_funnel AS
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'new')                                      AS total_new,
+        COUNT(*) FILTER (WHERE status = 'contacted')                                AS total_contacted,
+        COUNT(*) FILTER (WHERE status = 'replied')                                  AS total_replied,
+        COUNT(*) FILTER (WHERE status = 'demo_booked')                              AS total_demo_booked,
+        COUNT(*) FILTER (WHERE status = 'won')                                      AS total_won,
+        COUNT(*) FILTER (WHERE status = 'not_interested')                           AS total_not_interested,
+        ROUND(
+          100.0 * COUNT(*) FILTER (WHERE status IN ('replied','demo_booked','won'))
+          / NULLIF(COUNT(*) FILTER (WHERE status != 'new'), 0),
+        1) AS reply_rate_pct
+      FROM outreach_targets`],
+
+    ["VIEW v_prompt_performance", `
+      CREATE OR REPLACE VIEW v_prompt_performance AS
+      SELECT
+        pv.id,
+        pv.context,
+        pv.is_active,
+        pv.created_at,
+        COUNT(pe.id)                                        AS eval_count,
+        COALESCE(SUM(pe.signal_weight), 0)                 AS weighted_score,
+        ROUND(AVG(pe.signal_weight::numeric), 2)           AS avg_signal,
+        COUNT(*) FILTER (WHERE pe.signal = 'approved')     AS approvals,
+        COUNT(*) FILTER (WHERE pe.signal = 'rejected')     AS rejections,
+        COUNT(*) FILTER (WHERE pe.signal = 'edited')       AS edits,
+        COUNT(*) FILTER (WHERE pe.signal = 'demo_booked')  AS demos
+      FROM prompt_versions pv
+      LEFT JOIN prompt_evaluations pe ON pe.version_id = pv.id
+      GROUP BY pv.id, pv.context, pv.is_active, pv.created_at`],
+
+    // ── Phase 6: Data maintenance (retention / pruning — safe, idempotent)
+
+    // ── Phase 7: Data maintenance (retention / pruning — safe, idempotent)
 
     ["PRUNE outreach_log PII >90d", `
       UPDATE outreach_log

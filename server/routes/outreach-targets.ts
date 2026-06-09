@@ -36,6 +36,7 @@ import {
   type OutreachTargetRow,
 } from "../lib/outreachAgent.js"
 import { triggerOutreachNow, getSchedulerStatus } from "../lib/outreachScheduler.js"
+import { recordSignal } from "../lib/promptOptimiser.js"
 
 const router = Router()
 
@@ -146,6 +147,12 @@ router.post("/approve-draft/:id", async (req, res) => {
   const target = targets[0]
   if (!target?.phone) return res.status(400).json({ error: "Target has no phone number" })
 
+  // Fetch version_id before mutating the draft (for signal recording)
+  const versionRows = await query<{ version_id: number | null }>(
+    `SELECT version_id FROM outreach_drafts WHERE id = $1`, [draftId],
+  )
+  const versionId = versionRows[0]?.version_id ?? null
+
   try {
     const result = await sendSMS(target.phone, body)
     await markDraftSent(draftId)
@@ -160,6 +167,12 @@ router.post("/approve-draft/:id", async (req, res) => {
        WHERE id = $2`,
       [body.slice(0, 300), targetId],
     )
+
+    // Quality signal: edited body = 'edited', unchanged body = 'approved'
+    if (versionId) {
+      const signal = editedBody ? "edited" : "approved"
+      void recordSignal(versionId, signal, { draftId, targetId })
+    }
 
     res.json({
       ok:        true,
@@ -187,7 +200,18 @@ router.post("/reject-draft/:id", async (req, res) => {
   if (!isDbConnected()) return res.status(503).json({ error: "No database" })
   const draftId = parseInt(req.params.id, 10)
   if (isNaN(draftId)) return res.status(400).json({ error: "Invalid draft ID" })
+
+  // Capture version_id before rejection for signal recording
+  const versionRows = await query<{ version_id: number | null }>(
+    `SELECT version_id FROM outreach_drafts WHERE id = $1`, [draftId],
+  )
+  const versionId = versionRows[0]?.version_id ?? null
+
   await rejectDraft(draftId)
+
+  // Quality signal: rejected draft = negative feedback for the prompt version
+  if (versionId) void recordSignal(versionId, "rejected", { draftId })
+
   res.json({ ok: true })
 })
 
@@ -321,8 +345,8 @@ router.post("/:id/generate-draft", async (req, res) => {
     ? req.body.inbound.slice(0, 500)
     : "(manual request)"
 
-  const draft = await generateOutreachDraft(target, inbound)
-  const draftId = await saveOutreachDraft(target.id, inbound, draft)
+  const { draft, versionId } = await generateOutreachDraft(target, inbound)
+  const draftId = await saveOutreachDraft(target.id, inbound, draft, versionId)
   res.json({ ok: true, draft, draftId })
 })
 
@@ -362,6 +386,19 @@ router.put("/:id", async (req, res) => {
   params.push(req.params.id)
 
   await execute(`UPDATE outreach_targets SET ${fields.join(",")} WHERE id=$${n}`, params)
+
+  // Strong quality signal: demo booked = the outreach campaign is working
+  if (b.demoBookedAt || b.status === "demo_booked") {
+    try {
+      const latestVersion = await query<{ id: number }>(
+        `SELECT id FROM prompt_versions WHERE context = 'outreach_system' AND is_active = TRUE ORDER BY created_at DESC LIMIT 1`,
+      )
+      if (latestVersion[0]?.id) {
+        void recordSignal(latestVersion[0].id, "demo_booked", { targetId: req.params.id })
+      }
+    } catch { /* non-fatal */ }
+  }
+
   res.json({ ok: true })
 })
 

@@ -163,3 +163,29 @@ Key agents:
 
 **Never declare a feature done without a screenshot proving it renders correctly.**
 After deploying, use `open "https://propos.addvantage.site"` then take a computer-use screenshot to confirm the live site loads correctly.
+
+---
+
+## Known Friction Patterns
+
+Patterns that have repeatedly caused fix commits after feat commits — read before coding:
+
+- **Migration SQL**: never batch multiple statements in one `pool.query()` call — always use the per-step array in `migrate()` so one failure never blocks the rest
+- **Public API routes**: any new endpoint that must be unauthenticated (health, test-sms, sms-transport, webhooks) MUST be registered BEFORE the `requireAuth` middleware in `server/index.ts`
+- **Railway deploys**: push to `origin main` (triggers Railway auto-deploy) — pushing only to the feature branch does NOT deploy the backend
+- **TypeScript check**: always run `npx tsc --noEmit` from the `server/` directory before committing (root-level tsc only checks the frontend)
+- **Git branch**: this remote session runs on `main` locally; push to `origin main`, then `origin main:claude/prop-os-repo-access-vo46q` if a feature branch is required
+- **DB schema evolution**: when adding new columns to existing production tables, always add `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` in the migration — `CREATE TABLE IF NOT EXISTS` skips existing tables entirely
+
+---
+
+## Session Lessons (auto-accumulated)
+
+Newest first. Written by stop hook on session end when fix-after-feat patterns are detected; also written manually during session on user approval signals.
+
+<!-- LESSONS_START -->
+[2026-06-09] [win] per-step migration with labelled try/catch surfaced all 3 failures in one deploy rather than one per deploy cycle
+[2026-06-09] [win] DB-free /api/test-sms endpoint unblocked BlueBubbles testing immediately, independent of migration state
+[2026-06-09] [avoid] health endpoint placed after requireAuth blocked Railway healthcheck — always register /api/health before the auth middleware
+[2026-06-09] [avoid] pushing only to feature branch does not trigger Railway — always push to origin/main for backend changes to go live
+<!-- LESSONS_END -->

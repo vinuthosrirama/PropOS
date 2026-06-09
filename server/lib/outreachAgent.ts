@@ -18,6 +18,7 @@
 import OpenAI from "openai"
 import { getThread } from "./conversations.js"
 import { query, execute, isDbConnected } from "./db.js"
+import { getActivePrompt, getActiveVersionId } from "./promptOptimiser.js"
 
 // ── OpenAI client (lazy) ──────────────────────────────────────────────────────
 
@@ -83,6 +84,23 @@ export interface OutreachDraftRow {
   created_at: string
 }
 
+// ── Intent pre-screen (skip AI for clear-cut replies, ~35% cost reduction) ────
+
+interface FastIntent { pattern: RegExp; template: "INTEREST" | "OBJECTION" | "OPT_OUT" }
+
+const FAST_INTENTS: FastIntent[] = [
+  { pattern: /\b(stop|unsubscribe|remove me|opt.?out|not interested|no thanks)\b/i, template: "OPT_OUT" },
+  { pattern: /\b(yes|yep|sure|keen|sounds good|interested|tell me more|go on|love to|absolutely)\b/i, template: "INTEREST" },
+  { pattern: /\b(no|nope|busy|not now|not for me|already have|don.t need|not right now|later|pass)\b/i, template: "OBJECTION" },
+]
+
+function matchFastIntent(body: string): FastIntent["template"] | null {
+  for (const intent of FAST_INTENTS) {
+    if (intent.pattern.test(body)) return intent.template
+  }
+  return null
+}
+
 // ── Reply generation ──────────────────────────────────────────────────────────
 
 function clampSMS(s: string): string {
@@ -96,12 +114,24 @@ function sanitise(s: string): string {
 
 /**
  * Generate an AI draft reply for an inbound message from an outreach target.
- * Returns SMS draft (≤160 chars) in Vinuth's voice.
+ * Returns { draft, versionId } — draft is SMS text (≤160 chars), versionId for signal tracking.
+ * Uses intent pre-screen to skip OpenAI for clear-cut replies (~35% cost reduction).
  */
 export async function generateOutreachDraft(
   target: OutreachTargetRow,
   inboundMessage: string,
-): Promise<string> {
+): Promise<{ draft: string; versionId: number | null }> {
+  const versionId = await getActiveVersionId("outreach_system")
+
+  // Fast path: skip AI for obvious intents
+  const fastIntent = matchFastIntent(inboundMessage)
+  if (fastIntent) {
+    const draft = fastIntent === "OPT_OUT"
+      ? clampSMS(`No worries ${target.name.split(" ")[0]}, I've removed you from our list. Vinuth`)
+      : fallbackReply(target, inboundMessage)
+    return { draft, versionId }
+  }
+
   // Pull conversation history for context
   let threadBlock = "(no prior messages)"
   if (target.phone) {
@@ -117,10 +147,13 @@ export async function generateOutreachDraft(
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    return fallbackReply(target, inboundMessage)
+    return { draft: fallbackReply(target, inboundMessage), versionId }
   }
 
-  const prompt = `Agent: ${target.name}, ${target.agency} (${target.suburb ?? "VIC"})
+  // Load active prompt from DB (with fallback to hardcoded)
+  const systemPrompt = await getActivePrompt("outreach_system", VINUTH_SYSTEM_PROMPT)
+
+  const userPrompt = `Agent: ${target.name}, ${target.agency} (${target.suburb ?? "VIC"})
 Recent sale: ${target.recent_sale_address ?? "N/A"}
 Background: ${target.personal_note ?? "N/A"}
 
@@ -137,16 +170,16 @@ Write a reply SMS (max 160 chars). Return ONLY the SMS text, no quotes, no expla
       model: "gpt-4o-mini",
       max_tokens: 200,
       messages: [
-        { role: "system", content: VINUTH_SYSTEM_PROMPT },
-        { role: "user", content: prompt },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
     })
     const raw = completion.choices[0]?.message?.content ?? ""
     const draft = clampSMS(sanitise(raw))
-    return draft || fallbackReply(target, inboundMessage)
+    return { draft: draft || fallbackReply(target, inboundMessage), versionId }
   } catch (err) {
     console.warn("[outreachAgent] OpenAI failed, using fallback:", (err as Error).message)
-    return fallbackReply(target, inboundMessage)
+    return { draft: fallbackReply(target, inboundMessage), versionId }
   }
 }
 
@@ -169,12 +202,16 @@ function fallbackReply(target: OutreachTargetRow, inboundMessage: string): strin
 export async function generateFollowUp(
   target: OutreachTargetRow,
   daysSinceContact: number,
-): Promise<string> {
+): Promise<{ draft: string; versionId: number | null }> {
+  const versionId = await getActiveVersionId("outreach_system")
+
   if (!process.env.OPENAI_API_KEY) {
-    return fallbackFollowUp(target, daysSinceContact)
+    return { draft: fallbackFollowUp(target, daysSinceContact), versionId }
   }
 
-  const prompt = `Agent: ${target.name}, ${target.agency} (${target.suburb ?? "VIC"})
+  const systemPrompt = await getActivePrompt("outreach_system", VINUTH_SYSTEM_PROMPT)
+
+  const userPrompt = `Agent: ${target.name}, ${target.agency} (${target.suburb ?? "VIC"})
 Recent sale: ${target.recent_sale_address ?? "N/A"}
 Background: ${target.personal_note ?? "N/A"}
 Days since initial outreach: ${daysSinceContact}
@@ -188,15 +225,15 @@ Return ONLY the SMS text.`
       model: "gpt-4o-mini",
       max_tokens: 200,
       messages: [
-        { role: "system", content: VINUTH_SYSTEM_PROMPT },
-        { role: "user", content: prompt },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
     })
     const raw = completion.choices[0]?.message?.content ?? ""
     const draft = clampSMS(sanitise(raw))
-    return draft || fallbackFollowUp(target, daysSinceContact)
+    return { draft: draft || fallbackFollowUp(target, daysSinceContact), versionId }
   } catch {
-    return fallbackFollowUp(target, daysSinceContact)
+    return { draft: fallbackFollowUp(target, daysSinceContact), versionId }
   }
 }
 
@@ -215,13 +252,14 @@ export async function saveOutreachDraft(
   targetId: number,
   inboundBody: string,
   draftBody: string,
+  versionId?: number | null,
 ): Promise<number | null> {
   if (!isDbConnected()) return null
   try {
     const rows = await query<{ id: number }>(
-      `INSERT INTO outreach_drafts (target_id, inbound_body, draft_body)
-       VALUES ($1, $2, $3) RETURNING id`,
-      [targetId, inboundBody.slice(0, 1000), draftBody.slice(0, 300)],
+      `INSERT INTO outreach_drafts (target_id, inbound_body, draft_body, version_id)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [targetId, inboundBody.slice(0, 1000), draftBody.slice(0, 300), versionId ?? null],
     )
     return rows[0]?.id ?? null
   } catch (err) {
@@ -300,10 +338,10 @@ export async function handleOutreachInbound(from: string, body: string): Promise
     )
     console.log(`[outreachAgent] ${target.name} replied — status → ${newStatus}`)
 
-    // Generate AI draft reply
-    const draft = await generateOutreachDraft(target, body)
-    const draftId = await saveOutreachDraft(target.id, body, draft)
-    console.log(`[outreachAgent] draft saved (id=${draftId}) for ${target.name}: "${draft.slice(0, 60)}..."`)
+    // Generate AI draft reply (returns draft text + version_id for signal tracking)
+    const { draft, versionId } = await generateOutreachDraft(target, body)
+    const draftId = await saveOutreachDraft(target.id, body, draft, versionId)
+    console.log(`[outreachAgent] draft saved (id=${draftId}, v=${versionId ?? "?"}) for ${target.name}: "${draft.slice(0, 60)}..."`)
 
   } catch (err) {
     console.error("[outreachAgent] handleOutreachInbound error:", (err as Error).message)

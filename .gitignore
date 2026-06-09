@@ -2,7 +2,10 @@ node_modules
 dist
 .DS_Store
 *.local
-.claude
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/session-review.sh
 .env
 server/.env
 # server/public is the Railway-deploy copy of dist/ — tracked in git
