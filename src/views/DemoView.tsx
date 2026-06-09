@@ -476,6 +476,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
     slm: loadSLMForProperty(p.id),
   }))
   const [attended, setAttended] = useState<Set<string>>(new Set())
+  const [hoveredLeadId, setHoveredLeadId] = useState<string | null>(null)
 
   // For each lead, find the best-matching active listing
   const leadsWithRecs = leads.map(lead => {
@@ -583,16 +584,22 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                   cursor: onSelectLead ? "pointer" : "default",
                   transition: "border 0.15s, box-shadow 0.15s",
                 }}
-                onMouseEnter={onSelectLead ? (e => {
+                onMouseEnter={e => {
                   const el = e.currentTarget as HTMLDivElement
-                  el.style.borderColor = theme.primary + "55"
-                  el.style.boxShadow = `0 0 20px ${theme.glow}`
-                }) : undefined}
-                onMouseLeave={onSelectLead ? (e => {
+                  if (onSelectLead) {
+                    el.style.borderColor = theme.primary + "55"
+                    el.style.boxShadow = `0 0 20px ${theme.glow}`
+                  }
+                  setHoveredLeadId(lead.id || lead.name)
+                }}
+                onMouseLeave={e => {
                   const el = e.currentTarget as HTMLDivElement
-                  el.style.borderColor = C.border
-                  el.style.boxShadow = "none"
-                }) : undefined}
+                  if (onSelectLead) {
+                    el.style.borderColor = C.border
+                    el.style.boxShadow = "none"
+                  }
+                  setHoveredLeadId(null)
+                }}
               >
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
                   {/* Main info — no initials avatar */}
@@ -650,7 +657,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                     )}
                   </div>
 
-                  {/* Best match recommendation — score arc + compact ticks */}
+                  {/* Best match recommendation — score badge always visible; arc + ticks on hover */}
                   {bestMatch && (() => {
                     const r = 20
                     const circ = 2 * Math.PI * r
@@ -658,18 +665,19 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                     const dash = circ * pct
                     const gap = circ - dash
                     const reasons = bestMatch.result.reasons.filter(r => r.type === "strength").slice(0, 2)
+                    const isHovered = hoveredLeadId === (lead.id || lead.name)
                     return (
                       <div style={{
                         flexShrink: 0, textAlign: "right", display: "flex", flexDirection: "column",
                         alignItems: "flex-end", gap: 6,
                       }}>
-                        {/* Arc score circle */}
+                        {/* Arc score circle — arc visible only on hover; score badge always visible */}
                         <div
                           role="img"
                           aria-label={`Match score: ${score} out of 100`}
                           style={{ position: "relative", width: 48, height: 48 }}
                         >
-                          <svg aria-hidden="true" width={48} height={48} style={{ transform: "rotate(-90deg)" }}>
+                          <svg aria-hidden="true" width={48} height={48} style={{ transform: "rotate(-90deg)", opacity: isHovered ? 1 : 0, transition: "opacity 0.15s" }}>
                             <circle cx={24} cy={24} r={r} fill="none" stroke={color + "44"} strokeWidth={3} />
                             <circle
                               cx={24} cy={24} r={r} fill="none"
@@ -694,8 +702,8 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                         }}>
                           → {bestMatch.property.address}
                         </div>
-                        {/* Compact tick reasons */}
-                        {reasons.length > 0 && (
+                        {/* Compact tick reasons — visible only on hover */}
+                        {isHovered && reasons.length > 0 && (
                           <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
                             {reasons.map((r, ri) => {
                               // Extract short label — take first 2 words before "closely" or "match"
