@@ -184,6 +184,7 @@ Patterns that have repeatedly caused fix commits after feat commits — read bef
 Newest first. Written by stop hook on session end when fix-after-feat patterns are detected; also written manually during session on user approval signals.
 
 <!-- LESSONS_START -->
+[2026-06-09] [avoid] fix needed after feat: "fix: comparable sales map -- fallback to static list after 8s tile timeout" followed "feat: UX minimalism — reduce visual noise across SettingsView and DemoView"
 [2026-06-09] [win] per-step migration with labelled try/catch surfaced all 3 failures in one deploy rather than one per deploy cycle
 [2026-06-09] [win] DB-free /api/test-sms endpoint unblocked BlueBubbles testing immediately, independent of migration state
 [2026-06-09] [avoid] health endpoint placed after requireAuth blocked Railway healthcheck — always register /api/health before the auth middleware
