@@ -124,6 +124,7 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
 
     let cancelled = false
     let recreateTimer: ReturnType<typeof setTimeout> | null = null
+    let tileLoadTimer: ReturnType<typeof setTimeout> | null = null
 
     const createMap = (L: typeof import("leaflet"), lat: number, lng: number): boolean => {
       if (mapRef.current) { try { mapRef.current.remove() } catch {} mapRef.current = null }
@@ -160,10 +161,20 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
         subdomains: "abcd",
         opacity: 0.95,
       })
-      tileLayer.on("tileload", () => { if (!cancelled) setLoading(false) })
+
+      // Fallback: if no tile loads within 8s, show static list
+      if (tileLoadTimer) clearTimeout(tileLoadTimer)
+      tileLoadTimer = setTimeout(() => {
+        if (!cancelled) setFailed(true)
+      }, 8_000)
+
+      tileLayer.on("tileload", () => {
+        if (tileLoadTimer) clearTimeout(tileLoadTimer)
+        if (!cancelled) setLoading(false)
+      })
       tileLayer.on("tileerror", () => {
         tileErrorCount++
-        // If 3+ tiles fail, switch to static fallback
+        // If 3+ tiles fail, switch to static fallback immediately
         if (tileErrorCount >= 3 && !cancelled) setFailed(true)
       })
       tileLayer.addTo(map)
@@ -260,6 +271,7 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
     return () => {
       cancelled = true
       if (recreateTimer) clearTimeout(recreateTimer)
+      if (tileLoadTimer) clearTimeout(tileLoadTimer)
       const el = containerRef.current as (HTMLDivElement & { _ro?: ResizeObserver }) | null
       el?._ro?.disconnect()
       if (mapRef.current) { try { mapRef.current.remove() } catch {} mapRef.current = null }
