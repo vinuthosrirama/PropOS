@@ -482,6 +482,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
     slm: loadSLMForProperty(p.id),
   }))
   const [attended, setAttended] = useState<Set<string>>(new Set())
+  const [hoveredLeadId, setHoveredLeadId] = useState<string | null>(null)
 
   // For each lead, find the best-matching active listing
   const leadsWithRecs = leads.map(lead => {
@@ -589,16 +590,22 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                   cursor: onSelectLead ? "pointer" : "default",
                   transition: "border 0.15s, box-shadow 0.15s",
                 }}
-                onMouseEnter={onSelectLead ? (e => {
+                onMouseEnter={e => {
                   const el = e.currentTarget as HTMLDivElement
-                  el.style.borderColor = theme.primary + "55"
-                  el.style.boxShadow = `0 0 20px ${theme.glow}`
-                }) : undefined}
-                onMouseLeave={onSelectLead ? (e => {
+                  if (onSelectLead) {
+                    el.style.borderColor = theme.primary + "55"
+                    el.style.boxShadow = `0 0 20px ${theme.glow}`
+                  }
+                  setHoveredLeadId(lead.id || lead.name)
+                }}
+                onMouseLeave={e => {
                   const el = e.currentTarget as HTMLDivElement
-                  el.style.borderColor = C.border
-                  el.style.boxShadow = "none"
-                }) : undefined}
+                  if (onSelectLead) {
+                    el.style.borderColor = C.border
+                    el.style.boxShadow = "none"
+                  }
+                  setHoveredLeadId(null)
+                }}
               >
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
                   {/* Main info — no initials avatar */}
@@ -656,7 +663,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                     )}
                   </div>
 
-                  {/* Best match recommendation — score arc + compact ticks */}
+                  {/* Best match recommendation — score badge always visible; arc + ticks on hover */}
                   {bestMatch && (() => {
                     const r = 20
                     const circ = 2 * Math.PI * r
@@ -664,18 +671,19 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                     const dash = circ * pct
                     const gap = circ - dash
                     const reasons = bestMatch.result.reasons.filter(r => r.type === "strength").slice(0, 2)
+                    const isHovered = hoveredLeadId === (lead.id || lead.name)
                     return (
                       <div style={{
                         flexShrink: 0, textAlign: "right", display: "flex", flexDirection: "column",
                         alignItems: "flex-end", gap: 6,
                       }}>
-                        {/* Arc score circle */}
+                        {/* Arc score circle — arc visible only on hover; score badge always visible */}
                         <div
                           role="img"
                           aria-label={`Match score: ${score} out of 100`}
                           style={{ position: "relative", width: 48, height: 48 }}
                         >
-                          <svg aria-hidden="true" width={48} height={48} style={{ transform: "rotate(-90deg)" }}>
+                          <svg aria-hidden="true" width={48} height={48} style={{ transform: "rotate(-90deg)", opacity: isHovered ? 1 : 0, transition: "opacity 0.15s" }}>
                             <circle cx={24} cy={24} r={r} fill="none" stroke={color + "44"} strokeWidth={3} />
                             <circle
                               cx={24} cy={24} r={r} fill="none"
@@ -700,8 +708,8 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                         }}>
                           → {bestMatch.property.address}
                         </div>
-                        {/* Compact tick reasons */}
-                        {reasons.length > 0 && (
+                        {/* Compact tick reasons — visible only on hover */}
+                        {isHovered && reasons.length > 0 && (
                           <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
                             {reasons.map((r, ri) => {
                               // Extract short label — take first 2 words before "closely" or "match"
@@ -726,10 +734,13 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
       )}
 
       {/* Sheets data source — plain, unobtrusive */}
-      <div style={{ marginTop: 28 }}>
-        <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.6 }}>
-          Leads sourced from Google Sheets · inspectedProperty = {soldProperty.address}, {soldProperty.suburb} · Match scores calculated by SLM engine against active listings
-        </div>
+      <div style={{ marginTop: 28, display: "flex", gap: 8 }}>
+        <span style={{ fontSize: 10, color: C.faint, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 20, padding: "2px 10px" }}>
+          Matched via SLM
+        </span>
+        <span style={{ fontSize: 10, color: C.faint, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 20, padding: "2px 10px" }}>
+          From Sheets
+        </span>
       </div>
     </div>
   )
@@ -836,6 +847,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
 
   const [soldLeads, setSoldLeads] = useState<Record<number, SheetLead[]>>({})
   const [sheetsLoading, setSheetsLoading] = useState(true)
+  const [slmBannerExpanded, setSlmBannerExpanded] = useState(false)
   const [auctionPanelProperty, setAuctionPanelProperty] = useState<PortfolioProperty | null>(null)
   const [pitchProperty, setPitchProperty] = useState<PortfolioProperty | null>(null)
   // Capture new open-home lead
@@ -991,18 +1003,28 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
       {/* ── SLM completeness warning ────────────────────────────────────────── */}
       {slmWarnings.length > 0 && (
         <div style={{
-          marginBottom: 20, padding: "10px 16px", borderRadius: 10,
+          marginBottom: 20, padding: "8px 14px", borderRadius: 10,
           background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)",
-          display: "flex", alignItems: "center", gap: 10,
-        }}>
-          <span style={{ fontSize: 14, lineHeight: 1 }}>⚠️</span>
+          display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer",
+        }}
+          onClick={() => setSlmBannerExpanded(e => !e)}
+        >
+          <span style={{
+            width: 8, height: 8, borderRadius: "50%", background: "#f59e0b",
+            flexShrink: 0, marginTop: 4,
+          }} />
           <div style={{ fontSize: 12, color: "#f59e0b", lineHeight: 1.4 }}>
-            <span style={{ fontWeight: 700 }}>SLM incomplete: </span>
-            {slmWarnings.map(({ p, pct }) => `${p.address} (${pct}%)`).join(" · ")}
-            {" "}Outreach quality improves when property data is complete.{" "}
-            <span style={{ textDecoration: "underline", cursor: "pointer" }} onClick={onSettings}>
-              Update in Settings →
-            </span>
+            <span style={{ fontWeight: 700 }}>SLM incomplete</span>
+            {slmBannerExpanded && (
+              <span>
+                {": "}
+                {slmWarnings.map(({ p, pct }) => `${p.address} (${pct}%)`).join(" · ")}
+                {" "}Outreach quality improves when property data is complete.{" "}
+                <span style={{ textDecoration: "underline", cursor: "pointer" }} onClick={e => { e.stopPropagation(); onSettings() }}>
+                  Update in Settings →
+                </span>
+              </span>
+            )}
           </div>
         </div>
       )}

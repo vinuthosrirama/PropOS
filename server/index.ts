@@ -27,9 +27,12 @@ import boxdiceRouter from "./routes/boxdice.js"
 import authRouter from "./routes/auth.js"
 import { loadOptOuts, addOptOut } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
-import { activeTransport, checkSmsTransport } from "./lib/sms.js"
-import { parseBBWebhook, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
+import { activeTransport, checkSmsTransport, sendSMS } from "./lib/sms.js"
+import { parseBBWebhook, parseBBSendError, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
 import { watchIncomingImsg } from "./lib/imsg.js"
+import { parseTeleLinkWebhook, registerTeleLinkWebhook }            from "./lib/telelink.js"
+import { parseTextingBlueWebhook }                                   from "./lib/textingblue.js"
+import { parseAndroidGatewayWebhook, registerAndroidGatewayWebhook } from "./lib/androidgateway.js"
 import { writeToSheet } from "./lib/sheets.js"
 import conversationsRouter from "./routes/conversations.js"
 import replyAgentRouter from "./routes/reply-agent.js"
@@ -41,9 +44,14 @@ import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
 import gdprRouter from "./routes/gdpr.js"
 import marketUpdateRouter from "./routes/market-update.js"
+import outreachTargetsRouter from "./routes/outreach-targets.js"
+import smsShortcutRouter, { registerReplyHandler } from "./routes/sms-shortcut.js"
+import { parseHttpSmsWebhook } from "./lib/httpsms.js"
 import { loadConversations, addReplyToThread } from "./lib/conversations.js"
 import { initDb, isDbConnected, query } from "./lib/db.js"
 import { startScheduler, cancelNurtureJobs } from "./lib/scheduler.js"
+import { startOutreachScheduler } from "./lib/outreachScheduler.js"
+import { handleOutreachInbound } from "./lib/outreachAgent.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
@@ -99,13 +107,80 @@ app.use("/api/auth/register", authLimiter)
 app.use("/api/auth/refresh",  authLimiter)
 
 // ── Public routes (no auth required) ─────────────────────────────────────────
-app.use("/api/auth",        authRouter)
-app.use("/unsubscribe",     unsubscribeRouter)
-app.use("/api/track",       trackRouter)
-app.use("/api/webhook",     webhookRouter)
+
+// Health check — MUST be before the JWT auth middleware so Railway's unauthenticated
+// healthcheck probe reaches it. When DB is connected the auth guard blocks all /api/*
+// requests without a Bearer token, including Railway's healthcheck.
+// PT-C3: unauthenticated callers get { ok } only — full service map requires a valid JWT.
+app.get("/api/health", async (req, res) => {
+  const authHeader = req.headers["authorization"]
+  const isAuthed = authHeader?.startsWith("Bearer ")
+    ? !!verifyAccessToken(authHeader.slice(7))
+    : false
+
+  let dbLive = false
+  if (isDbConnected()) {
+    try {
+      const rows = await Promise.race<{ ok: number }[]>([
+        query<{ ok: number }>("SELECT 1 AS ok"),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("DB probe timeout")), 3_000),
+        ),
+      ])
+      dbLive = rows.length > 0
+    } catch {
+      dbLive = false
+    }
+  }
+
+  if (!isAuthed) {
+    return res.json({ ok: true, database: dbLive })
+  }
+
+  res.json({
+    ok:        true,
+    openai:    !!process.env.OPENAI_API_KEY,
+    anthropic: !!process.env.ANTHROPIC_API_KEY,
+    sheet:     !!process.env.SHEET_URL,
+    twilio:    !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+    smsTransport: activeTransport(),
+    gmail:     gmailConfigured(),
+    boxdice:   !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
+    domainAvm: !!process.env.DOMAIN_API_KEY,
+    database:  dbLive,
+    testMode:  !!(process.env.TEST_RECIPIENT_PHONE?.trim() || process.env.TEST_RECIPIENT_EMAIL?.trim()),
+  })
+})
+
+app.use("/api/auth",         authRouter)
+app.use("/unsubscribe",      unsubscribeRouter)
+app.use("/api/track",        trackRouter)
+app.use("/api/webhook",      webhookRouter)
+// iOS Shortcut relay — public, auth via SHORTCUT_RELAY_SECRET query param
+app.use("/api/sms-shortcut", smsShortcutRouter)
 // SLM answer routes also public (called from buyer-facing demo)
 app.use("/api/slm-answer",        slmAnswerRouter)
 app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
+
+// GET /api/sms-transport — returns which transport is active (for settings UI)
+app.get("/api/sms-transport", async (_req: Request, res: Response) => {
+  const status = await checkSmsTransport()
+  res.json(status)
+})
+
+// POST /api/test-sms — fire a test SMS via the active transport, no DB required
+// Body: { to?: string, message?: string }  (both optional — defaults to TEST_RECIPIENT_PHONE + "Hello World!")
+app.post("/api/test-sms", express.json(), async (req: Request, res: Response) => {
+  const to      = String(req.body?.to      ?? process.env.TEST_RECIPIENT_PHONE ?? "").trim()
+  const message = String(req.body?.message ?? "Hello World!").trim()
+  if (!to) return res.status(400).json({ error: "No 'to' phone number — set TEST_RECIPIENT_PHONE or pass { to } in body" })
+  try {
+    const result = await sendSMS(to, message)
+    res.json({ ok: true, to, message, ...result })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message })
+  }
+})
 
 // ── Protected routes (require valid JWT when DB is connected) ─────────────────
 // Auto-enforces when DATABASE_URL is set (production).
@@ -132,37 +207,86 @@ app.use("/api/add-lead",         addLeadRouter)
 app.use("/api/parse-notes",      parseNotesRouter)
 app.use("/api/gdpr",             gdprRouter)
 app.use("/api/market-update",    marketUpdateRouter)
+app.use("/api/outreach-targets", outreachTargetsRouter)
 
-// ── Shared reply handler (BlueBubbles + imsg use the same pipeline as Twilio) ──
+// ── Shared reply handler (all transports feed here) ──────────────────────────
 async function handleIncomingReply(from: string, body: string): Promise<void> {
   const lowerBody = body.toLowerCase().trim()
   try {
     if (["stop", "unsubscribe", "cancel", "quit", "end", "stopall"].includes(lowerBody)) {
       await addOptOut(from, "sms", "reply")
     } else {
+      // 1. Store in conversation thread (buyer/vendor lead pipeline)
       await addReplyToThread(from, body)
       void writeToSheet({ type: "update_lead_status", phone: from, status: "sms_replied", detail: body.slice(0, 200) })
       await cancelNurtureJobs(from)
+
+      // 2. Also check if this is one of our outreach targets (Vinuth self-outreach campaign)
+      //    Non-fatal — runs in parallel with the lead pipeline above
+      void handleOutreachInbound(from, body)
     }
   } catch (err) {
     console.error("[reply-handler] error:", (err as Error).message)
   }
 }
 
+// Wire iOS Shortcut relay reply handler (must be after handleIncomingReply is defined)
+registerReplyHandler(handleIncomingReply)
+
 // ── BlueBubbles incoming webhook ──────────────────────────────────────────────
 // POST /api/webhook/bluebubbles — receives incoming iMessage/SMS replies
 // when SMS_TRANSPORT=bluebubbles. Feeds into the existing reply-agent pipeline.
 app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Response) => {
   res.json({ ok: true })  // ack immediately — BB retries on 4xx/5xx, not on 200
+
+  // Handle incoming reply
   const msg = parseBBWebhook(req.body)
-  if (!msg || msg.isGroup) return
+  if (msg && !msg.isGroup) {
+    void handleIncomingReply(msg.from, msg.body)
+    return
+  }
+
+  // Handle send-error events — log for diagnostics, mark outreach failed
+  const sendErr = parseBBSendError(req.body)
+  if (sendErr) {
+    console.warn(`[bluebubbles] delivery failure guid=${sendErr.guid}: ${sendErr.reason}`)
+  }
+})
+
+// ── TeleLink incoming webhook ─────────────────────────────────────────────────
+app.post("/api/webhook/telelink", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })
+  const msg = parseTeleLinkWebhook(req.body)
+  if (!msg) return
   void handleIncomingReply(msg.from, msg.body)
 })
 
-// GET /api/sms-transport — returns which transport is active (for settings UI)
-app.get("/api/sms-transport", async (_req: Request, res: Response) => {
-  const status = await checkSmsTransport()
-  res.json(status)
+// ── TextingBlue incoming webhook ──────────────────────────────────────────────
+// POST /api/webhook/textingblue — receives iMessage replies via TextingBlue
+app.post("/api/webhook/textingblue", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })
+  const msg = parseTextingBlueWebhook(req.body)
+  if (!msg) return
+  void handleIncomingReply(msg.from, msg.body)
+})
+
+// ── Android SMS Gateway incoming webhook ─────────────────────────────────────
+// POST /api/webhook/android-gateway — receives SMS replies from Android device
+app.post("/api/webhook/android-gateway", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })
+  const msg = parseAndroidGatewayWebhook(req.body)
+  if (!msg) return
+  void handleIncomingReply(msg.from, msg.body)
+})
+
+// ── httpSMS incoming webhook ──────────────────────────────────────────────────
+// POST /api/webhook/httpsms — receives SMS replies via httpSMS Android app
+// Payload: { data: { contact, content, owner } }
+app.post("/api/webhook/httpsms", express.json(), (req: Request, res: Response) => {
+  res.json({ ok: true })
+  const msg = parseHttpSmsWebhook(req.body)
+  if (!msg) return
+  void handleIncomingReply(msg.from, msg.body)
 })
 
 // ── AVM route ─────────────────────────────────────────────────────────────────
@@ -172,54 +296,6 @@ app.get("/api/avm", async (req, res) => {
   const estimate = await getDomainEstimate(address)
   if (!estimate) return res.json({ ok: false, estimate: null })
   return res.json({ ok: true, estimate })
-})
-
-// Health check — must be before express.static so it's never shadowed by the SPA
-// PT-C3: unauthenticated callers get { ok } only — full service map requires a valid JWT
-// so attackers cannot fingerprint the stack before mounting targeted attacks.
-app.get("/api/health", async (req, res) => {
-  // Determine if caller is authenticated (Bearer token present and valid)
-  const authHeader = req.headers["authorization"]
-  const isAuthed = authHeader?.startsWith("Bearer ")
-    ? !!verifyAccessToken(authHeader.slice(7))
-    : false
-
-  // Live DB probe — 3s timeout so this endpoint stays fast
-  let dbLive = false
-  if (isDbConnected()) {
-    try {
-      const rows = await Promise.race<{ ok: number }[]>([
-        query<{ ok: number }>("SELECT 1 AS ok"),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("DB probe timeout")), 3_000),
-        ),
-      ])
-      dbLive = rows.length > 0
-    } catch {
-      dbLive = false
-    }
-  }
-
-  // Unauthenticated: bare liveness signal only
-  if (!isAuthed) {
-    return res.json({ ok: true, database: dbLive })
-  }
-
-  // Authenticated (internal dashboard / monitoring): full service map
-  res.json({
-    ok:        true,
-    openai:    !!process.env.OPENAI_API_KEY,
-    anthropic: !!process.env.ANTHROPIC_API_KEY,
-    sheet:     !!process.env.SHEET_URL,
-    twilio:    !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
-    smsTransport: activeTransport(),
-    gmail:     gmailConfigured(),
-    boxdice:   !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
-    domainAvm: !!process.env.DOMAIN_API_KEY,
-    database:  dbLive,
-    // testMode is a boolean flag only — never expose actual contact values
-    testMode:  !!(process.env.TEST_RECIPIENT_PHONE?.trim() || process.env.TEST_RECIPIENT_EMAIL?.trim()),
-  })
 })
 
 // Serve Vite production build — must come after all API routes
@@ -287,8 +363,9 @@ app.listen(PORT, async () => {
     console.warn("  ⚠️  Set DATABASE_URL before enabling the nurture scheduler in production.")
   }
 
-  // 3. Start nurture scheduler (no-ops if no DB)
+  // 3. Start schedulers (both no-op if no DB)
   startScheduler()
+  startOutreachScheduler()
 
   // 4. Wire up transport-specific init
   if (smsTransport === "bluebubbles" && process.env.BASE_URL) {
@@ -297,6 +374,20 @@ app.listen(PORT, async () => {
     registerBlueBubblesWebhook(webhookUrl)
       .then(() => console.log(`  BlueBubbles webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  BlueBubbles webhook register failed:", e.message))
+  }
+
+  if (smsTransport === "android-gateway" && process.env.BASE_URL) {
+    const webhookUrl = `${process.env.BASE_URL}/api/webhook/android-gateway`
+    registerAndroidGatewayWebhook(webhookUrl)
+      .then(() => console.log(`  AndroidGateway webhook registered → ${webhookUrl}`))
+      .catch(e => console.warn("  AndroidGateway webhook register failed:", e.message))
+  }
+
+  if (smsTransport === "telelink" && process.env.BASE_URL) {
+    const webhookUrl = `${process.env.BASE_URL}/api/webhook/telelink`
+    registerTeleLinkWebhook(webhookUrl)
+      .then(() => console.log(`  TeleLink webhook registered → ${webhookUrl}`))
+      .catch(e => console.warn("  TeleLink webhook register failed:", e.message))
   }
 
   if (smsTransport === "imsg") {

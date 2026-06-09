@@ -347,9 +347,6 @@ function AccordionSection({
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span>{section.label}</span>
-          <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>
-            {section.fields.length} fields
-          </span>
           {tbdCount > 0 && (
             <span
               style={{
@@ -537,7 +534,7 @@ function QACard({
 
       {/* Keywords */}
       <div>
-        <div style={{ fontSize: 11, color: C.muted, marginBottom: 3, fontWeight: 500 }}>Keywords <span style={{ color: C.faint, fontWeight: 400 }}>(comma-separated, used for matching)</span></div>
+        <div style={{ fontSize: 11, color: C.muted, marginBottom: 3, fontWeight: 500 }}>Keywords</div>
         <input
           type="text"
           value={qa.keywords.join(", ")}
@@ -781,26 +778,9 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{agent.name}</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {agent.agency} &nbsp;·&nbsp; {agent.email}
+              {agent.agency}
             </div>
           </div>
-          {!isMobile && (
-            <div style={{ marginLeft: "auto", flexShrink: 0 }}>
-              <span
-                style={{
-                  fontSize: 11,
-                  color: C.muted,
-                  background: C.bg3,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 6,
-                  padding: "4px 10px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Profile managed in login flow
-              </span>
-            </div>
-          )}
         </div>
 
         {/* ── Top-level tab strip ── */}
@@ -1304,31 +1284,17 @@ function VoiceStylePanel({ corpus, onAdd, onRemove, onClearAll }: VoiceStylePane
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Writing Style</div>
         <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.5 }}>
-          Paste real texts and emails you have sent. PropOS reads these to match your exact tone, vocabulary, and sign-off in every generated message.
+          Provide sample texts to train your voice.
         </div>
       </div>
 
       {/* Corpus strength gauge */}
       <div style={{ ...card, borderColor: strengthColor + "33", background: strengthColor + "08", marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{strengthLabel}</div>
-          <div style={{ fontSize: 12, color: C.muted }}>{total} example{total !== 1 ? "s" : ""}</div>
-        </div>
         {/* Progress bar */}
-        <div style={{ height: 4, background: C.bg3, borderRadius: 2, overflow: "hidden", marginBottom: 10 }}>
+        <div style={{ height: 4, background: C.bg3, borderRadius: 2, overflow: "hidden", marginBottom: 8 }}>
           <div style={{ height: "100%", width: `${strengthPct}%`, background: strengthColor, borderRadius: 2, transition: "width 0.4s" }} />
         </div>
-        {/* Breakdown pills */}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
-          {smsCount > 0     && <span style={{ ...typeBadgeStyle("paste"),         fontSize: 11 }}>{smsCount} SMS</span>}
-          {emailCount > 0   && <span style={{ ...typeBadgeStyle("email"),         fontSize: 11 }}>{emailCount} Email body</span>}
-          {subjectCount > 0 && <span style={{ ...typeBadgeStyle("email_subject"), fontSize: 11 }}>{subjectCount} Subject</span>}
-          {autoCount > 0    && (
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#f59e0b", background: "#f59e0b18", border: "1px solid #f59e0b33", borderRadius: 4, padding: "2px 6px" }}>
-              {autoCount} auto-learned
-            </span>
-          )}
-        </div>
+        <div style={{ fontSize: 12, color: C.muted }}>Training: {total} example{total !== 1 ? "s" : ""}</div>
         {total < 5 && (
           <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
             Add {5 - total} more example{5 - total !== 1 ? "s" : ""} for best results. Aim for at least 2 SMS + 2 email body examples.
@@ -2115,6 +2081,7 @@ function VendorPanelToggles({
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {(groups[g] ?? []).map(({ key, label, description }) => {
               const on = settings[key]
+              const shortDesc = description.length > 28 ? description.slice(0, 28) + "…" : description
               return (
                 <div
                   key={key}
@@ -2123,6 +2090,7 @@ function VendorPanelToggles({
                   tabIndex={0}
                   onClick={() => toggle(key)}
                   onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(key) } }}
+                  title={description}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",
                     background: C.bg2, border: `1px solid ${on ? "var(--accent, rgb(166,218,255))40" : C.border}`,
@@ -2132,7 +2100,7 @@ function VendorPanelToggles({
                 >
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 2 }}>{label}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{description}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{shortDesc}</div>
                   </div>
                   <TogglePill on={on} />
                 </div>
