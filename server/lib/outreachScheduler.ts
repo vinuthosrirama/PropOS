@@ -26,6 +26,7 @@ import {
   getMorningBrief,
   type OutreachTargetRow,
 } from "./outreachAgent.js"
+import { runOptimisationCycle } from "./promptOptimiser.js"
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -57,7 +58,12 @@ export function startOutreachScheduler(): void {
     void runOutreachWindow()
   }, { timezone: "Australia/Melbourne" })
 
-  console.log("  OutreachScheduler: running (9am brief, 10am sends, Melbourne time, weekdays)")
+  // Sunday 2:00am Melbourne time — weekly prompt optimisation cycle
+  cron.schedule("0 2 * * 0", () => {
+    void runOptimisationCycle("outreach_system")
+  }, { timezone: "Australia/Melbourne" })
+
+  console.log("  OutreachScheduler: running (9am brief, 10am sends, Sunday 2am optimiser, Melbourne time)")
 }
 
 // ── Morning brief ─────────────────────────────────────────────────────────────
@@ -188,14 +194,14 @@ async function queueFollowUpDraft(targetId: number, daysSince: number): Promise<
   const target = targets[0]
   if (!target) return
 
-  const followUpMessage = await generateFollowUp(target, daysSince)
+  const { draft: followUpMessage, versionId } = await generateFollowUp(target, daysSince)
 
   await query(
-    `INSERT INTO outreach_drafts (target_id, inbound_body, draft_body)
-     VALUES ($1, '(scheduled follow-up)', $2)`,
-    [targetId, followUpMessage],
+    `INSERT INTO outreach_drafts (target_id, inbound_body, draft_body, version_id)
+     VALUES ($1, '(scheduled follow-up)', $2, $3)`,
+    [targetId, followUpMessage, versionId ?? null],
   )
-  console.log(`[outreachScheduler] follow-up draft queued for ${target.name}`)
+  console.log(`[outreachScheduler] follow-up draft queued for ${target.name} (v=${versionId ?? "?"})`)
 }
 
 // ── Manual triggers ───────────────────────────────────────────────────────────
