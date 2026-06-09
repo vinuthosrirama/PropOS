@@ -720,10 +720,13 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
       )}
 
       {/* Sheets data source — plain, unobtrusive */}
-      <div style={{ marginTop: 28 }}>
-        <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.6 }}>
-          Leads sourced from Google Sheets · inspectedProperty = {soldProperty.address}, {soldProperty.suburb} · Match scores calculated by SLM engine against active listings
-        </div>
+      <div style={{ marginTop: 28, display: "flex", gap: 8 }}>
+        <span style={{ fontSize: 10, color: C.faint, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 20, padding: "2px 10px" }}>
+          Matched via SLM
+        </span>
+        <span style={{ fontSize: 10, color: C.faint, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 20, padding: "2px 10px" }}>
+          From Sheets
+        </span>
       </div>
     </div>
   )
@@ -830,6 +833,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
 
   const [soldLeads, setSoldLeads] = useState<Record<number, SheetLead[]>>({})
   const [sheetsLoading, setSheetsLoading] = useState(true)
+  const [slmBannerExpanded, setSlmBannerExpanded] = useState(false)
   const [auctionPanelProperty, setAuctionPanelProperty] = useState<PortfolioProperty | null>(null)
   const [pitchProperty, setPitchProperty] = useState<PortfolioProperty | null>(null)
   // Capture new open-home lead
@@ -966,18 +970,28 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
       {/* ── SLM completeness warning ────────────────────────────────────────── */}
       {slmWarnings.length > 0 && (
         <div style={{
-          marginBottom: 20, padding: "10px 16px", borderRadius: 10,
+          marginBottom: 20, padding: "8px 14px", borderRadius: 10,
           background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)",
-          display: "flex", alignItems: "center", gap: 10,
-        }}>
-          <span style={{ fontSize: 14, lineHeight: 1 }}>⚠️</span>
+          display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer",
+        }}
+          onClick={() => setSlmBannerExpanded(e => !e)}
+        >
+          <span style={{
+            width: 8, height: 8, borderRadius: "50%", background: "#f59e0b",
+            flexShrink: 0, marginTop: 4,
+          }} />
           <div style={{ fontSize: 12, color: "#f59e0b", lineHeight: 1.4 }}>
-            <span style={{ fontWeight: 700 }}>SLM incomplete: </span>
-            {slmWarnings.map(({ p, pct }) => `${p.address} (${pct}%)`).join(" · ")}
-            {" "}Outreach quality improves when property data is complete.{" "}
-            <span style={{ textDecoration: "underline", cursor: "pointer" }} onClick={onSettings}>
-              Update in Settings →
-            </span>
+            <span style={{ fontWeight: 700 }}>SLM incomplete</span>
+            {slmBannerExpanded && (
+              <span>
+                {": "}
+                {slmWarnings.map(({ p, pct }) => `${p.address} (${pct}%)`).join(" · ")}
+                {" "}Outreach quality improves when property data is complete.{" "}
+                <span style={{ textDecoration: "underline", cursor: "pointer" }} onClick={e => { e.stopPropagation(); onSettings() }}>
+                  Update in Settings →
+                </span>
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -985,8 +999,8 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
       {/* ── Active listings ─────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 36 }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 18 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.blue, textTransform: "uppercase" }}>
-            Active Listings
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.blue }}>
+            Active listings
           </div>
           <button onClick={() => setShowLeadModal(true)} style={{
             marginLeft: "auto", padding: "5px 14px", borderRadius: 8,
