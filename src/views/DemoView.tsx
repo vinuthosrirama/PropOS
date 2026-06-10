@@ -49,6 +49,9 @@ import { computePropertyDNA, type PropertyDNA } from "../lib/propertyDNA"
 import ComparableSalesMap from "../components/ComparableSalesMap"
 import ListingPresentation from "../components/ListingPresentation"
 import CampaignReport from "../components/CampaignReport"
+import GciCalculator from "../components/GciCalculator"
+import PriceUpdateTemplate, { type PriceUpdatePayload } from "../components/pitch/PriceUpdateTemplate"
+import PropertyPitchTemplate from "../components/pitch/PropertyPitchTemplate"
 import NurtureSequence from "../components/NurtureSequence"
 import TriggerFeed from "../components/TriggerFeed"
 
@@ -999,6 +1002,22 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
   return (
     <>
     <div style={{ padding: "80px 32px 56px", fontFamily: FONT, maxWidth: 1440, margin: "0 auto" }}>
+
+      {/* ── BuyerOS hero header ─────────────────────────────────────────────── */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 8 }}>
+          Buyer Outreach
+        </div>
+        <div style={{ fontSize: bpPP === "mobile" ? 20 : 26, fontWeight: 800, color: C.text, letterSpacing: -0.6, marginBottom: 8, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          Re-engage your open home database
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.faint, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "3px 10px", letterSpacing: 0 }}>
+            {agentActive.length} {agentActive.length === 1 ? "listing" : "listings"}
+          </span>
+        </div>
+        <div style={{ fontSize: 13, color: C.muted, maxWidth: 560, lineHeight: 1.55 }}>
+          PropOS matches every open-home attendee to your active listings using price, beds, and suburb fit. Generate hyper-personalised SMS and email outreach — in your voice — for each qualified lead in seconds.
+        </div>
+      </div>
 
       {/* ── SLM completeness warning ────────────────────────────────────────── */}
       {slmWarnings.length > 0 && (
@@ -3687,30 +3706,16 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
                 onMouseEnter={e => { if (isClickable) { e.currentTarget.style.borderColor = theme.primary + "55"; e.currentTarget.style.background = C.bg3; e.currentTarget.style.boxShadow = `0 4px 16px rgba(0,0,0,0.2)` } }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = nearbyAlert ? "#f59e0b55" : C.border; e.currentTarget.style.background = C.bg2; e.currentTarget.style.boxShadow = "none" }}
               >
+                {/* Initials avatar — no fake stock photos */}
                 <div style={{
                   width: 52, height: 52, borderRadius: 10, flexShrink: 0,
-                  overflow: "hidden",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: `linear-gradient(135deg, ${theme.gradient[0]}44, ${theme.gradient[1]}33)`,
                   border: `1px solid ${theme.primary}33`,
-                  background: `linear-gradient(135deg, ${theme.gradient[0]}33, ${theme.gradient[1]}22)`,
-                  position: "relative",
                 }}>
-                  <img
-                    src={`https://picsum.photos/seed/${encodeURIComponent(buyer.purchaseAddress.replace(/\s+/g, '-').toLowerCase())}/104/104`}
-                    alt={buyer.purchaseAddress}
-                    loading="lazy"
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                    onError={e => {
-                      const img = e.target as HTMLImageElement
-                      img.style.display = "none"
-                      const parent = img.parentElement
-                      if (parent) {
-                        parent.style.display = "flex"
-                        parent.style.alignItems = "center"
-                        parent.style.justifyContent = "center"
-                        parent.innerHTML = `<span style="font-size:16px;font-weight:700;color:${theme.primary}">${buyer.name.charAt(0)}</span>`
-                      }
-                    }}
-                  />
+                  <span style={{ fontSize: 18, fontWeight: 800, color: theme.primary, letterSpacing: -0.5 }}>
+                    {buyer.name.charAt(0).toUpperCase()}
+                  </span>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
@@ -4410,27 +4415,16 @@ function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, o
                 el.style.borderColor = C.border; el.style.boxShadow = "none"
               }}
             >
-              {/* Property thumbnail */}
+              {/* Initials avatar — no fake stock photos */}
               <div style={{
                 width: 52, height: 52, borderRadius: 10, flexShrink: 0,
-                overflow: "hidden", border: `1px solid ${pl.color}33`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                border: `1px solid ${pl.color}33`,
                 background: pl.color + "18",
               }}>
-                <img
-                  src={`https://picsum.photos/seed/${encodeURIComponent(buyer.purchaseAddress.replace(/\s+/g, '-').toLowerCase())}/104/104`}
-                  alt={buyer.purchaseAddress}
-                  loading="lazy"
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                  onError={e => {
-                    const img = e.target as HTMLImageElement
-                    const parent = img.parentElement
-                    if (parent) {
-                      img.style.display = "none"
-                      parent.style.display = "flex"; parent.style.alignItems = "center"; parent.style.justifyContent = "center"
-                      parent.innerHTML = `<span style="font-size:16px;font-weight:700;color:${pl.color}">${fname.charAt(0)}</span>`
-                    }
-                  }}
-                />
+                <span style={{ fontSize: 18, fontWeight: 800, color: pl.color }}>
+                  {fname.charAt(0).toUpperCase()}
+                </span>
               </div>
 
               {/* Info */}
@@ -6747,11 +6741,16 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [showAllMetrics, setShowAllMetrics] = useState(false)
   const [showInsights, setShowInsights] = useState(true)    // triggers open by default
   const [showPitchAngles, setShowPitchAngles] = useState(false)  // pitch angles collapsed by default
-  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture" | "market-update">("analysis")
+  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture" | "market-update" | "gci" | "pitch" | "property-pitch">("analysis")
   const [marketUpdatePreview, setMarketUpdatePreview] = useState<{ html: string; sms: string; subject: string } | null>(null)
   const [marketUpdateSending, setMarketUpdateSending] = useState(false)
   const [marketUpdateSent, setMarketUpdateSent] = useState(false)
   const [marketUpdateLoading, setMarketUpdateLoading] = useState(false)
+  const [pitchPayload, setPitchPayload] = useState<PriceUpdatePayload | null>(null)
+  const [pitchUrl, setPitchUrl] = useState<string | null>(null)
+  const [pitchGenerating, setPitchGenerating] = useState(false)
+  const [pitchSending, setPitchSending] = useState(false)
+  const [pitchSent, setPitchSent] = useState(false)
   const [selectedAngleIdx, setSelectedAngleIdx] = useState(0)
   // NotesBridge: populated from API response after generation
   const [extractedHook, setExtractedHook] = useState<string | null>(null)
@@ -7033,6 +7032,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
           { id: "listing",   label: "Listing CMA" },
           { id: "campaign",  label: "Campaign Report" },
           { id: "nurture",   label: "Nurture" },
+          { id: "pitch",     label: "Price Update Pitch" },
+          { id: "property-pitch", label: "Property Pitch" },
+          { id: "gci",       label: "GCI Calculator" },
         ] as { id: typeof profileTab; label: string }[]).map(tab => (
           <button key={tab.id} onClick={() => setProfileTab(tab.id)} style={{
             padding: isMobileVP ? "10px 14px" : "10px 22px", background: "none", border: "none", cursor: "pointer",
@@ -7710,6 +7712,211 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
           <CampaignReport buyer={buyer} agent={agent} theme={theme} />
         </div>
       )}
+
+      {/* === PROPERTY PITCH TAB === */}
+      {profileTab === "property-pitch" && (() => {
+        const pitchProperty = PORTFOLIO_ACTIVE[0]
+        const pitchSLM = loadSLMForProperty(pitchProperty.id)
+        const comparable = pitchSLM.comparableSales !== "TBD" && pitchSLM.comparableSales.length > 0
+          ? pitchSLM.comparableSales[0]
+          : { address: `${pitchProperty.address}, ${pitchProperty.suburb}`, price: 0, date: "", beds: pitchSLM.beds !== "TBD" ? pitchSLM.beds : 0 }
+
+        return (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+                PROPERTY PITCH
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
+                {pitchSLM.address}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                A classy, photo-led listing showcase in Peake's brand style, ready to share with prospective buyers.
+              </div>
+            </div>
+
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>PITCH PREVIEW</div>
+              </div>
+              <div style={{ maxHeight: 800, overflow: "auto" }}>
+                <PropertyPitchTemplate slm={pitchSLM} agent={agent} comparable={comparable} />
+              </div>
+            </motion.div>
+          </div>
+        )
+      })()}
+
+      {/* === GCI CALCULATOR TAB === */}
+      {profileTab === "gci" && (
+        <div style={{ marginTop: 4 }}>
+          <GciCalculator />
+        </div>
+      )}
+
+      {/* === PRICE UPDATE PITCH TAB === */}
+      {profileTab === "pitch" && (() => {
+        const handleGeneratePitch = async () => {
+          setPitchGenerating(true)
+          try {
+            const res = await authFetch(apiUrl("/api/pitches"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: "price_update",
+                leadId: String(buyer.id),
+                propertyRef: buyer.purchaseAddress,
+                agent: {
+                  name: agent.name,
+                  agency: agent.agency,
+                  email: agent.email,
+                  phone: agent.phone,
+                  suburb: agent.suburb,
+                  tagline: agent.tagline,
+                },
+                recipientName: buyer.name,
+                propertyAddress: buyer.purchaseAddress,
+                suburb: buyer.suburb,
+                comparableSales: comps.slice(0, 3).map(c => ({
+                  address: `${c.address}, ${buyer.suburb}`,
+                  price: c.soldPrice,
+                  date: c.soldDate,
+                  beds: c.beds,
+                })),
+                marketStats: {
+                  medianPrice: range.mid,
+                  daysOnMarket: range.daysOnMarket,
+                  clearanceRate: range.clearanceRate,
+                  annualGrowthPct: range.demandScore > 7 ? 6.5 : 5.8,
+                },
+                voiceContext: buildVoiceContext(agent.voiceProfile, loadCorpus()),
+              }),
+            }).then(r => r.json()) as { payload?: PriceUpdatePayload; url?: string }
+
+            if (res.payload && res.url) {
+              setPitchPayload(res.payload)
+              setPitchUrl(`${window.location.origin}${res.url}`)
+              setPitchSent(false)
+            }
+          } catch { /* silent */ }
+          setPitchGenerating(false)
+        }
+
+        const handleSendPitch = async () => {
+          if (!pitchUrl) return
+          setPitchSending(true)
+          try {
+            const sms = stripDashes(`Hi ${fname}, ${agentFirst} here. I've put together a quick price update for ${shortAddr(buyer.purchaseAddress)}. Have a look here: ${pitchUrl}`)
+            const subject = stripDashes(`Your price update for ${buyer.purchaseAddress}`)
+            const emailBody = stripDashes(
+              `Hi ${fname},\n\nI've put together a price update for your property at ${buyer.purchaseAddress}. You can view it here: ${pitchUrl}\n\nCheers,\n${agentFirst}`
+            )
+            await authFetch(apiUrl("/api/send"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                leadId: String(buyer.id), leadName: buyer.name,
+                phone: buyer.phone, email: buyer.email,
+                agentEmail: agent.email, agentName: agent.name, agentAgency: agent.agency,
+                agentPhone: agent.phone, agencyColor: theme.primary, agencyTagline: agent.tagline,
+                propertyAddress: buyer.purchaseAddress,
+                sms, subject, emailBody,
+                channel: buyer.email ? "both" : "sms",
+              }),
+            })
+            setPitchSent(true)
+          } catch { /* silent */ }
+          setPitchSending(false)
+        }
+
+        return (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+                PRICE UPDATE PITCH
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
+                {buyer.purchaseAddress}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                Generate a shareable Price Update page for {fname}, written in your voice, with comparable sales and market stats. You'll be notified when {fname} opens it.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                onClick={handleGeneratePitch}
+                disabled={pitchGenerating}
+                style={{
+                  padding: "12px 24px", borderRadius: 12, border: "none", cursor: pitchGenerating ? "default" : "pointer",
+                  background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                  color: "#fff", fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                  boxShadow: `0 4px 16px ${theme.glow}`,
+                  opacity: pitchGenerating ? 0.7 : 1,
+                }}
+              >
+                {pitchGenerating ? "Generating..." : pitchPayload ? "Regenerate Pitch" : "Generate Price Update Pitch"}
+              </motion.button>
+
+              {pitchUrl && !pitchSent && (
+                <motion.button
+                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                  onClick={handleSendPitch}
+                  disabled={pitchSending}
+                  style={{
+                    padding: "12px 24px", borderRadius: 12, border: `1px solid ${C.green}55`,
+                    cursor: pitchSending ? "default" : "pointer",
+                    background: C.green + "15", color: C.green,
+                    fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                  }}
+                >
+                  {pitchSending ? "Sending..." : `Send to ${fname} →`}
+                </motion.button>
+              )}
+
+              {pitchSent && (
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 12, background: C.green + "15", border: `1px solid ${C.green}40` }}>
+                  <span style={{ fontSize: 16 }}>✓</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Pitch link sent to {fname}</span>
+                </motion.div>
+              )}
+            </div>
+
+            {pitchUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.bg2, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: C.faint, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {pitchUrl}
+                </div>
+                <button
+                  onClick={() => navigator.clipboard.writeText(pitchUrl)}
+                  style={{
+                    padding: "6px 14px", borderRadius: 8, border: `1px solid ${C.border}`,
+                    background: C.bg3, color: C.text, fontSize: 11, fontWeight: 700, fontFamily: FONT, cursor: "pointer",
+                  }}
+                >
+                  Copy link
+                </button>
+              </div>
+            )}
+
+            {pitchPayload && (
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>PITCH PREVIEW</div>
+                </div>
+                <div style={{ maxHeight: 700, overflow: "auto" }}>
+                  <PriceUpdateTemplate payload={pitchPayload} />
+                </div>
+              </motion.div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* === MARKET UPDATE TAB === */}
       {profileTab === "market-update" && (() => {
@@ -8807,17 +9014,20 @@ export default function DemoView({
   const [draftingReply, setDraftingReply] = useState(false)
   const [sendingReply, setSendingReply] = useState(false)
   const [seedingDemo, setSeedingDemo] = useState(false)
+  // null = first poll hasn't resolved · true = server reachable · false = unreachable
+  const [inboxConnected, setInboxConnected] = useState<boolean | null>(null)
 
   // Poll for unread SMS replies every 30 seconds
   useEffect(() => {
     const poll = () => {
       authFetch(apiUrl("/api/conversations"))
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
         .then((d: { unread: number; threads: typeof inboxThreads }) => {
           setUnreadReplies(d.unread ?? 0)
           setInboxThreads(d.threads ?? [])
+          setInboxConnected(true)
         })
-        .catch(() => {})
+        .catch(() => setInboxConnected(false))
     }
     poll()
     const id = setInterval(poll, 30_000)
@@ -8987,9 +9197,21 @@ export default function DemoView({
               {/* Thread list */}
               {!selectedThread && (
                 <div style={{ overflowY: "auto", flex: 1 }}>
-                  {inboxThreads.length === 0 ? (
+                  {inboxConnected === false ? (
+                    <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 12, lineHeight: 1.6 }}>
+                      <div style={{ fontSize: 20, marginBottom: 8 }}>📵</div>
+                      <div style={{ color: C.text, fontWeight: 700, marginBottom: 4 }}>Inbox not connected</div>
+                      <div style={{ color: C.muted }}>
+                        PropOS can't reach the messaging server. Two-way SMS needs the
+                        BlueBubbles transport configured — check Settings → Comms, or
+                        verify the server is running.
+                      </div>
+                    </div>
+                  ) : inboxThreads.length === 0 ? (
                     <div style={{ padding: "24px 16px", textAlign: "center", color: C.muted, fontSize: 12 }}>
-                      No replies yet. Hit "Simulate reply" to demo the inbox flow.
+                      {inboxConnected === null
+                        ? "Loading conversations…"
+                        : "Connected — no replies yet. Hit \"Simulate reply\" to demo the inbox flow."}
                     </div>
                   ) : inboxThreads.map(t => {
                     const last = t.messages[t.messages.length - 1]

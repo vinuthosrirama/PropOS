@@ -89,6 +89,13 @@ export const AGENCY_THEMES: Record<string, AgencyTheme> = {
   "Kay & Burton":             { name: "Kay & Burton",             primary: "#B0A090",             dim: "rgba(176,160,144,0.12)",    glow: "rgba(176,160,144,0.07)",    logo: "KB", gradient: ["#C0B0A0", "#786050"]                       },
   "Biggin & Scott":           { name: "Biggin & Scott",           primary: "#4C78CC",             dim: "rgba(76,120,204,0.12)",     glow: "rgba(76,120,204,0.07)",     logo: "BS", gradient: ["#6492E0", "#4C78CC"]                       },
   "Area Specialist":          { name: "Area Specialist",          primary: "#111111",              dim: "rgba(17,17,17,0.12)",       glow: "rgba(17,17,17,0.07)",       logo: "AS", gradient: ["#484848", "#111111"]                       },
+  // ── New agents (June 2026) — hex from live site CSS extraction where possible ──
+  // 5th Avenue Real Estate: #e1b530 confirmed from .bg-primary/.text-primary in site CSS (the5thavenue.com.au)
+  "5th Avenue Real Estate":   { name: "5th Avenue Real Estate",   primary: "#e1b530",             dim: "rgba(225,181,48,0.12)",     glow: "rgba(225,181,48,0.07)",     logo: "5A", gradient: ["#f0cf6a", "#e1b530"]                       },
+  // Uphill Real Estate: #f18017 best available from uphillrealestate.com.au site CSS (orange brand accent)
+  "Uphill Real Estate":       { name: "Uphill Real Estate",       primary: "#f18017",             dim: "rgba(241,128,23,0.12)",     glow: "rgba(241,128,23,0.07)",     logo: "UH", gradient: ["#ffa64d", "#f18017"]                       },
+  // Gill Estate Agents: site unreachable for CSS extraction — best-available placeholder (navy), verify before brand use
+  "Gill Estate Agents":       { name: "Gill Estate Agents",       primary: "#14274e",             dim: "rgba(20,39,78,0.12)",       glow: "rgba(20,39,78,0.07)",       logo: "GE", gradient: ["#3a5a99", "#14274e"]                       },
   "Other":                    { name: "Other",                    primary: "rgb(166,218,255)",    dim: "rgba(166,218,255,0.12)",    glow: "rgba(166,218,255,0.06)",    logo: "AV", gradient: ["rgb(166,218,255)", "rgb(100,208,144)"]      },
 }
 
@@ -268,6 +275,75 @@ export const MANPREET_DEFAULT_AGENT: AgentProfile = {
   trainingCorpus: [],
 }
 
+export const GILL_DEFAULT_AGENT: AgentProfile = {
+  name:         "Harkirat Gill",
+  agency:       "Gill Estate Agents",
+  agencyShort:  "GE",
+  email:        "harkirat@gillagents.com",
+  phone:        "0400 000 000",   // TBD — verify direct mobile
+  suburb:       "Berwick",
+  tagline:      "Clyde North & Berwick specialist. Local results.",
+  voiceProfile: {
+    greeting:       "Hi",
+    closing:        "Cheers",
+    lengthStyle:    "short",
+    formalityScore: 2,
+    aussieIndex:    2,
+    specificity:    3,
+    emojiUsage:     "none",
+    examplesCount:  0,
+    confidence:     60,
+    detectedTraits: ["professional", "local-area focus", "concise"],
+  },
+  trainingCorpus: [],
+}
+
+export const KUMARAGE_DEFAULT_AGENT: AgentProfile = {
+  name:         "Chris Kumarage",
+  agency:       "Uphill Real Estate",
+  agencyShort:  "UH",
+  email:        "chris@uphillrealestate.com.au",
+  phone:        "0400 000 000",   // TBD — verify direct mobile
+  suburb:       "Clyde North",
+  tagline:      "Clyde & Clyde North specialist. Honest, hard-working results.",
+  voiceProfile: {
+    greeting:       "Hi",
+    closing:        "Cheers",
+    lengthStyle:    "short",
+    formalityScore: 2,
+    aussieIndex:    2,
+    specificity:    3,
+    emojiUsage:     "none",
+    examplesCount:  0,
+    confidence:     60,
+    detectedTraits: ["relationship-focused", "local-area focus", "concise"],
+  },
+  trainingCorpus: [],
+}
+
+export const ABEYSENA_DEFAULT_AGENT: AgentProfile = {
+  name:         "Anthony Abeysena",
+  agency:       "5th Avenue Real Estate",
+  agencyShort:  "5A",
+  email:        "anthony@the5thavenue.com.au",
+  phone:        "0400 000 000",   // TBD — verify direct mobile
+  suburb:       "Truganina",
+  tagline:      "Western & SE growth corridor specialist. Genuine results.",
+  voiceProfile: {
+    greeting:       "Hi",
+    closing:        "Cheers",
+    lengthStyle:    "short",
+    formalityScore: 2,
+    aussieIndex:    2,
+    specificity:    3,
+    emojiUsage:     "none",
+    examplesCount:  0,
+    confidence:     60,
+    detectedTraits: ["professional", "data-focused", "concise"],
+  },
+  trainingCorpus: [],
+}
+
 export const DEFAULT_AGENT: AgentProfile = {
   name:    "Cameron Knoll",
   agency:  "Peake",
@@ -335,10 +411,31 @@ export function isManpreetSingh(agent: AgentProfile): boolean {
   return nameMatch && agency.includes("barry plant")
 }
 
+export function isHarkiratGill(agent: AgentProfile): boolean {
+  const name = agent.name.toLowerCase().trim()
+  const agency = agent.agency.toLowerCase().trim()
+  return name.includes("harkirat") && name.includes("gill") && agency.includes("gill")
+}
+
+export function isChrisKumarage(agent: AgentProfile): boolean {
+  const name = agent.name.toLowerCase().trim()
+  const agency = agent.agency.toLowerCase().trim()
+  return name.includes("chris") && name.includes("kumarage") && agency.includes("uphill")
+}
+
+export function isAnthonyAbeysena(agent: AgentProfile): boolean {
+  const name = agent.name.toLowerCase().trim()
+  const agency = agent.agency.toLowerCase().trim()
+  return name.includes("anthony") && name.includes("abeysena") && agency.includes("5th avenue")
+}
+
 export function getPortfolioForAgent(agent: AgentProfile): { sold: PortfolioProperty[]; active: PortfolioProperty[] } {
   if (isCamKnoll(agent)) return { sold: PORTFOLIO_SOLD, active: PORTFOLIO_ACTIVE }
   if (isPasSunilchandra(agent)) return { sold: PAS_PORTFOLIO_SOLD, active: PAS_PORTFOLIO_ACTIVE }
   if (isManpreetSingh(agent)) return { sold: MANPREET_PORTFOLIO_SOLD, active: MANPREET_PORTFOLIO_ACTIVE }
+  if (isHarkiratGill(agent)) return { sold: GILL_PORTFOLIO_SOLD, active: GILL_PORTFOLIO_ACTIVE }
+  if (isChrisKumarage(agent)) return { sold: KUMARAGE_PORTFOLIO_SOLD, active: KUMARAGE_PORTFOLIO_ACTIVE }
+  if (isAnthonyAbeysena(agent)) return { sold: ABEYSENA_PORTFOLIO_SOLD, active: ABEYSENA_PORTFOLIO_ACTIVE }
   // Other agents see empty portfolio
   return { sold: [], active: [] }
 }
@@ -542,6 +639,210 @@ export const MANPREET_PORTFOLIO_ACTIVE: PortfolioProperty[] = [
     image: "/2-tallangatta-place.jpg",
     description: "Impressive 4-bed family residence on a generous 774sqm allotment in one of Berwick's most sought-after pockets. Featuring multiple living zones, modern kitchen with stone benchtops, alfresco entertaining and a double garage. Walking distance to Berwick Village, top schools and Casey Hub.",
     leadCount: 3,
+  },
+]
+
+// ── Harkirat Gill / Gill Estate Agents — Clyde North & Berwick portfolio ─────
+// Source: agent-supplied recently sold / active listing summary (Jun 2026).
+// No Section 32 available — descriptions are based on bed/bath/car counts only.
+
+export const GILL_PORTFOLIO_SOLD: PortfolioProperty[] = [
+  {
+    id: 701,
+    address: "44 Elmtree Crescent",
+    suburb: "Clyde North", state: "VIC", postcode: "3978",
+    price: 830000, beds: 4, baths: 2, cars: 2,
+    type: "House", status: "sold", soldDate: "13 May 2026",
+    image: "/44-elmtree-crescent.jpg",
+    description: "4-bed, 2-bath family home with double garage in Clyde North. Sold 13 May 2026.",
+    leadCount: 0,
+  },
+  {
+    id: 702,
+    address: "2/11 Pettit Close",
+    suburb: "Berwick", state: "VIC", postcode: "3806",
+    price: 765000, beds: 4, baths: 2, cars: 2,
+    type: "Townhouse", status: "sold", soldDate: "04 May 2026",
+    image: "/2-11-pettit-close.jpg",
+    description: "4-bed, 2-bath townhouse with double garage in Berwick. Sold 04 May 2026.",
+    leadCount: 0,
+  },
+  {
+    id: 703,
+    address: "4/527 Princes Highway",
+    suburb: "Noble Park", state: "VIC", postcode: "3174",
+    price: 462000, beds: 2, baths: 1, cars: 1,
+    type: "Unit", status: "sold", soldDate: "24 Apr 2026",
+    image: "/4-527-princes-highway.jpg",
+    description: "2-bed, 1-bath unit with single car space in Noble Park. Sold 24 Apr 2026.",
+    leadCount: 0,
+  },
+]
+
+export const GILL_PORTFOLIO_ACTIVE: PortfolioProperty[] = [
+  {
+    id: 711,
+    address: "31 Paxford Drive",
+    suburb: "Cranbourne North", state: "VIC", postcode: "3977",
+    price: 705000, priceMin: 680000, priceMax: 730000,
+    beds: 3, baths: 2, cars: 1,
+    type: "House", status: "active",
+    openDate: "TBD",
+    image: "/31-paxford-drive.jpg",
+    description: "3-bed, 2-bath family home with single garage in Cranbourne North. Listed 05 Jun 2026.",
+    leadCount: 0,
+  },
+  {
+    id: 712,
+    address: "139 Kananook Avenue",
+    suburb: "Seaford", state: "VIC", postcode: "3198",
+    price: 1000000, priceMin: 950000, priceMax: 1050000,
+    beds: 3, baths: 1, cars: 0,
+    type: "House", status: "active",
+    openDate: "TBD",
+    image: "/139-kananook-avenue.jpg",
+    description: "3-bed, 1-bath home in Seaford, close to the beach and Kananook Station. Listed 04 Jun 2026.",
+    leadCount: 0,
+  },
+  {
+    id: 713,
+    address: "8 Canter Circuit",
+    suburb: "Clyde North", state: "VIC", postcode: "3978",
+    price: 910000, priceMin: 910000, priceMax: 910000,
+    beds: 0, baths: 0, cars: 0,
+    type: "House", status: "active",
+    openDate: "TBD",
+    image: "/8-canter-circuit.jpg",
+    description: "Residential land at Canter Circuit, Clyde North. Listed 02 Jun 2026.",
+    leadCount: 0,
+  },
+]
+
+// ── Chris Kumarage / Uphill Real Estate — Clyde & Clyde North portfolio ──────
+// Source: agent-supplied recently sold / active listing summary (Jun 2026).
+// No Section 32 available — descriptions are based on bed/bath/car counts only.
+
+export const KUMARAGE_PORTFOLIO_SOLD: PortfolioProperty[] = [
+  {
+    id: 801,
+    address: "14 Basalt Drive",
+    suburb: "Clyde North", state: "VIC", postcode: "3978",
+    price: 780000, beds: 4, baths: 2, cars: 2,
+    type: "House", status: "sold", soldDate: "05 May 2026",
+    image: "/14-basalt-drive.jpg",
+    description: "4-bed, 2-bath family home with double garage in Clyde North. Sold 05 May 2026.",
+    leadCount: 0,
+  },
+  {
+    id: 802,
+    address: "27 Picnic Avenue",
+    suburb: "Clyde North", state: "VIC", postcode: "3978",
+    price: 0, beds: 4, baths: 2, cars: 2,
+    type: "House", status: "sold", soldDate: "03 May 2026",
+    image: "/27-picnic-avenue.jpg",
+    description: "4-bed, 2-bath family home with double garage in Clyde North. Sold price undisclosed (contact agent). Sold 03 May 2026.",
+    leadCount: 0,
+  },
+  {
+    id: 803,
+    address: "57 Kamet Street",
+    suburb: "Clyde", state: "VIC", postcode: "3978",
+    price: 650000, beds: 4, baths: 2, cars: 2,
+    type: "House", status: "sold", soldDate: "30 Apr 2026",
+    image: "/57-kamet-street.jpg",
+    description: "4-bed, 2-bath family home with double garage in Clyde. Sold 30 Apr 2026.",
+    leadCount: 0,
+  },
+]
+
+export const KUMARAGE_PORTFOLIO_ACTIVE: PortfolioProperty[] = [
+  {
+    id: 811,
+    address: "15 Niloma Street",
+    suburb: "Clyde North", state: "VIC", postcode: "3978",
+    price: 724500, priceMin: 699000, priceMax: 750000,
+    beds: 4, baths: 2, cars: 2,
+    type: "House", status: "active",
+    openDate: "TBD",
+    image: "/15-niloma-street.jpg",
+    description: "4-bed, 2-bath family home with double garage in Clyde North. Listed 01 May 2026.",
+    leadCount: 0,
+  },
+  {
+    id: 812,
+    address: "23 Seahawk Street",
+    suburb: "Clyde North", state: "VIC", postcode: "3978",
+    price: 719000, priceMin: 689000, priceMax: 749000,
+    beds: 4, baths: 2, cars: 2,
+    type: "House", status: "active",
+    openDate: "TBD",
+    image: "/23-seahawk-street.jpg",
+    description: "4-bed, 2-bath family home with double garage in Clyde North. Listed 17 Apr 2026.",
+    leadCount: 0,
+  },
+  {
+    id: 813,
+    address: "19 Sark Street",
+    suburb: "Clyde North", state: "VIC", postcode: "3978",
+    price: 974000, priceMin: 949000, priceMax: 999000,
+    beds: 4, baths: 2, cars: 2,
+    type: "House", status: "active",
+    openDate: "TBD",
+    image: "/19-sark-street.jpg",
+    description: "4-bed, 2-bath family home with double garage in Clyde North. Listed 17 Apr 2026.",
+    leadCount: 0,
+  },
+]
+
+// ── Anthony Abeysena / 5th Avenue Real Estate — growth corridor portfolio ───
+// Source: agent-supplied recently sold / active listing summary (Jun 2026).
+// No Section 32 available — descriptions are based on bed/bath/car counts only.
+
+export const ABEYSENA_PORTFOLIO_SOLD: PortfolioProperty[] = [
+  {
+    id: 901,
+    address: "18 Straun Road",
+    suburb: "Mickleham", state: "VIC", postcode: "3064",
+    price: 730000, beds: 4, baths: 2, cars: 2,
+    type: "House", status: "sold", soldDate: "22 May 2026",
+    image: "/18-straun-road.jpg",
+    description: "4-bed, 2-bath family home with double garage in Mickleham. Sold 22 May 2026.",
+    leadCount: 0,
+  },
+  {
+    id: 902,
+    address: "5 Glenisla Way",
+    suburb: "Berwick", state: "VIC", postcode: "3806",
+    price: 940000, beds: 4, baths: 2, cars: 2,
+    type: "House", status: "sold", soldDate: "18 Mar 2026",
+    image: "/5-glenisla-way.jpg",
+    description: "4-bed, 2-bath family home with double garage in Berwick. Sold 18 Mar 2026.",
+    leadCount: 0,
+  },
+  {
+    id: 903,
+    address: "9 Sugarloaf Grove",
+    suburb: "Werribee", state: "VIC", postcode: "3030",
+    price: 685000, beds: 4, baths: 2, cars: 2,
+    type: "House", status: "sold", soldDate: "06 Mar 2026",
+    image: "/9-sugarloaf-grove.jpg",
+    description: "4-bed, 2-bath family home with double garage in Werribee. Sold 06 Mar 2026.",
+    leadCount: 0,
+  },
+]
+
+export const ABEYSENA_PORTFOLIO_ACTIVE: PortfolioProperty[] = [
+  {
+    id: 911,
+    address: "18 Maplewood Circuit",
+    suburb: "Truganina", state: "VIC", postcode: "3029",
+    price: 719500, priceMin: 690000, priceMax: 749000,
+    beds: 4, baths: 2, cars: 2,
+    type: "House", status: "active",
+    openDate: "TBD",
+    image: "/18-maplewood-circuit.jpg",
+    description: "4-bed, 2-bath family home with double garage in Truganina. Listed 30 Apr 2026.",
+    leadCount: 0,
   },
 ]
 

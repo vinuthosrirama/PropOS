@@ -44,7 +44,9 @@ import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
 import gdprRouter from "./routes/gdpr.js"
 import marketUpdateRouter from "./routes/market-update.js"
+import { publicRouter as pitchesPublicRouter, authedRouter as pitchesAuthedRouter } from "./routes/pitches.js"
 import outreachTargetsRouter from "./routes/outreach-targets.js"
+import agentboxRouter from "./routes/agentbox.js"
 import smsShortcutRouter, { registerReplyHandler } from "./routes/sms-shortcut.js"
 import { parseHttpSmsWebhook } from "./lib/httpsms.js"
 import { loadConversations, addReplyToThread } from "./lib/conversations.js"
@@ -161,6 +163,8 @@ app.use("/api/sms-shortcut", smsShortcutRouter)
 // SLM answer routes also public (called from buyer-facing demo)
 app.use("/api/slm-answer",        slmAnswerRouter)
 app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
+// Pitch view-tracking + by-slug fetch — public, accessed from /p/:slug links
+app.use("/api/pitches",           pitchesPublicRouter)
 
 // GET /api/sms-transport — returns which transport is active (for settings UI)
 app.get("/api/sms-transport", async (_req: Request, res: Response) => {
@@ -205,9 +209,11 @@ app.use("/api/reply-agent",      replyAgentRouter)
 app.use("/api/add-contact",      addContactRouter)
 app.use("/api/add-lead",         addLeadRouter)
 app.use("/api/parse-notes",      parseNotesRouter)
+app.use("/api/pitches",          pitchesAuthedRouter)
 app.use("/api/gdpr",             gdprRouter)
 app.use("/api/market-update",    marketUpdateRouter)
 app.use("/api/outreach-targets", outreachTargetsRouter)
+app.use("/api/agentbox",         agentboxRouter)
 
 // ── Shared reply handler (all transports feed here) ──────────────────────────
 async function handleIncomingReply(from: string, body: string): Promise<void> {
@@ -232,6 +238,23 @@ async function handleIncomingReply(from: string, body: string): Promise<void> {
 
 // Wire iOS Shortcut relay reply handler (must be after handleIncomingReply is defined)
 registerReplyHandler(handleIncomingReply)
+
+// ── Webhook shared-secret gate ────────────────────────────────────────────────
+// All SMS-transport webhooks accept a secret via ?secret= or X-Webhook-Secret.
+// Enforced only when WEBHOOK_SECRET is set — unset keeps local dev frictionless.
+// Constant-time compare (same pattern as verifyShortcutSecret).
+function verifyWebhookSecret(req: Request, res: Response, next: NextFunction) {
+  const expected = process.env.WEBHOOK_SECRET?.trim()
+  if (!expected) return next()
+  const given = String(req.query.secret ?? req.headers["x-webhook-secret"] ?? "").trim()
+  let match = given.length === expected.length ? 0 : 1
+  for (let i = 0; i < Math.min(given.length, expected.length); i++) {
+    match |= given.charCodeAt(i) ^ expected.charCodeAt(i)
+  }
+  if (match !== 0) return res.status(401).json({ error: "invalid webhook secret" })
+  return next()
+}
+app.use("/api/webhook", verifyWebhookSecret)
 
 // ── BlueBubbles incoming webhook ──────────────────────────────────────────────
 // POST /api/webhook/bluebubbles — receives incoming iMessage/SMS replies
@@ -368,23 +391,33 @@ app.listen(PORT, async () => {
   startOutreachScheduler()
 
   // 4. Wire up transport-specific init
+  // Webhook callback URLs carry ?secret= so the verifyWebhookSecret gate passes.
+  const webhookSecretQS = process.env.WEBHOOK_SECRET?.trim()
+    ? `?secret=${encodeURIComponent(process.env.WEBHOOK_SECRET.trim())}`
+    : ""
+  if (process.env.WEBHOOK_SECRET?.trim()) {
+    console.log("  Webhook auth: shared secret ENFORCED on /api/webhook/*")
+  } else {
+    console.warn("  ⚠️  WEBHOOK_SECRET not set — /api/webhook/* accepts unauthenticated POSTs")
+  }
+
   if (smsTransport === "bluebubbles" && process.env.BASE_URL) {
     // Register incoming webhook with BlueBubbles so replies flow into PropOS
-    const webhookUrl = `${process.env.BASE_URL}/api/webhook/bluebubbles`
+    const webhookUrl = `${process.env.BASE_URL}/api/webhook/bluebubbles${webhookSecretQS}`
     registerBlueBubblesWebhook(webhookUrl)
       .then(() => console.log(`  BlueBubbles webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  BlueBubbles webhook register failed:", e.message))
   }
 
   if (smsTransport === "android-gateway" && process.env.BASE_URL) {
-    const webhookUrl = `${process.env.BASE_URL}/api/webhook/android-gateway`
+    const webhookUrl = `${process.env.BASE_URL}/api/webhook/android-gateway${webhookSecretQS}`
     registerAndroidGatewayWebhook(webhookUrl)
       .then(() => console.log(`  AndroidGateway webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  AndroidGateway webhook register failed:", e.message))
   }
 
   if (smsTransport === "telelink" && process.env.BASE_URL) {
-    const webhookUrl = `${process.env.BASE_URL}/api/webhook/telelink`
+    const webhookUrl = `${process.env.BASE_URL}/api/webhook/telelink${webhookSecretQS}`
     registerTeleLinkWebhook(webhookUrl)
       .then(() => console.log(`  TeleLink webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  TeleLink webhook register failed:", e.message))
