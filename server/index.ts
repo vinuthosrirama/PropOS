@@ -39,6 +39,7 @@ import replyAgentRouter from "./routes/reply-agent.js"
 import slmAnswerRouter from "./routes/slm-answer.js"
 import slmAnswerBatchRouter from "./routes/slm-answer-batch.js"
 import addContactRouter from "./routes/add-contact.js"
+import importContactsRouter from "./routes/import-contacts.js"
 import addLeadRouter from "./routes/add-lead.js"
 import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
@@ -76,6 +77,8 @@ app.use(cors({
 app.use(compression())
 app.use(cookieParser())
 
+// CRM workbook uploads (base64 xlsx) and bulk contact arrays exceed the global limit
+app.use("/api/import-contacts", express.json({ limit: "10mb" }))
 // 256 KB body limit — prevents large-payload DoS; no legitimate request exceeds this
 app.use(express.json({ limit: "256kb" }))
 // Twilio webhook sends URL-encoded body
@@ -207,6 +210,7 @@ app.use("/api/boxdice",          boxdiceRouter)
 app.use("/api/conversations",    conversationsRouter)
 app.use("/api/reply-agent",      replyAgentRouter)
 app.use("/api/add-contact",      addContactRouter)
+app.use("/api/import-contacts",  importContactsRouter)
 app.use("/api/add-lead",         addLeadRouter)
 app.use("/api/parse-notes",      parseNotesRouter)
 app.use("/api/pitches",          pitchesAuthedRouter)
