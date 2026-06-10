@@ -179,6 +179,35 @@ Patterns that have repeatedly caused fix commits after feat commits — read bef
 
 ---
 
+## Session Persistence Rules (cross-conversation continuity)
+
+These rules exist because work done in one Claude conversation must be visible to the next. An uncommitted file might as well not exist.
+
+### Session start (always, before any work)
+1. `git fetch origin && git status`
+2. If behind origin/main: `git pull --rebase origin main`
+3. If the working tree has uncommitted changes from a previous session: review with `git diff`, then commit them with a descriptive message BEFORE starting new work — never build on top of unsaved changes silently.
+4. Read `SESSION_LOG.md` (and any active plan file like `PITCH_SUITE_PLAN.md`) to load what was last done and what is planned next.
+
+### During work
+- Commit after every completed, verified feature (tsc clean + screenshot verified per the Visual Verification Protocol above), not just at session end. Small, frequent commits.
+- Never leave new source files untracked at the end of a turn.
+
+### Session end (always, even if work is incomplete)
+1. `npx tsc --noEmit` (root AND `server/`) — must show no new errors before committing.
+2. `git add` the work (never `backups/`, `dist_backup_*`, `src_snapshot_*` — these are gitignored).
+3. Commit with a message describing WHAT changed and WHY.
+4. `git push origin main`.
+5. Append a dated entry to `SESSION_LOG.md`: what was built, what was verified, what is half-done, and the exact next step. Commit and push that too — this file is how the next conversation resumes.
+
+If push is rejected (remote moved): `git pull --rebase origin main`, resolve, push again. Never force-push.
+
+### Frontend deploys (Cloudflare Pages)
+- `propos.addvantage.site` is served by the Pages project **`propos-demo`** — NOT `openhome-engine`. Deploying to the wrong project updates only its `*.pages.dev` URL and leaves the custom domain stale.
+- Deploy command: `npx vite build && npx wrangler pages deploy dist --project-name propos-demo --branch main`
+
+---
+
 ## Session Lessons (auto-accumulated)
 
 Newest first. Written automatically by the stop hook (`.claude/hooks/session-review.sh`) on session end: `[avoid]` when fix-after-feat or 3+ fix commits are detected, `[win]` when the transcript shows user praise/approval following a recent commit.
