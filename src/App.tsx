@@ -15,6 +15,7 @@ const AgentLogin     = lazy(() => import("./views/AgentLogin"))
 const DemoView       = lazy(() => import("./views/DemoView"))
 const SettingsView   = lazy(() => import("./views/SettingsView"))
 const PrincipalView  = lazy(() => import("./views/PrincipalView"))
+const PitchView      = lazy(() => import("./views/PitchView"))
 
 function LoadingSpinner() {
   return (
@@ -50,6 +51,18 @@ function detectProductMode(): DemoMode | null {
 }
 
 export const APP_PRODUCT_MODE = detectProductMode()
+
+// ── Public pitch page detection ───────────────────────────────────────────────
+// /p/:slug → standalone, unauthenticated pitch view (Realtair-style shared link)
+function detectPitchSlug(): string | null {
+  try {
+    const match = window.location.pathname.match(/^\/p\/([^/]+)\/?$/)
+    return match ? match[1] : null
+  } catch {}
+  return null
+}
+
+export const APP_PITCH_SLUG = detectPitchSlug()
 
 export function getProductLabel(mode: DemoMode | null): string {
   if (mode === "buyer") return "BuyerOS"
@@ -139,6 +152,14 @@ export default function App() {
   }, [loggedIn])
 
   const navigate = (v: ViewId) => { window.scrollTo({ top: 0, behavior: "smooth" }); setView(v) }
+
+  if (APP_PITCH_SLUG) {
+    return (
+      <Suspense fallback={<LoadingSpinner />}>
+        <PitchView slug={APP_PITCH_SLUG} />
+      </Suspense>
+    )
+  }
 
   if (!loggedIn) {
     return (

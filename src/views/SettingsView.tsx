@@ -1142,25 +1142,36 @@ type HealthStatus = { openai: boolean; anthropic: boolean; sheet: boolean; twili
 
 const AGENTBOX_KEY_STORE = "propOS_agentbox_creds"
 
+function formatTimeAgo(ts: number): string {
+  const mins = Math.floor((Date.now() - ts) / 60_000)
+  if (mins < 1)    return "just now"
+  if (mins < 60)   return `${mins}m ago`
+  if (mins < 1440) return `${Math.floor(mins / 60)}h ago`
+  return `${Math.floor(mins / 1440)}d ago`
+}
+
 function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
   const theme = getAgencyTheme(agent.agency)
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [healthLoading, setHealthLoading] = useState(true)
   const [healthError, setHealthError] = useState<string | null>(null)
 
-  // AgentBox credentials (stored locally — never sent to PropOS server)
-  const [agentBoxCreds, setAgentBoxCreds] = useState<{ apiKey: string; clientId: string; officeId: string }>(() => {
+  // AgentBox credentials — kept in localStorage, but all API calls go through
+  // the PropOS server proxy (/api/agentbox/test). Browser→AgentBox direct is
+  // blocked by CORS, and proxying keeps the key out of third-party requests.
+  const [agentBoxCreds, setAgentBoxCreds] = useState<{ apiKey: string; clientId: string; officeId: string; lastTestedOk?: number }>(() => {
     try { return JSON.parse(localStorage.getItem(AGENTBOX_KEY_STORE) ?? "{}") } catch { return {} }
   })
   const [abTesting, setAbTesting] = useState(false)
   const [abResult, setAbResult] = useState<"ok" | "error" | null>(null)
+  const [abError, setAbError] = useState<string | null>(null)
   const [abContactCount, setAbContactCount] = useState<number | null>(null)
 
   useEffect(() => {
     authFetch("/api/health")
       .then(r => r.json())
       .then(d => { setHealth(d as HealthStatus); setHealthLoading(false) })
-      .catch(() => { setHealthError("Could not reach server"); setHealthLoading(false) })
+      .catch(() => { setHealthError("Could not reach server — service status is only live in the deployed app."); setHealthLoading(false) })
   }, [])
 
   const saveAgentBoxCreds = (creds: typeof agentBoxCreds) => {
@@ -1170,23 +1181,24 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
 
   const testAgentBoxConnection = async () => {
     if (!agentBoxCreds.apiKey || !agentBoxCreds.clientId) return
-    setAbTesting(true); setAbResult(null)
+    setAbTesting(true); setAbResult(null); setAbError(null)
     try {
-      // AgentBox API: GET /contacts returns paginated contact list
-      const res = await fetch("https://api.agentboxcrm.com.au/contacts?limit=1", {
-        headers: {
-          "X-Client-ID": agentBoxCreds.clientId,
-          "X-API-Key":   agentBoxCreds.apiKey,
-          "Accept":      "application/json",
-        },
+      const res = await authFetch("/api/agentbox/test", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ clientId: agentBoxCreds.clientId, apiKey: agentBoxCreds.apiKey }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      // AgentBox wraps results in response.contacts or response.data
-      const count = data?.response?.contacts?.length ?? data?.response?.totalRecordCount ?? data?.contacts?.length ?? null
-      setAbContactCount(count)
-      setAbResult("ok")
+      const data = await res.json() as { ok: boolean; contactCount?: number | null; error?: string }
+      if (data.ok) {
+        setAbContactCount(data.contactCount ?? null)
+        setAbResult("ok")
+        saveAgentBoxCreds({ ...agentBoxCreds, lastTestedOk: Date.now() })
+      } else {
+        setAbError(data.error ?? "Connection failed")
+        setAbResult("error")
+      }
     } catch {
+      setAbError("Could not reach the PropOS server")
       setAbResult("error")
     }
     setAbTesting(false)
@@ -1257,8 +1269,18 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 20,
           }}>🏠</div>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 3 }}>AgentBox CRM</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>AgentBox CRM</div>
+              {agentBoxCreds.lastTestedOk && (
+                <div style={{
+                  fontSize: 10, fontWeight: 700, color: C.green,
+                  background: C.green + "18", borderRadius: 6, padding: "2px 8px",
+                }}>
+                  Connected · verified {formatTimeAgo(agentBoxCreds.lastTestedOk)}
+                </div>
+              )}
+            </div>
             <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
               Australia's most widely-deployed real estate CRM. Connect to pull contacts, listings, and inspection data directly into PropOS — eliminating manual Google Sheets exports.
             </div>
@@ -1300,7 +1322,7 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
               <input
                 type="password"
                 value={(agentBoxCreds as Record<string, string>)[key] ?? ""}
-                onChange={e => saveAgentBoxCreds({ ...agentBoxCreds, [key]: e.target.value })}
+                onChange={e => saveAgentBoxCreds({ ...agentBoxCreds, [key]: e.target.value, lastTestedOk: undefined })}
                 placeholder={placeholder}
                 style={{
                   width: "100%", padding: "9px 12px", borderRadius: 8,
@@ -1326,8 +1348,16 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
               fontFamily: "inherit",
             }}
           >
-            {abTesting ? "Testing…" : "Test Connection"}
+            {abTesting && (
+              <span style={{
+                width: 11, height: 11, borderRadius: "50%", display: "inline-block",
+                border: "2px solid rgba(255,255,255,0.35)", borderTopColor: "#fff",
+                animation: "spin 0.7s linear infinite", verticalAlign: -1, marginRight: 7,
+              }} />
+            )}
+            {abTesting ? "Testing connection" : "Test Connection"}
           </button>
+          <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
           {abResult === "ok" && (
             <div style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>
               ✅ Connected{abContactCount !== null ? ` — ${abContactCount} contact${abContactCount === 1 ? "" : "s"} found` : ""}
@@ -1335,7 +1365,7 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
           )}
           {abResult === "error" && (
             <div style={{ fontSize: 12, color: C.red, fontWeight: 600 }}>
-              ❌ Connection failed — check your API key and Client ID
+              ❌ {abError ?? "Connection failed — check your API key and Client ID"}
             </div>
           )}
         </div>

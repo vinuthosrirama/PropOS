@@ -4,7 +4,7 @@ import { sanitiseResult, sanitiseText } from "./sanitise.js"
 
 // Lazy init — only creates the client when ANTHROPIC_API_KEY is set
 let _client: Anthropic | null = null
-function getClient(): Anthropic {
+export function getClient(): Anthropic {
   if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   return _client
 }
@@ -20,7 +20,7 @@ const LLM_TIMEOUT_MS = 30_000
  * If the call hangs, the Promise rejects so the caller falls through to its
  * template fallback instead of waiting forever.
  */
-function withLLMTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+export function withLLMTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
   return fn(controller.signal).finally(() => clearTimeout(timer))

@@ -50,7 +50,26 @@ DROP POLICY IF EXISTS "past_buyers_public_read" ON past_buyers;
 CREATE POLICY "past_buyers_public_read"
   ON past_buyers FOR SELECT USING (true);
 
--- Service role can write (server-side operations)
+-- Service role can write (server-side operations).
+-- Uses the role-targeted form — auth.role() is deprecated.
 DROP POLICY IF EXISTS "past_buyers_service_write" ON past_buyers;
 CREATE POLICY "past_buyers_service_write"
-  ON past_buyers FOR ALL USING (auth.role() = 'service_role');
+  ON past_buyers FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+-- Anon (frontend) can insert + update — required for the PropOS browser client
+-- which upserts past buyers with the anon key (no user auth in the demo app).
+DROP POLICY IF EXISTS "past_buyers_anon_insert" ON past_buyers;
+CREATE POLICY "past_buyers_anon_insert"
+  ON past_buyers FOR INSERT
+  TO anon
+  WITH CHECK (true);
+
+DROP POLICY IF EXISTS "past_buyers_anon_update" ON past_buyers;
+CREATE POLICY "past_buyers_anon_update"
+  ON past_buyers FOR UPDATE
+  TO anon
+  USING (true)
+  WITH CHECK (true);

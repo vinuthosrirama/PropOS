@@ -412,6 +412,41 @@ async function migrate(): Promise<void> {
       LEFT JOIN prompt_evaluations pe ON pe.version_id = pv.id
       GROUP BY pv.id, pv.context, pv.is_active, pv.created_at`],
 
+    // ── Phase 5c: Pitch Suite (price updates, digital intros, listing proposals)
+
+    ["CREATE pitches", `
+      CREATE TABLE IF NOT EXISTS pitches (
+        id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        type             TEXT NOT NULL CHECK (type IN ('price_update','digital_intro','listing_proposal')),
+        slug             TEXT NOT NULL UNIQUE,
+        agent_id         TEXT NOT NULL,
+        lead_id          TEXT,
+        property_ref     TEXT,
+        payload_json     JSONB NOT NULL DEFAULT '{}',
+        status           TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','sent','viewed')),
+        view_count       INTEGER NOT NULL DEFAULT 0,
+        first_viewed_at  TIMESTAMPTZ,
+        last_viewed_at   TIMESTAMPTZ,
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        regenerated_at   TIMESTAMPTZ
+      )`],
+
+    ["INDEX pitches_slug",     `CREATE UNIQUE INDEX IF NOT EXISTS pitches_slug_idx     ON pitches(slug)`],
+    ["INDEX pitches_agent",    `CREATE INDEX        IF NOT EXISTS pitches_agent_idx    ON pitches(agent_id, created_at DESC)`],
+    ["INDEX pitches_lead",     `CREATE INDEX        IF NOT EXISTS pitches_lead_idx     ON pitches(lead_id)`],
+
+    ["VIEW v_pitch_views", `
+      CREATE OR REPLACE VIEW v_pitch_views AS
+      SELECT
+        agent_id,
+        COUNT(*)                                              AS total_pitches,
+        COUNT(*) FILTER (WHERE status = 'sent')               AS total_sent,
+        COUNT(*) FILTER (WHERE status = 'viewed')             AS total_viewed,
+        COUNT(*) FILTER (WHERE first_viewed_at >= NOW() - INTERVAL '24 hours') AS viewed_last_24h,
+        COALESCE(SUM(view_count), 0)                          AS total_views
+      FROM pitches
+      GROUP BY agent_id`],
+
     // ── Phase 6: Data maintenance (retention / pruning — safe, idempotent)
 
     // ── Phase 7: Data maintenance (retention / pruning — safe, idempotent)

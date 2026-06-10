@@ -297,9 +297,9 @@ export default function ComparableSalesMap({ suburb, comps, theme, height = 280 
         </div>
       )}
 
-      {/* Map legend */}
+      {/* Map legend — bottom-right so it doesn't block the map view */}
       <div style={{
-        position: "absolute", top: 8, left: 8, zIndex: 1000,
+        position: "absolute", bottom: 28, right: 8, zIndex: 1000,
         background: "rgba(4,7,13,0.82)", borderRadius: 8, padding: "6px 10px",
         display: "flex", flexDirection: "column", gap: 4, backdropFilter: "blur(4px)",
       }}>
