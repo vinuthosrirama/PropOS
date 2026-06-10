@@ -55,9 +55,12 @@ export async function authFetch(
     if (newToken) {
       return authFetch(input, init, true)
     }
-    // Refresh failed — clear state so the app shows the login screen
-    clearAccessToken()
-    window.dispatchEvent(new CustomEvent("propos:logout"))
+    // Only a real authenticated session counts as "expired" — guests were never
+    // logged in via JWT, so a 401 on a protected endpoint is expected and normal.
+    if (token) {
+      clearAccessToken()
+      window.dispatchEvent(new CustomEvent("propos:logout"))
+    }
   }
 
   return res

@@ -181,7 +181,7 @@ Patterns that have repeatedly caused fix commits after feat commits — read bef
 
 ## Session Lessons (auto-accumulated)
 
-Newest first. Written by stop hook on session end when fix-after-feat patterns are detected; also written manually during session on user approval signals.
+Newest first. Written automatically by the stop hook (`.claude/hooks/session-review.sh`) on session end: `[avoid]` when fix-after-feat or 3+ fix commits are detected, `[win]` when the transcript shows user praise/approval following a recent commit.
 
 <!-- LESSONS_START -->
 [2026-06-09] [avoid] fix needed after feat: "fix: comparable sales map -- fallback to static list after 8s tile timeout" followed "feat: UX minimalism — reduce visual noise across SettingsView and DemoView"
