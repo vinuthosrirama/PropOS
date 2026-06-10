@@ -555,7 +555,7 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
                         transition: "all 0.15s",
                       }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: active ? "#ffffff" : C.muted, marginBottom: 2 }}>
-                          {m === "buyer" ? "🏘" : "🏡"} {label}
+                          {label}
                         </div>
                         <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.3 }}>{desc}</div>
                       </button>
@@ -588,7 +588,7 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
                     color: C.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
                     display: "flex", alignItems: "center", justifyContent: "space-between",
                   }}>
-                    <span>🔑 Sign in with your PropOS account</span>
+                    <span>Sign in with your PropOS account</span>
                     <span style={{ color: C.faint, fontSize: 11 }}>→</span>
                   </button>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, marginBottom: 14 }}>
