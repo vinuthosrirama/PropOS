@@ -3268,6 +3268,44 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
   const isMobileVPP = bpVPP === "mobile"
   const hardcodedBuyers = getPastBuyersForAgent(agent)
   const [buyers, setBuyers] = useState(hardcodedBuyers)
+
+  // Read back previously imported contacts so the CRM survives reloads
+  useEffect(() => {
+    let cancelled = false
+    authFetch(apiUrl("/api/import-contacts"))
+      .then(r => r.json())
+      .then((res: { contacts?: Array<Record<string, unknown>> }) => {
+        if (cancelled || !res.contacts?.length) return
+        setBuyers(prev => {
+          const seen = new Set(prev.map(b => `${b.name}|${b.purchaseAddress}`.toLowerCase()))
+          const fresh = res.contacts!
+            .filter(c => !seen.has(`${c.name}|${c.purchaseAddress}`.toLowerCase()))
+            .map(c => ({
+              id: Number(c.id),
+              name: String(c.name ?? ""),
+              phone: String(c.phone ?? ""),
+              email: String(c.email ?? ""),
+              purchaseAddress: String(c.purchaseAddress ?? ""),
+              suburb: String(c.suburb ?? ""),
+              purchaseDate: String(c.purchaseDate ?? ""),
+              purchasePrice: Number(c.purchasePrice ?? 0),
+              deposit: Number(c.deposit ?? 0),
+              propertyType: (String(c.propertyType ?? "House")) as "House" | "Unit" | "Townhouse",
+              beds: Number(c.beds ?? 3),
+              baths: Number(c.baths ?? 2),
+              land: Number(c.land ?? 0),
+              status: String(c.status ?? "owner-occupier") as import("../data/pastBuyers").BuyerStatus,
+              notes: String(c.notes ?? ""),
+              lastContactDate: "",
+              agentName: agent.name,
+            }))
+          return fresh.length ? [...prev, ...fresh] : prev
+        })
+      })
+      .catch(() => { /* DB-less dev — nothing to read back */ })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [sheetLoading, setSheetLoading] = useState(false)
   const [sheetSource, setSheetSource] = useState<"demo" | "sheet">("demo")
   const [analysing, setAnalysing] = useState(false)
@@ -3437,7 +3475,106 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
     setTimeout(() => { setShowAddModal(false); setAddForm(EMPTY_FORM); setAddSaved(false); addVoice.reset(); setAddVoiceStage("idle") }, 1200)
   }
 
+  // Map a raw string grid (header row + data rows) to contact drafts.
+  // Shared by the CSV path (client-side split) and the XLSX path (server parse).
+  const mapRowsToContacts = (rawHeaders: string[], dataRows: string[][]): Partial<AddContactForm>[] => {
+    const headers = rawHeaders.map(h => h.replace(/^"|"$/g, "").trim().toLowerCase().replace(/[^a-z0-9]/g, ""))
+
+    // Find first column matching any alias (exact then contains)
+    const col = (aliases: string[]): number => {
+      for (const a of aliases) {
+        const exact = headers.findIndex(h => h === a)
+        if (exact !== -1) return exact
+      }
+      for (const a of aliases) {
+        const contains = headers.findIndex(h => h.includes(a))
+        if (contains !== -1) return contains
+      }
+      return -1
+    }
+
+    // Column indexes — wide alias list covers Rex, AgentBox, Vault, BoxDice, PropTrack, custom exports
+    const firstNameI  = col(["firstname", "first"])
+    const lastNameI   = col(["lastname", "last", "surname"])
+    const nameI       = col(["fullname", "name", "contactname", "client", "contact"])
+    const phoneI      = col(["phone", "mobile", "mobilephone", "cell", "contactphone"])
+    const emailI      = col(["email", "emailaddress", "contactemail"])
+    const addrI       = col(["purchaseaddress", "propertyaddress", "address", "streetaddress", "property", "soldaddress"])
+    const suburbI     = col(["suburb", "suburbname", "city", "town", "location"])
+    const priceI      = col(["purchaseprice", "settledprice", "soldprice", "price", "saleamount", "salevalue", "sold"])
+    const dateI       = col(["purchasedate", "settlementdate", "settledate", "saledate", "solddate", "date"])
+    const bedsI       = col(["beds", "bedrooms", "bedroom"])
+    const bathsI      = col(["baths", "bathrooms", "bathroom"])
+    const landI       = col(["land", "landarea", "landsqm", "landsize", "lotsize"])
+    const typeI       = col(["propertytype", "type", "dwellingtype"])
+    const statusI     = col(["status", "buyerstatus", "clienttype"])
+    const notesI      = col(["notes", "note", "comments", "description"])
+
+    // Extract suburb from "123 Main St, Suburb" format if no suburb column
+    const suburbFromAddr = (addr: string): string => {
+      const parts = addr.split(",")
+      return parts.length >= 2 ? parts[parts.length - 1].trim().replace(/\s+\w{3,4}\s*\d{4}$/, "").trim() : ""
+    }
+
+    return dataRows.map(cols => {
+      const get = (i: number) => i !== -1 ? cols[i]?.replace(/^"|"$/g, "").trim() ?? "" : ""
+
+      // Merge first + last name when there's no genuine combined column.
+      // (The "name" alias contains-matches "First Name", so nameI can point at
+      // the first-name column — treat that as no combined column.)
+      let name = get(nameI)
+      if ((nameI === -1 || nameI === firstNameI || nameI === lastNameI) && (firstNameI !== -1 || lastNameI !== -1)) {
+        name = [get(firstNameI), get(lastNameI)].filter(Boolean).join(" ")
+      }
+
+      const addr = get(addrI)
+      const rawSuburb = get(suburbI) || suburbFromAddr(addr)
+
+      return {
+        name,
+        phone: get(phoneI),
+        email: get(emailI),
+        purchaseAddress: addr,
+        suburb: rawSuburb,
+        purchasePrice: get(priceI),
+        purchaseDate: get(dateI),
+        beds: get(bedsI) || "3",
+        baths: get(bathsI) || "2",
+        land: get(landI),
+        propertyType: (get(typeI) || "House") as AddContactForm["propertyType"],
+        status: get(statusI) || "owner-occupier",
+        notes: get(notesI),
+      }
+    }).filter(c => c.name)
+  }
+
   const handleCsvFile = (file: File) => {
+    const isWorkbook = /\.(xlsx|xls)$/i.test(file.name)
+
+    if (isWorkbook) {
+      // XLSX/XLS — parsed server-side (SheetJS), returns a raw string grid
+      const reader = new FileReader()
+      reader.onload = async e => {
+        const buf = e.target?.result as ArrayBuffer
+        let binary = ""
+        const bytes = new Uint8Array(buf)
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+        const dataBase64 = btoa(binary)
+        try {
+          const res = await authFetch(apiUrl("/api/import-contacts/parse"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: file.name, dataBase64 }),
+          }).then(r => r.json()) as { rows?: string[][]; error?: string }
+          if (res.rows && res.rows.length >= 2) {
+            setCsvContacts(mapRowsToContacts(res.rows[0], res.rows.slice(1)))
+          }
+        } catch { /* parse failed — leave preview empty */ }
+      }
+      reader.readAsArrayBuffer(file)
+      return
+    }
+
     const reader = new FileReader()
     reader.onload = e => {
       const text = e.target?.result as string
@@ -3459,75 +3596,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
         return result
       }
 
-      const rawHeaders = splitCsvLine(lines[0])
-      const headers = rawHeaders.map(h => h.replace(/^"|"$/g, "").trim().toLowerCase().replace(/[^a-z0-9]/g, ""))
-
-      // Find first column matching any alias (exact then contains)
-      const col = (aliases: string[]): number => {
-        for (const a of aliases) {
-          const exact = headers.findIndex(h => h === a)
-          if (exact !== -1) return exact
-        }
-        for (const a of aliases) {
-          const contains = headers.findIndex(h => h.includes(a))
-          if (contains !== -1) return contains
-        }
-        return -1
-      }
-
-      // Column indexes — wide alias list covers Rex, AgentBox, Vault, BoxDice, PropTrack, custom exports
-      const firstNameI  = col(["firstname", "first"])
-      const lastNameI   = col(["lastname", "last", "surname"])
-      const nameI       = col(["fullname", "name", "contactname", "client", "contact"])
-      const phoneI      = col(["phone", "mobile", "mobilephone", "cell", "contactphone"])
-      const emailI      = col(["email", "emailaddress", "contactemail"])
-      const addrI       = col(["purchaseaddress", "propertyaddress", "address", "streetaddress", "property", "soldaddress"])
-      const suburbI     = col(["suburb", "suburbname", "city", "town", "location"])
-      const priceI      = col(["purchaseprice", "settledprice", "soldprice", "price", "saleamount", "salevalue", "sold"])
-      const dateI       = col(["purchasedate", "settlementdate", "settledate", "saledate", "solddate", "date"])
-      const bedsI       = col(["beds", "bedrooms", "bedroom"])
-      const bathsI      = col(["baths", "bathrooms", "bathroom"])
-      const landI       = col(["land", "landarea", "landsqm", "landsize", "lotsize"])
-      const typeI       = col(["propertytype", "type", "dwellingtype"])
-      const statusI     = col(["status", "buyerstatus", "clienttype"])
-      const notesI      = col(["notes", "note", "comments", "description"])
-
-      // Extract suburb from "123 Main St, Suburb" format if no suburb column
-      const suburbFromAddr = (addr: string): string => {
-        const parts = addr.split(",")
-        return parts.length >= 2 ? parts[parts.length - 1].trim().replace(/\s+\w{3,4}\s*\d{4}$/, "").trim() : ""
-      }
-
-      const parsed: Partial<AddContactForm>[] = lines.slice(1).map(line => {
-        const cols = splitCsvLine(line)
-        const get = (i: number) => i !== -1 ? cols[i]?.replace(/^"|"$/g, "").trim() ?? "" : ""
-
-        // Merge first + last name if no combined name column
-        let name = get(nameI)
-        if (!name && (firstNameI !== -1 || lastNameI !== -1)) {
-          name = [get(firstNameI), get(lastNameI)].filter(Boolean).join(" ")
-        }
-
-        const addr = get(addrI)
-        const rawSuburb = get(suburbI) || suburbFromAddr(addr)
-
-        return {
-          name,
-          phone: get(phoneI),
-          email: get(emailI),
-          purchaseAddress: addr,
-          suburb: rawSuburb,
-          purchasePrice: get(priceI),
-          purchaseDate: get(dateI),
-          beds: get(bedsI) || "3",
-          baths: get(bathsI) || "2",
-          land: get(landI),
-          propertyType: (get(typeI) || "House") as AddContactForm["propertyType"],
-          status: get(statusI) || "owner-occupier",
-          notes: get(notesI),
-        }
-      }).filter(c => c.name)
-      setCsvContacts(parsed)
+      setCsvContacts(mapRowsToContacts(splitCsvLine(lines[0]), lines.slice(1).map(splitCsvLine)))
     }
     reader.readAsText(file)
   }
@@ -3535,33 +3604,32 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
   const handleCsvImport = async () => {
     if (!csvContacts.length) return
     setCsvImporting(true)
-    for (const c of csvContacts) {
-      const newContact = {
-        id: Date.now() + Math.random(),
-        name: c.name ?? "",
-        phone: c.phone ?? "",
-        email: c.email ?? "",
-        purchaseAddress: c.purchaseAddress ?? "",
-        suburb: c.suburb ?? "",
-        purchaseDate: c.purchaseDate ?? "",
-        purchasePrice: parseInt((c.purchasePrice ?? "").replace(/\D/g, ""), 10) || 0,
-        deposit: 0,
-        propertyType: (c.propertyType ?? "House") as "House" | "Unit" | "Townhouse",
-        beds: parseInt(c.beds ?? "3", 10) || 3,
-        baths: parseInt(c.baths ?? "2", 10) || 2,
-        land: parseInt((c.land ?? "").replace(/\D/g, ""), 10) || 0,
-        status: (c.status ?? "owner-occupier") as import("../data/pastBuyers").BuyerStatus,
-        notes: c.notes ?? "", lastContactDate: "",
-        agentName: agent.name,  // tag contact to this agent's column in the sheet
-      }
-      try {
-        await authFetch(apiUrl("/api/add-contact"), {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newContact),
-        })
-      } catch { /* add locally anyway */ }
-      setBuyers(prev => [...prev, newContact])
-    }
+    const newContacts = csvContacts.map(c => ({
+      id: Date.now() + Math.random(),
+      name: c.name ?? "",
+      phone: c.phone ?? "",
+      email: c.email ?? "",
+      purchaseAddress: c.purchaseAddress ?? "",
+      suburb: c.suburb ?? "",
+      purchaseDate: c.purchaseDate ?? "",
+      purchasePrice: parseInt((c.purchasePrice ?? "").replace(/\D/g, ""), 10) || 0,
+      deposit: 0,
+      propertyType: (c.propertyType ?? "House") as "House" | "Unit" | "Townhouse",
+      beds: parseInt(c.beds ?? "3", 10) || 3,
+      baths: parseInt(c.baths ?? "2", 10) || 2,
+      land: parseInt((c.land ?? "").replace(/\D/g, ""), 10) || 0,
+      status: (c.status ?? "owner-occupier") as import("../data/pastBuyers").BuyerStatus,
+      notes: c.notes ?? "", lastContactDate: "",
+      agentName: agent.name,
+    }))
+    // One bulk upsert round-trip — server persists into the contacts table
+    try {
+      await authFetch(apiUrl("/api/import-contacts"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacts: newContacts }),
+      })
+    } catch { /* add locally anyway */ }
+    setBuyers(prev => [...prev, ...newContacts])
     setCsvImporting(false)
     setCsvImported(true)
     setTimeout(() => { setShowAddModal(false); setCsvContacts([]); setCsvImported(false); setImportSource("manual") }, 1400)
@@ -4065,7 +4133,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
               {/* ── CSV Import ── */}
               {importSource === "csv" && (
                 <>
-                  <input ref={csvRef} type="file" accept=".csv" style={{ display: "none" }}
+                  <input ref={csvRef} type="file" accept=".csv,.xlsx,.xls" style={{ display: "none" }}
                     onChange={e => { if (e.target.files?.[0]) handleCsvFile(e.target.files[0]) }}
                   />
                   {!csvContacts.length ? (
@@ -4076,9 +4144,9 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
                       style={{ border: `2px dashed ${theme.primary}55`, borderRadius: 14, padding: "40px 24px", textAlign: "center", cursor: "pointer", background: theme.dim, userSelect: "none" }}
                     >
                       <div style={{ fontSize: 32, marginBottom: 10 }}>📤</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>Drop your CSV file here</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>Drop your CSV or Excel file here</div>
                       <div style={{ fontSize: 12, color: C.muted }}>or click to browse, columns detected automatically</div>
-                      <div style={{ fontSize: 10, color: C.faint, marginTop: 10 }}>Supports: Name, Phone, Email, Address, Suburb, Purchase Price, Purchase Date</div>
+                      <div style={{ fontSize: 10, color: C.faint, marginTop: 10 }}>AgentBox, Rex, VaultRE and BoxDice exports supported (.csv, .xlsx)</div>
                     </div>
                   ) : (
                     <div>
@@ -6751,6 +6819,8 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [pitchGenerating, setPitchGenerating] = useState(false)
   const [pitchSending, setPitchSending] = useState(false)
   const [pitchSent, setPitchSent] = useState(false)
+  const [pitchViewNotif, setPitchViewNotif] = useState(false)
+  const [showCallScript, setShowCallScript] = useState(false)
   const [selectedAngleIdx, setSelectedAngleIdx] = useState(0)
   // NotesBridge: populated from API response after generation
   const [extractedHook, setExtractedHook] = useState<string | null>(null)
@@ -7826,6 +7896,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
               }),
             })
             setPitchSent(true)
+            // Demo: simulate the vendor opening the pitch shortly after send
+            setPitchViewNotif(false)
+            setTimeout(() => setPitchViewNotif(true), 9000)
           } catch { /* silent */ }
           setPitchSending(false)
         }
@@ -7885,6 +7958,91 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 </motion.div>
               )}
             </div>
+
+            {/* Simulated view notification — the strike-while-hot moment */}
+            {pitchViewNotif && (
+              <motion.div initial={{ opacity: 0, y: -12, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14, padding: "16px 18px", marginBottom: 16,
+                  borderRadius: 14, background: `linear-gradient(135deg, ${theme.gradient[0]}22, ${theme.gradient[1]}22)`,
+                  border: `1px solid ${theme.primary}66`, boxShadow: `0 8px 28px ${theme.glow}`,
+                }}>
+                <motion.div
+                  animate={{ scale: [1, 1.35, 1], opacity: [1, 0.6, 1] }}
+                  transition={{ duration: 1.4, repeat: Infinity }}
+                  style={{ width: 12, height: 12, borderRadius: "50%", background: C.green, flexShrink: 0 }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>
+                    {fname} just opened your Price Update
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                    3 views in the last few minutes. Strike while the iron is hot.
+                  </div>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                  onClick={() => setShowCallScript(true)}
+                  style={{
+                    padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer",
+                    background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                    color: "#fff", fontSize: 13, fontWeight: 700, fontFamily: FONT, whiteSpace: "nowrap",
+                  }}
+                >
+                  Call {fname} now
+                </motion.button>
+                <button onClick={() => setPitchViewNotif(false)} style={{ background: "none", border: "none", color: C.faint, fontSize: 16, cursor: "pointer", padding: 4, lineHeight: 1 }}>
+                  ×
+                </button>
+              </motion.div>
+            )}
+
+            {/* Call script overlay */}
+            {showCallScript && (
+              <div
+                onClick={() => setShowCallScript(false)}
+                style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                  onClick={e => e.stopPropagation()}
+                  style={{ width: "100%", maxWidth: 520, maxHeight: "85vh", overflow: "auto", background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 18, padding: 26, fontFamily: FONT }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+                    Strike while the iron is hot
+                  </div>
+                  <div style={{ fontSize: 19, fontWeight: 800, color: C.text, marginBottom: 4 }}>
+                    Call {buyer.name}
+                  </div>
+                  {buyer.phone && (
+                    <a href={`tel:${buyer.phone}`} style={{ fontSize: 24, fontWeight: 800, color: C.green, textDecoration: "none", display: "inline-block", marginBottom: 18 }}>
+                      {buyer.phone}
+                    </a>
+                  )}
+
+                  <div style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Your script</div>
+                    <p style={{ fontSize: 14, lineHeight: 1.75, color: C.text, margin: 0 }}>
+                      "Hi {fname}, it's {agentFirst} from {agent.agency}. It's been a while since we last chatted. We've been seeing buyer interest in your area at around the {fmt(range.low)} to {fmt(range.high)} mark, and I'm wondering if you'd be interested in an updated appraisal of your property. Are you interested?"
+                    </p>
+                  </div>
+
+                  <div style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>If they're too busy</div>
+                    <p style={{ fontSize: 14, lineHeight: 1.75, color: C.muted, margin: 0 }}>
+                      "I understand you're very busy. Instead of a full appraisal, how about I send you a quick market snapshot of comparable recent sales near your property?"
+                    </p>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 11, color: C.faint }}>Script: Tom Panos</div>
+                    <button onClick={() => setShowCallScript(false)} style={{ padding: "10px 20px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg3, color: C.text, fontSize: 13, fontWeight: 700, fontFamily: FONT, cursor: "pointer" }}>
+                      Close
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
 
             {pitchUrl && (
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.bg2, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 16 }}>
