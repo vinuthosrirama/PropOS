@@ -14,7 +14,7 @@
 import { google } from "googleapis"
 import { gmailConfigured } from "./gmail.js"
 import { isDbConnected, query, execute } from "./db.js"
-import { handleOutreachInbound } from "./outreachAgent.js"
+import { handleOutreachInbound, generateOutreachDraft, saveOutreachDraft } from "./outreachAgent.js"
 
 const WATERMARK_KEY = "gmail_inbound_watermark"
 
@@ -80,11 +80,12 @@ export async function pollGmailInbound(): Promise<void> {
     const gmail = google.gmail({ version: "v1", auth: getAuth() })
     const watermark = await getWatermark()
 
-    // after: takes epoch SECONDS. Sub-second overlap handled by processedIds + internalDate check.
-    const afterSec = Math.floor(watermark / 1000)
+    // Gmail's after: operator requires YYYY/MM/DD — epoch seconds are not accepted.
+    // The internalDate check below provides precise dedup within the day.
+    const afterDate = new Date(watermark).toISOString().slice(0, 10).replace(/-/g, "/")
     const list = await gmail.users.messages.list({
       userId: "me",
-      q: `in:inbox after:${afterSec}`,
+      q: `in:inbox after:${afterDate}`,
       maxResults: 20,
     })
 
@@ -120,11 +121,13 @@ export async function pollGmailInbound(): Promise<void> {
 
       console.log(`[gmailInbound] reply from outreach target ${fromEmail} — feeding inbound pipeline`)
 
-      // Feed the same pipeline as SMS replies (matches target by phone)
+      // Feed the same pipeline as SMS replies
       if (target.phone) {
+        // Phone present — handleOutreachInbound does the full CRM update + draft generation
         await handleOutreachInbound(target.phone, body.slice(0, 2000))
       } else {
-        // No phone on record — update status directly so the reply isn't lost
+        // No phone — update CRM status and generate a draft directly so the reply
+        // appears in GET /api/outreach-targets/drafts and the morning brief
         await execute(
           `UPDATE outreach_targets
            SET status = CASE WHEN status IN ('new','contacted') THEN 'replied' ELSE status END,
@@ -132,6 +135,18 @@ export async function pollGmailInbound(): Promise<void> {
            WHERE id = $2`,
           [body.slice(0, 500), target.id],
         )
+        try {
+          const fullTarget = (await query<import("./outreachAgent.js").OutreachTargetRow>(
+            `SELECT * FROM outreach_targets WHERE id = $1`, [target.id],
+          ))[0]
+          if (fullTarget) {
+            const { draft, versionId } = await generateOutreachDraft(fullTarget, body.slice(0, 2000))
+            await saveOutreachDraft(target.id, body.slice(0, 1000), draft, versionId)
+            console.log(`[gmailInbound] draft generated for email-only target ${fromEmail}`)
+          }
+        } catch (draftErr) {
+          console.warn("[gmailInbound] draft generation failed for email-only target:", (draftErr as Error).message)
+        }
       }
 
       // Mark read so it doesn't clutter the inbox unread count

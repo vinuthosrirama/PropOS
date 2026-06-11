@@ -292,7 +292,10 @@ app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Respons
     console.warn(`[bluebubbles] delivery failure guid=${sendErr.guid}: ${sendErr.reason}`)
 
     if (!sendErr.to || !sendErr.body) {
-      console.warn(`[bluebubbles] cannot redispatch guid=${sendErr.guid} — payload missing recipient or body`)
+      // BB's error payload often omits the original body/recipient — redispatch impossible.
+      // The synchronous cascade already tried fallback transports at send time, so this
+      // is expected in many cases. No further action needed.
+      console.warn(`[bluebubbles] send-error guid=${sendErr.guid} — payload missing to/body, cannot redispatch (reason: ${sendErr.reason})`)
       return
     }
     if (redispatchedGuids.has(sendErr.guid)) return  // already retried once
