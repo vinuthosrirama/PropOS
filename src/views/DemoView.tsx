@@ -7866,7 +7866,10 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
 
             if (res.payload && res.url) {
               setPitchPayload(res.payload)
-              setPitchUrl(`${window.location.origin}${res.url}`)
+              // Server returns an absolute URL on the production domain (BASE_URL).
+              // Fall back to a relative path off the current origin if it ever
+              // doesn't (e.g. BASE_URL unset in a dev/demo server).
+              setPitchUrl(/^https?:\/\//.test(res.url) ? res.url : `${window.location.origin}${res.url}`)
               setPitchSent(false)
             }
           } catch { /* silent */ }

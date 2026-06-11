@@ -114,7 +114,11 @@ authedRouter.post("/", async (req: Request, res: Response) => {
 
   if (!row) return res.status(503).json({ error: "Database not available" })
 
-  res.json({ id: row.id, slug: row.slug, type: row.type, payload, url: `/p/${row.slug}` })
+  // Always resolve to the production domain — req.headers.origin/host can be a
+  // Railway internal hostname or a Cloudflare *.pages.dev preview URL, neither
+  // of which the recipient can reach.
+  const base = process.env.BASE_URL ?? "https://propos.addvantage.site"
+  res.json({ id: row.id, slug: row.slug, type: row.type, payload, url: `${base}/p/${row.slug}` })
 })
 
 // ── GET /api/pitches/by-slug/:slug (public) ─────────────────────────────────
