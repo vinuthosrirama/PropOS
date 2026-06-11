@@ -53,6 +53,9 @@ import CampaignReport from "../components/CampaignReport"
 import GciCalculator from "../components/GciCalculator"
 import PriceUpdateTemplate, { type PriceUpdatePayload } from "../components/pitch/PriceUpdateTemplate"
 import PropertyPitchTemplate from "../components/pitch/PropertyPitchTemplate"
+import DigitalIntroductionTemplate from "../components/pitch/DigitalIntroductionTemplate"
+import ListingProposalTemplate from "../components/pitch/ListingProposalTemplate"
+import type { ListingProposalPayload } from "../components/pitch/ListingProposalTemplate"
 import NurtureSequence from "../components/NurtureSequence"
 import TriggerFeed from "../components/TriggerFeed"
 
@@ -6988,7 +6991,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [showAllMetrics, setShowAllMetrics] = useState(false)
   const [showInsights, setShowInsights] = useState(true)    // triggers open by default
   const [showPitchAngles, setShowPitchAngles] = useState(false)  // pitch angles collapsed by default
-  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture" | "market-update" | "gci" | "pitch" | "property-pitch">("analysis")
+  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture" | "market-update" | "gci" | "pitch" | "property-pitch" | "introduction" | "proposal">("analysis")
   const [marketUpdatePreview, setMarketUpdatePreview] = useState<{ html: string; sms: string; subject: string } | null>(null)
   const [marketUpdateSending, setMarketUpdateSending] = useState(false)
   const [marketUpdateSent, setMarketUpdateSent] = useState(false)
@@ -6999,6 +7002,13 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [pitchSending, setPitchSending] = useState(false)
   const [pitchSent, setPitchSent] = useState(false)
   const [pitchViewNotif, setPitchViewNotif] = useState(false)
+  const [introUrl, setIntroUrl] = useState<string | null>(null)
+  const [introGenerating, setIntroGenerating] = useState(false)
+  const [introSent, setIntroSent] = useState(false)
+  const [proposalUrl, setProposalUrl] = useState<string | null>(null)
+  const [proposalGenerating, setProposalGenerating] = useState(false)
+  const [proposalSent, setProposalSent] = useState(false)
+  const [proposalSending, setProposalSending] = useState(false)
   const [showCallScript, setShowCallScript] = useState(false)
   const [selectedAngleIdx, setSelectedAngleIdx] = useState(0)
   // NotesBridge: populated from API response after generation
@@ -7288,7 +7298,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
           { id: "listing",   label: "Listing CMA" },
           { id: "campaign",  label: "Campaign Report" },
           { id: "nurture",   label: "Nurture" },
-          { id: "pitch",     label: "Price Update Pitch" },
+          { id: "pitch",        label: "Price Update Pitch" },
+          { id: "introduction", label: "Agent Intro" },
+          { id: "proposal",     label: "Listing Proposal" },
           { id: "property-pitch", label: "Property Pitch" },
           { id: "gci",       label: "GCI Calculator" },
         ] as { id: typeof profileTab; label: string }[]).map(tab => (
@@ -8268,6 +8280,300 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 </div>
               </motion.div>
             )}
+          </div>
+        )
+      })()}
+
+      {/* === AGENT INTRODUCTION TAB === */}
+      {profileTab === "introduction" && (() => {
+        const introPayload = {
+          agentCard: {
+            name: agent.name,
+            agency: agent.agency,
+            email: agent.email ?? "",
+            phone: agent.phone ?? "",
+            suburb: agent.suburb ?? "Berwick",
+            tagline: `Your local ${agent.agency} specialist`,
+          },
+          recipientName: buyer.name,
+          leadName: buyer.name,
+          personalNote: `Hi ${buyer.name.split(" ")[0]}, it was great meeting you at the open home. I wanted to share a bit about my background so you can get to know who I am before we connect.`,
+          bio: `${agent.name.split(" ")[0]} has been the go-to agent for ${agent.suburb ?? "the area"} for over 8 years, specialising in family homes and delivering results consistently above price guide. Known for a straight-talking approach and a deep understanding of the local market, ${agent.name.split(" ")[0]} puts your goals first.`,
+          stats: {
+            salesCount: 87,
+            avgDaysOnMarket: 18,
+            avgAboveGuidePct: 8.2,
+            yearsExperience: 8,
+          },
+          recentSales: [
+            { address: "34 Hartsmere Drive, Berwick", price: 1280000, date: "2026-04-10" },
+            { address: "9 Arlington Place, Berwick", price: 880000, date: "2026-02-14" },
+            { address: "12 Birkdale Close, Berwick", price: 1050000, date: "2025-12-08" },
+          ],
+          testimonials: [
+            { quote: `${agent.name.split(" ")[0]} was exceptional from start to finish. We sold above our reserve and he kept us informed every step of the way.`, author: "James & Sarah T.", suburb: "Berwick" },
+            { quote: `Professional, honest, and genuinely cared about getting us the right result. Highly recommend.`, author: "Michelle K.", suburb: "Officer" },
+          ],
+        }
+
+        const handleGenerateIntro = async () => {
+          setIntroGenerating(true)
+          try {
+            const res = await authFetch(apiUrl("/api/pitches"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: "introduction",
+                leadId: String(buyer.id),
+                propertyRef: null,
+                agentCard: introPayload.agentCard,
+                introPayload,
+              }),
+            })
+            const data = await res.json() as { pitchUrl?: string }
+            if (data.pitchUrl) setIntroUrl(data.pitchUrl)
+          } catch { /* non-fatal */ }
+          setIntroGenerating(false)
+        }
+
+        return (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+                DIGITAL INTRODUCTION
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
+                Agent Profile for {buyer.name.split(" ")[0]}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                Send a branded agent profile page to {buyer.name.split(" ")[0]} — who you are, your track record, and a personal note. They'll see your stats and recent sales before you've even called.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                onClick={handleGenerateIntro}
+                disabled={introGenerating}
+                style={{
+                  padding: "12px 24px", borderRadius: 12, border: "none",
+                  cursor: introGenerating ? "default" : "pointer",
+                  background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                  color: "#fff", fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                  boxShadow: `0 4px 16px ${theme.glow}`,
+                  opacity: introGenerating ? 0.7 : 1,
+                }}
+              >
+                {introGenerating ? "Creating page..." : introUrl ? "Regenerate Intro" : "Create Agent Intro Page"}
+              </motion.button>
+
+              {introUrl && !introSent && (
+                <motion.button
+                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                  onClick={async () => {
+                    const sms = `Hi ${buyer.name.split(" ")[0]}, ${agent.name.split(" ")[0]} here from ${agent.agency}. It was great meeting you — here's a bit about me before we chat: ${introUrl}`
+                    await authFetch(apiUrl("/api/send"), {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ phone: buyer.phone, sms, email: buyer.email ?? "", subject: `Meeting ${agent.name.split(" ")[0]} from ${agent.agency}`, body: sms }),
+                    }).catch(() => {})
+                    setIntroSent(true)
+                  }}
+                  style={{
+                    padding: "12px 24px", borderRadius: 12, border: `1px solid ${C.green}55`,
+                    cursor: "pointer", background: C.green + "15", color: C.green,
+                    fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                  }}
+                >
+                  Send to {buyer.name.split(" ")[0]} →
+                </motion.button>
+              )}
+
+              {introSent && (
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 12, background: C.green + "15", border: `1px solid ${C.green}40` }}>
+                  <span style={{ fontSize: 16 }}>✓</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Intro sent to {buyer.name.split(" ")[0]}</span>
+                </motion.div>
+              )}
+            </div>
+
+            {introUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.bg2, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 16 }}>
+                <span style={{ fontSize: 11, color: C.muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{introUrl}</span>
+                <button onClick={() => navigator.clipboard.writeText(introUrl)} style={{ fontSize: 11, color: theme.primary, background: "none", border: "none", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>
+                  Copy link
+                </button>
+              </div>
+            )}
+
+            {/* Template preview */}
+            <div style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>PREVIEW</div>
+              </div>
+              <div style={{ maxHeight: 700, overflow: "auto" }}>
+                <DigitalIntroductionTemplate payload={introPayload} />
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* === LISTING PROPOSAL TAB === */}
+      {profileTab === "proposal" && (() => {
+        const proposalComps = comps.slice(0, 4).map(c => ({
+          address: `${c.address}, ${buyer.suburb}`,
+          price: c.soldPrice,
+          date: c.soldDate,
+          beds: c.beds,
+          result: "auction" as const,
+        }))
+
+        const proposalPayload: ListingProposalPayload = {
+          agentCard: {
+            name: agent.name,
+            agency: agent.agency,
+            email: agent.email,
+            phone: agent.phone,
+            suburb: agent.suburb,
+            tagline: agent.tagline,
+          },
+          vendorName: buyer.name,
+          propertyAddress: buyer.purchaseAddress ?? `${buyer.suburb} property`,
+          suburb: buyer.suburb,
+          beds: buyer.beds,
+          baths: buyer.baths ?? 2,
+          land: buyer.land ?? 500,
+          propertyType: buyer.propertyType ?? "House",
+          methodOfSale: "auction",
+          estimatedRange: { low: range.low, high: range.high },
+          comparableSales: proposalComps,
+          agencyStats: {
+            salesCount: 87,
+            avgDaysOnMarket: range.daysOnMarket,
+            clearanceRate: range.clearanceRate,
+            avgAboveGuidePct: 8.2,
+          },
+          personalNote: `Hi ${buyer.name.split(" ")[0]}, thank you for considering ${agent.agency} to manage the sale of your home. Based on current market conditions in ${buyer.suburb}, I believe we have a strong opportunity to achieve an excellent result. I've put together this proposal outlining our recommended approach, comparable sales, and marketing plan.`,
+          testimonials: [
+            { quote: `${agentFirst} was exceptional from start to finish. We sold above our reserve and he kept us informed every step of the way.`, author: "James & Sarah T.", suburb: "Berwick" },
+            { quote: "Professional, honest, and genuinely cared about getting us the right result. Highly recommend.", author: "Michelle K.", suburb: "Officer" },
+          ],
+        }
+
+        const handleGenerateProposal = async () => {
+          setProposalGenerating(true)
+          try {
+            const res = await authFetch(apiUrl("/api/pitches"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: "proposal",
+                leadId: String(buyer.id),
+                propertyRef: buyer.purchaseAddress,
+                agentCard: proposalPayload.agentCard,
+                proposalPayload,
+              }),
+            })
+            const data = await res.json() as { pitchUrl?: string }
+            if (data.pitchUrl) setProposalUrl(/^https?:\/\//.test(data.pitchUrl) ? data.pitchUrl : `${window.location.origin}${data.pitchUrl}`)
+          } catch { /* silent */ }
+          setProposalGenerating(false)
+        }
+
+        const handleSendProposal = async () => {
+          if (!proposalUrl) return
+          setProposalSending(true)
+          try {
+            const isLocalLink = /localhost|127\.0\.0\.1/.test(proposalUrl)
+            const sms = stripDashes(isLocalLink
+              ? `Hi ${fname}, ${agentFirst} here from ${agent.agency}. I've emailed you a listing proposal for ${shortAddr(buyer.purchaseAddress)}.`
+              : `Hi ${fname}, ${agentFirst} here. I've put together a listing proposal for ${shortAddr(buyer.purchaseAddress)}. Have a look: ${proposalUrl}`)
+            const emailBody = stripDashes(
+              `Hi ${fname},\n\nThank you for your time — I've put together a listing proposal for ${buyer.purchaseAddress} outlining the recommended method of sale, comparable sales, our marketing plan, and what you can expect from working with us.${isLocalLink ? "" : `\n\nView it here: ${proposalUrl}`}\n\nHappy to walk you through it at a time that suits.\n\nKind regards,\n${agentFirst}`
+            )
+            await authFetch(apiUrl("/api/send"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                leadId: String(buyer.id), leadName: buyer.name,
+                phone: buyer.phone, email: buyer.email,
+                agentEmail: agent.email, agentName: agent.name, agentAgency: agent.agency,
+                agentPhone: agent.phone, agencyColor: theme.primary, agencyTagline: agent.tagline,
+                propertyAddress: buyer.purchaseAddress,
+                sms, subject: stripDashes(`Listing proposal for ${buyer.purchaseAddress}`), emailBody,
+                channel: buyer.email ? "both" : "sms",
+              }),
+            })
+            setProposalSent(true)
+          } catch { /* silent */ }
+          setProposalSending(false)
+        }
+
+        return (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+                LISTING PROPOSAL
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
+                {buyer.purchaseAddress ?? buyer.suburb}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                Generate a professional listing proposal for {fname} — method of sale, comparable sales, marketing plan, and timeline in one branded page.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                onClick={handleGenerateProposal}
+                disabled={proposalGenerating}
+                style={{
+                  padding: "12px 24px", borderRadius: 12, border: "none", cursor: proposalGenerating ? "default" : "pointer",
+                  background: theme.primary, color: "#fff", fontWeight: 700, fontSize: 14, fontFamily: FONT,
+                  opacity: proposalGenerating ? 0.7 : 1,
+                }}
+              >
+                {proposalGenerating ? "Creating..." : proposalUrl ? "Regenerate Proposal" : "Create Listing Proposal"}
+              </motion.button>
+              {proposalUrl && !proposalSent && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                  onClick={handleSendProposal}
+                  disabled={proposalSending}
+                  style={{
+                    padding: "12px 24px", borderRadius: 12, border: `1px solid ${C.border}`,
+                    cursor: proposalSending ? "default" : "pointer",
+                    background: "transparent", color: C.text, fontWeight: 600, fontSize: 14, fontFamily: FONT,
+                  }}
+                >
+                  {proposalSending ? "Sending..." : `Send to ${fname} →`}
+                </motion.button>
+              )}
+              {proposalSent && (
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.green, alignSelf: "center" }}>Proposal sent to {fname}</span>
+              )}
+            </div>
+
+            {proposalUrl && (
+              <div style={{ marginBottom: 16 }}>
+                <a href={proposalUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: theme.primary, wordBreak: "break-all" }}>
+                  {proposalUrl}
+                </a>
+              </div>
+            )}
+
+            <div style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>PREVIEW</div>
+              </div>
+              <div style={{ maxHeight: 700, overflow: "auto" }}>
+                <ListingProposalTemplate payload={proposalPayload} />
+              </div>
+            </div>
           </div>
         )
       })()}
