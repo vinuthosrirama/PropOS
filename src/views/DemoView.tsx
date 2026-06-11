@@ -3724,6 +3724,66 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
         </div>
       </div>
 
+      {/* Sleeping GCI Hero — opens the demo with a hook */}
+      {(() => {
+        const COMMISSION_RATE = 0.02
+        const AGENT_SPLIT = 0.60
+        const dormantGCI = totalEstValue * COMMISSION_RATE * AGENT_SPLIT
+        const fmtHero = (v: number) => v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : `$${(v / 1_000).toFixed(0)}K`
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            style={{
+              marginBottom: 20,
+              background: `linear-gradient(135deg, ${theme.primary}1A, ${theme.primary}08)`,
+              border: `1px solid ${theme.primary}44`,
+              borderRadius: 16, padding: isMobileVPP ? "20px 18px" : "22px 28px",
+              display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap",
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: theme.primary, marginBottom: 8, textTransform: "uppercase" }}>
+                Dormant GCI in your CRM
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                <motion.span
+                  animate={{ opacity: [1, 0.7, 1] }}
+                  transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+                  style={{
+                    fontSize: isMobileVPP ? 32 : 40, fontWeight: 800, color: C.green,
+                    fontFamily: "'Instrument Serif', serif", lineHeight: 1,
+                  }}
+                >
+                  {fmtHero(dormantGCI)}+
+                </motion.span>
+                <span style={{ fontSize: 14, color: C.muted }}>sitting dormant across {buyers.length} past buyers</span>
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
+                Based on estimated portfolio value, 2% commission, 60% agent split
+              </div>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.96 }}
+              onClick={() => {
+                const analyseBtns = Array.from(document.querySelectorAll('button'))
+                const btn = analyseBtns.find(b => b.textContent && (b.textContent.includes('Analyse') || b.textContent.includes('Find my listings')))
+                if (btn) btn.click()
+              }}
+              style={{
+                padding: isMobileVPP ? "12px 20px" : "14px 28px", borderRadius: 12, border: "none", cursor: "pointer",
+                background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                color: "#fff", fontWeight: 700, fontSize: 14, fontFamily: FONT, whiteSpace: "nowrap",
+                boxShadow: `0 6px 20px ${theme.glow}`,
+              }}
+            >
+              Find my listings →
+            </motion.button>
+          </motion.div>
+        )
+      })()}
+
       {/* CRM Summary Stats — compact inline strip */}
       {(() => {
         const COMMISSION_RATE = 0.02
@@ -8167,6 +8227,30 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
               )}
             </div>
 
+            {/* Voice confidence badge — shown after pitch is generated */}
+            {pitchPayload && !pitchGenerating && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 10,
+                  padding: "8px 14px", borderRadius: 10, marginBottom: 14,
+                  background: `${theme.primary}14`, border: `1px solid ${theme.primary}33`,
+                }}
+              >
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                  style={{ width: 8, height: 8, borderRadius: "50%", background: theme.primary, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 12, fontWeight: 700, color: theme.primary }}>
+                  Drafted in {agent.name.split(" ")[0]}'s voice
+                </span>
+                <span style={{ fontSize: 12, color: C.muted }}>
+                  {Math.round(agent.voiceProfile.confidence ?? 91)}% style match
+                </span>
+              </motion.div>
+            )}
+
             {/* Simulated view notification — the strike-while-hot moment */}
             {pitchViewNotif && (
               <motion.div initial={{ opacity: 0, y: -12, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -8236,14 +8320,21 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   </div>
 
                   <div style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>If they're too busy</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>If they're too busy — Script B</div>
                     <p style={{ fontSize: 14, lineHeight: 1.75, color: C.muted, margin: 0 }}>
                       "I understand you're very busy. Instead of a full appraisal, how about I send you a quick market snapshot of comparable recent sales near your property?"
                     </p>
                   </div>
 
+                  <div style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Warm check-in — Script C</div>
+                    <p style={{ fontSize: 14, lineHeight: 1.75, color: C.muted, margin: 0 }}>
+                      "Hi {fname}, it's {agentFirst} from {agent.agency}. I just sent you a quick price update for your property — I think you'll find the numbers interesting. Have you had a chance to have a look? ... Great. Based on what we're seeing, there's real buyer demand in your suburb right now. Are you open to a quick 10-minute chat about your options?"
+                    </p>
+                  </div>
+
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 11, color: C.faint }}>Script: Tom Panos</div>
+                    <div style={{ fontSize: 11, color: C.faint }}>Scripts: Tom Panos method</div>
                     <button onClick={() => setShowCallScript(false)} style={{ padding: "10px 20px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg3, color: C.text, fontSize: 13, fontWeight: 700, fontFamily: FONT, cursor: "pointer" }}>
                       Close
                     </button>
