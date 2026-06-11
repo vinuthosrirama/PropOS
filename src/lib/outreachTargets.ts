@@ -111,7 +111,7 @@ export async function upsertOutreachTargets(targets: OutreachTarget[]): Promise<
     notes:               t.notes ?? null,
   }))
 
-  const { error, count } = await client
+  const { error, data } = await client
     .from('outreach_targets')
     .upsert(rows, {
       onConflict: 'phone',
@@ -125,7 +125,7 @@ export async function upsertOutreachTargets(targets: OutreachTarget[]): Promise<
     return 0
   }
 
-  return count ?? rows.length
+  return data?.length ?? rows.length
 }
 
 /**

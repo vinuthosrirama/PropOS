@@ -571,12 +571,12 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
   const [syncing, setSyncing] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [openSections, setOpenSections] = useState<Record<number, Set<number>>>({})
-  const SETTINGS_TAB_KEY = `propOS_settingsTab_${agent.name.replace(/\s+/g, "_")}`
   type SettingsTab = "slm" | "voice" | "comms" | "listings" | "connections" | "display"
+  const SETTINGS_TAB_KEY = `propOS_settingsTab_${agent.name.replace(/\s+/g, "_")}`
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(() => {
     try { return (localStorage.getItem(SETTINGS_TAB_KEY) as SettingsTab) ?? "slm" } catch { return "slm" }
   })
-  const navigateTab = (t: typeof settingsTab) => {
+  const navigateTab = (t: SettingsTab) => {
     setSettingsTab(t)
     try { localStorage.setItem(SETTINGS_TAB_KEY, t) } catch {}
   }
@@ -1403,69 +1403,6 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
   )
 }
 
-export function IntegrationsPanel() {
-  const [health, setHealth] = useState<HealthStatus | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    // authFetch sends Bearer token → health endpoint returns full service map for authenticated callers
-    authFetch("/api/health")
-      .then(r => r.json())
-      .then(d => { setHealth(d as HealthStatus); setLoading(false) })
-      .catch(() => { setError("Could not reach server"); setLoading(false) })
-  }, [])
-
-  const services: { key: keyof HealthStatus; label: string; description: string }[] = [
-    { key: "openai",    label: "OpenAI (GPT-4o)",  description: "Outreach generation engine" },
-    { key: "anthropic", label: "Anthropic Claude",  description: "Lead grading + QA review" },
-    { key: "sheet",     label: "Google Sheets",     description: "Lead data sync" },
-    { key: "twilio",    label: "Twilio SMS",        description: "SMS delivery" },
-    { key: "gmail",     label: "Gmail",             description: "Email delivery" },
-  ]
-
-  return (
-    <div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 6 }}>Integrations</div>
-      <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Live status of all connected services</div>
-      {loading && <div style={{ color: C.muted, fontSize: 13 }}>Checking connections...</div>}
-      {error  && <div style={{ color: C.red,  fontSize: 13 }}>{error}</div>}
-      {health && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {services.map(({ key, label, description }) => {
-            const ok = health[key]
-            return (
-              <div key={key} style={{
-                display: "flex", alignItems: "center", gap: 14,
-                background: C.bg2, border: `1px solid ${ok ? C.green + "33" : C.red + "33"}`,
-                borderRadius: 12, padding: "14px 16px",
-              }}>
-                <div style={{
-                  width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
-                  background: ok ? C.green : C.red,
-                  boxShadow: `0 0 8px ${ok ? C.green : C.red}88`,
-                }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{label}</div>
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{description}</div>
-                </div>
-                <div style={{
-                  fontSize: 11, fontWeight: 700,
-                  color: ok ? C.green : C.red,
-                  background: ok ? C.green + "18" : C.red + "18",
-                  borderRadius: 6, padding: "3px 8px",
-                }}>
-                  {ok ? "Connected" : "Offline"}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function VoiceStylePanel({ corpus, onAdd, onRemove, onClearAll }: VoiceStylePanelProps) {
   const [pasteText, setPasteText]     = useState("")
   const [msgType, setMsgType]         = useState<TrainingEntry["type"]>("paste")
@@ -1481,7 +1418,6 @@ function VoiceStylePanel({ corpus, onAdd, onRemove, onClearAll }: VoiceStylePane
     color: C.muted, textTransform: "uppercase" as const, marginBottom: 10,
   }
 
-  // Counts for the strength gauge
   const total = corpus.length
 
   // Strength thresholds: weak < 3, building 3-7, good 8+

@@ -9370,8 +9370,9 @@ export default function DemoView({
   const [seedingDemo, setSeedingDemo] = useState(false)
   // null = first poll hasn't resolved · true = server reachable · false = unreachable
   const [inboxConnected, setInboxConnected] = useState<boolean | null>(null)
+  const [pitchAlerts, setPitchAlerts] = useState<Array<{ id: string; leadName: string; propertyRef: string | null; viewCount: number; lastViewedAt: string }>>([])
 
-  // Poll for unread SMS replies every 30 seconds
+  // Poll for unread SMS replies + pitch opens every 30 seconds
   useEffect(() => {
     const poll = () => {
       authFetch(apiUrl("/api/conversations"))
@@ -9382,6 +9383,24 @@ export default function DemoView({
           setInboxConnected(true)
         })
         .catch(() => setInboxConnected(false))
+      // Pitch view alerts — show pitches opened in the last 24h
+      authFetch(apiUrl("/api/pitches"))
+        .then(r => r.ok ? r.json() : null)
+        .then((d: { pitches: Array<{ id: string; payload_json: { leadName?: string; vendorName?: string }; property_ref: string | null; view_count: number; last_viewed_at: string | null }> } | null) => {
+          if (!d) return
+          const cutoff = Date.now() - 24 * 60 * 60 * 1000
+          const alerts = d.pitches
+            .filter(p => p.view_count > 0 && p.last_viewed_at && new Date(p.last_viewed_at).getTime() > cutoff)
+            .map(p => ({
+              id: p.id,
+              leadName: p.payload_json?.leadName ?? p.payload_json?.vendorName ?? "Someone",
+              propertyRef: p.property_ref,
+              viewCount: p.view_count,
+              lastViewedAt: p.last_viewed_at!,
+            }))
+          setPitchAlerts(alerts)
+        })
+        .catch(() => {})
     }
     poll()
     const id = setInterval(poll, 30_000)
@@ -9547,6 +9566,30 @@ export default function DemoView({
                 <button onClick={() => { setShowInbox(false); setSelectedThreadPhone(null); setReplyDraft(null) }}
                   style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, padding: 0 }}>×</button>
               </div>
+
+              {/* Pitch view alerts — shown above SMS threads */}
+              {!selectedThread && pitchAlerts.length > 0 && (
+                <div style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ padding: "8px 14px 4px", fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: "0.07em", textTransform: "uppercase" }}>Pitch Activity</div>
+                  {pitchAlerts.map(a => {
+                    const mins = Math.floor((Date.now() - new Date(a.lastViewedAt).getTime()) / 60_000)
+                    const ago = mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`
+                    return (
+                      <div key={a.id} style={{ padding: "10px 14px", borderTop: `1px solid ${C.border}`, display: "flex", alignItems: "flex-start", gap: 10 }}>
+                        <div style={{ fontSize: 16, marginTop: 1 }}>👁</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{a.leadName}</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+                            opened your pitch{a.propertyRef ? ` · ${a.propertyRef}` : ""}
+                            {a.viewCount > 1 ? ` (${a.viewCount}×)` : ""}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 10, color: C.faint, flexShrink: 0, marginTop: 2 }}>{ago}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
 
               {/* Thread list */}
               {!selectedThread && (
