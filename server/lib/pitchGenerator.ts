@@ -41,12 +41,18 @@ export interface PitchRecipientInfo {
   suburb: string
 }
 
+export interface PitchBuyerDemand {
+  name: string
+  detail: string
+}
+
 export interface PriceUpdatePayload {
   recipient?: PitchRecipientInfo
   coverNote?: string
   comparableSales?: PitchCompSale[]
   agentCard?: PitchAgentInfo
   marketStats?: PitchMarketStats
+  buyerDemand?: PitchBuyerDemand
 }
 
 export interface GeneratePriceUpdateParams {
@@ -56,6 +62,7 @@ export interface GeneratePriceUpdateParams {
   suburb: string
   comparableSales?: PitchCompSale[]
   marketStats?: PitchMarketStats
+  buyerDemand?: PitchBuyerDemand
   voiceContext?: string
   // If a vetted, hand-written cover note already exists for this lead/property
   // combo, use it verbatim (sanitised) instead of calling Claude.
@@ -78,6 +85,10 @@ export async function generatePriceUpdatePitch(params: GeneratePriceUpdateParams
 
   if (params.marketStats && Object.values(params.marketStats).some(v => v !== undefined)) {
     payload.marketStats = params.marketStats
+  }
+
+  if (params.buyerDemand) {
+    payload.buyerDemand = params.buyerDemand
   }
 
   payload.coverNote = await generateCoverNote(params)
