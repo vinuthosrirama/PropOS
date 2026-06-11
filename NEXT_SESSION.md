@@ -1,5 +1,62 @@
 # PropOS — Session Notes & Ideas Bank
-_Last updated: 8 June 2026 — Session 13 (Cloud/Remote session)_
+_Last updated: 12 June 2026 — Session 14 (Fable plan completion)_
+
+---
+
+## Session 14 Summary — What Was Built (12 June 2026)
+
+### Fable Plan — All Items Completed
+
+#### 1. Listing Proposal Pitch Template (`src/components/pitch/ListingProposalTemplate.tsx`)
+Full-page vendor pitch with: agency badge, property address + estimated range, method of sale card (auction/private sale/EOI with emoji + description), comparable sales table, 2x2 agency stats grid, marketing plan items, 4-week campaign timeline with vertical line/dots, testimonials carousel, CTA buttons (call + email). Routed via `/p/:slug` when `pitch.type === "proposal"`.
+
+#### 2. Digital Introduction Template (`src/components/pitch/DigitalIntroductionTemplate.tsx`)
+Already built in previous sessions. Routing re-applied after rebase in PitchView.tsx.
+
+#### 3. Sleeping GCI Hero Stat (DemoView — VendorPortfolioPage)
+Animated card above CRM stats strip: "DORMANT GCI IN YOUR CRM" with pulsing `$992K+` figure, computed from `totalEstValue * 0.02 * 0.60`. "Find my listings →" CTA button.
+
+#### 4. AI Reply Agent Badge (`src/components/Nav.tsx`)
+Green pulsing pill on desktop in demo view: "AI Replies: Active". Uses `motion.div` with `opacity` keyframe animation. Uses `bp === "desktop"` (not `bp !== "mobile"`) because Nav early-returns for mobile.
+
+#### 5. Voice Confidence Badge (DemoView — Price Update tab)
+After `pitchSent` state: pulsing purple dot + "Drafted in Cameron's voice — 91% style match" badge.
+
+#### 6. Tom Panos Scripts A/B/C
+Script C added: "Warm check-in after pitch send" — references the pitch sent and asks if they've seen it.
+
+#### 7. GCI Calculator (`src/components/GciCalculator.tsx`)
+Already existed (175 lines). Verified working.
+
+#### 8. Mass Send Scale Counter (`src/components/OutreachQueue.tsx`)
+Animated strip between header and queue items showing: pulsing green dot + "Sending to N contacts", Est. GCI $Xk+ (computed as `approvedCount * 2000`), and "4-6x higher response rate". Also added Est. GCI line to bottom sticky send bar.
+
+#### 9. Response Rate Claim (DemoView — ReviewPanel)
+Stats bar above "Approve and Send" button: "4-6x higher reply rate vs generic" | "91% voice style match" | "160 char SMS, personalised". Uses `theme.primary` for accent colours.
+
+#### 10. Appraisal Booking Loop Milestone (DemoView — ReviewPanel sent state)
+3-step progress indicator after send: "Outreach sent ✓ → Reply received → Inspection booked". Steps light up as `leadStatus` advances. Shows on the sent confirmation screen.
+
+### Git / Deployment
+- Resolved 3-way merge conflict in `SettingsView.tsx` (rebase mid-session)
+- Removed duplicate `IntegrationsPanel` export (replaced by `ConnectionsPanel`)
+- Re-applied `PitchView.tsx` DigitalIntroduction + ListingProposal routing after rebase
+- Backend: pushed to Railway via `git push origin main`
+- Frontend: `npx wrangler pages deploy dist --project-name propos-demo`
+
+---
+
+## Outstanding Todos (after Session 14)
+
+### PropOS Product Improvements
+1. **Onboarding <10 min claim** — prominent setup time counter in agent onboarding screen
+2. **Bulk pitch generation** — "Generate All" button to create pitch pages for entire portfolio
+3. **Settings View Audit** — move ALL settings into Settings view: communication style selector, follow-up styles, featured listing management, integrations section, comparable sales section
+4. **`property.addvantage.site` landing page** — deploy to Cloudflare Pages (blocked on CF Pages decision)
+5. **Mass send — "Generate All" button** — trigger pitch generation for all contacts in OutreachQueue before sending
+
+### Self-Outreach Campaign (Vinuth's outbound to RE agents)
+See Session 13 checklist for Railway env vars setup, seeding, and testing steps.
 
 ---
 
