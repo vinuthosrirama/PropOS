@@ -4,6 +4,25 @@ Cross-conversation handoff file. Every Claude session appends a dated entry at t
 
 ---
 
+## 2026-06-11 (latest) — pitch URLs always production domain + per-agent persistent settings
+
+**Built (commit `1ff9da1`, plus earlier `f9ae631` BASE_URL fix on the same push):**
+- `server/routes/pitches.ts`: pitch creation response now resolves `url` via `process.env.BASE_URL ?? "https://propos.addvantage.site"` instead of `req.headers.origin`/host (which can be a Railway internal hostname or a Cloudflare `*.pages.dev` preview URL). `server/.env.example` documents `BASE_URL`.
+- `DemoView.tsx`: `setPitchUrl` now trusts the absolute URL from the server, falling back to `window.location.origin` only if the server ever returns a relative path.
+- New generic per-agent KV persistence: `agent_state` table (`server/lib/db.ts` migration), `server/routes/agent-state.ts` (GET/PUT `/api/agent-state/:key`, DB-less in-memory fallback), client helper `src/lib/agentState.ts` (`loadAgentState`/`saveAgentState`).
+- `SettingsView.tsx`: `comm_settings` (CommsPanel) and `featured_listing_id` (ListingsPanel) now read back from `agent_state` on mount and write through to it on save, so these survive a refresh or a different browser/device, not just localStorage.
+
+**Persistence landscape (Pareto 80% review):**
+- Already persisted (no work needed): leads/contacts + CSV/XLSX imports (`contacts` table, `import-contacts` routes), outreach/personalisation messages (`outreach_log`), SLM info (Google Sheets via `sheetSLMCache`), voice corpus (Google Sheets via `writeAgentVoiceEntry`/`readAgentVoiceCorpus`).
+- Newly persisted this session: comm settings + featured listing (`agent_state`).
+- Still local-only / not investigated: any agent-added "new listings" beyond the hardcoded portfolio.
+
+**Verified:** `agent_state` GET/PUT round-trip confirmed via direct fetch in Preview (DB-less in-memory mode). tsc: server 0 errors, root same 11 pre-existing errors. Full UI click-through of CommsPanel/ListingsPanel save→reload NOT visually verified this session (SPA routing issue when navigating to `/settings` directly) — flagged as outstanding.
+
+**Deploy state:** pushed to origin/main (Railway backend auto-deploys, picks up BASE_URL + agent_state API). Cloudflare Pages (`propos-demo` / propos.addvantage.site) frontend deploy still pending explicit user authorization — needs to ship to also pick up the BASE_URL pitch-link fix, agent_state settings wiring, and the earlier pitch-email-content fix (commit `867517b`) all together.
+
+---
+
 ## 2026-06-11 (later still) — pitch email embeds content, no more dead localhost links
 
 **Built (commit `867517b`):**
