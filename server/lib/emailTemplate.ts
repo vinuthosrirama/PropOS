@@ -1,4 +1,51 @@
+import type { PriceUpdatePayload } from "./pitchGenerator.js"
+
 const BASE_URL = process.env.BASE_URL ?? "https://propos.addvantage.site"
+
+// ---------------------------------------------------------------------------
+// Price Update content block — embeds the pitch data directly in the email
+// body so the recipient sees comps + market stats without clicking a link.
+// ---------------------------------------------------------------------------
+
+export function buildPitchContentHtml(payload: PriceUpdatePayload, color: string): string {
+  const fmt = (v: number) => `$${Math.round(v).toLocaleString("en-AU")}`
+  const comps = payload.comparableSales ?? []
+  const stats = payload.marketStats
+
+  const compsHtml = comps.length === 0 ? "" : `
+    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:${color};text-transform:uppercase;font-family:Arial,sans-serif;margin:4px 0 10px;">Recent comparable sales</div>
+    <table cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 20px 0;border:1px solid #e8e8e8;border-radius:6px;border-collapse:separate;overflow:hidden;">
+      ${comps.slice(0, 3).map((c, i) => `
+      <tr style="${i > 0 ? "border-top:1px solid #eee;" : ""}">
+        <td style="padding:10px 14px;${i > 0 ? "border-top:1px solid #eee;" : ""}">
+          <div style="font-size:13px;font-weight:600;color:#1a1a1a;font-family:Arial,sans-serif;">${c.address}</div>
+          <div style="font-size:11px;color:#888;font-family:Arial,sans-serif;margin-top:2px;">${c.beds} bed &middot; Sold ${c.date}</div>
+        </td>
+        <td align="right" style="padding:10px 14px;font-size:14px;font-weight:800;color:${color};font-family:Arial,sans-serif;white-space:nowrap;${i > 0 ? "border-top:1px solid #eee;" : ""}">${fmt(c.price)}</td>
+      </tr>`).join("")}
+    </table>`
+
+  const statCell = (label: string, value: string) => `
+        <td align="center" style="padding:12px 6px;background:#f5f5f7;border-radius:6px;">
+          <div style="font-size:16px;font-weight:800;color:#1a1a1a;font-family:Arial,sans-serif;">${value}</div>
+          <div style="font-size:10px;color:#888;letter-spacing:0.5px;text-transform:uppercase;font-family:Arial,sans-serif;margin-top:3px;">${label}</div>
+        </td>`
+
+  const statCells = !stats ? [] : [
+    stats.medianPrice ? statCell("Suburb median", fmt(stats.medianPrice)) : "",
+    stats.daysOnMarket ? statCell("Days on market", String(stats.daysOnMarket)) : "",
+    stats.clearanceRate ? statCell("Clearance rate", `${stats.clearanceRate}%`) : "",
+    stats.annualGrowthPct ? statCell("Annual growth", `${stats.annualGrowthPct}%`) : "",
+  ].filter(Boolean)
+
+  const statsHtml = statCells.length === 0 ? "" : `
+    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:${color};text-transform:uppercase;font-family:Arial,sans-serif;margin:4px 0 10px;">${payload.recipient?.suburb ? `${payload.recipient.suburb} market snapshot` : "Market snapshot"}</div>
+    <table cellpadding="0" cellspacing="6" width="100%" style="margin:0 0 16px -6px;">
+      <tr>${statCells.join("")}</tr>
+    </table>`
+
+  return compsHtml + statsHtml
+}
 
 // ---------------------------------------------------------------------------
 // Barry Plant Signature Block
@@ -145,6 +192,7 @@ export function buildEmailHTML(params: {
   propertyAddress: string
   priceGuide?:     string
   bodyParagraphs:  string[]
+  contentHtml?:    string   // pre-built rich block (e.g. pitch comps/stats) injected after the property box
   leadId:          string
   trackingId?:     number   // outreach_log id — enables open/click pixel tracking
 }): string {
@@ -194,6 +242,7 @@ export function buildEmailHTML(params: {
         <tr><td style="padding:32px 36px 8px;">
           ${paragraphsHtml}
           ${propertyBox}
+          ${params.contentHtml ?? ""}
         </td></tr>
 
         <!-- Divider -->

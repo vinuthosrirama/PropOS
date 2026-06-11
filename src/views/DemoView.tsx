@@ -7877,10 +7877,15 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
           if (!pitchUrl) return
           setPitchSending(true)
           try {
-            const sms = stripDashes(`Hi ${fname}, ${agentFirst} here. I've put together a quick price update for ${shortAddr(buyer.purchaseAddress)}. Have a look here: ${pitchUrl}`)
+            // Local dev links (localhost) are dead for recipients — embed the pitch
+            // content in the email instead and only include a link on a real domain.
+            const isLocalLink = /localhost|127\.0\.0\.1/.test(pitchUrl)
+            const sms = stripDashes(isLocalLink
+              ? `Hi ${fname}, ${agentFirst} here. I've just emailed you a price update for ${shortAddr(buyer.purchaseAddress)}. Worth a look when you get a minute.`
+              : `Hi ${fname}, ${agentFirst} here. I've put together a quick price update for ${shortAddr(buyer.purchaseAddress)}. Have a look here: ${pitchUrl}`)
             const subject = stripDashes(`Your price update for ${buyer.purchaseAddress}`)
             const emailBody = stripDashes(
-              `Hi ${fname},\n\nI've put together a price update for your property at ${buyer.purchaseAddress}. You can view it here: ${pitchUrl}\n\nCheers,\n${agentFirst}`
+              `Hi ${fname},\n\nI've put together a price update for your property at ${buyer.purchaseAddress}. The full breakdown, including recent comparable sales near you, is below.${isLocalLink ? "" : ` You can also view it online here: ${pitchUrl}`}\n\nCheers,\n${agentFirst}`
             )
             await authFetch(apiUrl("/api/send"), {
               method: "POST",
@@ -7892,6 +7897,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 agentPhone: agent.phone, agencyColor: theme.primary, agencyTagline: agent.tagline,
                 propertyAddress: buyer.purchaseAddress,
                 sms, subject, emailBody,
+                pitchPayload: pitchPayload ?? undefined,
                 channel: buyer.email ? "both" : "sms",
               }),
             })
