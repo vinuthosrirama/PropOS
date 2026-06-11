@@ -2,7 +2,8 @@ import { Router } from "express"
 import { checkCompliance } from "../lib/compliance.js"
 import { sendSMS, smsConfigured as twilioConfigured } from "../lib/sms.js"
 import { sendEmail, gmailConfigured } from "../lib/gmail.js"
-import { buildEmailHTML } from "../lib/emailTemplate.js"
+import { buildEmailHTML, buildPitchContentHtml } from "../lib/emailTemplate.js"
+import type { PriceUpdatePayload } from "../lib/pitchGenerator.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"
 import { logOutreach, updateOutreachStatus } from "../lib/db.js"
 import { queueNurtureSequence, type NurtureContext } from "../lib/scheduler.js"
@@ -40,6 +41,7 @@ interface SendRequest {
   subject:          string
   emailBody:        string   // \n\n-separated plain-text paragraphs
   channel:          "sms" | "email" | "both"
+  pitchPayload?:    PriceUpdatePayload           // when set, comps/stats are embedded in the email body
   pipeline?:        string                      // vendor pipeline id — triggers nurture scheduling
   nurtureContext?:  NurtureContext                // extra context passed to nurture LLM
 }
@@ -154,6 +156,7 @@ router.post("/", async (req, res) => {
         propertyAddress: propertyAddr,
         priceGuide,
         bodyParagraphs:  emailBody.split("\n\n").filter(p => p.trim()),
+        contentHtml:     body.pitchPayload ? buildPitchContentHtml(body.pitchPayload, agencyColor ?? "#4B2E7E") : undefined,
         leadId,
         trackingId:      outreachLogId > 0 ? outreachLogId : undefined,
       })
