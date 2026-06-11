@@ -2397,6 +2397,44 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
             </div>
           )}
 
+          {/* Appraisal booking loop milestone */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 0, marginBottom: 20, padding: "14px 20px",
+              background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`,
+            }}
+          >
+            {[
+              { label: "Outreach sent",      done: true,                                    color: C.green },
+              { label: "Reply received",     done: leadStatus !== "outreach_sent",          color: C.green },
+              { label: "Inspection booked",  done: ["inspection_booked","inspection_attended","registered_to_bid","bid_placed","property_won"].includes(leadStatus), color: theme.primary },
+            ].map((step, i, arr) => (
+              <div key={step.label} style={{ display: "flex", alignItems: "center" }}>
+                <div style={{ textAlign: "center", width: 110 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: "50%", margin: "0 auto 6px",
+                    background: step.done ? step.color + "22" : C.bg3,
+                    border: `2px solid ${step.done ? step.color : C.border}`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 12, color: step.done ? step.color : C.faint, fontWeight: 700,
+                  }}>
+                    {step.done ? "✓" : `${i + 1}`}
+                  </div>
+                  <div style={{ fontSize: 10, color: step.done ? C.text : C.faint, fontFamily: FONT, lineHeight: 1.3 }}>
+                    {step.label}
+                  </div>
+                </div>
+                {i < arr.length - 1 && (
+                  <div style={{ width: 32, height: 1, background: step.done ? C.green + "66" : C.border, flexShrink: 0, margin: "0 0 16px" }} />
+                )}
+              </div>
+            ))}
+          </motion.div>
+
           {/* Nurture sequence preview */}
           <div style={{ marginBottom: 20 }}>
             <button
@@ -2747,6 +2785,29 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
           </div>
         </div>
       )}
+
+      {/* Response rate claim */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 20,
+        padding: "12px 20px", borderRadius: 12, marginBottom: 14,
+        background: `linear-gradient(135deg, ${theme.primary}12, ${theme.primary}08)`,
+        border: `1px solid ${theme.primary}2A`,
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.green, fontFamily: FONT, lineHeight: 1 }}>4-6x</div>
+          <div style={{ fontSize: 10, color: C.muted, marginTop: 2, fontFamily: FONT }}>higher reply rate vs generic</div>
+        </div>
+        <div style={{ width: 1, height: 30, background: C.border }} />
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: theme.primary, fontFamily: FONT, lineHeight: 1 }}>91%</div>
+          <div style={{ fontSize: 10, color: C.muted, marginTop: 2, fontFamily: FONT }}>voice style match</div>
+        </div>
+        <div style={{ width: 1, height: 30, background: C.border }} />
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#a78bfa", fontFamily: FONT, lineHeight: 1 }}>160</div>
+          <div style={{ fontSize: 10, color: C.muted, marginTop: 2, fontFamily: FONT }}>char SMS, personalised</div>
+        </div>
+      </div>
 
       {/* Send button */}
       <motion.button
