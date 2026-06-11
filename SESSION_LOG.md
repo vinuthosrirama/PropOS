@@ -4,6 +4,23 @@ Cross-conversation handoff file. Every Claude session appends a dated entry at t
 
 ---
 
+## 2026-06-11 (later) — CRM import connector + pitch-opened call-now climax
+
+**Built (commit `a7472d0`):**
+- `server/routes/import-contacts.ts`: POST `/parse` (SheetJS XLSX to string grid), POST bulk upsert into `contacts` (single round trip, `source='import'`), GET read-back per agent. Registered behind auth; 10mb body override for workbook uploads. `xlsx` added to server deps.
+- DemoView VendorPortfolioPage: file input accepts `.csv,.xlsx,.xls`; header-alias mapping extracted to `mapRowsToContacts` shared by CSV (client parse) and XLSX (server parse); **bug fixed**: first+last name merge never ran because the `name` alias contains-matched the "First Name" header; bulk import in one POST; read-back useEffect merges DB contacts into buyers on mount (dedupe by name+address).
+- DemoView pitch tab: simulated view notification 9s after pitch send ("{fname} just opened your Price Update, 3 views") with "Call now" button opening a personalised Tom Panos call-script overlay (tap-to-call phone, price band from `buildAppraisalRange` low/high, "too busy" variant, attribution).
+
+**Verified (Preview screenshots):** AgentBox-style CSV imported through the real modal — 3 contacts (Greg Hartley, Priya Nair, Sam & Elena Castellanos) appeared in the CRM with computed equity and Nearby-sale triggers, count 88→91. XLSX parse verified via curl with a real workbook. DB-less read-back graceful (`contacts: []`, `persisted:false`). Notification appeared ~9s post-send; overlay showed "Hi David, it's Cameron from Peake... $795K to $950K" fully personalised. tsc: server 0 errors; root only pre-existing (note: a SettingsView:1324 TS2352 appeared mid-session from edits outside this session).
+
+**Deployed:** propos.addvantage.site serves `index-CWk23ErI.js` (verified via curl). Railway backend redeploys from the origin/main push.
+
+**Context (strategy session):** competitor = Realtair (vendor-only, no AI). PropOS = BuyerOS (top of funnel) + VendorOS (middle). Demo audience: individual agents. 60-day goal: 3-5 paying betas. Identified demo gaps: open on the GCI number, live import of prospect's own data (now built), closed-loop notification moment (now built), flywheel visual (buyer becomes future vendor), leave-behind artifact per agency.
+
+**Next step:** flywheel screen and/or per-agency leave-behind one-pager; remaining deferred Pitch Suite items (bulk generation, regenerate, Digital Intro / Listing Proposal templates, real `v_pitch_views` inbox badge).
+
+---
+
 ## 2026-06-11 — Pitch Suite complete, Property Pitch template, deploy fix
 
 **Built:**
