@@ -331,6 +331,23 @@ export default function Nav({
           </button>
         )}
 
+        {/* AI Reply Agent status pill */}
+        {view === "demo" && bp === "desktop" && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 5,
+            padding: "3px 9px", borderRadius: 20,
+            background: "rgba(100,208,144,0.08)", border: "1px solid rgba(100,208,144,0.2)",
+            flexShrink: 0,
+          }}>
+            <motion.div
+              animate={{ opacity: [1, 0.4, 1] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+              style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, flexShrink: 0 }}
+            />
+            <span style={{ fontSize: 10, fontWeight: 700, color: C.green, whiteSpace: "nowrap" }}>AI Replies: Active</span>
+          </div>
+        )}
+
         {/* Inbox button — inline with nav tabs */}
         {onInbox && (
           <button onClick={onInbox} style={{
