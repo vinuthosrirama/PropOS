@@ -20,6 +20,8 @@
 import cron from "node-cron"
 import { isDbConnected, query, execute } from "./db.js"
 import { sendSMS, smsConfigured } from "./sms.js"
+import { sendEmail, gmailConfigured } from "./gmail.js"
+import { pollGmailInbound } from "./gmailInbound.js"
 import { addAgentMessageToThread } from "./conversations.js"
 import {
   generateFollowUp,
@@ -62,6 +64,14 @@ export function startOutreachScheduler(): void {
   cron.schedule("0 2 * * 0", () => {
     void runOptimisationCycle("outreach_system")
   }, { timezone: "Australia/Melbourne" })
+
+  // Every 5 minutes — capture email replies from outreach targets
+  if (gmailConfigured()) {
+    cron.schedule("*/5 * * * *", () => {
+      void pollGmailInbound()
+    })
+    console.log("  OutreachScheduler: Gmail reply capture running (every 5 min)")
+  }
 
   console.log("  OutreachScheduler: running (9am brief, 10am sends, Sunday 2am optimiser, Melbourne time)")
 }
@@ -151,7 +161,23 @@ async function runOutreachWindow(): Promise<void> {
 async function sendOutreachMessage(target: OutreachTargetRow, message: string): Promise<void> {
   if (!target.phone) return
   try {
-    const result = await sendSMS(target.phone, message)
+    let transportUsed: string
+    try {
+      const result = await sendSMS(target.phone, message)
+      transportUsed = result.transport + (result.testMode ? " (TEST)" : "")
+    } catch (smsErr) {
+      // Every SMS transport in the chain failed — fall back to email if we have one
+      if (!gmailConfigured() || !target.email) throw smsErr
+      console.warn(`[outreachScheduler] all SMS transports failed for ${target.name} — falling back to email`)
+      const emailResult = await sendEmail({
+        to:       target.email,
+        fromName: "Vinuth",
+        subject:  "Quick one",
+        htmlBody: `<p style="font-family:sans-serif;font-size:15px">${message.replace(/\n/g, "<br/>")}</p>`,
+      })
+      transportUsed = "email" + (emailResult.testMode ? " (TEST)" : "")
+    }
+
     await execute(
       `UPDATE outreach_targets
        SET status = 'contacted', last_contact_date = NOW(),
@@ -163,7 +189,7 @@ async function sendOutreachMessage(target: OutreachTargetRow, message: string): 
       leadName:        target.name,
       propertyAddress: target.recent_sale_address ?? "",
     })
-    console.log(`[outreachScheduler] sent to ${target.name} via ${result.transport}${result.testMode ? " (TEST)" : ""}`)
+    console.log(`[outreachScheduler] sent to ${target.name} via ${transportUsed}`)
   } catch (err) {
     console.error(`[outreachScheduler] send failed for ${target.name}:`, (err as Error).message)
     const errNote = `Send failed: ${(err as Error).message.slice(0, 200)}`

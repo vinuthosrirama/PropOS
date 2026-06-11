@@ -14,11 +14,28 @@ Messages build authentic relationships because recipients see the agent's real m
 | Android phone | **Method 3: Android SMS Gateway** | Free |
 | Android phone, want a dashboard | **Method 4: httpSMS** | Free (200/mo) |
 
-**Always set a fallback** so sends never drop:
+**Set the full cascade** so sends never drop — each transport picks up when the previous fails:
 ```env
-SMS_TRANSPORT=bluebubbles
-SMS_TRANSPORT_FALLBACK=httpsms
+SMS_TRANSPORT_CHAIN=bluebubbles,shortcut-relay,httpsms,textingblue
 ```
+Unconfigured entries are skipped automatically. The legacy pair still works
+(`SMS_TRANSPORT=` + `SMS_TRANSPORT_FALLBACK=`), and if neither is set the chain
+auto-builds from every configured transport in priority order.
+
+Double handling is two-layered:
+1. **Synchronous cascade** — `sendSMS()` tries each transport in order at send time; the API response includes an `attempts` array showing what happened on each.
+2. **Async recovery** — if BlueBubbles accepts a message but later reports a `message-send-error` webhook, the message is automatically redispatched through the rest of the chain (once per message).
+
+**Live health for the whole chain:**
+```bash
+curl https://propos.addvantage.site/api/sms-transport
+# → { ..., chain: [{ transport, ok, label, detail }, ...], email: { configured } }
+```
+
+**Email redundancy:** when ALL SMS transports fail and the outreach target has an
+email address, the message is sent via Gmail (GMAIL_* env vars) instead. Email
+replies from targets are captured every 5 minutes and feed the same draft +
+morning-brief pipeline as SMS replies.
 
 ---
 

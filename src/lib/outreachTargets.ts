@@ -116,8 +116,9 @@ export async function upsertOutreachTargets(targets: OutreachTarget[]): Promise<
     .upsert(rows, {
       onConflict: 'phone',
       ignoreDuplicates: false,
+      count: 'exact',
     })
-    .select('id', { count: 'exact' })
+    .select('id')
 
   if (error) {
     console.error('[outreachTargets] upsert error:', error.message)

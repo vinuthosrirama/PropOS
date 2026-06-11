@@ -1481,16 +1481,11 @@ function VoiceStylePanel({ corpus, onAdd, onRemove, onClearAll }: VoiceStylePane
   }
 
   // Counts for the strength gauge
-  const smsCount     = corpus.filter(e => e.type === "paste" || e.type === "voice").length
-  const emailCount   = corpus.filter(e => e.type === "email").length
-  const subjectCount = corpus.filter(e => e.type === "email_subject").length
-  const autoCount    = corpus.filter(e => e.isAutoLearned).length
   const total = corpus.length
 
   // Strength thresholds: weak < 3, building 3-7, good 8+
   const strengthLevel = total < 3 ? "weak" : total < 8 ? "building" : "good"
   const strengthColor = strengthLevel === "good" ? C.green : strengthLevel === "building" ? "#f59e0b" : C.red ?? "#ef4444"
-  const strengthLabel = strengthLevel === "good" ? "Voice well-trained" : strengthLevel === "building" ? "Building up..." : "Add more examples"
   const strengthPct   = Math.min(100, Math.round((total / 10) * 100))
 
   const PLACEHOLDERS: Record<TrainingEntry["type"], string> = {
