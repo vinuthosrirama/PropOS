@@ -89,3 +89,15 @@ Cross-conversation handoff file. Every Claude session appends a dated entry at t
 **Deployed:** rebuilt `dist/`, copied to `server/public/`, deployed to `propos-demo` (Cloudflare Pages).
 
 **Next step:** none queued — flywheel feature complete end-to-end (BuyerOS recommendation + VendorOS buyer-demand pitch evidence using the same lead).
+
+---
+
+## 2026-06-11 (cont.) — AddVantage PropOS marketing landing page
+
+**Built:** `landing/index.html` — standalone static landing page (no build step; GSAP 3.12 + three.js r149 via CDN). Sections: three.js particle-grid hero with animated GCI counters, 3-step how-it-works, 7-card feature grid (prospecting engine, voice outreach, trackable price updates, call-now moment, CRM import, GCI calc, CMA/reports), animated flywheel SVG, PropOS-vs-pitch-suite comparison table, demo CTA. Respects prefers-reduced-motion; canvas pauses off-screen; DPR capped.
+
+**Bugs found & fixed during Preview verification:** (1) hero canvas width feedback loop (`inset:0` doesn't stretch replaced elements → canvas grew to 10198px and caused horizontal overflow; fixed with explicit CSS 100% sizing + measuring the parent), (2) flywheel SVG rotating around the wrong origin (CSS `transformOrigin` → GSAP `svgOrigin:"240 240"`), (3) 3-column pipeline too cramped at tablet (stacks at ≤1024px). Em-dashes removed from all prose copy.
+
+**Verified (Preview screenshots):** all sections at desktop (1440), tablet (768), mobile (375); zero console errors; no horizontal overflow at any width. Commit `f6c6a6f`, pushed.
+
+**Not deployed:** `property.addvantage.site` Cloudflare Pages project decision still open (plan question #10) — page is ready to deploy as-is when decided.
