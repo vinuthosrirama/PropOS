@@ -27,7 +27,7 @@ import boxdiceRouter from "./routes/boxdice.js"
 import authRouter from "./routes/auth.js"
 import { loadOptOuts, addOptOut } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
-import { activeTransport, checkSmsTransport, sendSMS } from "./lib/sms.js"
+import { activeTransport, checkSmsTransport, checkTransportChain, sendSMS } from "./lib/sms.js"
 import { parseBBWebhook, parseBBSendError, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
 import { watchIncomingImsg } from "./lib/imsg.js"
 import { parseTeleLinkWebhook, registerTeleLinkWebhook }            from "./lib/telelink.js"
@@ -170,10 +170,17 @@ app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
 // Pitch view-tracking + by-slug fetch — public, accessed from /p/:slug links
 app.use("/api/pitches",           pitchesPublicRouter)
 
-// GET /api/sms-transport — returns which transport is active (for settings UI)
+// GET /api/sms-transport — full transport chain with live health (for settings UI + ops)
 app.get("/api/sms-transport", async (_req: Request, res: Response) => {
-  const status = await checkSmsTransport()
-  res.json(status)
+  const [status, chain] = await Promise.all([checkSmsTransport(), checkTransportChain()])
+  res.json({
+    ...status,                    // legacy shape: primary transport + optional fallback
+    chain,                        // full cascade in send order, each with live health
+    email: {
+      configured: gmailConfigured(),
+      user: gmailConfigured() ? process.env.GMAIL_USER : undefined,
+    },
+  })
 })
 
 // POST /api/test-sms — fire a test SMS via the active transport, no DB required
@@ -265,6 +272,10 @@ app.use("/api/webhook", verifyWebhookSecret)
 // ── BlueBubbles incoming webhook ──────────────────────────────────────────────
 // POST /api/webhook/bluebubbles — receives incoming iMessage/SMS replies
 // when SMS_TRANSPORT=bluebubbles. Feeds into the existing reply-agent pipeline.
+// Async send-error recovery: one redispatch per failed message guid, never via
+// bluebubbles again (it just failed). Set bounded to avoid unbounded growth.
+const redispatchedGuids = new Set<string>()
+
 app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Response) => {
   res.json({ ok: true })  // ack immediately — BB retries on 4xx/5xx, not on 200
 
@@ -275,10 +286,22 @@ app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Respons
     return
   }
 
-  // Handle send-error events — log for diagnostics, mark outreach failed
+  // Handle send-error events — redispatch via the rest of the transport chain
   const sendErr = parseBBSendError(req.body)
   if (sendErr) {
     console.warn(`[bluebubbles] delivery failure guid=${sendErr.guid}: ${sendErr.reason}`)
+
+    if (!sendErr.to || !sendErr.body) {
+      console.warn(`[bluebubbles] cannot redispatch guid=${sendErr.guid} — payload missing recipient or body`)
+      return
+    }
+    if (redispatchedGuids.has(sendErr.guid)) return  // already retried once
+    redispatchedGuids.add(sendErr.guid)
+    if (redispatchedGuids.size > 1000) redispatchedGuids.clear()
+
+    void sendSMS(sendErr.to, sendErr.body, ["bluebubbles"])
+      .then(r => console.log(`[bluebubbles] redispatch guid=${sendErr.guid} succeeded via "${r.transport}"`))
+      .catch(e => console.error(`[bluebubbles] redispatch guid=${sendErr.guid} failed on all transports: ${(e as Error).message}`))
   }
 })
 

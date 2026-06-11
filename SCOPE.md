@@ -181,6 +181,39 @@ PropOS is a real estate agent productivity SPA built for Berwick, VIC agents (pr
 
 ---
 
+### Session 14 — Bulletproof Multi-Transport Outreach (2026-06-11)
+**Request:** Build a bulletproof, multi-redundant system to text real estate agents from PRE-EXISTING phone numbers, with email (Gmail OAuth) redundancy, full CRM in Supabase, morning reply workflow, and an evolving voice — without expensive SaaS plans.
+
+**Hard requirements (standing — apply to all future sessions):**
+- **Never use new/virtual phone numbers.** Always send from pre-existing real SIM numbers the recipient may recognise — relationship preservation is the whole point.
+- **No expensive monthly or per-message plans.** Self-hosted / free tiers only. Code leverage over subscriptions.
+- **4 send methods with double handling** — when one transport fails the next picks up automatically, both synchronously (cascade at send time) and asynchronously (delivery-failure webhooks redispatch).
+- **Test phone:** all sends redirect to `TEST_RECIPIENT_PHONE` (+61415883354) until go-live.
+- Natural send times (10am coffee-break window, ±12 min jitter), personal tone referencing the agent's recent sale/listing/suburb.
+- Every conversation tracked in Supabase (`outreach_targets`, `outreach_drafts`, `conversations`); morning brief at 9am; replies drafted in Vinuth's voice for approve/edit/send.
+- Voice evolves via the prompt-optimisation loop (approved/rejected/edited/demo_booked signals → weekly + threshold-triggered self-rewrite).
+
+**Research findings (2026-06-11):**
+- **TextingBlu / TextBlu.ai mechanism reverse-engineered:** their product is an iOS Shortcut installed on YOUR OWN iPhone that polls their cloud queue and sends via the native Send Message action — your number, their $9+/mo queue. PropOS's `shortcutRelay.ts` + `/api/sms-shortcut/*` is a self-hosted clone of exactly this: $0, no message caps.
+- **telelink (nicholasxdavis/telelink):** Windows-only — drives Microsoft Phone Link via pywinauto UI automation. Ruled out as primary (we're Mac-based) but transport exists in code if a Windows box appears.
+- **Email-to-SMS carrier gateways in Australia are discontinued** (Telstra Desktop Messaging dead, Optus/Vodafone gone). Ruled out permanently.
+- **Sendblue** = managed Apple device fleet with dedicated numbers — violates the pre-existing-number rule. Ruled out.
+
+**The 4 active methods (send order):**
+1. **BlueBubbles** (Mac + own Apple ID) — iMessage native + SMS via Text Forwarding, webhook replies, named Cloudflare tunnel `bluebubbles.addvantage.site`
+2. **iOS Shortcut Relay** (own iPhone, no Mac needed) — DB-backed queue polled by a personal automation, self-hosted TextingBlu clone
+3. **Android SMS Gateway / httpSMS** (any spare Android + SIM) — REST + webhooks
+4. **TextingBlue free tier** (100 msgs/mo) — zero-ops cloud fallback, still sends from own number
+
+**Built this session:**
+- `server/lib/sms.ts`: full cascade — `SMS_TRANSPORT_CHAIN` env var (comma-separated, ordered), legacy `SMS_TRANSPORT`+`FALLBACK` pair still works, auto-chain from all configured transports otherwise. `sendSMS()` walks the chain until success and returns per-transport `attempts`. `getTransportChain()`, `checkTransportChain()` exported.
+- `server/index.ts`: BlueBubbles `message-send-error` webhook now redispatches the failed message through the remaining chain (once per guid). `GET /api/sms-transport` returns full chain health + gmail status.
+- `server/lib/gmailInbound.ts` (NEW): polls Gmail every 5 min, matches senders against `outreach_targets.email`, feeds replies into the same inbound pipeline as SMS (drafts + morning brief), watermark in `system_kv`.
+- `server/lib/outreachScheduler.ts`: when ALL SMS transports fail and the target has an email, the outreach message is delivered via Gmail instead.
+- `server/lib/db.ts`: `system_kv` table; `outreach_log.transport` column.
+
+---
+
 ## Data Architecture
 
 ### Key Types (`src/data.ts`)

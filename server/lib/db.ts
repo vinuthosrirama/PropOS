@@ -456,7 +456,16 @@ async function migrate(): Promise<void> {
       FROM pitches
       GROUP BY agent_id`],
 
-    // ── Phase 6: Data maintenance (retention / pruning — safe, idempotent)
+    // ── Phase 6: System key-value store (gmail inbound watermark, misc state)
+
+    ["CREATE system_kv", `
+      CREATE TABLE IF NOT EXISTS system_kv (
+        key        TEXT PRIMARY KEY,
+        value      TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["ALTER outreach_log: transport", `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS transport TEXT`],
 
     // ── Phase 7: Data maintenance (retention / pruning — safe, idempotent)
 

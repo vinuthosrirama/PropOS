@@ -139,6 +139,8 @@ export interface BBIncomingMessage {
 export interface BBSendError {
   guid:   string
   reason: string
+  to:     string   // recipient phone if recoverable from payload, else ""
+  body:   string   // original message text if present, else ""
 }
 
 /**
@@ -177,5 +179,15 @@ export function parseBBSendError(payload: unknown): BBSendError | null {
   const reason = (data.error as string) ?? (data.description as string) ?? "unknown"
 
   if (!guid) return null
-  return { guid, reason }
+
+  // Recover recipient + body for redispatch via the next transport.
+  // Chat guid format: "iMessage;-;+61412345678" or "SMS;-;+61412345678"
+  const body   = (data.text as string) ?? ""
+  const handle = data.handle as Record<string, unknown> | undefined
+  const chats  = (data.chats as Array<Record<string, unknown>>) ?? []
+  const chatGuid = (chats[0]?.guid as string) ?? ""
+  const to = ((handle?.address as string) || "")
+    || (chatGuid.includes(";-;") ? chatGuid.split(";-;").pop() ?? "" : "")
+
+  return { guid, reason, to, body }
 }

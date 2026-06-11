@@ -1040,7 +1040,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
                 {": "}
                 {slmWarnings.map(({ p, pct }) => `${p.address} (${pct}%)`).join(" · ")}
                 {" "}Outreach quality improves when property data is complete.{" "}
-                <span style={{ textDecoration: "underline", cursor: "pointer" }} onClick={e => { e.stopPropagation(); onSettings() }}>
+                <span style={{ textDecoration: "underline", cursor: "pointer" }} onClick={e => { e.stopPropagation(); onSettings?.() }}>
                   Update in Settings →
                 </span>
               </span>
