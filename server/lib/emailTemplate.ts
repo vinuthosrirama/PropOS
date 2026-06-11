@@ -44,7 +44,16 @@ export function buildPitchContentHtml(payload: PriceUpdatePayload, color: string
       <tr>${statCells.join("")}</tr>
     </table>`
 
-  return compsHtml + statsHtml
+  const demand = payload.buyerDemand
+  const demandHtml = !demand ? "" : `
+    <table cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 20px 0;background:${color}11;border:1px solid ${color}33;border-radius:6px;">
+      <tr><td style="padding:14px 16px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:${color};text-transform:uppercase;font-family:Arial,sans-serif;margin-bottom:6px;">Buyer demand</div>
+        <div style="font-size:13px;color:#333;font-family:Arial,sans-serif;line-height:1.5;">${demand.detail}</div>
+      </td></tr>
+    </table>`
+
+  return demandHtml + compsHtml + statsHtml
 }
 
 // ---------------------------------------------------------------------------

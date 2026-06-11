@@ -69,3 +69,23 @@ Cross-conversation handoff file. Every Claude session appends a dated entry at t
 **Half-done / deferred (from PITCH_SUITE_PLAN.md):** bulk pitch generation + worker pool, regenerate (single + bulk), Digital Introduction / Listing Proposal templates, view-tracking Inbox badge (`v_pitch_views`), `property.addvantage.site` landing page (blocked on Cloudflare Pages project decision — plan open question #10), Tom Panos scripts carousel.
 
 **Next step:** pick up the deferred Pitch Suite items above, starting with view-tracking Inbox badge or bulk generation.
+
+---
+
+## 2026-06-11 (cont.) — Flywheel: re-engage past vendors, cross-pitch buyer demand
+
+**Built:**
+- `src/lib/flywheel.ts`: `recommendListingForBuyer` (matches a re-engaged "buyer→seller" contact against the agent's active listings by suburb/type/price proximity) and `findBuyerDemand` (finds another portfolio buyer searching in a vendor's suburb+property type, for "we already have a buyer for this" pitch evidence).
+- `src/data/pastBuyers.ts`: extended `BuyerStatus` type to include `"buyer→landlord" | "buyer→seller" | "renter→buyer" | "buyer→downsizer"` (previously used via casts/labels but not in the type).
+- DemoView VendorPortfolioPage: "+ Add past vendor" button + modal (name, suburb they bought in, rough purchase year, property type, optional phone/email). Estimates a synthetic purchase price by working backward from the agent's average active-listing price in that suburb/type at ~6% p.a. growth, tags the contact `buyer→seller`, and renders a "→ Recommend: {listing}" badge in the CRM list via `recommendListingForBuyer`.
+- VendorProfilePage: computes `buyerDemand` via `findBuyerDemand` (only when navigated with `allEntries`, i.e. via the segmented Vendor Dashboard) and sends it to `/api/pitches`.
+- `server/lib/pitchGenerator.ts`, `server/lib/emailTemplate.ts`, `src/components/pitch/PriceUpdateTemplate.tsx`: added optional `buyerDemand`/`PitchBuyerDemand` field + "Buyer demand" card, following the existing `marketStats` pattern.
+- **Bug fixed:** `server/routes/pitches.ts` `CreatePitchBody` didn't declare or forward `buyerDemand` to `generatePriceUpdatePitch`, so the field was silently dropped. Added the field to the interface and the call.
+
+**Verified (Preview screenshots):** Added "David Hollis" (Officer, House, ~2020) via the new modal — appeared in CRM (89 contacts) with badge "→ Recommend: 3 Fairholme Boulevard, Berwick". Generated a Price Update pitch for James & Lisa Thompson (Berwick, House) via the segmented Vendor Dashboard flow — "Buyer demand" card rendered: "Wei is actively looking for a 4-bedroom house in Berwick, exactly like yours." Also restarted the local backend (was running stale code from before this session's earlier edits — `tsx` without `--watch` doesn't hot-reload).
+
+**tsc:** root + server clean except the same 11 pre-existing errors (SettingsView.tsx, DemoView.tsx:1043, outreachTargets.ts:120) — none touched this session.
+
+**Deployed:** rebuilt `dist/`, copied to `server/public/`, deployed to `propos-demo` (Cloudflare Pages).
+
+**Next step:** none queued — flywheel feature complete end-to-end (BuyerOS recommendation + VendorOS buyer-demand pitch evidence using the same lead).

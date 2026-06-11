@@ -16,6 +16,7 @@ import {
   type PitchAgentInfo,
   type PitchCompSale,
   type PitchMarketStats,
+  type PitchBuyerDemand,
   type PriceUpdatePayload,
 } from "../lib/pitchGenerator.js"
 
@@ -57,6 +58,7 @@ interface CreatePitchBody {
   suburb: string
   comparableSales?: PitchCompSale[]
   marketStats?: PitchMarketStats
+  buyerDemand?: PitchBuyerDemand
   voiceContext?: string
   cachedCoverNote?: string
 }
@@ -79,6 +81,7 @@ authedRouter.post("/", async (req: Request, res: Response) => {
     suburb: body.suburb,
     comparableSales: body.comparableSales,
     marketStats: body.marketStats,
+    buyerDemand: body.buyerDemand,
     voiceContext: body.voiceContext,
     cachedCoverNote: body.cachedCoverNote,
   })

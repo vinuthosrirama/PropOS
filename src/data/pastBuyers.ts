@@ -8,6 +8,7 @@
 // current financial position and life stage to decide who to approach about selling.
 
 export type BuyerStatus = "owner-occupier" | "investor" | "renter" | "unknown"
+  | "buyer→landlord" | "buyer→seller" | "renter→buyer" | "buyer→downsizer"
 
 export interface PastBuyer {
   id: number

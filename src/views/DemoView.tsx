@@ -35,6 +35,7 @@ import { authFetch } from "../lib/authFetch"
 import { buildVoiceContext, loadCorpus } from "../lib/voiceContext"
 import { DEMO_FALLBACK_LEADS } from "../lib/demoFallback"
 import { getCachedOutreach } from "../lib/cachedOutreach"
+import { recommendListingForBuyer, findBuyerDemand } from "../lib/flywheel"
 import { useVoiceMemo } from "../hooks/useVoiceMemo"
 import {
   getLeadKnowledge, upsertLeadTranscript,
@@ -3310,6 +3311,11 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
   const [sheetSource, setSheetSource] = useState<"demo" | "sheet">("demo")
   const [analysing, setAnalysing] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showFlywheelModal, setShowFlywheelModal] = useState(false)
+  const [flywheelForm, setFlywheelForm] = useState({ name: "", suburb: "", purchaseYear: "", propertyType: "House" as "House" | "Unit" | "Townhouse", phone: "", email: "" })
+  const [flywheelSaving, setFlywheelSaving] = useState(false)
+  const [flywheelSaved, setFlywheelSaved] = useState(false)
+  const { active: activeListings } = getPortfolioForAgent(agent)
   const [addForm, setAddForm] = useState<AddContactForm>(EMPTY_FORM)
   const [addSaving, setAddSaving] = useState(false)
   const [addSaved, setAddSaved] = useState(false)
@@ -3473,6 +3479,61 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
     setAddSaved(true)
     setAddSaving(false)
     setTimeout(() => { setShowAddModal(false); setAddForm(EMPTY_FORM); setAddSaved(false); addVoice.reset(); setAddVoiceStage("idle") }, 1200)
+  }
+
+  // Flywheel: bring a previous vendor's name into the system. Re-run them
+  // through BuyerOS (recommend a new listing) and VendorOS (pitch them on
+  // selling, citing buyer demand). Estimate purchase price from the agent's
+  // active listings in that suburb/type since we don't have their real contract.
+  const handleAddFlywheelVendor = async () => {
+    const { name, suburb, purchaseYear, propertyType } = flywheelForm
+    if (!name || !suburb || !purchaseYear) return
+    setFlywheelSaving(true)
+
+    const candidates = activeListings.filter(l => l.suburb.toLowerCase() === suburb.toLowerCase() && l.type === propertyType)
+    const pool = candidates.length > 0 ? candidates : activeListings.filter(l => l.type === propertyType)
+    const samples = pool.length > 0 ? pool : activeListings
+    const avgPrice = samples.length > 0
+      ? Math.round(samples.reduce((s, l) => s + (l.priceMin ?? l.price), 0) / samples.length)
+      : 700000
+    // Roughly back out a purchase price assuming ~6% p.a. growth since the rough purchase year
+    const yearsHeld = Math.max(0, 2026 - parseInt(purchaseYear, 10))
+    const estimatedPurchasePrice = Math.round(avgPrice / Math.pow(1.06, yearsHeld) / 1000) * 1000
+
+    const newContact = {
+      id: Date.now(),
+      name,
+      phone: flywheelForm.phone,
+      email: flywheelForm.email,
+      purchaseAddress: `Previous property, ${suburb}`,
+      suburb,
+      purchaseDate: `${purchaseYear}-06-01`,
+      purchasePrice: estimatedPurchasePrice,
+      deposit: Math.round(estimatedPurchasePrice * 0.2),
+      propertyType,
+      beds: propertyType === "Unit" ? 2 : 4,
+      baths: 2,
+      land: propertyType === "Unit" ? 0 : 500,
+      status: "buyer→seller" as import("../data/pastBuyers").BuyerStatus,
+      notes: `Re-engaged via flywheel: previously bought in ${suburb} (~${purchaseYear}). Recommend a new listing and pitch them on selling their current property.`,
+      lastContactDate: "",
+      agentName: agent.name,
+    }
+    try {
+      await authFetch(apiUrl("/api/add-contact"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newContact),
+      })
+    } catch { /* add locally anyway */ }
+    setBuyers(prev => [...prev, newContact])
+    setFlywheelSaved(true)
+    setFlywheelSaving(false)
+    setTimeout(() => {
+      setShowFlywheelModal(false)
+      setFlywheelForm({ name: "", suburb: "", purchaseYear: "", propertyType: "House", phone: "", email: "" })
+      setFlywheelSaved(false)
+    }, 1200)
   }
 
   // Map a raw string grid (header row + data rows) to contact drafts.
@@ -3738,8 +3799,16 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
           {sheetSource === "demo" && !sheetLoading && (
             <div style={{ fontSize: 10, color: C.faint, padding: "2px 8px", background: C.bg3, borderRadius: 6 }}>Demo data</div>
           )}
-          <button onClick={() => setShowAddModal(true)} style={{
+          <button onClick={() => setShowFlywheelModal(true)} style={{
             marginLeft: "auto", padding: "5px 14px", borderRadius: 8,
+            background: "transparent", border: `1px solid ${theme.primary}55`,
+            color: theme.primary, fontSize: 11, fontWeight: 700,
+            cursor: "pointer", fontFamily: FONT,
+          }}>
+            + Add past vendor
+          </button>
+          <button onClick={() => setShowAddModal(true)} style={{
+            padding: "5px 14px", borderRadius: 8,
             background: theme.primary, border: "none",
             color: "#ffffff", fontSize: 11, fontWeight: 700,
             cursor: "pointer", fontFamily: FONT,
@@ -3796,6 +3865,14 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
                     )}
                   </div>
                   <div style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{buyer.purchaseAddress}</div>
+                  {buyer.status === "buyer→seller" && (() => {
+                    const rec = recommendListingForBuyer(buyer, activeListings)
+                    return rec ? (
+                      <div title={rec.reason} style={{ fontSize: 10, color: theme.primary, marginTop: 2, fontWeight: 600 }}>
+                        → Recommend: {rec.listing.address}, {rec.listing.suburb}
+                      </div>
+                    ) : null
+                  })()}
                   {nearbyAlert && (
                     <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 2 }}>
                       {nearbyAlert.beds}bd at {nearbyAlert.address} sold {fmtDollar(nearbyAlert.soldPrice)}
@@ -4255,6 +4332,108 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
                   </div>
                 </div>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Past Vendor modal — flywheel: BuyerOS recommendation + VendorOS pitch */}
+      <AnimatePresence>
+        {showFlywheelModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{
+              position: "fixed", inset: 0, zIndex: 200,
+              background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)",
+              display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+            }}
+            onClick={() => setShowFlywheelModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.93, y: 16 }} animate={{ scale: 1, y: 0 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: C.bg2, borderRadius: 18, border: `1px solid ${C.border}`,
+                padding: "28px 28px", maxWidth: 480, width: "100%",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 3 }}>Add a past vendor</div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+                    Bring a previous client back into the loop. We'll recommend a current listing for them to buy, and flag them as buyer demand when you pitch nearby vendors.
+                  </div>
+                </div>
+                <button onClick={() => setShowFlywheelModal(false)} style={{
+                  background: "none", border: "none", color: C.faint, fontSize: 18,
+                  cursor: "pointer", padding: "0 4px", lineHeight: 1,
+                }}>✕</button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 18 }}>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Name *</label>
+                  <input value={flywheelForm.name} onChange={e => setFlywheelForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="Sarah Chen"
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Suburb they bought in *</label>
+                  <input value={flywheelForm.suburb} onChange={e => setFlywheelForm(f => ({ ...f, suburb: e.target.value }))}
+                    placeholder="Officer"
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Rough purchase year *</label>
+                  <input value={flywheelForm.purchaseYear} onChange={e => setFlywheelForm(f => ({ ...f, purchaseYear: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                    placeholder="2021"
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Property type</label>
+                  <select value={flywheelForm.propertyType} onChange={e => setFlywheelForm(f => ({ ...f, propertyType: e.target.value as "House" | "Unit" | "Townhouse" }))}
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  >
+                    <option value="House">House</option>
+                    <option value="Townhouse">Townhouse</option>
+                    <option value="Unit">Unit</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Phone (optional)</label>
+                  <input value={flywheelForm.phone} onChange={e => setFlywheelForm(f => ({ ...f, phone: e.target.value }))}
+                    placeholder="0412 345 678"
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Email (optional)</label>
+                  <input value={flywheelForm.email} onChange={e => setFlywheelForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="sarah@email.com"
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                <button onClick={() => setShowFlywheelModal(false)} style={{ flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Cancel</button>
+                <button
+                  onClick={handleAddFlywheelVendor}
+                  disabled={flywheelSaving || flywheelSaved || !flywheelForm.name || !flywheelForm.suburb || !flywheelForm.purchaseYear}
+                  style={{
+                    flex: 2, padding: "12px", borderRadius: 10, border: "none",
+                    background: flywheelSaved ? C.green : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                    color: "white", fontSize: 14, fontWeight: 700,
+                    cursor: flywheelSaving || flywheelSaved ? "default" : "pointer", fontFamily: FONT,
+                    opacity: (!flywheelForm.name || !flywheelForm.suburb || !flywheelForm.purchaseYear) ? 0.5 : 1,
+                  }}
+                >
+                  {flywheelSaved ? "✓ Added" : flywheelSaving ? "Saving…" : "Add to CRM"}
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -6852,6 +7031,13 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   })
 
   const { buyer, segment } = entry
+
+  // Flywheel: surface buyer demand from elsewhere in the portfolio when
+  // pitching this vendor a Price Update — "we already have a buyer for this".
+  const buyerDemand = allEntries
+    ? findBuyerDemand(allEntries.map(e => e.buyer), buyer)
+    : null
+
   const pl = PIPELINE_LABELS[segment.pipeline]
   const fname = buyer.name.split("&")[0].split(" ")[0].trim()
   const agentFirst = agent.nickname ?? agent.name.split(" ")[0]
@@ -7860,6 +8046,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   clearanceRate: range.clearanceRate,
                   annualGrowthPct: range.demandScore > 7 ? 6.5 : 5.8,
                 },
+                buyerDemand: buyerDemand ?? undefined,
                 voiceContext: buildVoiceContext(agent.voiceProfile, loadCorpus()),
               }),
             }).then(r => r.json()) as { payload?: PriceUpdatePayload; url?: string }

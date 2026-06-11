@@ -30,12 +30,18 @@ export interface PitchRecipientInfo {
   suburb: string
 }
 
+export interface PitchBuyerDemand {
+  name: string
+  detail: string
+}
+
 export interface PriceUpdatePayload {
   recipient?: PitchRecipientInfo
   coverNote?: string
   comparableSales?: PitchCompSale[]
   agentCard?: PitchAgentInfo
   marketStats?: PitchMarketStats
+  buyerDemand?: PitchBuyerDemand
 }
 
 function fmtPrice(n: number): string {
@@ -86,6 +92,22 @@ export default function PriceUpdateTemplate({ payload }: { payload: PriceUpdateP
                 {para}
               </p>
             ))}
+          </div>
+        )}
+
+        {/* Buyer demand */}
+        {payload.buyerDemand && (
+          <div style={{
+            background: `${theme.gradient[0]}1a`, backdropFilter: "blur(8px)",
+            borderRadius: 16, border: `1px solid ${theme.gradient[0]}55`,
+            padding: 20, marginBottom: 24,
+          }}>
+            <div style={{ fontSize: 13, color: "#A6DAFF", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
+              Buyer demand
+            </div>
+            <p style={{ fontSize: 15, lineHeight: 1.6, color: "#D6DCE5", margin: 0 }}>
+              {payload.buyerDemand.detail}
+            </p>
           </div>
         )}
 
