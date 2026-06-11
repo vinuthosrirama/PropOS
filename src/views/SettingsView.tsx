@@ -572,8 +572,9 @@ export default function SettingsView({ agent, vendorSettings, onVendorSettingsCh
   const [savedFlash, setSavedFlash] = useState(false)
   const [openSections, setOpenSections] = useState<Record<number, Set<number>>>({})
   const SETTINGS_TAB_KEY = `propOS_settingsTab_${agent.name.replace(/\s+/g, "_")}`
-  const [settingsTab, setSettingsTab] = useState<"slm" | "voice" | "comms" | "listings" | "connections" | "display">(() => {
-    try { return (localStorage.getItem(SETTINGS_TAB_KEY) as typeof settingsTab) ?? "slm" } catch { return "slm" }
+  type SettingsTab = "slm" | "voice" | "comms" | "listings" | "connections" | "display"
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(() => {
+    try { return (localStorage.getItem(SETTINGS_TAB_KEY) as SettingsTab) ?? "slm" } catch { return "slm" }
   })
   const navigateTab = (t: typeof settingsTab) => {
     setSettingsTab(t)
@@ -1322,7 +1323,7 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
               <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 4 }}>{label}</div>
               <input
                 type="password"
-                value={(agentBoxCreds as Record<string, string>)[key] ?? ""}
+                value={(agentBoxCreds as unknown as Record<string, string>)[key] ?? ""}
                 onChange={e => saveAgentBoxCreds({ ...agentBoxCreds, [key]: e.target.value, lastTestedOk: undefined })}
                 placeholder={placeholder}
                 style={{
@@ -1402,7 +1403,7 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
   )
 }
 
-function IntegrationsPanel() {
+export function IntegrationsPanel() {
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
