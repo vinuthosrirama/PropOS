@@ -76,6 +76,8 @@ export default function OutreachQueue({ items: initial, agentName: _agentName, s
 
   const approved      = items.filter(i => i.approved)
   const approvedCount = approved.length
+  const estGCI        = approvedCount * 2000
+  const fmtGCI        = (v: number) => v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${v}`
 
   const isMobile = bp === "mobile"
 
@@ -83,7 +85,7 @@ export default function OutreachQueue({ items: initial, agentName: _agentName, s
     <div style={{ maxWidth: 960, margin: "0 auto", padding: isMobile ? "0 16px" : "0 24px" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <button onClick={onBack} style={{
           background: "none", border: `1px solid ${C.border}`,
           color: C.muted, borderRadius: 8, padding: "8px 14px",
@@ -123,6 +125,46 @@ export default function OutreachQueue({ items: initial, agentName: _agentName, s
           </motion.button>
         </div>
       </div>
+
+      {/* Mass send scale counter */}
+      {approvedCount > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            background: `linear-gradient(135deg, ${theme.gradient[0]}1A, ${theme.gradient[1]}0D)`,
+            border: `1px solid ${theme.primary}33`,
+            borderRadius: 12, padding: "12px 18px", marginBottom: 16,
+            flexWrap: "wrap", gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <motion.div
+              animate={{ opacity: [1, 0.4, 1] }}
+              transition={{ duration: 1.8, repeat: Infinity }}
+              style={{ width: 7, height: 7, borderRadius: "50%", background: C.green, flexShrink: 0 }}
+            />
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: FONT }}>
+              Sending to <span style={{ color: theme.primary }}>{approvedCount}</span> contact{approvedCount !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.green, fontFamily: FONT, lineHeight: 1 }}>
+                {fmtGCI(estGCI)}+
+              </div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 2, fontFamily: FONT }}>Est. GCI at stake</div>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: theme.primary, fontFamily: FONT, lineHeight: 1 }}>
+                4-6x
+              </div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 2, fontFamily: FONT }}>higher response rate</div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Queue items */}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -272,9 +314,14 @@ export default function OutreachQueue({ items: initial, agentName: _agentName, s
             boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
           }}
         >
-          <div style={{ fontSize: 14, color: C.text }}>
-            <strong style={{ color: theme.primary }}>{approvedCount}</strong> contact{approvedCount !== 1 ? "s" : ""} approved ·{" "}
-            <span style={{ color: C.muted }}>{items.length - approvedCount} skipped</span>
+          <div>
+            <div style={{ fontSize: 14, color: C.text, fontFamily: FONT }}>
+              <strong style={{ color: theme.primary }}>{approvedCount}</strong> contact{approvedCount !== 1 ? "s" : ""} approved ·{" "}
+              <span style={{ color: C.muted }}>{items.length - approvedCount} skipped</span>
+            </div>
+            <div style={{ fontSize: 12, color: C.green, marginTop: 2, fontFamily: FONT }}>
+              Est. GCI: {fmtGCI(estGCI)}+
+            </div>
           </div>
           <motion.button
             whileHover={{ scale: 1.02 }}
