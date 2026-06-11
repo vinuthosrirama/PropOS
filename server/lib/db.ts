@@ -245,6 +245,15 @@ async function migrate(): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`],
 
+    ["CREATE agent_state", `
+      CREATE TABLE IF NOT EXISTS agent_state (
+        agent_id   TEXT NOT NULL,
+        key        TEXT NOT NULL,
+        value      JSONB NOT NULL DEFAULT '{}',
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (agent_id, key)
+      )`],
+
     ["CREATE shortcut_queue", `
       CREATE TABLE IF NOT EXISTS shortcut_queue (
         id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
