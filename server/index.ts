@@ -40,6 +40,7 @@ import slmAnswerRouter from "./routes/slm-answer.js"
 import slmAnswerBatchRouter from "./routes/slm-answer-batch.js"
 import addContactRouter from "./routes/add-contact.js"
 import importContactsRouter from "./routes/import-contacts.js"
+import agentStateRouter from "./routes/agent-state.js"
 import addLeadRouter from "./routes/add-lead.js"
 import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
@@ -211,6 +212,7 @@ app.use("/api/conversations",    conversationsRouter)
 app.use("/api/reply-agent",      replyAgentRouter)
 app.use("/api/add-contact",      addContactRouter)
 app.use("/api/import-contacts",  importContactsRouter)
+app.use("/api/agent-state",      agentStateRouter)
 app.use("/api/add-lead",         addLeadRouter)
 app.use("/api/parse-notes",      parseNotesRouter)
 app.use("/api/pitches",          pitchesAuthedRouter)

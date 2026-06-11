@@ -9,6 +9,7 @@ import { readPropertySLMFromSheet, writeSLMFieldToSheet, sheetsConnected } from 
 import AnalyticsDashboard from "../components/AnalyticsDashboard"
 import { loadCorpus, saveCorpus, type TrainingEntry } from "../lib/voiceContext"
 import { authFetch } from "../lib/authFetch"
+import { loadAgentState, saveAgentState } from "../lib/agentState"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1782,12 +1783,21 @@ function CommsPanel({ agent }: { agent: AgentProfile }) {
 
   void agent  // used for future personalisation
 
+  // Read back from the server so settings saved on another device/browser apply here too.
+  useEffect(() => {
+    loadAgentState("comm_settings", settings).then(remote => {
+      setSettings(prev => ({ ...prev, ...remote }))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function update<K extends keyof CommSettings>(key: K, val: CommSettings[K]) {
     setSettings(prev => ({ ...prev, [key]: val }))
   }
 
   function handleSave() {
     saveCommSettings(settings)
+    saveAgentState("comm_settings", settings)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -1982,10 +1992,19 @@ function ListingsPanel({ agent }: { agent: AgentProfile }) {
   const [featuredId, setFeaturedId] = useState<number | null>(loadFeaturedId)
   const [flash, setFlash] = useState<number | null>(null)
 
+  // Read back from the server so the featured listing applies on other devices/browsers too.
+  useEffect(() => {
+    loadAgentState<number | null>("featured_listing_id", featuredId).then(remote => {
+      if (remote !== null && remote !== undefined) setFeaturedId(remote)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function markFeatured(id: number) {
     const next = featuredId === id ? null : id
     setFeaturedId(next)
     try { localStorage.setItem(FEATURED_LISTING_KEY, String(next ?? "")) } catch {}
+    saveAgentState("featured_listing_id", next)
     setFlash(id)
     setTimeout(() => setFlash(null), 1500)
   }
