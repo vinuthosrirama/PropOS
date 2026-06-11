@@ -55,6 +55,40 @@ export interface PriceUpdatePayload {
   buyerDemand?: PitchBuyerDemand
 }
 
+export interface AppraisalProperty {
+  address:      string
+  suburb:       string
+  beds:         number
+  baths:        number
+  parking:      number
+  landSqm?:     number
+  propertyType: "House" | "Unit" | "Townhouse"
+}
+
+export interface AppraisalPriceGuide {
+  low:        number
+  mid:        number
+  high:       number
+  method:     string      // e.g. "Domain AVM + comparable analysis"
+  confidence: string      // "high" | "medium" | "low" | "estimate"
+}
+
+export interface AppraisalPayload {
+  property:         AppraisalProperty
+  priceGuide:       AppraisalPriceGuide
+  comparableSales?: PitchCompSale[]
+  agentCard:        PitchAgentInfo
+  executiveSummary: string
+  suburbStats?: {
+    medianHouse:       number
+    annualGrowthPct:   number
+    avgDaysOnMarket:   number
+    clearanceRate:     number
+  }
+  disclaimer:   string
+  generatedAt:  string
+}
+
 export interface GeneratePriceUpdateParams {
   agent: PitchAgentInfo
   recipientName: string

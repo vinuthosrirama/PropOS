@@ -29,6 +29,7 @@ import {
   type OutreachTargetRow,
 } from "./outreachAgent.js"
 import { runOptimisationCycle } from "./promptOptimiser.js"
+import { runWeeklyVendorReports } from "./vendorReportGenerator.js"
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,11 @@ export function startOutreachScheduler(): void {
     void runOptimisationCycle("outreach_system")
   }, { timezone: "Australia/Melbourne" })
 
+  // Sunday 7:00am Melbourne time — weekly vendor campaign reports
+  cron.schedule("0 7 * * 0", () => {
+    void runWeeklyVendorReports()
+  }, { timezone: "Australia/Melbourne" })
+
   // Every 5 minutes — capture email replies from outreach targets
   if (gmailConfigured()) {
     cron.schedule("*/5 * * * *", () => {
@@ -73,7 +79,7 @@ export function startOutreachScheduler(): void {
     console.log("  OutreachScheduler: Gmail reply capture running (every 5 min)")
   }
 
-  console.log("  OutreachScheduler: running (9am brief, 10am sends, Sunday 2am optimiser, Melbourne time)")
+  console.log("  OutreachScheduler: running (9am brief, 10am sends, Sunday 2am optimiser, Sunday 7am vendor reports, Melbourne time)")
 }
 
 // ── Morning brief ─────────────────────────────────────────────────────────────
