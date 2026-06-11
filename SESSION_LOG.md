@@ -4,6 +4,19 @@ Cross-conversation handoff file. Every Claude session appends a dated entry at t
 
 ---
 
+## 2026-06-11 (later still) — pitch email embeds content, no more dead localhost links
+
+**Built (commit `867517b`):**
+- `server/lib/emailTemplate.ts`: new `buildPitchContentHtml(payload, color)` renders comparable sales table + suburb market snapshot as email-safe branded HTML; `buildEmailHTML` gained optional `contentHtml` injected after the property box.
+- `server/routes/send.ts`: `/api/send` accepts optional `pitchPayload` and embeds the block in the email.
+- `DemoView.tsx` `handleSendPitch`: detects localhost pitch URLs; email copy says "the full breakdown is below" (link only added on a real domain), SMS copy points to the email instead of a dead URL, `pitchPayload` passed to `/api/send`.
+
+**Verified:** live send via Preview (SMS sid + Gmail messageId returned); sent email read back via Gmail (thread `19eb407b9d405589`) — no localhost anywhere, comps ($860K/$900K/$855K Officer sales) + market snapshot ($870K median, 26 DOM, 74% clearance, 5.8% growth) embedded, Peake purple branding and CK signature intact; rendered HTML screenshot-verified via Preview. tsc: server 0 errors, root 11 (all pre-existing).
+
+**Deploy state:** pushed to origin/main (Railway backend auto-deploys). Cloudflare Pages deploy attempt was denied by the permission classifier (not explicitly user-authorized this session); curl confirms propos.addvantage.site still serves the previous bundle `index-CWk23ErI.js`. When authorized: `npx vite build && npx wrangler pages deploy dist --project-name propos-demo --branch main`.
+
+---
+
 ## 2026-06-11 (later) — CRM import connector + pitch-opened call-now climax
 
 **Built (commit `a7472d0`):**
