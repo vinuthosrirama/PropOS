@@ -1,11 +1,19 @@
 /**
- * Pitch Suite — Price Update pitches.
+ * Pitch Suite routes.
  *
- * POST /api/pitches              (authed)  — generate + create a pitch, returns slug
- * GET  /api/pitches/by-slug/:slug (public) — fetch a pitch for the public /p/:slug page
- * POST /api/pitches/:id/view      (public) — record a view (Realtair's "notified when opened")
+ * Public routes (registered before requireAuth in index.ts):
+ *   GET  /api/pitches/by-slug/:slug    — fetch pitch for /p/:slug page
+ *   POST /api/pitches/:id/view         — record a view
+ *   POST /api/pitches/:token/accept    — vendor/buyer accepts the proposal
  *
- * The two public routes are registered before requireAuth in index.ts.
+ * Authed routes (registered after requireAuth):
+ *   POST /api/pitches                  — generate + create a price_update pitch
+ *   POST /api/pitches/appraisal        — generate an instant CMA appraisal pitch
+ *   POST /api/pitches/:id/send-email   — email pitch link to vendor
+ *   GET  /api/pitches                  — list pitches for the current agent
+ *   GET  /api/vendor-reports           — list vendor reports for the current agent
+ *   POST /api/vendor-reports/generate  — manually trigger a vendor report
+ *   POST /api/vendor-reports/:id/send  — resend a failed/draft vendor report
  */
 
 import { Router, type Request, type Response } from "express"
@@ -18,113 +26,51 @@ import {
   type PitchMarketStats,
   type PitchBuyerDemand,
   type PriceUpdatePayload,
+  type AppraisalPayload,
+  type AppraisalProperty,
 } from "../lib/pitchGenerator.js"
+import { generateAppraisalPayload } from "../lib/appraisalGenerator.js"
+import { sendVendorReport, runWeeklyVendorReports, type VendorReportContext, type VendorReportRow } from "../lib/vendorReportGenerator.js"
+import { sendEmail, gmailConfigured } from "../lib/gmail.js"
 
-const publicRouter = Router()
-const authedRouter = Router()
+const publicRouter  = Router()
+const authedRouter  = Router()
+
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 interface PitchRow {
-  id: string
-  type: string
-  slug: string
-  agent_id: string
-  lead_id: string | null
-  property_ref: string | null
-  payload_json: PriceUpdatePayload
-  status: string
-  view_count: number
+  id:              string
+  type:            string
+  slug:            string
+  agent_id:        string
+  lead_id:         string | null
+  property_ref:    string | null
+  payload_json:    PriceUpdatePayload | AppraisalPayload
+  status:          string
+  view_count:      number
   first_viewed_at: string | null
-  last_viewed_at: string | null
-  created_at: string
-  regenerated_at: string | null
+  last_viewed_at:  string | null
+  created_at:      string
+  regenerated_at:  string | null
+  // acceptance
+  accepted_at:      string | null
+  accepted_by:      string | null
+  accepted_ip:      string | null
+  acceptance_token: string | null
+  // vendor
+  vendor_email:     string | null
+  vendor_name:      string | null
 }
 
 function makeSlug(): string {
   return randomBytes(6).toString("base64url")
 }
 
-// In-memory fallback store, used when DATABASE_URL isn't set (local/demo mode) —
-// mirrors the "DB-free endpoint" pattern used elsewhere so /p/:slug works in dev.
+// In-memory fallback for DB-free (demo/dev) mode
 const memPitches = new Map<string, PitchRow>()
 
-// ── POST /api/pitches (authed) ──────────────────────────────────────────────
-interface CreatePitchBody {
-  type?: string
-  leadId?: string
-  propertyRef?: string
-  agent: PitchAgentInfo
-  recipientName: string
-  propertyAddress: string
-  suburb: string
-  comparableSales?: PitchCompSale[]
-  marketStats?: PitchMarketStats
-  buyerDemand?: PitchBuyerDemand
-  voiceContext?: string
-  cachedCoverNote?: string
-}
+// ── GET /api/pitches/by-slug/:slug  (public) ──────────────────────────────────
 
-authedRouter.post("/", async (req: Request, res: Response) => {
-  const body = req.body as CreatePitchBody
-  const type = body.type ?? "price_update"
-
-  if (type !== "price_update") {
-    return res.status(400).json({ error: `Unsupported pitch type: ${type}` })
-  }
-  if (!body.agent || !body.recipientName || !body.propertyAddress || !body.suburb) {
-    return res.status(400).json({ error: "Missing required fields: agent, recipientName, propertyAddress, suburb" })
-  }
-
-  const payload = await generatePriceUpdatePitch({
-    agent: body.agent,
-    recipientName: body.recipientName,
-    propertyAddress: body.propertyAddress,
-    suburb: body.suburb,
-    comparableSales: body.comparableSales,
-    marketStats: body.marketStats,
-    buyerDemand: body.buyerDemand,
-    voiceContext: body.voiceContext,
-    cachedCoverNote: body.cachedCoverNote,
-  })
-
-  const agentId = req.agentId ? String(req.agentId) : "default"
-  const slug = makeSlug()
-
-  let row: PitchRow | null
-
-  if (isDbConnected()) {
-    row = await queryOne<PitchRow>(
-      `INSERT INTO pitches (type, slug, agent_id, lead_id, property_ref, payload_json, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'draft')
-       RETURNING *`,
-      [type, slug, agentId, body.leadId ?? null, body.propertyRef ?? null, JSON.stringify(payload)],
-    )
-  } else {
-    row = {
-      id: slug,
-      type, slug, agent_id: agentId,
-      lead_id: body.leadId ?? null,
-      property_ref: body.propertyRef ?? null,
-      payload_json: payload,
-      status: "draft",
-      view_count: 0,
-      first_viewed_at: null,
-      last_viewed_at: null,
-      created_at: new Date().toISOString(),
-      regenerated_at: null,
-    }
-    memPitches.set(slug, row)
-  }
-
-  if (!row) return res.status(503).json({ error: "Database not available" })
-
-  // Always resolve to the production domain — req.headers.origin/host can be a
-  // Railway internal hostname or a Cloudflare *.pages.dev preview URL, neither
-  // of which the recipient can reach.
-  const base = process.env.BASE_URL ?? "https://propos.addvantage.site"
-  res.json({ id: row.id, slug: row.slug, type: row.type, payload, url: `${base}/p/${row.slug}` })
-})
-
-// ── GET /api/pitches/by-slug/:slug (public) ─────────────────────────────────
 publicRouter.get("/by-slug/:slug", async (req: Request, res: Response) => {
   const row = isDbConnected()
     ? await queryOne<PitchRow>(`SELECT * FROM pitches WHERE slug = $1`, [req.params.slug])
@@ -132,16 +78,24 @@ publicRouter.get("/by-slug/:slug", async (req: Request, res: Response) => {
   if (!row) return res.status(404).json({ error: "Pitch not found" })
 
   res.json({
-    id: row.id,
-    type: row.type,
-    payload: row.payload_json,
-    status: row.status,
-    viewCount: row.view_count,
-    createdAt: row.created_at,
+    id:              row.id,
+    type:            row.type,
+    payload:         row.payload_json,
+    status:          row.status,
+    viewCount:       row.view_count,
+    createdAt:       row.created_at,
+    // acceptance (frontend needs token to post accept, name/time to show confirmed state)
+    acceptanceToken: row.acceptance_token ?? null,
+    acceptedAt:      row.accepted_at ?? null,
+    acceptedBy:      row.accepted_by ?? null,
+    // vendor
+    vendorEmail:     row.vendor_email ?? null,
+    vendorName:      row.vendor_name ?? null,
   })
 })
 
-// ── POST /api/pitches/:id/view (public) ─────────────────────────────────────
+// ── POST /api/pitches/:id/view  (public) ─────────────────────────────────────
+
 publicRouter.post("/:id/view", async (req: Request, res: Response) => {
   const { id } = req.params
 
@@ -165,13 +119,299 @@ publicRouter.post("/:id/view", async (req: Request, res: Response) => {
     [id],
   )
   if (updated === 0) return res.status(404).json({ error: "Pitch not found" })
-
-  await execute(`UPDATE pitches SET status = 'viewed' WHERE id = $1`, [id]).catch(() => { /* non-fatal */ })
-
+  await execute(`UPDATE pitches SET status = 'viewed' WHERE id = $1 AND status != 'accepted'`, [id]).catch(() => {/* non-fatal */})
   res.json({ ok: true })
 })
 
-// ── GET /api/pitches (authed) — list pitches for the current agent ─────────
+// ── POST /api/pitches/:token/accept  (public) ─────────────────────────────────
+// Proposal e-acceptance: captures name + timestamp + IP as an audit trail.
+// NOT a legally-binding e-signature — see disclaimer in frontend modal.
+
+publicRouter.post("/:token/accept", async (req: Request, res: Response) => {
+  const { token } = req.params
+  const name = (req.body?.name ?? "").toString().trim()
+
+  if (!name) return res.status(400).json({ error: "Full name is required" })
+  if (name.length > 200) return res.status(400).json({ error: "Name too long" })
+
+  if (!isDbConnected()) {
+    // In-memory mode: find pitch by acceptance_token (which we store as the slug in mem mode)
+    const row = [...memPitches.values()].find(r => (r.acceptance_token ?? r.slug) === token)
+    if (!row) return res.status(404).json({ error: "Proposal not found" })
+    if (row.status === "accepted") return res.json({ ok: true, acceptedAt: row.accepted_at, acceptedBy: row.accepted_by })
+    row.accepted_at = new Date().toISOString()
+    row.accepted_by = name
+    row.status = "accepted"
+    return res.json({ ok: true, acceptedAt: row.accepted_at, acceptedBy: name })
+  }
+
+  const pitch = await queryOne<PitchRow>(
+    `SELECT id, slug, agent_id, status, accepted_at, accepted_by, payload_json FROM pitches WHERE acceptance_token = $1`,
+    [token],
+  )
+  if (!pitch) return res.status(404).json({ error: "Proposal not found" })
+
+  // Idempotent — return existing acceptance record if already accepted
+  if (pitch.status === "accepted") {
+    return res.json({ ok: true, acceptedAt: pitch.accepted_at, acceptedBy: pitch.accepted_by })
+  }
+
+  const ip = (req.headers["x-forwarded-for"]?.toString().split(",")[0] ?? req.ip ?? "unknown").trim()
+
+  await execute(
+    `UPDATE pitches
+     SET status = 'accepted', accepted_at = NOW(), accepted_by = $1, accepted_ip = $2
+     WHERE acceptance_token = $3`,
+    [name, ip, token],
+  )
+
+  const acceptedAt = new Date().toISOString()
+
+  // Notify agent via email (non-fatal)
+  if (gmailConfigured()) {
+    const payload = pitch.payload_json as PriceUpdatePayload
+    const address = (payload as PriceUpdatePayload).recipient?.propertyAddress
+      ?? (payload as AppraisalPayload & { property?: { address?: string } }).property?.address
+      ?? "your property"
+    const agentEmail = (payload as PriceUpdatePayload).agentCard?.email
+    if (agentEmail) {
+      const base = process.env.BASE_URL ?? "https://propos.addvantage.site"
+      sendEmail({
+        to:       agentEmail,
+        fromName: "PropOS",
+        subject:  `Proposal accepted by ${name}`,
+        htmlBody: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+          <h2 style="color:#7B35BE">Proposal accepted</h2>
+          <p><strong>${name}</strong> has accepted your proposal for <strong>${address}</strong>.</p>
+          <p style="color:#666">Accepted at: ${new Date(acceptedAt).toLocaleString("en-AU", { timeZone: "Australia/Melbourne" })} AEST</p>
+          <p style="color:#666">IP address: ${ip}</p>
+          <p><a href="${base}/p/${pitch.slug}" style="color:#7B35BE">View the proposal</a></p>
+          <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+          <p style="font-size:12px;color:#999">This notification was sent by PropOS. The acceptance is an evidentiary record only, not a legally binding signature.</p>
+        </div>`,
+      }).catch(() => {/* non-fatal */})
+    }
+  }
+
+  res.json({ ok: true, acceptedAt, acceptedBy: name })
+})
+
+// ── POST /api/pitches  (authed) — price_update pitch ─────────────────────────
+
+interface CreatePitchBody {
+  type?:          string
+  leadId?:        string
+  propertyRef?:   string
+  vendorEmail?:   string
+  vendorName?:    string
+  agent:          PitchAgentInfo
+  recipientName:  string
+  propertyAddress: string
+  suburb:         string
+  comparableSales?: PitchCompSale[]
+  marketStats?:   PitchMarketStats
+  buyerDemand?:   PitchBuyerDemand
+  voiceContext?:  string
+  cachedCoverNote?: string
+}
+
+authedRouter.post("/", async (req: Request, res: Response) => {
+  const body = req.body as CreatePitchBody
+  const type = body.type ?? "price_update"
+
+  if (type === "appraisal") {
+    // Redirect to appraisal handler — POST /api/pitches/appraisal
+    return res.status(400).json({ error: "Use POST /api/pitches/appraisal for appraisal pitches" })
+  }
+
+  if (!["price_update", "listing_proposal", "digital_intro"].includes(type)) {
+    return res.status(400).json({ error: `Unsupported pitch type: ${type}` })
+  }
+  if (!body.agent || !body.recipientName || !body.propertyAddress || !body.suburb) {
+    return res.status(400).json({ error: "Missing required fields: agent, recipientName, propertyAddress, suburb" })
+  }
+
+  const payload = await generatePriceUpdatePitch({
+    agent:          body.agent,
+    recipientName:  body.recipientName,
+    propertyAddress: body.propertyAddress,
+    suburb:         body.suburb,
+    comparableSales: body.comparableSales,
+    marketStats:    body.marketStats,
+    buyerDemand:    body.buyerDemand,
+    voiceContext:   body.voiceContext,
+    cachedCoverNote: body.cachedCoverNote,
+  })
+
+  const agentId = req.agentId ? String(req.agentId) : "default"
+  const slug    = makeSlug()
+
+  let row: PitchRow | null
+
+  if (isDbConnected()) {
+    row = await queryOne<PitchRow>(
+      `INSERT INTO pitches (type, slug, agent_id, lead_id, property_ref, payload_json, status, vendor_email, vendor_name)
+       VALUES ($1, $2, $3, $4, $5, $6, 'draft', $7, $8)
+       RETURNING *`,
+      [type, slug, agentId, body.leadId ?? null, body.propertyRef ?? null,
+       JSON.stringify(payload), body.vendorEmail ?? null, body.vendorName ?? null],
+    )
+  } else {
+    row = {
+      id: slug, type, slug, agent_id: agentId,
+      lead_id: body.leadId ?? null, property_ref: body.propertyRef ?? null,
+      payload_json: payload, status: "draft", view_count: 0,
+      first_viewed_at: null, last_viewed_at: null,
+      created_at: new Date().toISOString(), regenerated_at: null,
+      accepted_at: null, accepted_by: null, accepted_ip: null,
+      acceptance_token: slug,
+      vendor_email: body.vendorEmail ?? null, vendor_name: body.vendorName ?? null,
+    }
+    memPitches.set(slug, row)
+  }
+
+  if (!row) return res.status(503).json({ error: "Database not available" })
+
+  const base = process.env.BASE_URL ?? "https://propos.addvantage.site"
+  res.json({ id: row.id, slug: row.slug, type: row.type, payload, url: `${base}/p/${row.slug}` })
+})
+
+// ── POST /api/pitches/appraisal  (authed) — instant CMA ──────────────────────
+
+interface AppraisalBody {
+  agent:          PitchAgentInfo
+  address:        string
+  suburb:         string
+  beds:           number
+  baths:          number
+  parking:        number
+  propertyType:   "House" | "Unit" | "Townhouse"
+  landSqm?:       number
+  comparableSales?: PitchCompSale[]
+  vendorEmail?:   string
+  vendorName?:    string
+}
+
+authedRouter.post("/appraisal", async (req: Request, res: Response) => {
+  const body = req.body as AppraisalBody
+
+  if (!body.agent || !body.address || !body.suburb) {
+    return res.status(400).json({ error: "Missing required fields: agent, address, suburb" })
+  }
+  if (!body.beds || !body.propertyType) {
+    return res.status(400).json({ error: "Missing required fields: beds, propertyType" })
+  }
+  if (!["House", "Unit", "Townhouse"].includes(body.propertyType)) {
+    return res.status(400).json({ error: "propertyType must be House, Unit, or Townhouse" })
+  }
+
+  const property: AppraisalProperty = {
+    address:      body.address,
+    suburb:       body.suburb,
+    beds:         Number(body.beds),
+    baths:        Number(body.baths) || 1,
+    parking:      Number(body.parking) || 0,
+    landSqm:      body.landSqm,
+    propertyType: body.propertyType,
+  }
+
+  let payload: AppraisalPayload
+  try {
+    payload = await generateAppraisalPayload({
+      property,
+      agent:          body.agent,
+      comparableSales: body.comparableSales,
+    })
+  } catch (err) {
+    return res.status(500).json({ error: `Appraisal generation failed: ${(err as Error).message}` })
+  }
+
+  const agentId = req.agentId ? String(req.agentId) : "default"
+  const slug    = makeSlug()
+
+  let row: PitchRow | null
+
+  if (isDbConnected()) {
+    row = await queryOne<PitchRow>(
+      `INSERT INTO pitches (type, slug, agent_id, payload_json, status, vendor_email, vendor_name)
+       VALUES ('appraisal', $1, $2, $3, 'draft', $4, $5)
+       RETURNING *`,
+      [slug, agentId, JSON.stringify(payload), body.vendorEmail ?? null, body.vendorName ?? null],
+    )
+  } else {
+    row = {
+      id: slug, type: "appraisal", slug, agent_id: agentId,
+      lead_id: null, property_ref: null,
+      payload_json: payload, status: "draft", view_count: 0,
+      first_viewed_at: null, last_viewed_at: null,
+      created_at: new Date().toISOString(), regenerated_at: null,
+      accepted_at: null, accepted_by: null, accepted_ip: null,
+      acceptance_token: slug,
+      vendor_email: body.vendorEmail ?? null, vendor_name: body.vendorName ?? null,
+    }
+    memPitches.set(slug, row)
+  }
+
+  if (!row) return res.status(503).json({ error: "Database not available" })
+
+  const base = process.env.BASE_URL ?? "https://propos.addvantage.site"
+  res.json({ id: row.id, slug: row.slug, type: "appraisal", payload, url: `${base}/p/${row.slug}` })
+})
+
+// ── POST /api/pitches/:id/send-email  (authed) ────────────────────────────────
+
+authedRouter.post("/:id/send-email", async (req: Request, res: Response) => {
+  const { id } = req.params
+  const to: string = (req.body?.to ?? "").toString().trim()
+  const subject: string = (req.body?.subject ?? "").toString().trim() || "Your property report from PropOS"
+
+  if (!to || !to.includes("@")) return res.status(400).json({ error: "Valid email address required" })
+  if (!gmailConfigured()) return res.status(503).json({ error: "Email not configured on this server" })
+
+  const pitch = isDbConnected()
+    ? await queryOne<PitchRow>(`SELECT * FROM pitches WHERE id = $1`, [id])
+    : memPitches.get(id) ?? null
+  if (!pitch) return res.status(404).json({ error: "Pitch not found" })
+
+  const payload  = pitch.payload_json as (PriceUpdatePayload & AppraisalPayload & Record<string, unknown>)
+  const agentName = (payload.agentCard as PitchAgentInfo | undefined)?.name ?? "Your agent"
+  const base      = process.env.BASE_URL ?? "https://propos.addvantage.site"
+  const pitchUrl  = `${base}/p/${pitch.slug}`
+  const address   = (payload.recipient as { propertyAddress?: string } | undefined)?.propertyAddress
+    ?? (payload.property as { address?: string } | undefined)?.address
+    ?? "your property"
+
+  const htmlBody = `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+      <h2 style="color:#7B35BE">Your property report</h2>
+      <p>${address}</p>
+      <p><a href="${pitchUrl}" style="display:inline-block;background:linear-gradient(135deg,#7B35BE,#3f0278);color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">
+        View your report
+      </a></p>
+      <p style="color:#888;font-size:13px">Link: ${pitchUrl}</p>
+      <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+      <p style="font-size:12px;color:#aaa">Sent by ${agentName} via PropOS by AddVantage AI</p>
+    </div>`
+
+  try {
+    const result = await sendEmail({ to, fromName: agentName, subject, htmlBody })
+
+    // Store vendor email on pitch for weekly reports
+    if (isDbConnected()) {
+      await execute(
+        `UPDATE pitches SET vendor_email = COALESCE(vendor_email, $1) WHERE id = $2`,
+        [to, id],
+      ).catch(() => {/* non-fatal */})
+    }
+
+    res.json({ ok: true, messageId: result.messageId })
+  } catch (err) {
+    res.status(500).json({ error: `Email send failed: ${(err as Error).message}` })
+  }
+})
+
+// ── GET /api/pitches  (authed) — list ─────────────────────────────────────────
+
 authedRouter.get("/", async (req: Request, res: Response) => {
   const agentId = req.agentId ? String(req.agentId) : "default"
 
@@ -187,6 +427,113 @@ authedRouter.get("/", async (req: Request, res: Response) => {
     [agentId],
   )
   res.json({ pitches: rows })
+})
+
+// ── Vendor report endpoints (authed) ──────────────────────────────────────────
+
+// GET /api/vendor-reports
+authedRouter.get("/vendor-reports", async (req: Request, res: Response) => {
+  const agentId = req.agentId ? String(req.agentId) : "default"
+  if (!isDbConnected()) return res.json({ reports: [] })
+
+  const reports = await query<VendorReportRow>(
+    `SELECT vr.*, p.slug as pitch_slug
+     FROM vendor_reports vr
+     JOIN pitches p ON p.id = vr.pitch_id
+     WHERE vr.agent_id = $1
+     ORDER BY vr.created_at DESC
+     LIMIT 100`,
+    [agentId],
+  )
+  res.json({ reports })
+})
+
+// POST /api/vendor-reports/generate  — manual trigger for a specific pitch
+authedRouter.post("/vendor-reports/generate", async (req: Request, res: Response) => {
+  const pitchId: string = (req.body?.pitchId ?? "").toString().trim()
+  if (!pitchId) return res.status(400).json({ error: "pitchId required" })
+  if (!gmailConfigured()) return res.status(503).json({ error: "Gmail not configured" })
+
+  const pitch = await queryOne<PitchRow>(`SELECT * FROM pitches WHERE id = $1`, [pitchId])
+  if (!pitch) return res.status(404).json({ error: "Pitch not found" })
+  if (!pitch.vendor_email) return res.status(400).json({ error: "No vendor email on this pitch" })
+
+  const p = pitch.payload_json as PriceUpdatePayload
+  const refDate  = pitch.first_viewed_at ?? pitch.created_at
+  const daysSince = Math.max(0, Math.floor((Date.now() - new Date(refDate).getTime()) / 86_400_000))
+  const weekNumber = Math.max(1, Math.ceil(daysSince / 7))
+
+  const ctx: VendorReportContext = {
+    pitchId:         pitch.id,
+    slug:            pitch.slug,
+    propertyAddress: p.recipient?.propertyAddress ?? "Your property",
+    suburb:          p.recipient?.suburb ?? "",
+    agentCard:       p.agentCard ?? { name: "Your agent", agency: "", suburb: "" },
+    vendorName:      pitch.vendor_name ?? "Valued client",
+    vendorEmail:     pitch.vendor_email,
+    weekNumber,
+    viewCount:       pitch.view_count,
+    firstViewedAt:   pitch.first_viewed_at,
+    lastViewedAt:    pitch.last_viewed_at,
+    comparableSales: p.comparableSales ?? [],
+  }
+
+  try {
+    await sendVendorReport(ctx)
+    res.json({ ok: true, weekNumber, to: pitch.vendor_email })
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
+// POST /api/vendor-reports/:id/send  — resend a failed/draft report
+authedRouter.post("/vendor-reports/:id/send", async (req: Request, res: Response) => {
+  if (!isDbConnected()) return res.status(503).json({ error: "Database not available" })
+  if (!gmailConfigured()) return res.status(503).json({ error: "Gmail not configured" })
+
+  const report = await queryOne<VendorReportRow & { pitch_slug: string }>(
+    `SELECT vr.*, p.slug as pitch_slug, p.payload_json, p.vendor_email, p.vendor_name,
+            p.view_count, p.first_viewed_at, p.last_viewed_at
+     FROM vendor_reports vr JOIN pitches p ON p.id = vr.pitch_id
+     WHERE vr.id = $1`,
+    [req.params.id],
+  )
+  if (!report) return res.status(404).json({ error: "Report not found" })
+
+  const pitch = await queryOne<PitchRow>(`SELECT * FROM pitches WHERE id = $1`, [report.pitch_id])
+  if (!pitch?.vendor_email) return res.status(400).json({ error: "No vendor email on this pitch" })
+
+  const p = pitch.payload_json as PriceUpdatePayload
+
+  const ctx: VendorReportContext = {
+    pitchId:         pitch.id,
+    slug:            pitch.slug,
+    propertyAddress: p.recipient?.propertyAddress ?? "Your property",
+    suburb:          p.recipient?.suburb ?? "",
+    agentCard:       p.agentCard ?? { name: "Your agent", agency: "", suburb: "" },
+    vendorName:      pitch.vendor_name ?? "Valued client",
+    vendorEmail:     pitch.vendor_email,
+    weekNumber:      report.week_number,
+    viewCount:       pitch.view_count,
+    firstViewedAt:   pitch.first_viewed_at,
+    lastViewedAt:    pitch.last_viewed_at,
+    comparableSales: p.comparableSales ?? [],
+  }
+
+  try {
+    await sendVendorReport(ctx)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
+// ── GET /api/vendor-reports/:id  (authed) — fetch report HTML ─────────────────
+authedRouter.get("/vendor-reports/:id", async (req: Request, res: Response) => {
+  if (!isDbConnected()) return res.status(503).json({ error: "Database not available" })
+  const report = await queryOne<VendorReportRow>(`SELECT * FROM vendor_reports WHERE id = $1`, [req.params.id])
+  if (!report) return res.status(404).json({ error: "Report not found" })
+  res.json(report)
 })
 
 export { publicRouter, authedRouter }

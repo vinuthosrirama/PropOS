@@ -340,6 +340,22 @@ async function migrate(): Promise<void> {
       EXCEPTION WHEN others THEN NULL;
       END $$`],
 
+    ["CONSTRAINT pitches_status_check", `
+      DO $$ BEGIN
+        ALTER TABLE pitches DROP CONSTRAINT IF EXISTS pitches_status_check;
+        ALTER TABLE pitches ADD CONSTRAINT pitches_status_check
+          CHECK (status IN ('draft','sent','viewed','accepted'));
+      EXCEPTION WHEN others THEN NULL;
+      END $$`],
+
+    ["CONSTRAINT pitches_type_check", `
+      DO $$ BEGIN
+        ALTER TABLE pitches DROP CONSTRAINT IF EXISTS pitches_type_check;
+        ALTER TABLE pitches ADD CONSTRAINT pitches_type_check
+          CHECK (type IN ('price_update','digital_intro','listing_proposal','appraisal','vendor_report'));
+      EXCEPTION WHEN others THEN NULL;
+      END $$`],
+
     // ── Phase 4: Indexes (IF NOT EXISTS — safe to re-run)
 
     ["INDEX idx_outreach_agent",       `CREATE INDEX IF NOT EXISTS idx_outreach_agent       ON outreach_log(agent_id)`],
@@ -456,6 +472,24 @@ async function migrate(): Promise<void> {
       FROM pitches
       GROUP BY agent_id`],
 
+    ["CREATE vendor_reports", `
+      CREATE TABLE IF NOT EXISTS vendor_reports (
+        id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        pitch_id     UUID REFERENCES pitches(id) ON DELETE CASCADE,
+        agent_id     TEXT NOT NULL,
+        week_number  INTEGER NOT NULL,
+        payload_json JSONB NOT NULL DEFAULT '{}',
+        html_body    TEXT,
+        status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','sent','failed')),
+        sent_at      TIMESTAMPTZ,
+        error_msg    TEXT,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(pitch_id, week_number)
+      )`],
+
+    ["INDEX idx_vendor_reports_agent", `CREATE INDEX IF NOT EXISTS idx_vendor_reports_agent ON vendor_reports(agent_id)`],
+    ["INDEX idx_vendor_reports_pitch", `CREATE INDEX IF NOT EXISTS idx_vendor_reports_pitch ON vendor_reports(pitch_id)`],
+
     // ── Phase 6: System key-value store (gmail inbound watermark, misc state)
 
     ["CREATE system_kv", `
@@ -466,6 +500,14 @@ async function migrate(): Promise<void> {
       )`],
 
     ["ALTER outreach_log: transport", `ALTER TABLE outreach_log ADD COLUMN IF NOT EXISTS transport TEXT`],
+
+    // ── Pitches suite additions (acceptance + vendor/appraisal columns)
+    ["ALTER pitches: accepted_at",      `ALTER TABLE pitches ADD COLUMN IF NOT EXISTS accepted_at      TIMESTAMPTZ`],
+    ["ALTER pitches: accepted_by",      `ALTER TABLE pitches ADD COLUMN IF NOT EXISTS accepted_by      TEXT`],
+    ["ALTER pitches: accepted_ip",      `ALTER TABLE pitches ADD COLUMN IF NOT EXISTS accepted_ip      TEXT`],
+    ["ALTER pitches: acceptance_token", `ALTER TABLE pitches ADD COLUMN IF NOT EXISTS acceptance_token TEXT UNIQUE DEFAULT gen_random_uuid()::TEXT`],
+    ["ALTER pitches: vendor_email",     `ALTER TABLE pitches ADD COLUMN IF NOT EXISTS vendor_email     TEXT`],
+    ["ALTER pitches: vendor_name",      `ALTER TABLE pitches ADD COLUMN IF NOT EXISTS vendor_name      TEXT`],
 
     // ── Phase 7: Data maintenance (retention / pruning — safe, idempotent)
 
