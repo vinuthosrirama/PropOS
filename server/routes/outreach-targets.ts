@@ -23,6 +23,7 @@
 import { Router } from "express"
 import { query, execute, isDbConnected } from "../lib/db.js"
 import { sendSMS, smsConfigured } from "../lib/sms.js"
+import { smsOptOutReason } from "../lib/compliance.js"
 import { addAgentMessageToThread, getThread } from "../lib/conversations.js"
 import { OUTREACH_TARGETS_SEED } from "../data/outreachTargetsSeed.js"
 import {
@@ -153,6 +154,17 @@ router.post("/approve-draft/:id", async (req, res) => {
   )
   const versionId = versionRows[0]?.version_id ?? null
 
+  // Compliance gate: if the target has opted out, do not send. Keep the draft
+  // visible by reverting it to pending.
+  const optOut = await smsOptOutReason(target.phone)
+  if (optOut) {
+    await execute(
+      `UPDATE outreach_drafts SET status = 'pending', updated_at = NOW() WHERE id = $1`,
+      [draftId],
+    )
+    return res.status(403).json({ error: `Cannot send: ${optOut}` })
+  }
+
   try {
     const result = await sendSMS(target.phone, body)
     await markDraftSent(draftId)
@@ -246,6 +258,8 @@ router.post("/send-batch", async (req, res) => {
 
   for (const t of targets) {
     if (!t.sms_script) { results.push({ name: t.name, ok: false, error: "no sms_script" }); continue }
+    const optOut = await smsOptOutReason(t.phone!)
+    if (optOut) { results.push({ name: t.name, ok: false, error: optOut }); continue }
     try {
       const r = await sendSMS(t.phone!, t.sms_script)
       await execute(
@@ -312,6 +326,9 @@ router.post("/:id/reply", async (req, res) => {
   const body = typeof req.body?.message === "string" ? req.body.message.trim() : ""
   if (!body)            return res.status(400).json({ error: "message is required" })
   if (body.length > 300) return res.status(400).json({ error: "message too long (max 300 chars)" })
+
+  const optOut = await smsOptOutReason(target.phone)
+  if (optOut) return res.status(403).json({ error: `Cannot send: ${optOut}` })
 
   try {
     const result = await sendSMS(target.phone, body)
@@ -417,6 +434,9 @@ router.post("/send/:id", async (req, res) => {
 
   if (!target.phone)      return res.status(400).json({ error: "No phone number on this target" })
   if (!target.sms_script) return res.status(400).json({ error: "No SMS script — set sms_script first" })
+
+  const optOut = await smsOptOutReason(target.phone)
+  if (optOut) return res.status(403).json({ error: `Cannot send: ${optOut}` })
 
   try {
     const result = await sendSMS(target.phone, target.sms_script)

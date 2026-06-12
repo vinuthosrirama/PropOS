@@ -74,8 +74,9 @@ const HOLLOW_PHRASES: ReadonlyArray<RegExp> = [
  * for when the prompt instructions aren't followed.
  */
 export function sanitiseText(s: string): string {
-  // 1. Em-dash / en-dash → comma (hard rule)
-  let out = s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
+  // 1. Em-dash / en-dash / double-hyphen → comma (hard rule).
+  //    Absorb surrounding spaces so we never leave a " , " artifact.
+  let out = s.replace(/\s*(?:—|–|--)\s*/g, ", ").replace(/ {2,}/g, " ").trim()
 
   // 2. Strip zero-value openers
   for (const re of HOLLOW_PHRASES) {
