@@ -37,7 +37,7 @@ import { sendPMBriefEmail } from "./pmBrief.js"
 
 const DAILY_NEW_CAP   = parseInt(process.env.OUTREACH_DAILY_CAP ?? "5", 10)
 const FOLLOWUP_DAYS   = parseInt(process.env.OUTREACH_FOLLOWUP_DAYS ?? "3", 10)
-const SEND_GAP_MS     = 3_000   // 3s between sends — carrier throttle buffer
+const SEND_GAP_MS     = 6_000   // 6s between successive SMS sends — carrier throttle buffer
 const JITTER_MAX_MS   = 12 * 60 * 1_000   // ±12 minutes jitter
 
 let started = false
@@ -131,8 +131,15 @@ async function runMorningBrief(): Promise<void> {
 // ── Outreach window ───────────────────────────────────────────────────────────
 
 async function runOutreachWindow(): Promise<void> {
-  if (!smsConfigured()) {
-    console.log("[outreachScheduler] Outreach window: no SMS transport configured — skipping")
+  // Hard guard — TEST_RECIPIENT_PHONE must always be set. Sends are never directed
+  // at real agents directly; every message routes through the test number first.
+  if (!process.env.TEST_RECIPIENT_PHONE?.trim()) {
+    console.error("[outreachScheduler] ⛔  TEST_RECIPIENT_PHONE not set — outreach window BLOCKED. All sends must route through your test number.")
+    return
+  }
+
+  if (!smsConfigured() && !gmailConfigured()) {
+    console.log("[outreachScheduler] Outreach window: no send channel configured — skipping")
     return
   }
 
@@ -140,7 +147,8 @@ async function runOutreachWindow(): Promise<void> {
     // Pick up to DAILY_NEW_CAP new targets
     const targets = await query<OutreachTargetRow>(
       `SELECT * FROM outreach_targets
-       WHERE status = 'new' AND phone IS NOT NULL AND sms_script IS NOT NULL
+       WHERE status = 'new' AND sms_script IS NOT NULL
+         AND (phone IS NOT NULL OR email IS NOT NULL)
        ORDER BY id
        LIMIT $1`,
       [DAILY_NEW_CAP],
@@ -169,57 +177,76 @@ async function runOutreachWindow(): Promise<void> {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function sendOutreachMessage(target: OutreachTargetRow, message: string): Promise<void> {
-  if (!target.phone) return
+// ── Outreach email subject — short, non-salesy, complementary to the SMS ─────
 
-  // Compliance gate: never text a number that has opted out.
-  const optOut = await smsOptOutReason(target.phone)
-  if (optOut) {
-    console.log(`[outreachScheduler] suppressing ${target.name} — ${optOut}`)
-    await execute(
-      `UPDATE outreach_targets
-       SET status = 'not_interested',
-           notes = CASE WHEN notes IS NULL OR notes = '' THEN $1 ELSE notes || E'\\n' || $1 END,
-           updated_at = NOW()
-       WHERE id = $2 AND status = 'new'`,
-      [`Suppressed: ${optOut}`, target.id],
+function outreachEmailSubject(target: OutreachTargetRow): string {
+  const first = target.name.split(" ")[0]
+  if (target.recent_sale_address) {
+    const street = target.recent_sale_address.split(",")[0].replace(/^\d+\s+/, "").trim()
+    return `Quick question about ${street}, ${first}`
+  }
+  return `Quick question, ${first}`
+}
+
+async function sendOutreachMessage(target: OutreachTargetRow, message: string): Promise<void> {
+  if (!target.phone && !target.email) return
+
+  // Compliance gate on phone
+  if (target.phone) {
+    const optOut = await smsOptOutReason(target.phone)
+    if (optOut) {
+      console.log(`[outreachScheduler] suppressing ${target.name} — ${optOut}`)
+      await execute(
+        `UPDATE outreach_targets
+         SET status = 'not_interested',
+             notes = CASE WHEN notes IS NULL OR notes = '' THEN $1 ELSE notes || E'\\n' || $1 END,
+             updated_at = NOW()
+         WHERE id = $2 AND status = 'new'`,
+        [`Suppressed: ${optOut}`, target.id],
+      )
+      return
+    }
+  }
+
+  // Fire SMS and email simultaneously — neither is a fallback for the other.
+  // Both channels are attempted in parallel; partial success is still logged.
+  const channels: Array<Promise<string>> = []
+
+  if (target.phone && smsConfigured()) {
+    channels.push(
+      sendSMS(target.phone, message)
+        .then(r => `sms:${r.transport}${r.testMode ? "(TEST)" : ""}`)
+        .catch((e: Error) => { throw new Error(`SMS — ${e.message}`) }),
     )
+  }
+
+  if (target.email && gmailConfigured()) {
+    const htmlBody = `<div style="font-family:-apple-system,sans-serif;font-size:15px;line-height:1.6;color:#222;max-width:520px">` +
+      `<p style="margin:0 0 12px 0">${message.replace(/\n/g, "<br>")}</p></div>`
+    channels.push(
+      sendEmail({
+        to:       target.email,
+        fromName: "Vinuth",
+        subject:  outreachEmailSubject(target),
+        htmlBody,
+      })
+        .then(r => `email${r.testMode ? "(TEST)" : ""}`)
+        .catch((e: Error) => { throw new Error(`Email — ${e.message}`) }),
+    )
+  }
+
+  if (channels.length === 0) {
+    console.warn(`[outreachScheduler] no send channel available for ${target.name}`)
     return
   }
 
-  try {
-    let transportUsed: string
-    try {
-      const result = await sendSMS(target.phone, message)
-      transportUsed = result.transport + (result.testMode ? " (TEST)" : "")
-    } catch (smsErr) {
-      // Every SMS transport in the chain failed — fall back to email if we have one
-      if (!gmailConfigured() || !target.email) throw smsErr
-      console.warn(`[outreachScheduler] all SMS transports failed for ${target.name} — falling back to email`)
-      const emailResult = await sendEmail({
-        to:       target.email,
-        fromName: "Vinuth",
-        subject:  "Quick one",
-        htmlBody: `<p style="font-family:sans-serif;font-size:15px">${message.replace(/\n/g, "<br/>")}</p>`,
-      })
-      transportUsed = "email" + (emailResult.testMode ? " (TEST)" : "")
-    }
+  const results = await Promise.allSettled(channels)
+  const ok      = results.filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled").map(r => r.value)
+  const errs    = results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map(r => (r.reason as Error).message)
 
-    await execute(
-      `UPDATE outreach_targets
-       SET status = 'contacted', last_contact_date = NOW(),
-           last_message = $1, updated_at = NOW()
-       WHERE id = $2 AND status = 'new'`,
-      [message.slice(0, 300), target.id],
-    )
-    await addAgentMessageToThread(target.phone, message, {
-      leadName:        target.name,
-      propertyAddress: target.recent_sale_address ?? "",
-    })
-    console.log(`[outreachScheduler] sent to ${target.name} via ${transportUsed}`)
-  } catch (err) {
-    console.error(`[outreachScheduler] send failed for ${target.name}:`, (err as Error).message)
-    const errNote = `Send failed: ${(err as Error).message.slice(0, 200)}`
+  if (ok.length === 0) {
+    const errNote = `Send failed: ${errs.join("; ").slice(0, 200)}`
+    console.error(`[outreachScheduler] all channels failed for ${target.name}: ${errs.join("; ")}`)
     await execute(
       `UPDATE outreach_targets
        SET notes = CASE WHEN notes IS NULL OR notes = '' THEN $1 ELSE notes || E'\\n' || $1 END,
@@ -227,6 +254,30 @@ async function sendOutreachMessage(target: OutreachTargetRow, message: string): 
        WHERE id = $2`,
       [errNote, target.id],
     )
+    return
+  }
+
+  // Record the outbound message to the conversation thread (phone key, or email as fallback)
+  const threadKey = target.phone || target.email!
+  await addAgentMessageToThread(threadKey, message, {
+    leadName:        target.name,
+    propertyAddress: target.recent_sale_address ?? "",
+    email:           target.email ?? "",
+  })
+
+  await execute(
+    `UPDATE outreach_targets
+     SET status = 'contacted', last_contact_date = NOW(),
+         last_message = $1, updated_at = NOW()
+     WHERE id = $2 AND status = 'new'`,
+    [message.slice(0, 300), target.id],
+  )
+
+  const summary = ok.join(" + ")
+  if (errs.length > 0) {
+    console.warn(`[outreachScheduler] partial delivery to ${target.name} — ok: ${summary}; failed: ${errs.join(", ")}`)
+  } else {
+    console.log(`[outreachScheduler] sent to ${target.name} via ${summary}`)
   }
 }
 

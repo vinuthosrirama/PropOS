@@ -15,6 +15,7 @@ import { google } from "googleapis"
 import { gmailConfigured } from "./gmail.js"
 import { isDbConnected, query, execute } from "./db.js"
 import { handleOutreachInbound, generateOutreachDraft, saveOutreachDraft } from "./outreachAgent.js"
+import { addReplyToThread } from "./conversations.js"
 
 const WATERMARK_KEY = "gmail_inbound_watermark"
 
@@ -121,13 +122,18 @@ export async function pollGmailInbound(): Promise<void> {
 
       console.log(`[gmailInbound] reply from outreach target ${fromEmail} — feeding inbound pipeline`)
 
-      // Feed the same pipeline as SMS replies
+      // Feed the same inbound pipeline as SMS replies.
+      // For targets with a phone, handleOutreachInbound handles CRM + draft + conversation.
+      // For email-only targets, we do the same steps manually and key the thread on email.
       if (target.phone) {
-        // Phone present — handleOutreachInbound does the full CRM update + draft generation
         await handleOutreachInbound(target.phone, body.slice(0, 2000))
+        // Also record the inbound message keyed by email so the thread is reachable either way
+        await addReplyToThread(target.phone, body.slice(0, 2000), {
+          leadName: fromEmail,
+          email:    fromEmail,
+        }).catch(() => { /* non-fatal */ })
       } else {
-        // No phone — update CRM status and generate a draft directly so the reply
-        // appears in GET /api/outreach-targets/drafts and the morning brief
+        // Email-only target — update CRM, log to thread, generate draft
         await execute(
           `UPDATE outreach_targets
            SET status = CASE WHEN status IN ('new','contacted') THEN 'replied' ELSE status END,
@@ -135,6 +141,11 @@ export async function pollGmailInbound(): Promise<void> {
            WHERE id = $2`,
           [body.slice(0, 500), target.id],
         )
+        // Store in conversation thread keyed by email address
+        await addReplyToThread(fromEmail, body.slice(0, 2000), {
+          leadName: fromEmail,
+          email:    fromEmail,
+        }).catch(() => { /* non-fatal */ })
         try {
           const fullTarget = (await query<import("./outreachAgent.js").OutreachTargetRow>(
             `SELECT * FROM outreach_targets WHERE id = $1`, [target.id],
