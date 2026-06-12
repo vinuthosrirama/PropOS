@@ -517,8 +517,28 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
               <div style={{ fontSize: 22, fontWeight: 700, color: C.text, letterSpacing: -0.5, marginBottom: 4 }}>
                 {getProductName(productMode)}
               </div>
-              <div style={{ fontSize: 13, color: C.muted }}>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
                 {getProductTagline(productMode)}
+              </div>
+              {/* Setup time + social proof strip */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0, flexWrap: "wrap" }}>
+                {[
+                  { value: "<10 min", label: "setup" },
+                  { value: "No",      label: "CRM migration" },
+                  { value: "Free",    label: "to try" },
+                ].map((stat, i, arr) => (
+                  <div key={stat.label} style={{ display: "flex", alignItems: "center" }}>
+                    <div style={{ padding: "4px 14px", textAlign: "center" }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: theme ? theme.primary : C.blue, letterSpacing: -0.3 }}>
+                        {stat.value}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.faint, marginTop: 1 }}>{stat.label}</div>
+                    </div>
+                    {i < arr.length - 1 && (
+                      <div style={{ width: 1, height: 24, background: C.border, flexShrink: 0 }} />
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 

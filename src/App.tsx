@@ -16,6 +16,7 @@ const DemoView       = lazy(() => import("./views/DemoView"))
 const SettingsView   = lazy(() => import("./views/SettingsView"))
 const PrincipalView  = lazy(() => import("./views/PrincipalView"))
 const PitchView      = lazy(() => import("./views/PitchView"))
+const CampaignView   = lazy(() => import("./views/CampaignView"))
 
 function LoadingSpinner() {
   return (
@@ -198,6 +199,7 @@ export default function App() {
                                               vendorSettings={vendorSettings} />}
             {view === "setup"     && <SettingsView agent={agent} vendorSettings={vendorSettings} onVendorSettingsChange={handleVendorSettings} lightMode={lightMode} onToggleLightMode={() => setLightMode(m => !m)} />}
             {view === "principal" && <PrincipalView agent={agent} theme={theme} />}
+            {view === "campaign"  && <CampaignView />}
           </motion.div>
         </AnimatePresence>
       </Suspense>
