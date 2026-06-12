@@ -121,6 +121,22 @@ function buildResult(
 }
 
 /**
+ * SMS-only opt-out guard. Returns a human-readable block reason, or null if the
+ * number may be texted. Fails open (returns null) on error — the opt-out registry
+ * stays the source of truth and a transient DB hiccup must not silently drop sends.
+ */
+export async function smsOptOutReason(phone: string): Promise<string | null> {
+  if (!phone) return null
+  try {
+    const c = await checkCompliance(phone, "")
+    return c.smsOk ? null : (c.reason ?? "opted out of SMS")
+  } catch (err) {
+    console.error("[compliance] smsOptOutReason check failed:", (err as Error).message)
+    return null
+  }
+}
+
+/**
  * Generate a tamper-proof HMAC-SHA256 unsubscribe token.
  * Uses UNSUBSCRIBE_SECRET env var (falls back to a derived value so dev works
  * without config, but production MUST set this to a real secret).

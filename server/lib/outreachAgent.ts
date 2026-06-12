@@ -19,6 +19,7 @@ import OpenAI from "openai"
 import { getThread } from "./conversations.js"
 import { query, execute, isDbConnected } from "./db.js"
 import { getActivePrompt, getActiveVersionId } from "./promptOptimiser.js"
+import { sanitiseText } from "./sanitise.js"
 
 // ── OpenAI client (lazy) ──────────────────────────────────────────────────────
 
@@ -109,7 +110,9 @@ function clampSMS(s: string): string {
 }
 
 function sanitise(s: string): string {
-  return s.replace(/—|–|--/g, ",").replace(/^["']|["']$/g, "").trim()
+  // Strip surrounding quotes the model sometimes adds, then run the shared
+  // safety net (em-dash hard rule + AI-tell vocabulary + hollow openers).
+  return sanitiseText(s.replace(/^["']|["']$/g, "")).trim()
 }
 
 /**

@@ -19,6 +19,7 @@
 
 import cron from "node-cron"
 import { isDbConnected, query, execute } from "./db.js"
+import { smsOptOutReason } from "./compliance.js"
 import { sendSMS, smsConfigured } from "./sms.js"
 import { sendEmail, gmailConfigured } from "./gmail.js"
 import { pollGmailInbound } from "./gmailInbound.js"
@@ -166,6 +167,22 @@ async function runOutreachWindow(): Promise<void> {
 
 async function sendOutreachMessage(target: OutreachTargetRow, message: string): Promise<void> {
   if (!target.phone) return
+
+  // Compliance gate: never text a number that has opted out.
+  const optOut = await smsOptOutReason(target.phone)
+  if (optOut) {
+    console.log(`[outreachScheduler] suppressing ${target.name} — ${optOut}`)
+    await execute(
+      `UPDATE outreach_targets
+       SET status = 'not_interested',
+           notes = CASE WHEN notes IS NULL OR notes = '' THEN $1 ELSE notes || E'\\n' || $1 END,
+           updated_at = NOW()
+       WHERE id = $2 AND status = 'new'`,
+      [`Suppressed: ${optOut}`, target.id],
+    )
+    return
+  }
+
   try {
     let transportUsed: string
     try {

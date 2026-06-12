@@ -14,6 +14,7 @@
 
 import { Router } from "express"
 import Anthropic from "@anthropic-ai/sdk"
+import { sanitiseText } from "../lib/sanitise.js"
 
 const router = Router()
 
@@ -82,8 +83,9 @@ function clampSMS(s: string): string {
   return s.slice(0, 157).trimEnd() + "..."
 }
 
+// Shared safety net: em-dash hard rule + AI-tell vocabulary + hollow openers.
 function sanitise(s: string): string {
-  return s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
+  return sanitiseText(s)
 }
 
 // Contingency frameworks — used when AI call fails or returns unparseable JSON.

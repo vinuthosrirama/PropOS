@@ -4,6 +4,7 @@ import OpenAI from "openai"
 import { inferLifeStage, renderLifeStageBlock } from "../lib/lifeStageInference.js"
 import { getSuburbContext } from "../lib/suburbContext.js"
 import { getTimingTriggers, renderTimingBlock } from "../lib/timingTriggers.js"
+import { sanitiseText } from "../lib/sanitise.js"
 
 const router = Router()
 
@@ -25,8 +26,9 @@ function clampSMS(s: string): string {
   return s.length <= 160 ? s : s.slice(0, 157).trimEnd() + "..."
 }
 
+// Shared safety net: em-dash hard rule + AI-tell vocabulary + hollow openers.
 function sanitise(s: string): string {
-  return s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
+  return sanitiseText(s)
 }
 
 export interface VendorGenerateParams {
