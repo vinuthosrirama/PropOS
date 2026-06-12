@@ -2,6 +2,8 @@
  * Self-outreach campaign management — Vinuth pitching PropOS to boutique RE agents.
  *
  * POST /api/outreach-targets/seed              — upsert the 16-agent seed list
+ * POST /api/outreach-targets/seed-test         — upsert 25 synthetic test leads (fake phones, sends → TEST_RECIPIENT_PHONE)
+ * POST /api/outreach-targets/clear-test        — remove test leads (source = 'test:synthetic')
  * GET  /api/outreach-targets                   — list all targets (?status= filter)
  * GET  /api/outreach-targets/brief             — morning summary (drafts, replies, follow-ups due)
  * GET  /api/outreach-targets/drafts            — pending AI reply drafts awaiting approval
@@ -26,6 +28,7 @@ import { sendSMS, smsConfigured } from "../lib/sms.js"
 import { smsOptOutReason } from "../lib/compliance.js"
 import { addAgentMessageToThread, getThread } from "../lib/conversations.js"
 import { OUTREACH_TARGETS_SEED } from "../data/outreachTargetsSeed.js"
+import { TEST_TARGETS_SEED } from "../data/testTargetsSeed.js"
 import {
   getPendingDrafts,
   approveDraft,
@@ -84,6 +87,62 @@ router.post("/seed", async (_req, res) => {
   }
 
   res.json({ ok: errors.length === 0, total: OUTREACH_TARGETS_SEED.length, upserted, errors })
+})
+
+// ── Test seed: 25 synthetic leads, phones redirect to TEST_RECIPIENT_PHONE ───
+
+router.post("/seed-test", async (_req, res) => {
+  if (!isDbConnected()) {
+    return res.status(503).json({ error: "Database not connected" })
+  }
+  let upserted = 0
+  const errors: string[] = []
+  for (const t of TEST_TARGETS_SEED) {
+    try {
+      await execute(
+        `INSERT INTO outreach_targets
+           (name, agency, phone, email, suburb, state,
+            recent_sale_address, years_in_area, agency_size_est,
+            personal_note, sms_script, source, status)
+         VALUES ($1,$2,$3,$4,$5,'VIC',$6,$7,$8,$9,$10,$11,'new')
+         ON CONFLICT (phone) DO UPDATE SET
+           name                = EXCLUDED.name,
+           agency              = EXCLUDED.agency,
+           email               = COALESCE(EXCLUDED.email, outreach_targets.email),
+           suburb              = EXCLUDED.suburb,
+           recent_sale_address = EXCLUDED.recent_sale_address,
+           years_in_area       = EXCLUDED.years_in_area,
+           agency_size_est     = EXCLUDED.agency_size_est,
+           personal_note       = EXCLUDED.personal_note,
+           sms_script          = EXCLUDED.sms_script,
+           source              = EXCLUDED.source,
+           status              = 'new',
+           updated_at          = NOW()`,
+        [
+          t.name, t.agency, t.phone ?? null, t.email ?? null, t.suburb,
+          t.recentSaleAddress ?? null, t.yearsInArea ?? null, t.agencySizeEst ?? null,
+          t.personalNote, t.smsScript, t.source,
+        ],
+      )
+      upserted++
+    } catch (err) {
+      errors.push(`${t.name}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  const testPhone = process.env.TEST_RECIPIENT_PHONE?.trim() ?? "(not set)"
+  res.json({ ok: errors.length === 0, total: TEST_TARGETS_SEED.length, upserted, errors, testPhone })
+})
+
+// ── Clear test leads ──────────────────────────────────────────────────────────
+
+router.post("/clear-test", async (_req, res) => {
+  if (!isDbConnected()) {
+    return res.status(503).json({ error: "Database not connected" })
+  }
+  const deleted = await execute(
+    `DELETE FROM outreach_targets WHERE source = 'test:synthetic'`,
+  )
+  res.json({ ok: true, deleted })
 })
 
 // ── List ──────────────────────────────────────────────────────────────────────
