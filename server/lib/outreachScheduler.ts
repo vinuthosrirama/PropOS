@@ -31,6 +31,7 @@ import {
 } from "./outreachAgent.js"
 import { runOptimisationCycle } from "./promptOptimiser.js"
 import { runWeeklyVendorReports } from "./vendorReportGenerator.js"
+import { sendPMBriefEmail } from "./pmBrief.js"
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,9 @@ async function runMorningBrief(): Promise<void> {
     if (brief.pendingDrafts > 0) {
       console.log(`[outreachScheduler]  Review drafts at: GET /api/outreach-targets/drafts`)
     }
+
+    // Email Vinuth the PM brief (also warms the sending domain)
+    await sendPMBriefEmail(brief)
 
     // Auto-generate follow-ups for targets overdue (but don't auto-send — queue as drafts)
     if (brief.followUpsDue.length > 0) {
