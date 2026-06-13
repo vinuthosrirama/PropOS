@@ -97,6 +97,13 @@ iPhone ──► BlueBubbles (Mac) ──► PropOS /api/webhook/bluebubbles ─
   (draft id=1 appeared in `GET /api/sms-agent/drafts`, then `POST /drafts/1/reject` → `voice_signals`
   row recorded). `WEBHOOK_SECRET` is set locally (`server/.env`); BlueBubbles webhook URL registered
   on startup as `${BASE_URL}/api/webhook/bluebubbles?secret=...`.
+- [x] **In-app Voice Agent UI (2026-06-13)** — new "Voice" tab in PropOS (`src/views/VoiceAgentView.tsx`,
+  `server/routes/sms-agent.ts` `POST /contacts/:id/send`). Lets Vinuth type, edit, and send iMessages
+  via BlueBubbles, view conversation threads, approve/edit/reject pending drafts, and run voice
+  calibration — all from the browser, no terminal/curl needed. Includes an inline sign-in form
+  (`authRequired` state) since `/api/sms-agent/*` requires a JWT. Verified end-to-end in Preview:
+  logged in as `vinuth.o.srirama@gmail.com`, selected "Test Partner", sent a live message that
+  appeared in the thread, opened the calibration panel.
 - [ ] **Live test with a real business partner** — pending 20 real voice samples via `/calibrate`.
 
 > All four build stages are code-complete and type-clean on the `sms-agent` branch.

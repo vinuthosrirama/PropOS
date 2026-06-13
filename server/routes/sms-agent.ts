@@ -172,6 +172,33 @@ router.post("/seed-stage1", async (req, res) => {
   })
 })
 
+// ── Send (manual message typed in PropOS, delivered via iMessage) ──────────────
+
+router.post("/contacts/:id/send", async (req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  const id = parseInt(req.params.id, 10)
+  const body = typeof req.body?.message === "string" ? req.body.message.trim() : ""
+  if (!body) return res.status(400).json({ error: "message is required" })
+
+  const contact = await getContactById(id)
+  if (!contact) return res.status(404).json({ error: "Contact not found" })
+
+  if (!smsConfigured()) return res.status(503).json({ error: "SMS not configured" })
+  if (!(await canSendNow(id))) {
+    return res.status(429).json({ ok: false, sent: false, error: "Send cooldown active — try again in a few seconds" })
+  }
+
+  try {
+    await sendSMS(contact.phone, body)
+    await addAgentMessageToThread(contact.phone, body, { leadName: contact.name })
+    await markContacted(id)
+    await recordAgentMessageSent(id)
+    res.json({ ok: true, sent: true })
+  } catch (err) {
+    res.status(502).json({ ok: false, sent: false, error: (err as Error).message })
+  }
+})
+
 // ── Initiate (generate + send an opener) ────────────────────────────────────────
 
 router.post("/initiate/:contactId", async (req, res) => {

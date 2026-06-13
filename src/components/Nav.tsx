@@ -14,6 +14,7 @@ function productLabel(mode: DemoMode | null): string {
 export const VIEWS: { id: ViewId; label: string; short: string; principalOnly?: boolean }[] = [
   { id: "demo",      label: "Launchpad", short: "Launchpad" },
   { id: "campaign",  label: "Campaign",  short: "Campaign" },
+  { id: "voiceagent", label: "Voice Agent", short: "Voice" },
   { id: "setup",     label: "Settings",  short: "Settings" },
   { id: "principal", label: "Office",    short: "Office", principalOnly: true },
 ]
