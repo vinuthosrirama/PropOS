@@ -109,9 +109,14 @@ iPhone ──► BlueBubbles (Mac) ──► PropOS /api/webhook/bluebubbles ─
   Full send path (UI → `/api/sms-agent/contacts/:id/send` → `sendSMS` → BlueBubbles → iPhone) is
   confirmed working end-to-end, not just in the dev preview thread.
 - [ ] **Live test with a real business partner** — pending 20 real voice samples via `/calibrate`.
-- [ ] **CRM-Triggered Auto-Outreach + per-agent learning loop** — planned, not yet built. See
-  "Planned: CRM-Triggered Auto-Outreach + MVP Hardening" below for the full spec (8 build items +
-  live CRM reality check).
+- [x] **CRM-Triggered Auto-Outreach + per-agent learning loop (code, 2026-06-13)** — all 8 build
+  items from "Planned: CRM-Triggered Auto-Outreach + MVP Hardening" below are implemented and
+  `tsc --noEmit` clean (server + frontend). Migration applied live (`ready_to_contact`,
+  `assigned_agent_id`, 3 new indexes — "[migrate] all 121 steps ok"), 2-min ready-poller cron
+  registered ("SMS ready-poller: started (every 2 min, Melbourne)"), and `POST /run-ready` confirmed
+  working end-to-end via authenticated API call. **Remaining:** items 3-7 of the Verification
+  checklist below (real ticked contact → opener → approve → real send, plus the Voice-tab label
+  screenshot for #7) — Vinuth authorised live verification data on 2026-06-13; run this next.
 
 > All four build stages are code-complete and type-clean on the `sms-agent` branch.
 > Outbound (opener generation + send) and inbound (reply generation, conversation memory,
@@ -534,10 +539,12 @@ fields. Once present, the ready-poller (#3) has real hooks to reference in gener
 ## How another Claude Code instance continues this
 
 1. `cd` into the PropOS repo, `git fetch && git checkout sms-agent && git pull`.
-2. Read this doc's **Stage status** for the next unchecked box — as of 2026-06-13 that's
-   "CRM-Triggered Auto-Outreach + per-agent learning loop"; the full spec (8 build items + CRM
-   reality check) is in "Planned: CRM-Triggered Auto-Outreach + MVP Hardening" above.
-3. Before relying on inbound auto-drafting in local dev (including the new ready-poller), read
+2. Read this doc's **Stage status** for the next unchecked box — as of 2026-06-13 the 8-item
+   CRM-Triggered Auto-Outreach build is **code-complete**; the only remaining work is the
+   **Verification checklist** (items 1-8) under "Planned: CRM-Triggered Auto-Outreach + MVP
+   Hardening" below — start there. Vinuth authorised writing live verification data to the
+   `sms_contacts` / `sms_agent_drafts` tables on 2026-06-13 for this purpose.
+3. Before relying on inbound auto-drafting in local dev (including the ready-poller), read
    Known issue #7 (possible local/production double-processing) — confirm with Vinuth how to
    handle it first.
 4. `cd server && npx tsc --noEmit` must be clean before any commit (repo rule).

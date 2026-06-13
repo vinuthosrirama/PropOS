@@ -15,52 +15,34 @@
  * POST /api/sms-agent/seed-stage1              — seed the Stage 1 test contact + voice samples
  * POST /api/sms-agent/seed-stage2              — seed a Stage 2 contact (real number, not redirected)
  * POST /api/sms-agent/contacts/:id/suggest     — AI-generate 3 message suggestions from thread history
+ * POST /api/sms-agent/run-ready                — run the CRM-triggered ready-queue poller now
  *
  * Static paths are registered before dynamic ones so Express matches correctly.
  */
 
 import { Router } from "express"
-import { isDbConnected, query } from "../lib/db.js"
+import { isDbConnected } from "../lib/db.js"
 import { sendSMS, smsConfigured } from "../lib/sms.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"
 import {
   listContacts, upsertContact, getContactById, markContacted, recordVoiceSignal,
   getUpcomingMeetings, canSendNow, recordAgentMessageSent, type Relationship,
 } from "../lib/smsContacts.js"
-import { getVoiceProfile, getAgentVoiceId } from "../lib/voiceProfile.js"
+import { getVoiceProfile } from "../lib/voiceProfile.js"
 import { calibrateVoice, recalibrateVoice } from "../lib/voiceCalibration.js"
 import {
   getPendingAgentDrafts, approveAgentDraft, rejectAgentDraft, markAgentDraftSent,
 } from "../lib/smsAgentDrafts.js"
-import { generateOpener, generateSuggestions, type AgentContext } from "../lib/smsAgent.js"
+import { generateOpener, generateSuggestions } from "../lib/smsAgent.js"
 import { runSmsOrchestration } from "../lib/smsOrchestrator.js"
+import { runReadyOutreach } from "../lib/smsReadyOutreach.js"
+import { getAgentContext } from "../lib/agentContext.js"
 import { buildStage1TestContact, buildStage2Contact, STARTER_VOICE_SAMPLES } from "../data/smsAgentSeed.js"
 
 const router = Router()
 
 function noDb(res: import("express").Response) {
   return res.status(503).json({ error: "Database not connected — set DATABASE_URL in server/.env" })
-}
-
-/** Build agent context from the JWT-authenticated agent id. Falls back to Vinuth/PropOS defaults. */
-async function getAgentContext(agentId?: number): Promise<AgentContext> {
-  const DEFAULT: AgentContext = { name: "Vinuth Srirama", agency: "PropOS", voiceId: "vinuth_personal" }
-  if (!agentId || !isDbConnected()) return DEFAULT
-  try {
-    const rows = await query<{ name: string; agency: string | null }>(
-      `SELECT name, agency FROM agents WHERE id = $1 LIMIT 1`,
-      [agentId],
-    )
-    const row = rows[0]
-    if (!row?.name) return DEFAULT
-    return {
-      name: row.name,
-      agency: row.agency ?? DEFAULT.agency,
-      voiceId: getAgentVoiceId(agentId),
-    }
-  } catch {
-    return DEFAULT
-  }
 }
 
 // ── Contacts ────────────────────────────────────────────────────────────────────
@@ -178,6 +160,18 @@ router.get("/meetings", async (_req, res) => {
 router.post("/orchestrate", async (_req, res) => {
   const summary = await runSmsOrchestration()
   res.json(summary)
+})
+
+// ── Ready-queue (CRM-triggered auto-outreach) ───────────────────────────────────
+
+router.post("/run-ready", async (_req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  const results = await runReadyOutreach()
+  res.json({
+    queued: results.map(r => ({
+      contactId: r.contactId, name: r.name, draftId: r.draftId, preview: r.preview, skipped: r.skipped,
+    })),
+  })
 })
 
 // ── Seed (Stage 1 test bed) ─────────────────────────────────────────────────────

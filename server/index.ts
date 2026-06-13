@@ -59,6 +59,7 @@ import { startOutreachScheduler } from "./lib/outreachScheduler.js"
 import { handleOutreachInbound } from "./lib/outreachAgent.js"
 import { handleSmsAgentInbound } from "./lib/smsAgentInbound.js"
 import { startSmsAgentScheduler } from "./lib/smsOrchestrator.js"
+import { startReadyOutreachScheduler } from "./lib/smsReadyOutreach.js"
 import { startTransportHealthMonitor } from "./lib/transportHealthMonitor.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
@@ -433,6 +434,7 @@ app.listen(PORT, async () => {
   startScheduler()
   startOutreachScheduler()
   startSmsAgentScheduler()
+  startReadyOutreachScheduler()
   startTransportHealthMonitor()
 
   // 4. Wire up transport-specific init

@@ -377,7 +377,7 @@ export default function VoiceAgentView() {
             {drafts.map(d => (
               <div key={d.id} style={{ background: C.bg3, borderRadius: 12, padding: 14 }}>
                 <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>
-                  {d.contact_name} said: "{d.inbound_body}"
+                  {d.inbound_body ? `${d.contact_name} said: "${d.inbound_body}"` : `New ${d.kind} for ${d.contact_name}`}
                 </div>
                 {editingDraftId === d.id ? (
                   <textarea
