@@ -16,6 +16,11 @@ import { query, execute, isDbConnected } from "./db.js"
 
 export const DEFAULT_VOICE_ID = "vinuth_personal"
 
+/** Returns the voice_id for a specific logged-in agent (e.g. "agent_3"). */
+export function getAgentVoiceId(agentId: number): string {
+  return `agent_${agentId}`
+}
+
 // ── Profile shape ──────────────────────────────────────────────────────────────
 
 export interface VoiceProfile {

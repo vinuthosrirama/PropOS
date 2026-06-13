@@ -15,10 +15,23 @@
 import { generateChatJSON, llmConfigured } from "./claude.js"
 import { sanitiseText } from "./sanitise.js"
 import { getThread } from "./conversations.js"
-import { getVoiceProfile, formatVoiceProfileForPrompt } from "./voiceProfile.js"
+import { getVoiceProfile, DEFAULT_VOICE_ID, formatVoiceProfileForPrompt } from "./voiceProfile.js"
 import type { SmsContact } from "./smsContacts.js"
 
 const SMS_LIMIT = 160
+
+// ── Agent context (who is logged in sending these messages) ──────────────────
+export interface AgentContext {
+  name: string      // e.g. "Cameron Knoll"
+  agency: string    // e.g. "Peake Real Estate"
+  voiceId: string   // e.g. "agent_3" — which voice profile to load
+}
+
+export const DEFAULT_AGENT: AgentContext = {
+  name: "Vinuth Srirama",
+  agency: "PropOS",
+  voiceId: DEFAULT_VOICE_ID,
+}
 
 // ── Output types ─────────────────────────────────────────────────────────────
 
@@ -52,13 +65,13 @@ function clean(s: string): string {
   return sanitiseText(s.replace(/^["']|["']$/g, "")).trim()
 }
 
-async function threadBlock(contact: SmsContact): Promise<string> {
+async function threadBlock(contact: SmsContact, agentFirstName = "Vinuth"): Promise<string> {
   try {
     const thread = await getThread(contact.phone)
     if (thread?.messages?.length) {
       const first = contact.name.split(" ")[0]
       return thread.messages.slice(-8).map(m =>
-        `[${m.role === "agent" ? "Vinuth" : first}]: ${m.body}`,
+        `[${m.role === "agent" ? agentFirstName : first}]: ${m.body}`,
       ).join("\n")
     }
   } catch { /* non-fatal */ }
@@ -82,8 +95,9 @@ const HARD_RULES = `HARD RULES:
 
 // ── Opener (first message in a thread) ──────────────────────────────────────────
 
-export async function generateOpener(contact: SmsContact): Promise<OpenerResult> {
+export async function generateOpener(contact: SmsContact, agent: AgentContext = DEFAULT_AGENT): Promise<OpenerResult> {
   const first = contact.name.split(" ")[0]
+  const agentFirst = agent.name.split(" ")[0]
   const objective = contact.conversation_objective ?? "Reconnect and see how they are going."
   const fallback: OpenerResult = {
     draft: clampSMS(`Hey ${first}, ${objective.toLowerCase().includes("coffee") ? "you free for a coffee this week?" : "how's things?"}`),
@@ -97,16 +111,18 @@ export async function generateOpener(contact: SmsContact): Promise<OpenerResult>
 
   if (!llmConfigured()) return fallback
 
-  const vp = await getVoiceProfile()
-  const prompt = `You are drafting an opening text from Vinuth Srirama to ${contact.name}, who is Vinuth's ${relationshipLabel(contact.relationship)}.
+  const vp = await getVoiceProfile(agent.voiceId)
+  const prompt = `You are drafting an opening text from ${agent.name} (${agent.agency}) to ${contact.name}, who is ${agentFirst}'s ${relationshipLabel(contact.relationship)}.
 
-VINUTH'S VOICE PROFILE:
+AGENT SENDING THIS TEXT: ${agent.name} from ${agent.agency}. Sign off as ${agentFirst}. Never mention AI or that this is automated.
+
+${agentFirst.toUpperCase()}'S VOICE PROFILE:
 ${formatVoiceProfileForPrompt(vp)}
 
 RELATIONSHIP VOICE ADJUSTMENTS (apply on top of the base profile):
 ${JSON.stringify(contact.voice_override ?? {})}
 
-HYPER-PERSONALISATION NOTES:
+HYPER-PERSONALISATION NOTES (specific things ${agentFirst} knows about ${contact.name.split(" ")[0]}):
 ${JSON.stringify(contact.personalisation ?? {}, null, 2)}
 
 OBJECTIVE (this is the reason for texting — nobody texts without one):
@@ -117,7 +133,7 @@ This is the first message in a new thread (or resuming after a gap). Give it a c
 Return ONLY this JSON (no markdown):
 {"draft_message":"...","voice_confidence":0.0,"personalisation_hook":"which note was referenced","follow_up_if_no_reply":{"wait_hours":48,"follow_up_message":"..."}}
 
-${HARD_RULES}`
+${HARD_RULES.replace("Vinuth", agentFirst)}`
 
   try {
     const raw = await generateChatJSON(prompt, 400)
@@ -153,8 +169,9 @@ export interface SuggestionResult {
   context: string      // one-line summary of what the AI picked up on
 }
 
-export async function generateSuggestions(contact: SmsContact): Promise<SuggestionResult> {
+export async function generateSuggestions(contact: SmsContact, agent: AgentContext = DEFAULT_AGENT): Promise<SuggestionResult> {
   const first = contact.name.split(" ")[0]
+  const agentFirst = agent.name.split(" ")[0]
   const fallback: SuggestionResult = {
     suggestions: [
       { draft: `Hey ${first}, how's things?`, tone: "casual", charCount: 0 },
@@ -167,39 +184,42 @@ export async function generateSuggestions(contact: SmsContact): Promise<Suggesti
 
   if (!llmConfigured()) return fallback
 
-  const vp = await getVoiceProfile()
+  const vp = await getVoiceProfile(agent.voiceId)
   const history = await threadBlock(contact)
   const objective = contact.conversation_objective ?? "Have a natural conversation."
 
-  const prompt = `You are drafting 3 different text message options for Vinuth Srirama to send to ${contact.name}, his ${relationshipLabel(contact.relationship)}.
+  const prompt = `You are drafting 3 different text message options for ${agent.name} (${agent.agency}) to send to ${contact.name}, ${agentFirst}'s ${relationshipLabel(contact.relationship)}.
 
-VINUTH'S VOICE PROFILE:
+AGENT SENDING: ${agent.name} from ${agent.agency}. All drafts must sound like ${agentFirst} wrote them personally.
+
+${agentFirst.toUpperCase()}'S VOICE PROFILE:
 ${formatVoiceProfileForPrompt(vp)}
 
 RELATIONSHIP VOICE ADJUSTMENTS:
 ${JSON.stringify(contact.voice_override ?? {})}
 
-HYPER-PERSONALISATION NOTES:
+HYPER-PERSONALISATION NOTES (specific things ${agentFirst} knows about ${first}):
 ${JSON.stringify(contact.personalisation ?? {}, null, 2)}
 
 CONVERSATION OBJECTIVE:
 ${objective}
 
-CONVERSATION HISTORY:
+CONVERSATION HISTORY (most recent messages at bottom):
 ${history}
 
-Draft 3 DIFFERENT text message options. Each should:
-- Sound exactly like Vinuth wrote it
-- Be contextually aware of the conversation history
-- Advance the objective naturally
-- Take a different tone/approach from the others
+Draft exactly 3 DIFFERENT text message options. Requirements for each:
+- Sound EXACTLY like ${agentFirst} personally wrote it — match the voice profile precisely
+- Be directly relevant to what ${first} last said (if there is history) OR to a specific personalisation detail (if no history)
+- Each option takes a genuinely different approach (e.g. one asks a question, one makes a plan, one references something specific)
+- None should feel like a generic "hey how are you" — each must earn its relevance
+- Sign off consistent with the voice profile sign-off style
 
-If there is conversation history, each suggestion should be a natural REPLY or follow-up. If no history, each should be a natural opener.
+Return ONLY this JSON (no markdown, no extra fields):
+{"suggestions":[{"draft":"...","tone":"casual"},{"draft":"...","tone":"direct"},{"draft":"...","tone":"warm"}],"context":"one sentence: what you noticed from the history or notes that shaped these options"}
 
-Return ONLY this JSON (no markdown):
-{"suggestions":[{"draft":"...","tone":"casual|direct|warm|playful|professional"},{"draft":"...","tone":"..."},{"draft":"...","tone":"..."}],"context":"one line about what you picked up on from the history/notes"}
+The "tone" field must be a SINGLE word from: casual, direct, warm, playful, professional.
 
-${HARD_RULES}`
+${HARD_RULES.replace("Vinuth", agentFirst)}`
 
   try {
     const raw = await generateChatJSON(prompt, 600)
@@ -224,8 +244,9 @@ ${HARD_RULES}`
 
 const SIMPLE_ACK = /^(ok|okay|cool|sweet|nice|great|sounds good|sg|thanks|thank you|ta|cheers|\u{1F44D}|yep|yup|yeah|haha|lol)[.! ]*$/iu
 
-export async function generateReply(contact: SmsContact, inbound: string): Promise<ReplyResult> {
+export async function generateReply(contact: SmsContact, inbound: string, agent: AgentContext = DEFAULT_AGENT): Promise<ReplyResult> {
   const first = contact.name.split(" ")[0]
+  const agentFirst = agent.name.split(" ")[0]
   const fallback: ReplyResult = {
     draft: clampSMS(`No worries ${first}, sounds good`),
     charCount: 0,
@@ -244,38 +265,40 @@ export async function generateReply(contact: SmsContact, inbound: string): Promi
 
   if (!llmConfigured()) return fallback
 
-  const vp = await getVoiceProfile()
-  const history = await threadBlock(contact)
+  const vp = await getVoiceProfile(agent.voiceId)
+  const history = await threadBlock(contact, agentFirst)
   const objective = contact.conversation_objective ?? "Have a natural conversation."
 
-  const prompt = `You are texting as Vinuth Srirama from his personal phone, replying to ${contact.name}, his ${relationshipLabel(contact.relationship)}.
+  const prompt = `You are texting as ${agent.name} (${agent.agency}) from their personal phone, replying to ${contact.name}, ${agentFirst}'s ${relationshipLabel(contact.relationship)}.
 
-VINUTH'S VOICE PROFILE:
+AGENT REPLYING: ${agent.name} from ${agent.agency}. Sign off as ${agentFirst} if a sign-off is needed. Never mention AI or automation.
+
+${agentFirst.toUpperCase()}'S VOICE PROFILE:
 ${formatVoiceProfileForPrompt(vp)}
 
 RELATIONSHIP VOICE ADJUSTMENTS (apply on top of base profile):
 ${JSON.stringify(contact.voice_override ?? {})}
 
-HYPER-PERSONALISATION NOTES (details only Vinuth would know — use naturally):
+HYPER-PERSONALISATION NOTES (details only ${agentFirst} would know — use naturally):
 ${JSON.stringify(contact.personalisation ?? {}, null, 2)}
 
 CONVERSATION OBJECTIVE (advance subtly, do not be robotic):
 ${objective}
 
-CONVERSATION HISTORY:
+CONVERSATION HISTORY (most recent messages at bottom):
 ${history}
 
 INBOUND MESSAGE FROM ${first}:
 "${inbound.slice(0, 500)}"
 
-Draft a reply that sounds EXACTLY like Vinuth wrote it himself, responds to what ${first} actually said, and advances the objective subtly. If Vinuth would not reply to this (it is a natural end), return draft_reply as null.
+Draft a reply that sounds EXACTLY like ${agentFirst} wrote it personally, responds directly to what ${first} actually said, and advances the objective subtly. If ${agentFirst} would not reply to this (natural conversation end), return draft_reply as null.
 
 Return ONLY this JSON (no markdown):
 {"draft_reply":"... or null","auto_sendable":false,"voice_confidence":0.0,"reasoning":"one sentence","personalisation_used":[]}
 
 AUTO-SENDABLE is true ONLY if ALL hold: the inbound is a simple factual question with an unambiguous answer available in the notes/history; the reply is under 50 chars; voice_confidence above 0.9; getting it wrong has zero consequence. Anything involving opinions, plans, emotions, or new information is NOT auto-sendable.
 
-${HARD_RULES}`
+${HARD_RULES.replace("Vinuth", agentFirst)}`
 
   try {
     const raw = await generateChatJSON(prompt, 400)

@@ -6,6 +6,9 @@
  *     model's auto_sendable + the voice-degradation brake all agree), or
  *   - queue a draft for Vinuth's approval.
  *
+ * Unknown numbers: auto-created as stage=1 contacts (status=active, auto_reply=false)
+ * so every inbound message gets a draft queued, even from unknown callers.
+ *
  * Stage routing: stage>=3 scheduling replies go through the calendar agent;
  * everything else goes through the conversational agent. Non-fatal throughout —
  * any error is swallowed so the main webhook pipeline is never affected.
@@ -14,10 +17,10 @@
 import { sendSMS, smsConfigured } from "./sms.js"
 import { addAgentMessageToThread } from "./conversations.js"
 import {
-  getContactByPhone, setContactStatus, bookSlot, getApprovedAsIsRate, markContacted,
-  canSendNow, recordAgentMessageSent,
+  getContactByPhone, upsertContact, setContactStatus, bookSlot, getApprovedAsIsRate,
+  markContacted, canSendNow, recordAgentMessageSent,
 } from "./smsContacts.js"
-import { generateReply } from "./smsAgent.js"
+import { generateReply, DEFAULT_AGENT } from "./smsAgent.js"
 import { negotiateMeeting, looksLikeScheduling } from "./calendarAgent.js"
 import { saveAgentDraft, type DraftKind } from "./smsAgentDrafts.js"
 import { isDbConnected } from "./db.js"
@@ -44,12 +47,35 @@ function isAfterHours(): boolean {
 /**
  * Main entry. Called in parallel (void) from handleIncomingReply. The inbound
  * body has already been appended to the conversation thread by the caller.
+ *
+ * The inbound handler always uses DEFAULT_AGENT (Vinuth/PropOS) because there is
+ * no logged-in session — BlueBubbles delivers webhooks server-side. Whoever
+ * approves the queued draft is the effective "sender" at send time.
  */
 export async function handleSmsAgentInbound(from: string, body: string): Promise<void> {
   if (!isDbConnected()) return
   try {
-    const contact = await getContactByPhone(from)
-    if (!contact) return                  // not one of our SMS-agent contacts
+    let contact = await getContactByPhone(from)
+
+    // Auto-create unknown numbers as stage-1 contacts so every inbound message
+    // gets a draft queued rather than silently dropped.
+    if (!contact) {
+      const norm = from.startsWith("+") ? from : "+" + from.replace(/\D/g, "")
+      const id = await upsertContact({
+        name: norm,           // phone as placeholder name until updated
+        phone: norm,
+        relationship: "agent_prospect",
+        stage: 1,
+        auto_reply: false,
+        source: "inbound:auto",
+        conversation_objective: "Respond naturally to this inbound message and find out who they are and what they need.",
+        personalisation: { note: "Auto-created from inbound message. Update name and details." },
+      })
+      contact = await getContactByPhone(norm)
+      if (!contact) return    // still null means upsert failed — give up non-fatally
+      console.log(`[smsAgentInbound] auto-created contact id=${id} for unknown number ${norm}`)
+    }
+
     if (contact.status === "opted_out") return
 
     const first = contact.name.split(" ")[0]
@@ -79,7 +105,7 @@ export async function handleSmsAgentInbound(from: string, body: string): Promise
         await setContactStatus(contact.id, "backlog")
       }
     } else {
-      const rep = await generateReply(contact, body)
+      const rep = await generateReply(contact, body, DEFAULT_AGENT)
       draft = rep.draft
       autoSendable = rep.autoSendable
       voiceConfidence = rep.voiceConfidence

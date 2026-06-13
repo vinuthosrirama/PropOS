@@ -446,23 +446,30 @@ app.listen(PORT, async () => {
     console.warn("  ⚠️  WEBHOOK_SECRET not set — /api/webhook/* accepts unauthenticated POSTs")
   }
 
-  if (smsTransport === "bluebubbles" && process.env.BASE_URL) {
+  // Where this server receives inbound webhooks. Normally BASE_URL, but in local dev
+  // BASE_URL is the public production domain (used for email links) which does NOT route
+  // to this machine — so inbound replies would never arrive. Set WEBHOOK_BASE_URL to a
+  // URL the SMS provider can reach this server at (e.g. http://localhost:3001 when the
+  // provider runs on the same Mac, or a tunnel) to receive replies locally.
+  const webhookBase = process.env.WEBHOOK_BASE_URL?.trim() || process.env.BASE_URL?.trim()
+
+  if (smsTransport === "bluebubbles" && webhookBase) {
     // Register incoming webhook with BlueBubbles so replies flow into PropOS
-    const webhookUrl = `${process.env.BASE_URL}/api/webhook/bluebubbles${webhookSecretQS}`
+    const webhookUrl = `${webhookBase}/api/webhook/bluebubbles${webhookSecretQS}`
     registerBlueBubblesWebhook(webhookUrl)
       .then(() => console.log(`  BlueBubbles webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  BlueBubbles webhook register failed:", e.message))
   }
 
-  if (smsTransport === "android-gateway" && process.env.BASE_URL) {
-    const webhookUrl = `${process.env.BASE_URL}/api/webhook/android-gateway${webhookSecretQS}`
+  if (smsTransport === "android-gateway" && webhookBase) {
+    const webhookUrl = `${webhookBase}/api/webhook/android-gateway${webhookSecretQS}`
     registerAndroidGatewayWebhook(webhookUrl)
       .then(() => console.log(`  AndroidGateway webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  AndroidGateway webhook register failed:", e.message))
   }
 
-  if (smsTransport === "telelink" && process.env.BASE_URL) {
-    const webhookUrl = `${process.env.BASE_URL}/api/webhook/telelink${webhookSecretQS}`
+  if (smsTransport === "telelink" && webhookBase) {
+    const webhookUrl = `${webhookBase}/api/webhook/telelink${webhookSecretQS}`
     registerTeleLinkWebhook(webhookUrl)
       .then(() => console.log(`  TeleLink webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  TeleLink webhook register failed:", e.message))
