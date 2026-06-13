@@ -20,19 +20,19 @@
  */
 
 import { Router } from "express"
-import { isDbConnected } from "../lib/db.js"
+import { isDbConnected, query } from "../lib/db.js"
 import { sendSMS, smsConfigured } from "../lib/sms.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"
 import {
   listContacts, upsertContact, getContactById, markContacted, recordVoiceSignal,
   getUpcomingMeetings, canSendNow, recordAgentMessageSent, type Relationship,
 } from "../lib/smsContacts.js"
-import { getVoiceProfile } from "../lib/voiceProfile.js"
+import { getVoiceProfile, getAgentVoiceId } from "../lib/voiceProfile.js"
 import { calibrateVoice, recalibrateVoice } from "../lib/voiceCalibration.js"
 import {
   getPendingAgentDrafts, approveAgentDraft, rejectAgentDraft, markAgentDraftSent,
 } from "../lib/smsAgentDrafts.js"
-import { generateOpener, generateSuggestions } from "../lib/smsAgent.js"
+import { generateOpener, generateSuggestions, type AgentContext } from "../lib/smsAgent.js"
 import { runSmsOrchestration } from "../lib/smsOrchestrator.js"
 import { buildStage1TestContact, buildStage2Contact, STARTER_VOICE_SAMPLES } from "../data/smsAgentSeed.js"
 
@@ -40,6 +40,27 @@ const router = Router()
 
 function noDb(res: import("express").Response) {
   return res.status(503).json({ error: "Database not connected — set DATABASE_URL in server/.env" })
+}
+
+/** Build agent context from the JWT-authenticated agent id. Falls back to Vinuth/PropOS defaults. */
+async function getAgentContext(agentId?: number): Promise<AgentContext> {
+  const DEFAULT: AgentContext = { name: "Vinuth Srirama", agency: "PropOS", voiceId: "vinuth_personal" }
+  if (!agentId || !isDbConnected()) return DEFAULT
+  try {
+    const rows = await query<{ name: string; agency: string | null }>(
+      `SELECT name, agency FROM agents WHERE id = $1 LIMIT 1`,
+      [agentId],
+    )
+    const row = rows[0]
+    if (!row?.name) return DEFAULT
+    return {
+      name: row.name,
+      agency: row.agency ?? DEFAULT.agency,
+      voiceId: getAgentVoiceId(agentId),
+    }
+  } catch {
+    return DEFAULT
+  }
 }
 
 // ── Contacts ────────────────────────────────────────────────────────────────────
@@ -72,22 +93,25 @@ router.post("/contacts", async (req, res) => {
 
 // ── Voice ─────────────────────────────────────────────────────────────────────
 
-router.get("/voice-profile", async (_req, res) => {
-  const vp = await getVoiceProfile()
+router.get("/voice-profile", async (req, res) => {
+  const agentCtx = await getAgentContext((req as any).agentId)
+  const vp = await getVoiceProfile(agentCtx.voiceId)
   res.json(vp)
 })
 
 router.post("/calibrate", async (req, res) => {
   const samples: string[] = Array.isArray(req.body?.samples) ? req.body.samples.map(String) : []
   if (samples.length === 0) return res.status(400).json({ error: "samples (string array) is required" })
-  const vp = await calibrateVoice(samples)
-  res.json({ ok: true, confidence: vp.confidence, samples_analysed: vp.samples_analysed, profile: vp.profile })
+  const agentCtx = await getAgentContext((req as any).agentId)
+  const vp = await calibrateVoice(samples, agentCtx.voiceId)
+  res.json({ ok: true, confidence: vp.confidence, samples_analysed: vp.samples_analysed, profile: vp.profile, voiceId: agentCtx.voiceId })
 })
 
-router.post("/recalibrate", async (_req, res) => {
-  const vp = await recalibrateVoice()
+router.post("/recalibrate", async (req, res) => {
+  const agentCtx = await getAgentContext((req as any).agentId)
+  const vp = await recalibrateVoice(agentCtx.voiceId)
   if (!vp) return res.json({ ok: false, message: "Not enough signals to recalibrate yet (need 5+)" })
-  res.json({ ok: true, confidence: vp.confidence, samples_analysed: vp.samples_analysed })
+  res.json({ ok: true, confidence: vp.confidence, samples_analysed: vp.samples_analysed, voiceId: agentCtx.voiceId })
 })
 
 // ── Drafts (approval queue) ─────────────────────────────────────────────────────
@@ -198,7 +222,8 @@ router.post("/contacts/:id/suggest", async (req, res) => {
   const contact = await getContactById(id)
   if (!contact) return res.status(404).json({ error: "Contact not found" })
 
-  const result = await generateSuggestions(contact)
+  const agentCtx = await getAgentContext((req as any).agentId)
+  const result = await generateSuggestions(contact, agentCtx)
   res.json(result)
 })
 
@@ -237,7 +262,8 @@ router.post("/initiate/:contactId", async (req, res) => {
   const contact = await getContactById(contactId)
   if (!contact) return res.status(404).json({ error: "Contact not found" })
 
-  const opener = await generateOpener(contact)
+  const agentCtx = await getAgentContext((req as any).agentId)
+  const opener = await generateOpener(contact, agentCtx)
   if (!smsConfigured()) {
     return res.json({ ok: true, sent: false, draft: opener.draft, message: "SMS not configured — draft only" })
   }
