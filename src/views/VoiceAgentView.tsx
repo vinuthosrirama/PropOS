@@ -77,6 +77,9 @@ export default function VoiceAgentView() {
   const [calibrateOpen, setCalibrateOpen] = useState(false)
   const [calibrateText, setCalibrateText] = useState("")
   const [calibrating, setCalibrating] = useState(false)
+  const [suggestions, setSuggestions] = useState<Array<{ draft: string; tone: string; charCount: number }>>([])
+  const [suggestCtx, setSuggestCtx] = useState<string | null>(null)
+  const [suggesting, setSuggesting] = useState(false)
   const [authRequired, setAuthRequired] = useState(false)
   const [loginEmail, setLoginEmail] = useState("")
   const [loginPassword, setLoginPassword] = useState("")
@@ -209,7 +212,39 @@ export default function VoiceAgentView() {
     } catch (e) { setActionMsg((e as Error).message) }
   }, [load, loadThread, selected])
 
-  // ── Voice calibration ────────────────────────────────────────────────────────────
+  // ── AI suggestions ──────────────────────────────────────────────────────────────
+  const suggest = useCallback(async () => {
+    if (!selected) return
+    setSuggesting(true)
+    setSuggestions([])
+    setSuggestCtx(null)
+    try {
+      const res = await authFetch(apiUrl(`/api/sms-agent/contacts/${selected.id}/suggest`), { method: "POST" })
+      const json = await res.json() as { suggestions?: Array<{ draft: string; tone: string; charCount: number }>; context?: string; error?: string }
+      if (json.error) { setActionMsg(json.error); return }
+      setSuggestions(json.suggestions ?? [])
+      setSuggestCtx(json.context ?? null)
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setSuggesting(false) }
+  }, [selected])
+
+  const generateOpener = useCallback(async () => {
+    if (!selected) return
+    setSending(true)
+    try {
+      const res = await authFetch(apiUrl(`/api/sms-agent/initiate/${selected.id}`), { method: "POST" })
+      const json = await res.json() as { ok?: boolean; sent?: boolean; draft?: string; error?: string }
+      if (!json.ok) { setActionMsg(json.error ?? "Failed"); return }
+      setActionMsg(json.sent ? `Opener sent: "${json.draft}"` : `Draft generated: "${json.draft}"`)
+      await loadThread(selected)
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setSending(false) }
+  }, [selected, loadThread])
+
+  // Clear suggestions when switching contacts
+  useEffect(() => { setSuggestions([]); setSuggestCtx(null) }, [selectedId])
+
+  // ── Voice calibration ──────────────────────────────────────────────────────────────
   const calibrate = useCallback(async () => {
     const samples = calibrateText.split("\n").map(s => s.trim()).filter(Boolean)
     if (samples.length === 0) return
@@ -456,6 +491,29 @@ export default function VoiceAgentView() {
                   )}
                   <div ref={threadEndRef} />
                 </div>
+                {/* AI suggestions panel */}
+                {suggestions.length > 0 && (
+                  <div style={{ background: C.bg3, borderRadius: 12, padding: 12, marginBottom: 10 }}>
+                    {suggestCtx && <div style={{ fontSize: 10.5, color: C.faint, marginBottom: 8 }}>AI context: {suggestCtx}</div>}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {suggestions.map((s, i) => (
+                        <button key={i} onClick={() => { setComposeText(s.draft); setSuggestions([]) }} style={{
+                          textAlign: "left", background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 10,
+                          padding: "8px 12px", cursor: "pointer", fontFamily: FONT, width: "100%",
+                        }}>
+                          <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4 }}>{s.draft}</div>
+                          <div style={{ fontSize: 10, color: C.faint, marginTop: 4 }}>
+                            {s.tone} · {s.charCount} chars
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={() => setSuggestions([])} style={{ ...btn, color: C.faint, background: "transparent", fontSize: 10, marginTop: 6, padding: "3px 8px" }}>
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
                 <div style={{ display: "flex", gap: 8 }}>
                   <input
                     value={composeText}
@@ -472,6 +530,22 @@ export default function VoiceAgentView() {
                   }}>
                     {sending ? "..." : "Send"}
                   </button>
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  <button onClick={() => void suggest()} disabled={suggesting} style={{
+                    ...btn, color: C.purple, background: "transparent", border: `1px solid ${C.purple}40`,
+                    opacity: suggesting ? 0.5 : 1, fontSize: 10.5,
+                  }}>
+                    {suggesting ? "Thinking..." : "Suggest messages"}
+                  </button>
+                  {thread.length === 0 && (
+                    <button onClick={() => void generateOpener()} disabled={sending} style={{
+                      ...btn, color: C.green, background: "transparent", border: `1px solid ${C.green}40`,
+                      opacity: sending ? 0.5 : 1, fontSize: 10.5,
+                    }}>
+                      Generate opener
+                    </button>
+                  )}
                 </div>
               </>
             ) : (

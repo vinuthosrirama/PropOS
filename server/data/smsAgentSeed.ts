@@ -67,3 +67,27 @@ export function buildStage1TestContact(name = "Test Partner"): UpsertContactInpu
     },
   }
 }
+
+/**
+ * Stage 2 contact — a real person Vinuth knows, NOT test-redirected.
+ * Stage 2 tests live two-way conversation with AI-suggested replies.
+ */
+export function buildStage2Contact(name: string, phone: string, personalisation?: Record<string, unknown>): UpsertContactInput {
+  return {
+    name,
+    phone,
+    relationship: "business_partner",
+    stage: 2,
+    auto_reply: false,
+    source: "seed:stage2",
+    conversation_objective: "Have a natural back-and-forth conversation. Test the AI suggestion quality by picking from recommended messages. Build towards a coffee catch-up.",
+    personalisation: personalisation ?? {
+      relationship: "Friend / business contact",
+      tone: "Casual and natural, like texting a mate",
+    },
+    voice_override: {
+      formality: -1,
+      humour: 1,
+    },
+  }
+}

@@ -13,6 +13,8 @@
  * GET  /api/sms-agent/meetings                 — upcoming booked meetings
  * POST /api/sms-agent/orchestrate              — run the daily orchestration now
  * POST /api/sms-agent/seed-stage1              — seed the Stage 1 test contact + voice samples
+ * POST /api/sms-agent/seed-stage2              — seed a Stage 2 contact (real number, not redirected)
+ * POST /api/sms-agent/contacts/:id/suggest     — AI-generate 3 message suggestions from thread history
  *
  * Static paths are registered before dynamic ones so Express matches correctly.
  */
@@ -30,9 +32,9 @@ import { calibrateVoice, recalibrateVoice } from "../lib/voiceCalibration.js"
 import {
   getPendingAgentDrafts, approveAgentDraft, rejectAgentDraft, markAgentDraftSent,
 } from "../lib/smsAgentDrafts.js"
-import { generateOpener } from "../lib/smsAgent.js"
+import { generateOpener, generateSuggestions } from "../lib/smsAgent.js"
 import { runSmsOrchestration } from "../lib/smsOrchestrator.js"
-import { buildStage1TestContact, STARTER_VOICE_SAMPLES } from "../data/smsAgentSeed.js"
+import { buildStage1TestContact, buildStage2Contact, STARTER_VOICE_SAMPLES } from "../data/smsAgentSeed.js"
 
 const router = Router()
 
@@ -170,6 +172,34 @@ router.post("/seed-stage1", async (req, res) => {
     voiceConfidence: vp.confidence,
     note: "Replace starter samples via POST /calibrate with 20+ of Vinuth's real texts. Sends redirect to TEST_RECIPIENT_PHONE.",
   })
+})
+
+// ── Seed Stage 2 contact ────────────────────────────────────────────────────────
+
+router.post("/seed-stage2", async (req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  const name = req.body?.name ? String(req.body.name) : "Stage 2 Contact"
+  const phone = req.body?.phone ? String(req.body.phone) : "+61426719845"
+  const contact = buildStage2Contact(name, phone, req.body?.personalisation)
+  const id = await upsertContact(contact)
+  res.json({
+    ok: true,
+    contactId: id,
+    phone: contact.phone,
+    note: "Stage 2 contact added. Messages go to their REAL number (not test-redirected). Use /contacts/:id/suggest for AI recommendations.",
+  })
+})
+
+// ── Suggest (AI-generated message options based on thread history) ───────────
+
+router.post("/contacts/:id/suggest", async (req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  const id = parseInt(req.params.id, 10)
+  const contact = await getContactById(id)
+  if (!contact) return res.status(404).json({ error: "Contact not found" })
+
+  const result = await generateSuggestions(contact)
+  res.json(result)
 })
 
 // ── Send (manual message typed in PropOS, delivered via iMessage) ──────────────
