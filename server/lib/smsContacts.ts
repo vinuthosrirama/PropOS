@@ -162,6 +162,30 @@ export async function markContacted(id: number, opts?: { followUpAt?: string; in
   )
 }
 
+const SEND_COOLDOWN_MS = 6_000
+
+/**
+ * Guards against duplicate/rapid sends to the same contact (e.g. two parallel
+ * inbound-reply paths both deciding to text within milliseconds of each other).
+ * Returns true if it is safe to send now. No-ops (always true) without a DB.
+ */
+export async function canSendNow(id: number): Promise<boolean> {
+  if (!isDbConnected()) return true
+  const rows = await query<{ last_agent_message_at: string | null }>(
+    `SELECT last_agent_message_at FROM sms_contacts WHERE id = $1`,
+    [id],
+  )
+  const last = rows[0]?.last_agent_message_at
+  if (!last) return true
+  return Date.now() - new Date(last).getTime() >= SEND_COOLDOWN_MS
+}
+
+/** Record that an outbound message was just sent to this contact (for canSendNow). */
+export async function recordAgentMessageSent(id: number): Promise<void> {
+  if (!isDbConnected()) return
+  await execute(`UPDATE sms_contacts SET last_agent_message_at = NOW() WHERE id = $1`, [id])
+}
+
 // ── Voice signals (learning data) ────────────────────────────────────────────
 
 export async function recordVoiceSignal(sig: VoiceSignal): Promise<void> {

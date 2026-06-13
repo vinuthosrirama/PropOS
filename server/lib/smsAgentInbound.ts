@@ -15,6 +15,7 @@ import { sendSMS, smsConfigured } from "./sms.js"
 import { addAgentMessageToThread } from "./conversations.js"
 import {
   getContactByPhone, setContactStatus, bookSlot, getApprovedAsIsRate, markContacted,
+  canSendNow, recordAgentMessageSent,
 } from "./smsContacts.js"
 import { generateReply } from "./smsAgent.js"
 import { negotiateMeeting, looksLikeScheduling } from "./calendarAgent.js"
@@ -108,13 +109,15 @@ export async function handleSmsAgentInbound(from: string, body: string): Promise
       autoSendable &&
       brakeOk &&
       !afterHoursBlock &&
-      smsConfigured()
+      smsConfigured() &&
+      await canSendNow(contact.id)
 
     if (canAutoSend) {
       try {
         await sendSMS(contact.phone, draft)
         await addAgentMessageToThread(contact.phone, draft, { leadName: contact.name })
         await markContacted(contact.id)
+        await recordAgentMessageSent(contact.id)
         console.log(`[smsAgentInbound] auto-sent ${kind} to ${first} (conf ${voiceConfidence}): "${draft.slice(0, 60)}"`)
         return
       } catch (err) {

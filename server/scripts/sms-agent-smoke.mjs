@@ -44,12 +44,63 @@ if (samplesFile) {
 
 const log = (label, obj) => console.log(`\n── ${label} ──\n${JSON.stringify(obj, null, 2)}`)
 
+// ── Auth (only needed when the server has DATABASE_URL set — /api/* is JWT-gated) ──
+// Logs in once with the agent account and refreshes the access token on 401 using
+// the refresh cookie, so a long-running smoke test survives the 15-minute expiry.
+const AGENT_EMAIL = process.env.AGENT_EMAIL || "vinuth.o.srirama@gmail.com"
+const AGENT_PASSWORD = process.env.AGENT_PASSWORD || "PropOS2026!"
+let accessToken = null
+let refreshCookie = null
+
+function extractRefreshCookie(res) {
+  const setCookie = res.headers.get("set-cookie")
+  if (!setCookie) return null
+  const match = setCookie.split(",").map(s => s.trim()).find(s => s.startsWith("propos_refresh="))
+  return match ? match.split(";")[0] : null
+}
+
+async function login() {
+  const res = await fetch(`${BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: AGENT_EMAIL, password: AGENT_PASSWORD }),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    console.log(`  (login HTTP ${res.status}: ${json.error || "unknown error"} — continuing unauthenticated)`)
+    return
+  }
+  accessToken = json.accessToken
+  refreshCookie = extractRefreshCookie(res) || refreshCookie
+}
+
+async function refresh() {
+  if (!refreshCookie) return false
+  const res = await fetch(`${BASE}/api/auth/refresh`, {
+    method: "POST",
+    headers: { Cookie: refreshCookie },
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) return false
+  accessToken = json.accessToken
+  refreshCookie = extractRefreshCookie(res) || refreshCookie
+  return true
+}
+
 async function call(method, path, body) {
-  const res = await fetch(`${BASE}${path}`, {
+  const doFetch = () => fetch(`${BASE}${path}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   })
+
+  let res = await doFetch()
+  if (res.status === 401 && (await refresh())) {
+    res = await doFetch()
+  }
   const text = await res.text()
   let json; try { json = JSON.parse(text) } catch { json = { raw: text } }
   if (!res.ok) console.log(`  (HTTP ${res.status})`)
@@ -57,6 +108,7 @@ async function call(method, path, body) {
 }
 
 console.log(`\n=== SMS Agent smoke test against ${BASE} ===`)
+await login()
 
 // 0. health
 try {

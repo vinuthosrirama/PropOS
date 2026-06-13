@@ -90,13 +90,20 @@ iPhone ──► BlueBubbles (Mac) ──► PropOS /api/webhook/bluebubbles ─
   opener via `generateChatJSON` (OpenAI gpt-4o-mini fallback, no Anthropic key set) and sent it via
   BlueBubbles to Vinuth's own phone. Message: *"Hey mate, how did the demo prep go? keen to chat about
   PropOS and our plans, maybe catch up later this week?"* — recorded to the conversation thread.
-- [ ] **Stage 1 — inbound verified** — BLOCKED by the webhook-auth bug below. Cannot confirm
-  `generateReply` + draft queueing until `/api/webhook/bluebubbles` is reachable again.
-- [ ] **Live test with a real business partner** — pending inbound fix + 20 real voice samples via `/calibrate`.
+- [x] **Stage 1 — inbound verified (2026-06-13)** — webhook-auth bug fixed (see issue #1, now
+  resolved): `/api/webhook/*` is exempted from the global `requireAuth` middleware and gated only by
+  `verifyWebhookSecret`. Locally verified: POST without `?secret=` → 401, wrong secret → 401, correct
+  secret → 200 and the payload reaches `handleSmsAgentInbound` → `generateReply` → `saveAgentDraft`
+  (draft id=1 appeared in `GET /api/sms-agent/drafts`, then `POST /drafts/1/reject` → `voice_signals`
+  row recorded). `WEBHOOK_SECRET` is set locally (`server/.env`); BlueBubbles webhook URL registered
+  on startup as `${BASE_URL}/api/webhook/bluebubbles?secret=...`.
+- [ ] **Live test with a real business partner** — pending 20 real voice samples via `/calibrate`.
 
 > All four build stages are code-complete and type-clean on the `sms-agent` branch.
-> Outbound (opener generation + send) is now live-verified. Inbound (reply generation,
-> conversation memory, draft approval) is blocked — see "Known issues" below.
+> Outbound (opener generation + send) and inbound (reply generation, conversation memory,
+> draft approval, webhook auth) are both live-verified locally. Remaining work is mostly
+> operational — see "Known issues" below for the few open items (Gmail OAuth scopes,
+> production WEBHOOK_SECRET).
 
 ---
 
@@ -158,45 +165,37 @@ registration order, so once `DATABASE_URL` is set, **every BlueBubbles inbound w
 401'd by `requireAuth`** before `verifyWebhookSecret` or the handler ever runs. Confirmed by sending
 a synthetic webhook POST and getting `{"error":"Missing or invalid Authorization header"}`.
 
-**Impact:** Replies from real people never reach `generateReply`, `handleOutreachInbound`, or the
-buyer/vendor conversation pipeline. The conversational agent is effectively deaf.
-
-**Fix (1 line, pending user authorization — security-relevant change to auth middleware on a
-publicly-tunneled server):**
+**RESOLVED (2026-06-13).** `server/index.ts`'s global `/api` middleware now exempts `/api/webhook/*`
+before the `requireAuth` check:
 ```ts
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  // Webhook routes have their own gate (verifyWebhookSecret, below) — never JWT-gated.
+  if (req.path.startsWith("/webhook/")) return next()
   if (!isDbConnected()) return next()
-  if (req.path.startsWith("/webhook/")) return next()   // ← add this line
   return requireAuth(req, res, next)
 })
 ```
-This is safe because `/api/webhook/*` is already gated by `verifyWebhookSecret` (set `WEBHOOK_SECRET`
-in `.env` to enforce it — currently unset, so webhooks are unauthenticated, which is its own
-pre-existing issue, see #2).
+Verified locally: unauthenticated/wrong-secret POSTs to `/api/webhook/bluebubbles` → 401; correct
+`?secret=` → 200 and the inbound message reaches `handleSmsAgentInbound`. See Stage status above.
 
 ### 2. WEBHOOK_SECRET not set
-**Problem:** Server log shows `⚠️ WEBHOOK_SECRET not set — /api/webhook/* accepts unauthenticated POSTs`.
-Combined with issue #1's fix, this means anyone who finds `https://propos.addvantage.site/api/webhook/bluebubbles`
-could POST a fake "new-message" payload and trigger `generateReply`/auto-send logic (burns OpenAI/Anthropic
-credits, could pollute conversation threads).
 
-**Fix:** Set `WEBHOOK_SECRET=<random 32+ char string>` in `server/.env` and on Railway, then configure
-BlueBubbles's webhook URL with `?secret=<value>` appended. Low urgency while `SMS_AGENT_AUTOSEND` is off
-(worst case is a queued draft, not a real send) but should be done before enabling auto-send.
+**RESOLVED (2026-06-13) for local dev.** `WEBHOOK_SECRET` is set in `server/.env` (32-char hex) and
+`registerBlueBubblesWebhook()` appends `?secret=...` to the registered webhook URL on startup
+(confirmed in server logs: "Webhook auth: shared secret ENFORCED on /api/webhook/*").
+
+**Still open:** `WEBHOOK_SECRET` is NOT set on Railway production yet. Production deploys from
+`main`, which doesn't have the issue #1 fix merged — setting the secret there now wouldn't enable
+anything and would require BlueBubbles' production webhook URL to be updated too. Do this as part
+of merging `sms-agent` → `main` (Vinuth's call on timing).
 
 ### 3. JWT access tokens expire every 15 minutes
-**Problem:** Every `/api/sms-agent/*` call now needs `Authorization: Bearer <token>`, and that token
-dies after 15 minutes (`ACCESS_TTL = 15 * 60` in `server/lib/auth.ts`). The agent account created
-during this session is `vinuth.o.srirama@gmail.com` (id=1) on the Supabase DB.
 
-**Fix options:**
-- For scripts/cron (orchestrator, future automation): use `/api/auth/refresh` with the httpOnly
-  refresh cookie (7-day TTL), or store the password and re-login on 401.
-- For a single trusted server-to-server caller (e.g. the daily 7am orchestrator running inside the
-  same Node process), consider calling the underlying functions directly instead of HTTP — `smsOrchestrator.ts`
-  likely already does this (it's in-process, not via fetch). Worth double-checking it doesn't hit the JWT wall.
-- For convenience during dev, raise `ACCESS_TTL` locally — do NOT do this in production without
-  understanding the security tradeoff (longer-lived stolen tokens).
+**RESOLVED (2026-06-13).** All in-process callers (`smsOrchestrator.ts`'s daily cron, the inbound
+webhook handler) already called the underlying `lib/` functions directly — no HTTP/JWT involved, so
+the 15-minute expiry never affected them. The only place tokens matter is external tooling
+(`server/scripts/sms-agent-smoke.mjs`), which now logs in via `/api/auth/login` and auto-refreshes
+via `/api/auth/refresh` on a 401.
 
 ### 4. Voice calibration is still on placeholder data
 **Problem:** `STARTER_VOICE_SAMPLES` in `smsAgentSeed.ts` are generic Australian-casual placeholders,
@@ -262,18 +261,22 @@ are already code-complete but untested and depend on an Anthropic key per issue 
 
 ## Future robustness ideas (not urgent, but worth tracking)
 
-- **Per-contact rate limiting / cooldown** — nothing currently stops the agent from texting the same
-  contact repeatedly if `smsOrchestrator.ts`'s daily cron and a manual `/initiate` overlap. Add a
-  `last_agent_message_at` cooldown check before sending.
+- **RESOLVED (2026-06-13): Per-contact rate limiting / cooldown** — `sms_contacts.last_agent_message_at`
+  (new column, `server/lib/db.ts` migration) + `canSendNow()`/`recordAgentMessageSent()` in
+  `smsContacts.ts` enforce a 6-second cooldown between sends to the same contact. Checked before
+  every send path: `/drafts/:id/approve`, `/initiate/:contactId`, and the inbound auto-send branch
+  in `smsAgentInbound.ts`. HTTP callers get a 429 if the cooldown is active.
 - **Dead-letter queue for failed sends** — `sendViaBlueBubbles` retries 3x then throws; if BlueBubbles
   is down for an extended period (Mac asleep, tunnel down), drafts/openers should queue rather than
   fail silently. Worth checking what `initiate`/`drafts/approve` do on a thrown error from `sendSMS`.
 - **Multi-provider model routing for cost** — now that `generateChatJSON` exists, could route
   cheap/simple replies (SIMPLE_ACK-adjacent but not quite) to gpt-4o-mini and reserve Sonnet for
   openers/complex replies, regardless of which key is "primary".
-- **BlueBubbles uptime monitoring** — the Mac must stay awake and the launchd tunnel must stay up.
-  Consider a Railway-side health check that pings `/api/sms-transport` every few minutes and alerts
-  (e.g. via the Gmail transport) if `bluebubbles.ok` flips to false.
+- **RESOLVED (2026-06-13): BlueBubbles uptime monitoring** — `server/lib/transportHealthMonitor.ts`
+  polls `checkSmsTransport()` on a cron (`SMS_TRANSPORT_CHECK_CRON`, default every 10 min) and emails
+  `SMS_TRANSPORT_ALERT_EMAIL` (falls back to `GMAIL_USER`) on a healthy↔unhealthy transition. Started
+  from `index.ts` alongside the other schedulers; confirmed in logs ("SMS transport health monitor:
+  started (*/10 * * * *, alerts → vinuth.o.srirama@gmail.com)").
 - **Conversation thread pruning** — `threadBlock` reads "last 8 messages"; for long-running
   relationships this will eventually need pagination/summarisation so old context isn't silently dropped.
 

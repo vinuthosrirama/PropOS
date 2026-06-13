@@ -59,6 +59,7 @@ import { startOutreachScheduler } from "./lib/outreachScheduler.js"
 import { handleOutreachInbound } from "./lib/outreachAgent.js"
 import { handleSmsAgentInbound } from "./lib/smsAgentInbound.js"
 import { startSmsAgentScheduler } from "./lib/smsOrchestrator.js"
+import { startTransportHealthMonitor } from "./lib/transportHealthMonitor.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
@@ -204,6 +205,8 @@ app.post("/api/test-sms", express.json(), async (req: Request, res: Response) =>
 // Auto-enforces when DATABASE_URL is set (production).
 // No-op when DATABASE_URL is missing (demo/dev mode) so the demo runs without accounts.
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  // Webhook routes have their own gate (verifyWebhookSecret, below) — never JWT-gated.
+  if (req.path.startsWith("/webhook/")) return next()
   if (!isDbConnected()) return next()
   return requireAuth(req, res, next)
 })
@@ -430,6 +433,7 @@ app.listen(PORT, async () => {
   startScheduler()
   startOutreachScheduler()
   startSmsAgentScheduler()
+  startTransportHealthMonitor()
 
   // 4. Wire up transport-specific init
   // Webhook callback URLs carry ?secret= so the verifyWebhookSecret gate passes.
