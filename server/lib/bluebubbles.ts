@@ -50,9 +50,13 @@ export async function sendViaBlueBubbles(
   const actualTo   = testPhone ?? to
   const actualBody = testPhone ? `[TEST to ${to}]\n${body}` : body
 
-  // "any;-;+number" — BlueBubbles tries iMessage first, falls back to SMS
+  // chatGuid service prefix. Default "any" lets the Private API pick iMessage/SMS.
+  // BLUEBUBBLES_SERVICE=iMessage forces a real service for the AppleScript path
+  // (AppleScript cannot use "any" — it errors -1700). Set this when the Private
+  // API helper is not connected and you are messaging iMessage contacts.
+  const service    = process.env.BLUEBUBBLES_SERVICE?.trim() || "any"
   const safeNumber = actualTo.startsWith("+") ? actualTo : "+" + actualTo.replace(/\D/g, "")
-  const chatGuid   = `any;-;${safeNumber}`
+  const chatGuid   = `${service};-;${safeNumber}`
   const tempGuid   = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
   const MAX_ATTEMPTS = 3

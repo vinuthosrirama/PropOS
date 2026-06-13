@@ -46,6 +46,10 @@ recipients, falls back to SMS automatically. Replies arrive via webhook instantl
 
 **GitHub:** https://github.com/BlueBubblesApp/bluebubbles-server
 
+**✅ VERIFIED WORKING (2026-06-13)** — confirmed end-to-end with a real iMessage
+received on Vinuth's phone. Working config is below. Read the "Lessons learned"
+section before changing anything — several approaches looked correct but failed.
+
 ### Setup (~20 min)
 
 **1. Install BlueBubbles on your Mac:**
@@ -60,22 +64,80 @@ System Settings → Privacy & Security → Full Disk Access → + BlueBubbles
 **3. Enable SMS Relay on iPhone:**
 Settings → Messages → Text Message Forwarding → enable your Mac
 
-**4. Expose via Cloudflare Tunnel (free, permanent URL):**
+**4. Do NOT enable Private API unless SIP is disabled.**
+BlueBubbles Settings → Private API shows "SIP Disabled: Fail" on a normal Mac.
+Toggling Private API ON anyway causes BlueBubbles to repeatedly try (and fail) to
+inject a helper dylib into Messages.app — it force-quits Messages every ~1-2s in
+an infinite crash loop. If this happens: toggle Private API OFF, fully quit
+BlueBubbles (check Activity Monitor for stray "BlueBubbles"/"BlueBubbles Helper"
+processes), reopen Messages.app manually first, then reopen BlueBubbles.
+**You do not need Private API for plain text sends — AppleScript mode works fine.**
+
+**5. Expose via a PERMANENT named Cloudflare Tunnel (not a quick tunnel):**
+
+Quick tunnels (`cloudflared tunnel --url ...`, the kind BlueBubbles spins up itself
+via its built-in "Cloudflare (Recommended)" proxy option) generate a **new random
+URL every restart** — painful to keep updating in `.env`. Instead, use a named
+tunnel tied to the Cloudflare account that owns `addvantage.site`:
+
 ```bash
-brew install cloudflare/cloudflare/cloudflared
-cloudflared tunnel --url http://localhost:1234
-# Copy the generated URL: https://xxxx.trycloudflare.com
+# One-time: tunnel "propos-bb" already exists, routed to bluebubbles.addvantage.site
+cloudflared tunnel route dns propos-bb bluebubbles.addvantage.site   # idempotent
+
+# Config at ~/.cloudflared/config.yml:
+#   tunnel: 1547ca82-3ca8-4cb0-8f43-a52363797bc7
+#   credentials-file: /Users/vinuthmacbook/.cloudflared/1547ca82-3ca8-4cb0-8f43-a52363797bc7.json
+#   ingress:
+#     - hostname: bluebubbles.addvantage.site
+#       service: http://localhost:1234
+#     - service: http_status:404
+
+cloudflared tunnel run propos-bb
 ```
 
-**5. Set Railway env vars:**
+Made persistent via a launchd agent (auto-starts on login, restarts on crash):
+`~/Library/LaunchAgents/com.propos.bluebubbles-tunnel.plist` runs
+`cloudflared tunnel run propos-bb` with `RunAtLoad` + `KeepAlive`.
+
+This means `BLUEBUBBLES_URL` never needs to change again — set it once to
+`https://bluebubbles.addvantage.site`.
+
+**6. Set env vars (server/.env and Railway):**
 ```env
+SMS_TRANSPORT_CHAIN=bluebubbles
 SMS_TRANSPORT=bluebubbles
-BLUEBUBBLES_URL=https://xxxx.trycloudflare.com
+BLUEBUBBLES_URL=https://bluebubbles.addvantage.site
 BLUEBUBBLES_PASSWORD=your_bluebubbles_password
+
+# Required when Private API is OFF (see lessons learned below):
+BLUEBUBBLES_METHOD=apple-script
+BLUEBUBBLES_SERVICE=iMessage
 ```
 
-**6. Set inbound webhook in BlueBubbles:**
+**7. Set inbound webhook in BlueBubbles:**
 Server → Webhooks → Add → `https://propos.addvantage.site/api/webhook/bluebubbles`
+(registered automatically on server startup — see `registerBlueBubblesWebhook`)
+
+### Lessons learned (do not repeat these)
+
+- **`chatGuid: "any;-;+number"` fails with AppleScript** (`-1700: Can't make any
+  into type constant`). The `"any"` service prefix only works via the Private API
+  helper. Without Private API, you MUST set `BLUEBUBBLES_SERVICE=iMessage` (or
+  `SMS`) so the chatGuid becomes `"iMessage;-;+number"`. Implemented in
+  `server/lib/bluebubbles.ts` via `BLUEBUBBLES_SERVICE` env var.
+- **`BLUEBUBBLES_METHOD=apple-script`** forces the non-Private-API send path
+  explicitly — set this whenever Private API is off (which is the default/safe
+  state on a Mac with SIP enabled).
+- **Quick Cloudflare tunnels (`trycloudflare.com`) rotate their URL on every
+  BlueBubbles restart.** Use the permanent named tunnel (`propos-bb` →
+  `bluebubbles.addvantage.site`) instead — see Step 5.
+- **`/api/test-sms`** (no DB required) is the fastest way to verify the transport
+  — it sends to `TEST_RECIPIENT_PHONE` and returns the full `attempts` array
+  showing exactly which transport succeeded.
+- **`/api/outreach-targets/trigger-now`** requires `DATABASE_URL` to be set
+  (Supabase Postgres) AND a valid Bearer auth token once a DB is connected —
+  it 503s with `{"error":"No database"}` in pure demo mode, and 401s with
+  `{"error":"Missing or invalid Authorization header"}` once a DB is connected.
 
 ---
 
