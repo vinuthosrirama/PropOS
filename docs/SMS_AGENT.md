@@ -109,6 +109,9 @@ iPhone ──► BlueBubbles (Mac) ──► PropOS /api/webhook/bluebubbles ─
   Full send path (UI → `/api/sms-agent/contacts/:id/send` → `sendSMS` → BlueBubbles → iPhone) is
   confirmed working end-to-end, not just in the dev preview thread.
 - [ ] **Live test with a real business partner** — pending 20 real voice samples via `/calibrate`.
+- [ ] **CRM-Triggered Auto-Outreach + per-agent learning loop** — planned, not yet built. See
+  "Planned: CRM-Triggered Auto-Outreach + MVP Hardening" below for the full spec (8 build items +
+  live CRM reality check).
 
 > All four build stages are code-complete and type-clean on the `sms-agent` branch.
 > Outbound (opener generation + send) and inbound (reply generation, conversation memory,
@@ -244,6 +247,42 @@ is broken.
 **Fix:** Regenerate `GMAIL_REFRESH_TOKEN` with the correct Gmail API scopes (likely needs
 `gmail.readonly` or `gmail.modify` in addition to `gmail.send`). Separate task, not SMS-agent-specific.
 
+### 7. Possible double-processing of inbound replies (local + production share one DB) — OPEN
+
+**Problem (discovered 2026-06-13):** Fixing issues #1/#2 for local dev required registering a
+BlueBubbles webhook pointing at `http://localhost:3001` (the new `WEBHOOK_BASE_URL` env var, see
+`server/index.ts`'s webhook-registration block, shipped in commit d849392). BlueBubbles' webhook
+list (`GET /api/v1/webhook`) shows this local webhook (id=3) **alongside two pre-existing
+production webhooks (id=1, id=2) pointing at `https://propos.addvantage.site/api/webhook/bluebubbles`**.
+Local and production point at the **same Supabase `DATABASE_URL`**.
+
+After sending one synthetic inbound webhook to the local server, the conversation thread ended up
+with TWO new rows instead of one — a "lead" message and an "agent" message with **identical body
+text**, immediately after the genuine inbound reply:
+
+```
+4 lead   09:33:35 | yeah sounds good, keen to catch up. how about Thursday arvo?
+5 lead   09:34:58 | sounds good, Thursday arvo it is. reckon we can chat about PropOS
+6 agent  09:35:07 | sounds good, Thursday arvo it is. reckon we can chat about PropOS
+```
+
+Local autosend is OFF (`SMS_AGENT_AUTOSEND` unset, `Test Partner.auto_reply = false`), so the local
+server alone shouldn't produce message 6. Leading hypothesis: BlueBubbles fanned the same inbound
+event out to all three registered webhooks; production (different `SMS_AGENT_AUTOSEND`/`auto_reply`
+config there?) auto-replied and wrote to the shared `conversations` table, and BlueBubbles' own echo
+of that send (`isFromMe`) was then parsed back in locally as a "lead" message by `parseBBWebhook`.
+
+**NOT YET FIXED.** Verifying this requires probing `https://propos.addvantage.site/api/webhook/*` or
+inspecting its env — both touch shared production data/config and were correctly blocked by the
+permission system without Vinuth's explicit go-ahead. **Before relying on local inbound
+auto-drafting again (including the ready-poller below, which writes to the same tables), ask
+Vinuth how he wants to handle this**, e.g.:
+- Temporarily unregister BlueBubbles webhook ids 1/2 (production) during local dev/testing, or
+- Confirm production's `SMS_AGENT_AUTOSEND`/contact `auto_reply` settings are safe, or
+- Make `handleIncomingReply`/`addReplyToThread` idempotent (dedupe by BlueBubbles message GUID) so
+  duplicate fan-out from multiple registered webhooks is harmless regardless — probably the right
+  long-term fix either way.
+
 ---
 
 ## Gap analysis: what's needed to reach a fully working Stage 2
@@ -293,13 +332,217 @@ are already code-complete but untested and depend on an Anthropic key per issue 
 
 ---
 
+## Planned: CRM-Triggered Auto-Outreach + MVP Hardening (2026-06-13)
+
+**Not yet built** — this section is the spec for the next work session (any machine: `git pull` on
+`sms-agent` and start here). Goal: tick a `ready_to_contact` box on a `sms_contacts` row in Supabase
+→ a hyper-personalised opener is generated automatically and lands in the Voice tab's approval
+queue. Live for Aneesha + Vinuth's own number now (Stage 2); same mechanism scales to the full lead
+DB at Stage 4 once `SMS_LIVE_ALLOWLIST` is widened.
+
+### Why nothing fires today (audit)
+- The daily orchestrator's "new outreach" step (`smsOrchestrator.ts` `queueNewOutreach`, ~line 76)
+  reads the **old `outreach_targets` table**, not `sms_contacts` — where Aneesha, per-agent voice,
+  and all Stage 1/2 work actually live. Editing a `sms_contacts` row is invisible to it.
+- `queueFollowUps` (~line 51) skips any contact with no `last_contact` — i.e. every brand-new lead.
+- The orchestrator only runs 7am weekdays, not "right after I edit the CRM".
+- **Latent bug:** `normalisePhone()` (`smsContacts.ts:52`) only strips whitespace. `0426 719 845`
+  typed into Supabase won't match the `+61426719845` BlueBubbles delivers on inbound — creates a
+  duplicate contact and loses personalisation. High-likelihood the moment AU numbers are hand-entered.
+
+### Decisions (confirmed with Vinuth)
+1. Trigger = a `ready_to_contact` checkbox on `sms_contacts` (not a status string — no typo risk).
+2. Allowlisted leads (Aneesha / future live DB): queue for one-tap approval — generate
+   automatically, do not auto-send.
+3. Non-allowlisted leads (testing): queue as draft only — same draft-time behaviour as #2.
+
+Both (2) and (3) resolve to **tick → generate opener → queue draft**. The existing allowlist gate
+(`bluebubbles.ts:53`) only matters at approve/send time and is already built — Aneesha sends real,
+everyone else redirects to the test phone, on approval.
+
+### Build items
+
+1. **Schema** (`server/lib/db.ts`) — two new columns + index on `sms_contacts`, idempotent
+   migration steps (`ADD COLUMN IF NOT EXISTS`, same `[label, sql]` pattern):
+   - `ready_to_contact BOOLEAN NOT NULL DEFAULT FALSE` — the trigger.
+   - `assigned_agent_id INTEGER` (nullable, references `agents.id`) — whose voice writes the
+     opener; `NULL` = default (Vinuth). Live schema check (below) confirms `agents` already has
+     the right shape for Stage 4 (id/email/name/agency/phone/role) — this FK is the only thing
+     missing to connect a lead to an agent's voice.
+   - Partial index: `CREATE INDEX ... ON sms_contacts(ready_to_contact) WHERE ready_to_contact = TRUE`.
+
+2. **Phone normalisation → E.164** (`server/lib/smsContacts.ts`) — rewrite `normalisePhone()`:
+   strip spaces/dashes/parens; `04xxxxxxxx` → `+614xxxxxxxx`; `61…` → `+61…`; keep existing `+…`.
+   Apply on both write (`upsertContact`) and read (`getContactByPhone`). Existing rows are already
+   `+61…`, no backfill needed — fixes all *future* hand-entered numbers.
+
+3. **Ready-queue poller** (`server/lib/smsReadyOutreach.ts`, new) — one exported `runReadyOutreach()`:
+   1. Atomic claim: `UPDATE sms_contacts SET ready_to_contact = FALSE, updated_at = NOW() WHERE
+      ready_to_contact = TRUE AND status NOT IN ('opted_out') RETURNING *`, batched (e.g.
+      `LIMIT 15`) — prevents double-drafting across overlapping ticks / a slow LLM call.
+   2. Per claimed contact: skip if a pending draft already exists; skip if opted out (double-check
+      the `opt_outs` registry beyond `status`, Spam Act safety).
+   3. `getAgentContext(contact.assigned_agent_id)` → `generateOpener(contact, agentCtx)` — reads
+      `personalisation` JSONB, so richer CRM detail = a more hyper-personalised opener.
+   4. `saveAgentDraft({ contactId, draftBody, kind: "opener", reasoning: "CRM ready_to_contact",
+      voiceConfidence })` — lands in the existing approval queue. The generator never throws
+      (returns a safe template on failure), so a draft is always produced; log per-contact outcome.
+   Register in `server/index.ts` as a cron, every 2 min (`*/2 * * * *`, Melbourne tz), guarded by
+   `isDbConnected()`, alongside the existing 7am orchestrator.
+
+4. **Shared agent-context helper** (`server/lib/agentContext.ts`, new) — lift `getAgentContext(agentId?)`
+   out of `routes/sms-agent.ts` so both the JWT route path and the autonomous poller use one
+   implementation. Queries `agents` by id → `{ name, agency, voiceId: agent_<id> }`, falls back to
+   Vinuth/PropOS when null. Update the route to import it.
+
+5. **Manual trigger for demos** (`server/routes/sms-agent.ts`) — `POST /api/sms-agent/run-ready`
+   (JWT) calls `runReadyOutreach()` once immediately, returns `{ queued: [{contact, draftId, preview}] }`.
+   Lets Vinuth tick a box and see the opener in seconds during a live demo instead of waiting 2 min.
+
+6. **Single source of truth** (`server/lib/smsOrchestrator.ts`) — gate the legacy `queueNewOutreach`
+   (`outreach_targets` promoter) behind `SMS_AGENT_PROMOTE_TARGETS` (default off), so the **only**
+   outreach trigger is `ready_to_contact` on `sms_contacts`. Prevents duplicate drafts from two
+   uncoordinated sources.
+
+7. **Voice-tab polish** (`src/views/VoiceAgentView.tsx`) — opener drafts already render. Add:
+   contact name on each draft card (already returned via join — `contact_name`); re-fetch
+   `/drafts` every ~30s (and after approve/reject) so newly-queued openers appear without reload.
+
+8. **Learning loop — per-agent nightly recalibration (addresses "gets better over time")**
+
+   Most of this already exists and works *today* for Vinuth, no extra build needed for him:
+   - Every approve/edit/reject writes a row to `voice_signals` (`draft_body`, `action`,
+     `edited_body`, `contact_id`, `relationship` — `smsContacts.ts:194`). An **edited** draft
+     records the human's corrected wording verbatim in `edited_body` — the highest-value signal.
+   - `recalibrateVoice(voiceId)` reads accumulated signals and updates that voice's profile.
+   - The nightly orchestrator (`smsOrchestrator.ts:150-156`) already calls
+     `recalibrateVoice(DEFAULT_VOICE_ID)` once `countSignalsSinceCalibration >= RECALIBRATE_THRESHOLD`
+     — Vinuth's voice already self-improves from his approve/edit/reject history.
+
+   **Gap:** that nightly call is hardcoded to `DEFAULT_VOICE_ID` only. With per-agent voices
+   (`agent_<id>`, commit d849392) and the new `assigned_agent_id` column (#1), other agents'
+   signals accumulate in `voice_signals` but only auto-recalibrate via manual `POST /recalibrate`.
+   **Fix:** in the nightly block, after the existing Vinuth check, loop `SELECT id FROM agents` and
+   run the same `countSignalsSinceCalibration` / `recalibrateVoice` pair for each `agent_<id>` —
+   same two functions, just called per-agent. Net effect: the more openers/replies an agent
+   approves or edits, the closer future drafts match their actual voice — for every agent,
+   automatically, nightly.
+
+   **Optional polish (not blocking):** `voice_signals.edit_diff` exists in the schema and is
+   accepted by `saveVoiceSignal`, but nothing currently computes a value — it's always `null`. A
+   real diff (word-level diff of `draft_body` vs `edited_body`) would let recalibration learn *what*
+   changed (tone? length? specific phrases?), not just *that* it changed. Worth doing once #8's
+   per-agent loop is live and there's enough edited-draft volume to make the extra signal meaningful.
+
+### CRM reality check (2026-06-13) — read-only inspection of live Supabase
+
+Ran a read-only query against `sms_contacts` and `agents` via `server/.env`'s `DATABASE_URL`:
+
+- **`sms_contacts` columns (17 total):** id, name, phone, relationship, stage, personalisation
+  (jsonb), voice_override (jsonb), conversation_objective, last_contact, status, auto_reply,
+  follow_up_at, attempts, source, created_at, updated_at, last_agent_message_at. **No
+  `ready_to_contact` or `assigned_agent_id` yet** — confirms build item #1 is correctly scoped,
+  nothing conflicts.
+- **Rows (2 total, both Stage ≤2 as expected):**
+  - `[1] Test Partner <+61415883354>` — Vinuth's own number, stage 1, source `seed:stage1`.
+  - `[2] Aneesha <+61426719845>` — stage 2, source `seed:stage2`.
+  - Both `personalisation` JSONB currently hold only **conversational/relationship** fields
+    (`tone`, `recent_topics`, `things_to_ask`, `current_projects`, `relationship`,
+    `what_we_call_each_other`) — **no real-estate fields** (recently sold, currently listing,
+    suburb focus, etc.) yet.
+- **`agents` table:** 1 row — `[1] vinuth.o.srirama@gmail.com | Vinuth Srirama | AddVantage |
+  role=agent`. Schema already covers everything Stage 4 needs (email/name/agency/phone/role/
+  office_id) — `assigned_agent_id` (#1) is the only missing link from a lead to an agent.
+
+**Re: "include the REA's personalisation info like recently sold, currently listing, etc."** —
+`personalisation` is freeform JSONB, so no schema change is needed to add these; it's a **data**
+gap, not a structure gap. I did **not** write example values myself: an attempt to upsert
+placeholder addresses/prices into the live CRM for Aneesha's and Vinuth's contact rows was blocked
+by the permission system as fabricated data that could later be sent to real people as
+"hyper-personalised" outreach once `ready_to_contact` exists — correctly so.
+
+**Action for Vinuth (either machine, anytime):** add real values to `personalisation` for contacts
+1 and/or 2 in the Supabase table editor (or paste them here and they'll be written in as
+user-provided data). Suggested shape — `generateOpener` dumps this JSON raw into the prompt, so any
+keys work, but these names read naturally:
+```json
+{
+  "recent_sale": { "address": "...", "price": "...", "sold_date": "YYYY-MM-DD" },
+  "current_listing": { "address": "...", "price_guide": "...", "status": "..." },
+  "suburb_focus": "..."
+}
+```
+This is additive (`personalisation || $1::jsonb` merge) — won't disturb the existing tone/topics
+fields. Once present, the ready-poller (#3) has real hooks to reference in generated openers.
+
+### Forecast — risks this plan addresses / flags
+
+**Fixed by this plan**
+- Phone-format mismatch → dup contacts / lost personalisation → E.164 normaliser (#2).
+- Double-draft on poll overlap or slow LLM → atomic `RETURNING` claim (#3.1).
+- Opener stacked on a pending reply → skip if pending draft exists (#3.2).
+- Texting an opted-out lead → exclude `status='opted_out'` + check `opt_outs` registry (#3.2).
+- LLM cost spike if many leads ticked at once → per-tick batch cap, draft-only (#3.1).
+- Wrong voice in multi-agent future → `assigned_agent_id` (#1) + per-agent recalibration (#8).
+- Surprise duplicate drafts from the old CRM table → legacy promoter gated off by default (#6).
+- Queued openers invisible until reload → 30s draft refetch (#7).
+- Voice quality stagnates → per-agent nightly recalibration from real approve/edit signals (#8).
+
+**Flagged — decisions/ops, not code**
+- `ANTHROPIC_API_KEY` still empty → generation runs on gpt-4o-mini, not Sonnet 4.6. Add key
+  (locally + Railway on merge) when budget allows.
+- Voice confidence still 0.4 (15 placeholder samples) — openers are personalised but generic in
+  tone until `/calibrate` runs with 20+ real texts per agent.
+- Hosting/uptime — the poller runs wherever the server runs; BlueBubbles needs the Mac awake + the
+  Cloudflare tunnel up. Keep on the Mac until the `sms-agent` → `main` merge decision.
+- Go-live ramp — widen `SMS_LIVE_ALLOWLIST` (or add `SMS_LIVE_ALL=true`) when ready for the real
+  lead DB.
+- **Known issue #7 above (possible local/production double-processing)** should be resolved or at
+  least understood before relying on the 2-min poller + inbound auto-drafting at the same time —
+  both write to the same `conversations`/`sms_agent_drafts` tables production might also touch.
+
+### Critical files
+- `server/lib/db.ts` — migration: `ready_to_contact`, `assigned_agent_id`, partial index.
+- `server/lib/smsContacts.ts` — E.164 `normalisePhone`; add the two fields to `SmsContact` +
+  `rowToContact`.
+- `server/lib/smsReadyOutreach.ts` *(new)* — poller, atomic claim, generate, queue.
+- `server/lib/agentContext.ts` *(new)* — shared `getAgentContext`.
+- `server/routes/sms-agent.ts` — import shared helper; `POST /run-ready`.
+- `server/lib/smsOrchestrator.ts` — gate legacy `queueNewOutreach`; per-agent recalibration loop (#8).
+- `server/index.ts` — register 2-min ready-poller cron.
+- `src/views/VoiceAgentView.tsx` — contact-name label + 30s draft refetch.
+
+### Verification (end-to-end, screenshots per project rules)
+1. `npx tsc --noEmit` in `server/` and frontend — both clean.
+2. Restart server; logs show migration OK for the two new columns + "ready poller started (2 min)".
+3. **Aneesha (allowlisted):** add a real `personalisation` detail (see CRM reality check above),
+   tick `ready_to_contact`. Hit `POST /run-ready` (or wait 2 min) → box auto-unticks, an opener
+   draft for Aneesha appears in the Voice tab naming her + the new detail. Approve → real iMessage
+   to Aneesha's phone; thread + cooldown recorded.
+4. **Test lead (non-allowlisted):** add a dummy contact, tick ready → opener draft appears.
+   Approve → redirects to the test phone (+61415883354). Screenshot the received text.
+5. **Re-fire guard:** run `/run-ready` twice → second run queues nothing for the same lead.
+6. **Phone-format:** add a contact as `0426 719 845`; simulate inbound from `+61426719845` →
+   confirms it matches the same contact (no duplicate), reply uses its personalisation.
+7. **Learning loop:** edit a draft before approving → confirm a `voice_signals` row with
+   `action='edited'` and the edited text lands; after enough signals, confirm
+   `recalibrateVoice(agent_<id>)` runs in the nightly orchestrator log.
+8. Commit + push to `sms-agent` (not `main`). No em-dashes in generated text (`sanitiseText`).
+
+---
+
 ## How another Claude Code instance continues this
 
 1. `cd` into the PropOS repo, `git fetch && git checkout sms-agent && git pull`.
-2. Read this doc's **Stage status** for the next unchecked box.
-3. `cd server && npx tsc --noEmit` must be clean before any commit (repo rule).
-4. No em-dashes anywhere (repo rule). All generated text already routes through `sanitiseText`.
-5. Commit + `git push origin sms-agent` after each stage. Update the Stage status checkboxes.
+2. Read this doc's **Stage status** for the next unchecked box — as of 2026-06-13 that's
+   "CRM-Triggered Auto-Outreach + per-agent learning loop"; the full spec (8 build items + CRM
+   reality check) is in "Planned: CRM-Triggered Auto-Outreach + MVP Hardening" above.
+3. Before relying on inbound auto-drafting in local dev (including the new ready-poller), read
+   Known issue #7 (possible local/production double-processing) — confirm with Vinuth how to
+   handle it first.
+4. `cd server && npx tsc --noEmit` must be clean before any commit (repo rule).
+5. No em-dashes anywhere (repo rule). All generated text already routes through `sanitiseText`.
+6. Commit + `git push origin sms-agent` after each stage. Update the Stage status checkboxes.
 
 ## Env vars this agent reads
 
