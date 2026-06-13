@@ -56,6 +56,7 @@ import { initDb, isDbConnected, query } from "./lib/db.js"
 import { startScheduler, cancelNurtureJobs } from "./lib/scheduler.js"
 import { startOutreachScheduler } from "./lib/outreachScheduler.js"
 import { handleOutreachInbound } from "./lib/outreachAgent.js"
+import { handleSmsAgentInbound } from "./lib/smsAgentInbound.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
@@ -243,6 +244,10 @@ async function handleIncomingReply(from: string, body: string): Promise<void> {
       // 2. Also check if this is one of our outreach targets (Vinuth self-outreach campaign)
       //    Non-fatal — runs in parallel with the lead pipeline above
       void handleOutreachInbound(from, body)
+
+      // 3. Conversational SMS agent (sms_contacts — Stages 1-4, see docs/SMS_AGENT.md)
+      //    Non-fatal — parallel with the pipelines above
+      void handleSmsAgentInbound(from, body)
     }
   } catch (err) {
     console.error("[reply-handler] error:", (err as Error).message)
