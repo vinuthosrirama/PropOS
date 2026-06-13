@@ -47,8 +47,9 @@ export async function sendViaBlueBubbles(
   body: string,
 ): Promise<{ sid: string; testMode: boolean }> {
   const testPhone  = process.env.TEST_RECIPIENT_PHONE?.trim()
+  const showTestLabel = process.env.SMS_TEST_LABEL === "true"
   const actualTo   = testPhone ?? to
-  const actualBody = testPhone ? `[TEST to ${to}]\n${body}` : body
+  const actualBody = (testPhone && showTestLabel) ? `[TEST to ${to}]\n${body}` : body
 
   // chatGuid service prefix. Default "any" lets the Private API pick iMessage/SMS.
   // BLUEBUBBLES_SERVICE=iMessage forces a real service for the AppleScript path

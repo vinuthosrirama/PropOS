@@ -1,22 +1,23 @@
 /**
  * Conversational SMS Agent runtime (Stages 1-2)
  *
- * Sonnet 4.6 (claude-sonnet-4-6) drafts opener and reply messages that sound
- * exactly like Vinuth, using the calibrated voice profile + per-contact
- * hyper-personalisation + relationship voice overrides + full thread history.
+ * Sonnet 4.6 (preferred, via ANTHROPIC_API_KEY) or gpt-4o-mini (fallback, via
+ * OPENAI_API_KEY) drafts opener and reply messages that sound exactly like
+ * Vinuth, using the calibrated voice profile + per-contact hyper-personalisation
+ * + relationship voice overrides + full thread history. See generateChatJSON
+ * in claude.ts for the provider-selection logic.
  *
  * Output is structured: every draft carries a voice_confidence and an
  * auto_sendable flag so the inbound handler can decide send-now vs queue.
  * All text passes through sanitiseText (em-dash / AI-tell safety net).
  */
 
-import { getClient, withLLMTimeout } from "./claude.js"
+import { generateChatJSON, llmConfigured } from "./claude.js"
 import { sanitiseText } from "./sanitise.js"
 import { getThread } from "./conversations.js"
 import { getVoiceProfile, formatVoiceProfileForPrompt } from "./voiceProfile.js"
 import type { SmsContact } from "./smsContacts.js"
 
-const RUNTIME_MODEL = "claude-sonnet-4-6"
 const SMS_LIMIT = 160
 
 // ── Output types ─────────────────────────────────────────────────────────────
@@ -49,12 +50,6 @@ function clampSMS(s: string): string {
 
 function clean(s: string): string {
   return sanitiseText(s.replace(/^["']|["']$/g, "")).trim()
-}
-
-interface AnthropicMessage { content: Array<{ type: string; text?: string }> }
-function rawText(m: AnthropicMessage): string {
-  const t = m.content[0]?.type === "text" ? (m.content[0].text ?? "") : ""
-  return t.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
 }
 
 async function threadBlock(contact: SmsContact): Promise<string> {
@@ -100,7 +95,7 @@ export async function generateOpener(contact: SmsContact): Promise<OpenerResult>
   }
   fallback.charCount = fallback.draft.length
 
-  if (!process.env.ANTHROPIC_API_KEY) return fallback
+  if (!llmConfigured()) return fallback
 
   const vp = await getVoiceProfile()
   const prompt = `You are drafting an opening text from Vinuth Srirama to ${contact.name}, who is Vinuth's ${relationshipLabel(contact.relationship)}.
@@ -125,13 +120,8 @@ Return ONLY this JSON (no markdown):
 ${HARD_RULES}`
 
   try {
-    const message = await withLLMTimeout(signal =>
-      getClient().messages.create({
-        model: RUNTIME_MODEL, max_tokens: 400,
-        messages: [{ role: "user", content: prompt }],
-      }, { signal }),
-    )
-    const parsed = JSON.parse(rawText(message)) as {
+    const raw = await generateChatJSON(prompt, 400)
+    const parsed = JSON.parse(raw) as {
       draft_message?: string; voice_confidence?: number; personalisation_hook?: string
       follow_up_if_no_reply?: { wait_hours?: number; follow_up_message?: string }
     }
@@ -174,7 +164,7 @@ export async function generateReply(contact: SmsContact, inbound: string): Promi
       reasoning: "Simple acknowledgement, the conversation has reached a natural pause.", personalisationUsed: [] }
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) return fallback
+  if (!llmConfigured()) return fallback
 
   const vp = await getVoiceProfile()
   const history = await threadBlock(contact)
@@ -210,13 +200,8 @@ AUTO-SENDABLE is true ONLY if ALL hold: the inbound is a simple factual question
 ${HARD_RULES}`
 
   try {
-    const message = await withLLMTimeout(signal =>
-      getClient().messages.create({
-        model: RUNTIME_MODEL, max_tokens: 400,
-        messages: [{ role: "user", content: prompt }],
-      }, { signal }),
-    )
-    const parsed = JSON.parse(rawText(message)) as {
+    const raw = await generateChatJSON(prompt, 400)
+    const parsed = JSON.parse(raw) as {
       draft_reply?: string | null; auto_sendable?: boolean; voice_confidence?: number
       reasoning?: string; personalisation_used?: string[]
     }

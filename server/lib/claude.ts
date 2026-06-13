@@ -26,6 +26,50 @@ export function withLLMTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Prom
   return fn(controller.signal).finally(() => clearTimeout(timer))
 }
 
+/**
+ * Returns true if any LLM provider is configured (Anthropic or OpenAI).
+ * Use this for "should I even try" guards before calling generateChatJSON.
+ */
+export function llmConfigured(): boolean {
+  return !!process.env.ANTHROPIC_API_KEY || !!process.env.OPENAI_API_KEY
+}
+
+/**
+ * Provider-agnostic JSON-mode chat completion.
+ * Prefers Anthropic (Sonnet 4.6) when ANTHROPIC_API_KEY is set, falling back
+ * to OpenAI (gpt-4o-mini) when only OPENAI_API_KEY is available. Returns the
+ * raw text response (JSON string, fenced code blocks stripped).
+ *
+ * Used by smsAgent.ts so the conversational agent works with either provider.
+ */
+export async function generateChatJSON(prompt: string, maxTokens = 400): Promise<string> {
+  if (process.env.ANTHROPIC_API_KEY) {
+    const message = await withLLMTimeout(signal =>
+      getClient().messages.create({
+        model: "claude-sonnet-4-6", max_tokens: maxTokens,
+        messages: [{ role: "user", content: prompt }],
+      }, { signal }),
+    )
+    const t = message.content[0]?.type === "text" ? (message.content[0].text ?? "") : ""
+    return t.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+  }
+
+  if (process.env.OPENAI_API_KEY) {
+    const { getOpenAIClient } = await import("./openai.js")
+    const completion = await withLLMTimeout(signal =>
+      getOpenAIClient().chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: maxTokens,
+        response_format: { type: "json_object" },
+      }, { signal }),
+    )
+    return (completion.choices[0]?.message?.content ?? "").trim()
+  }
+
+  throw new Error("No LLM provider configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY)")
+}
+
 export interface LeadContext {
   name: string
   budget: string

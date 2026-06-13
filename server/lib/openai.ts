@@ -9,6 +9,9 @@ function getOpenAI(): OpenAI {
   return _openai
 }
 
+// Exported for cross-module reuse (e.g. claude.ts's provider-agnostic JSON helper)
+export const getOpenAIClient = getOpenAI
+
 export interface GenerateParams {
   agentName: string
   agentAgency: string
