@@ -58,12 +58,19 @@ export async function sendViaBlueBubbles(
   const MAX_ATTEMPTS = 3
   let lastErr: unknown
 
+  // Optional override: "private-api" (reliable, supports new chats — needs Private
+  // API enabled) or "apple-script" (works for existing chats without Private API).
+  // Unset lets BlueBubbles pick its default.
+  const method = process.env.BLUEBUBBLES_METHOD?.trim()
+  const payload: Record<string, unknown> = { chatGuid, tempGuid, message: actualBody }
+  if (method) payload.method = method
+
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const res = await fetch(bbUrl("/api/v1/message/text"), {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ chatGuid, tempGuid, message: actualBody }),
+        body:    JSON.stringify(payload),
         signal:  AbortSignal.timeout(SEND_TIMEOUT_MS),
       })
 
