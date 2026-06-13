@@ -48,6 +48,7 @@ import gdprRouter from "./routes/gdpr.js"
 import marketUpdateRouter from "./routes/market-update.js"
 import { publicRouter as pitchesPublicRouter, authedRouter as pitchesAuthedRouter } from "./routes/pitches.js"
 import outreachTargetsRouter from "./routes/outreach-targets.js"
+import smsAgentRouter from "./routes/sms-agent.js"
 import agentboxRouter from "./routes/agentbox.js"
 import smsShortcutRouter, { registerReplyHandler } from "./routes/sms-shortcut.js"
 import { parseHttpSmsWebhook } from "./lib/httpsms.js"
@@ -57,6 +58,7 @@ import { startScheduler, cancelNurtureJobs } from "./lib/scheduler.js"
 import { startOutreachScheduler } from "./lib/outreachScheduler.js"
 import { handleOutreachInbound } from "./lib/outreachAgent.js"
 import { handleSmsAgentInbound } from "./lib/smsAgentInbound.js"
+import { startSmsAgentScheduler } from "./lib/smsOrchestrator.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
@@ -227,6 +229,7 @@ app.use("/api/pitches",          pitchesAuthedRouter)
 app.use("/api/gdpr",             gdprRouter)
 app.use("/api/market-update",    marketUpdateRouter)
 app.use("/api/outreach-targets", outreachTargetsRouter)
+app.use("/api/sms-agent",        smsAgentRouter)
 app.use("/api/agentbox",         agentboxRouter)
 
 // ── Shared reply handler (all transports feed here) ──────────────────────────
@@ -423,9 +426,10 @@ app.listen(PORT, async () => {
     console.warn("  ⚠️  Set DATABASE_URL before enabling the nurture scheduler in production.")
   }
 
-  // 3. Start schedulers (both no-op if no DB)
+  // 3. Start schedulers (all no-op if no DB)
   startScheduler()
   startOutreachScheduler()
+  startSmsAgentScheduler()
 
   // 4. Wire up transport-specific init
   // Webhook callback URLs carry ?secret= so the verifyWebhookSecret gate passes.
