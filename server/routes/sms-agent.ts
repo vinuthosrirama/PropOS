@@ -16,6 +16,8 @@
  * POST /api/sms-agent/seed-stage2              — seed a Stage 2 contact (real number, not redirected)
  * POST /api/sms-agent/contacts/:id/suggest     — AI-generate 3 message suggestions from thread history
  * POST /api/sms-agent/run-ready                — run the CRM-triggered ready-queue poller now
+ * GET  /api/sms-agent/settings                 — current toggles (e.g. { autoSend })
+ * POST /api/sms-agent/settings                 — update toggles (e.g. { autoSend: true })
  *
  * Static paths are registered before dynamic ones so Express matches correctly.
  */
@@ -37,6 +39,7 @@ import { generateOpener, generateSuggestions } from "../lib/smsAgent.js"
 import { runSmsOrchestration } from "../lib/smsOrchestrator.js"
 import { runReadyOutreach } from "../lib/smsReadyOutreach.js"
 import { getAgentContext } from "../lib/agentContext.js"
+import { getSetting, setSetting } from "../lib/appSettings.js"
 import { buildStage1TestContact, buildStage2Contact, STARTER_VOICE_SAMPLES } from "../data/smsAgentSeed.js"
 
 const router = Router()
@@ -172,6 +175,23 @@ router.post("/run-ready", async (_req, res) => {
       contactId: r.contactId, name: r.name, draftId: r.draftId, preview: r.preview, skipped: r.skipped,
     })),
   })
+})
+
+// ── Settings (Voice tab toggles) ────────────────────────────────────────────────
+
+router.get("/settings", async (_req, res) => {
+  if (!isDbConnected()) return res.json({ autoSend: false })
+  const value = await getSetting("sms_agent_autosend")
+  res.json({ autoSend: value === "true" })
+})
+
+router.post("/settings", async (req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  if (typeof req.body?.autoSend !== "boolean") {
+    return res.status(400).json({ error: "autoSend (boolean) is required" })
+  }
+  await setSetting("sms_agent_autosend", req.body.autoSend ? "true" : "false")
+  res.json({ ok: true, autoSend: req.body.autoSend })
 })
 
 // ── Seed (Stage 1 test bed) ─────────────────────────────────────────────────────

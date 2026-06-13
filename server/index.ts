@@ -58,6 +58,7 @@ import { startScheduler, cancelNurtureJobs } from "./lib/scheduler.js"
 import { startOutreachScheduler } from "./lib/outreachScheduler.js"
 import { handleOutreachInbound } from "./lib/outreachAgent.js"
 import { handleSmsAgentInbound } from "./lib/smsAgentInbound.js"
+import { claimMessageGuid } from "./lib/messageDedup.js"
 import { startSmsAgentScheduler } from "./lib/smsOrchestrator.js"
 import { startReadyOutreachScheduler } from "./lib/smsReadyOutreach.js"
 import { startTransportHealthMonitor } from "./lib/transportHealthMonitor.js"
@@ -237,7 +238,11 @@ app.use("/api/sms-agent",        smsAgentRouter)
 app.use("/api/agentbox",         agentboxRouter)
 
 // ── Shared reply handler (all transports feed here) ──────────────────────────
-async function handleIncomingReply(from: string, body: string): Promise<void> {
+async function handleIncomingReply(from: string, body: string, guid?: string): Promise<void> {
+  if (guid && !(await claimMessageGuid(guid))) {
+    console.log(`[reply-handler] duplicate message guid=${guid}, skipping (already processed)`)
+    return
+  }
   const lowerBody = body.toLowerCase().trim()
   try {
     if (["stop", "unsubscribe", "cancel", "quit", "end", "stopall"].includes(lowerBody)) {
@@ -294,7 +299,7 @@ app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Respons
   // Handle incoming reply
   const msg = parseBBWebhook(req.body)
   if (msg && !msg.isGroup) {
-    void handleIncomingReply(msg.from, msg.body)
+    void handleIncomingReply(msg.from, msg.body, msg.guid)
     return
   }
 

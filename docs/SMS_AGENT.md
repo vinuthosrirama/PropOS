@@ -117,6 +117,18 @@ iPhone ──► BlueBubbles (Mac) ──► PropOS /api/webhook/bluebubbles ─
   working end-to-end via authenticated API call. **Remaining:** items 3-7 of the Verification
   checklist below (real ticked contact → opener → approve → real send, plus the Voice-tab label
   screenshot for #7) — Vinuth authorised live verification data on 2026-06-13; run this next.
+- [x] **Idempotent inbound dedup + DB-backed auto-send toggle (code + verified, 2026-06-13)** —
+  fixes Known issue #7 (see above) and adds a Voice-tab "Auto-send: ON/OFF" toggle
+  (`server/lib/appSettings.ts`, `server/lib/messageDedup.ts`, new `app_settings` +
+  `processed_message_guids` tables). Migration applied live ("[migrate] all 123 steps ok"),
+  `tsc --noEmit` clean (server + frontend), toggle screenshot-verified in the Voice tab header
+  showing "Auto-send: OFF" (not switched on — would enable live auto-sends to real contacts).
+- [x] **Ready-poller live test for Aneesha (2026-06-13)** — ticked `ready_to_contact` for Aneesha
+  (`+61426719845`, contact id=2) and ran `runReadyOutreach()`. Poller correctly claimed and
+  auto-unticked the flag, then skipped queuing a new opener because a pending draft (id=11, "how
+  about a coffee catch-up? always good to chat") already existed for her — confirms the
+  re-fire/dedup guard (Verification item 5) works. **Draft #11 remains pending in the Voice tab,
+  not approved/sent** — needs Vinuth's review before any real iMessage goes to Aneesha.
 
 > All four build stages are code-complete and type-clean on the `sms-agent` branch.
 > Outbound (opener generation + send) and inbound (reply generation, conversation memory,
@@ -252,7 +264,7 @@ is broken.
 **Fix:** Regenerate `GMAIL_REFRESH_TOKEN` with the correct Gmail API scopes (likely needs
 `gmail.readonly` or `gmail.modify` in addition to `gmail.send`). Separate task, not SMS-agent-specific.
 
-### 7. Possible double-processing of inbound replies (local + production share one DB) — OPEN
+### 7. Possible double-processing of inbound replies (local + production share one DB) — FIXED (2026-06-13)
 
 **Problem (discovered 2026-06-13):** Fixing issues #1/#2 for local dev required registering a
 BlueBubbles webhook pointing at `http://localhost:3001` (the new `WEBHOOK_BASE_URL` env var, see
@@ -277,16 +289,18 @@ event out to all three registered webhooks; production (different `SMS_AGENT_AUT
 config there?) auto-replied and wrote to the shared `conversations` table, and BlueBubbles' own echo
 of that send (`isFromMe`) was then parsed back in locally as a "lead" message by `parseBBWebhook`.
 
-**NOT YET FIXED.** Verifying this requires probing `https://propos.addvantage.site/api/webhook/*` or
-inspecting its env — both touch shared production data/config and were correctly blocked by the
-permission system without Vinuth's explicit go-ahead. **Before relying on local inbound
-auto-drafting again (including the ready-poller below, which writes to the same tables), ask
-Vinuth how he wants to handle this**, e.g.:
-- Temporarily unregister BlueBubbles webhook ids 1/2 (production) during local dev/testing, or
-- Confirm production's `SMS_AGENT_AUTOSEND`/contact `auto_reply` settings are safe, or
-- Make `handleIncomingReply`/`addReplyToThread` idempotent (dedupe by BlueBubbles message GUID) so
-  duplicate fan-out from multiple registered webhooks is harmless regardless — probably the right
-  long-term fix either way.
+**FIXED via the recommended option (idempotent dedupe by BlueBubbles message GUID).** Added a new
+`processed_message_guids(guid PRIMARY KEY, created_at)` table (`server/lib/db.ts` migration, step
+122) and `server/lib/messageDedup.ts` exporting `claimMessageGuid(guid)`, which does an atomic
+`INSERT ... ON CONFLICT DO NOTHING RETURNING guid`. `parseBBWebhook` (`server/lib/bluebubbles.ts`)
+now extracts `data.guid ?? data.tempGuid` into `BBIncomingMessage.guid`. `handleIncomingReply`
+(`server/index.ts`) takes an optional `guid` param and calls `claimMessageGuid(guid)` first — if
+another process (local or production) already claimed this guid, it logs
+`[reply-handler] duplicate message guid=... skipping` and returns immediately, so the same inbound
+BlueBubbles webhook can safely be processed by both copies pointed at the shared DB with no
+duplicate thread rows or duplicate auto-replies. Migration applied live 2026-06-13
+("[migrate] all 123 steps ok"). Only the BlueBubbles webhook path supplies a `guid`; the other 5
+`handleIncomingReply` call sites (other transports) pass no guid and the dedup check no-ops for them.
 
 ---
 
@@ -560,7 +574,7 @@ fields. Once present, the ready-poller (#3) has real hooks to reference in gener
 | `OPENAI_API_KEY` | Fallback model (gpt-4o-mini) for generateOpener/generateReply via generateChatJSON | smsAgent.ts returns hardcoded template replies if neither key set |
 | `BLUEBUBBLES_URL` / `BLUEBUBBLES_PASSWORD` | Send + receive | No send; webhook inbound dead |
 | `TEST_RECIPIENT_PHONE` | Redirect all sends in test | Sends go to the real contact |
-| `SMS_AGENT_AUTOSEND` | Master switch for auto-send (default off) | Everything queues for approval |
+| `SMS_AGENT_AUTOSEND` | Master switch for auto-send (default off). Overridden at runtime by the `app_settings` row `sms_agent_autosend` ("true"/"false"), which the Voice tab's "Auto-send: ON/OFF" toggle (`GET`/`POST /api/sms-agent/settings`) writes — see `server/lib/appSettings.ts`. | Everything queues for approval |
 | `BASE_URL` | BlueBubbles webhook registration | No inbound replies captured |
 
 ## Safety model

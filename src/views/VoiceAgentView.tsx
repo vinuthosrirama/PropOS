@@ -84,6 +84,8 @@ export default function VoiceAgentView() {
   const [loginEmail, setLoginEmail] = useState("")
   const [loginPassword, setLoginPassword] = useState("")
   const [loggingIn, setLoggingIn] = useState(false)
+  const [autoSend, setAutoSend] = useState(false)
+  const [togglingAutoSend, setTogglingAutoSend] = useState(false)
 
   const threadEndRef = useRef<HTMLDivElement | null>(null)
 
@@ -92,10 +94,11 @@ export default function VoiceAgentView() {
   // ── Load contacts, drafts, voice profile ──────────────────────────────────────
   const load = useCallback(async () => {
     try {
-      const [cRes, dRes, vRes] = await Promise.all([
+      const [cRes, dRes, vRes, sRes] = await Promise.all([
         authFetch(apiUrl("/api/sms-agent/contacts")),
         authFetch(apiUrl("/api/sms-agent/drafts")),
         authFetch(apiUrl("/api/sms-agent/voice-profile")),
+        authFetch(apiUrl("/api/sms-agent/settings")),
       ])
       if (cRes.status === 401 || dRes.status === 401 || vRes.status === 401) {
         setAuthRequired(true)
@@ -108,6 +111,8 @@ export default function VoiceAgentView() {
       setDrafts(dJson.drafts ?? [])
       const vJson = await vRes.json() as VoiceProfile & { error?: string }
       if (!vJson.error) setVoiceProfile(vJson)
+      const sJson = await sRes.json() as { autoSend?: boolean }
+      setAutoSend(!!sJson.autoSend)
     } catch (e) {
       setActionMsg((e as Error).message)
     } finally {
@@ -163,6 +168,22 @@ export default function VoiceAgentView() {
     } catch (e) { setActionMsg((e as Error).message) }
     finally { setLoggingIn(false) }
   }, [loginEmail, loginPassword, load])
+
+  // ── Toggle auto-send (master switch for low-risk auto-replies) ─────────────────
+  const toggleAutoSend = useCallback(async () => {
+    setTogglingAutoSend(true)
+    try {
+      const next = !autoSend
+      const res = await authFetch(apiUrl("/api/sms-agent/settings"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoSend: next }),
+      })
+      const json = await res.json() as { ok?: boolean; autoSend?: boolean; error?: string }
+      if (!json.ok) { setActionMsg(json.error ?? "Failed to update setting"); return }
+      setAutoSend(!!json.autoSend)
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setTogglingAutoSend(false) }
+  }, [autoSend])
 
   // ── Seed a test contact if there are none ───────────────────────────────────────
   const seed = useCallback(async () => {
@@ -295,6 +316,20 @@ export default function VoiceAgentView() {
               Voice confidence {confidencePct}% ({voiceProfile.samples_analysed} samples)
             </span>
           )}
+          <button
+            onClick={() => void toggleAutoSend()}
+            disabled={togglingAutoSend}
+            title="When on, very low-risk replies (e.g. a bare 'ok thanks') send automatically without approval"
+            style={{
+              ...btn,
+              color: autoSend ? C.green : C.muted,
+              background: autoSend ? C.greenDim : "transparent",
+              border: `1px solid ${autoSend ? C.green + "40" : C.border}`,
+              opacity: togglingAutoSend ? 0.6 : 1,
+            }}
+          >
+            Auto-send: {autoSend ? "ON" : "OFF"}
+          </button>
           <button onClick={() => setCalibrateOpen(v => !v)} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}` }}>
             {calibrateOpen ? "Close" : "Calibrate voice"}
           </button>

@@ -24,12 +24,18 @@ import { generateReply, DEFAULT_AGENT } from "./smsAgent.js"
 import { negotiateMeeting, looksLikeScheduling } from "./calendarAgent.js"
 import { saveAgentDraft, type DraftKind } from "./smsAgentDrafts.js"
 import { isDbConnected } from "./db.js"
+import { getSetting } from "./appSettings.js"
 
 const MELBOURNE_TZ = "Australia/Melbourne"
 const VOICE_BRAKE_FLOOR = 0.6   // below this approved-as-is rate, auto-send disables
 
-function autoSendEnabled(): boolean {
-  return /^(1|true|on|yes)$/i.test(process.env.SMS_AGENT_AUTOSEND ?? "")
+const ENV_AUTOSEND = /^(1|true|on|yes)$/i.test(process.env.SMS_AGENT_AUTOSEND ?? "")
+
+/** DB-backed toggle (Voice tab switch) overrides SMS_AGENT_AUTOSEND when set. */
+export async function autoSendEnabled(): Promise<boolean> {
+  const override = await getSetting("sms_agent_autosend")
+  if (override !== null) return override === "true"
+  return ENV_AUTOSEND
 }
 
 function melbourneHour(): number {
@@ -130,7 +136,7 @@ export async function handleSmsAgentInbound(from: string, body: string): Promise
     // ── Auto-send vs queue ──────────────────────────────────────────────────────
     const afterHoursBlock = isAfterHours() && kind !== "schedule"   // scheduling: they just texted, they are awake
     const canAutoSend =
-      autoSendEnabled() &&
+      await autoSendEnabled() &&
       contact.auto_reply &&
       autoSendable &&
       brakeOk &&

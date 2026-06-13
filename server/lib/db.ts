@@ -626,6 +626,19 @@ async function migrate(): Promise<void> {
     ["INDEX sms_agent_drafts_contact", `CREATE INDEX IF NOT EXISTS sms_agent_drafts_contact_idx ON sms_agent_drafts(contact_id)`],
     ["INDEX voice_signals_contact",  `CREATE INDEX IF NOT EXISTS voice_signals_contact_idx ON voice_signals(contact_id, created_at)`],
     ["INDEX calendar_slots_contact", `CREATE INDEX IF NOT EXISTS calendar_slots_contact_idx ON calendar_slots(contact_id, proposed_time)`],
+
+    ["TABLE processed_message_guids", `
+      CREATE TABLE IF NOT EXISTS processed_message_guids (
+        guid       TEXT PRIMARY KEY,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["TABLE app_settings", `
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key        TEXT PRIMARY KEY,
+        value      TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
   ]
 
   let failed = 0
