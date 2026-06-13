@@ -104,6 +104,10 @@ iPhone ──► BlueBubbles (Mac) ──► PropOS /api/webhook/bluebubbles ─
   (`authRequired` state) since `/api/sms-agent/*` requires a JWT. Verified end-to-end in Preview:
   logged in as `vinuth.o.srirama@gmail.com`, selected "Test Partner", sent a live message that
   appeared in the thread, opened the calibration panel.
+- [x] **Vinuth confirmed live on his real phone (2026-06-13)** — "Testing PropOS mainframe send —
+  voice agent UI working!" sent from the Voice tab arrived as a real iMessage on Vinuth's phone.
+  Full send path (UI → `/api/sms-agent/contacts/:id/send` → `sendSMS` → BlueBubbles → iPhone) is
+  confirmed working end-to-end, not just in the dev preview thread.
 - [ ] **Live test with a real business partner** — pending 20 real voice samples via `/calibrate`.
 
 > All four build stages are code-complete and type-clean on the `sms-agent` branch.
