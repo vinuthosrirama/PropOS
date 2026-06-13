@@ -23,7 +23,7 @@ import { sendSMS, smsConfigured } from "../lib/sms.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"
 import {
   listContacts, upsertContact, getContactById, markContacted, recordVoiceSignal,
-  getUpcomingMeetings, type Relationship,
+  getUpcomingMeetings, canSendNow, recordAgentMessageSent, type Relationship,
 } from "../lib/smsContacts.js"
 import { getVoiceProfile } from "../lib/voiceProfile.js"
 import { calibrateVoice, recalibrateVoice } from "../lib/voiceCalibration.js"
@@ -116,10 +116,15 @@ router.post("/drafts/:id/approve", async (req, res) => {
     return res.json({ ok: true, sent: false, message: "Approved but SMS not configured", body: result.body })
   }
 
+  if (!(await canSendNow(result.contactId))) {
+    return res.status(429).json({ ok: false, sent: false, error: "Send cooldown active — try again in a few seconds" })
+  }
+
   try {
     await sendSMS(result.contactPhone, result.body)
     await addAgentMessageToThread(result.contactPhone, result.body)
     await markContacted(result.contactId)
+    await recordAgentMessageSent(result.contactId)
     await markAgentDraftSent(id)
     res.json({ ok: true, sent: true, body: result.body })
   } catch (err) {
@@ -179,10 +184,14 @@ router.post("/initiate/:contactId", async (req, res) => {
   if (!smsConfigured()) {
     return res.json({ ok: true, sent: false, draft: opener.draft, message: "SMS not configured — draft only" })
   }
+  if (!(await canSendNow(contactId))) {
+    return res.status(429).json({ ok: false, sent: false, error: "Send cooldown active — try again in a few seconds" })
+  }
   try {
     await sendSMS(contact.phone, opener.draft)
     await addAgentMessageToThread(contact.phone, opener.draft, { leadName: contact.name })
     await markContacted(contactId, { incrementAttempts: true })
+    await recordAgentMessageSent(contactId)
     res.json({ ok: true, sent: true, draft: opener.draft, charCount: opener.charCount })
   } catch (err) {
     res.status(502).json({ ok: false, sent: false, error: (err as Error).message })

@@ -610,6 +610,9 @@ async function migrate(): Promise<void> {
         created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`],
 
+    ["ALTER sms_contacts last_agent_message_at", `
+      ALTER TABLE sms_contacts ADD COLUMN IF NOT EXISTS last_agent_message_at TIMESTAMPTZ`],
+
     ["INDEX sms_contacts_status",   `CREATE INDEX IF NOT EXISTS sms_contacts_status_idx   ON sms_contacts(status, stage)`],
     ["INDEX sms_contacts_followup", `CREATE INDEX IF NOT EXISTS sms_contacts_followup_idx ON sms_contacts(follow_up_at) WHERE follow_up_at IS NOT NULL`],
     ["INDEX sms_agent_drafts_status", `CREATE INDEX IF NOT EXISTS sms_agent_drafts_status_idx ON sms_agent_drafts(status, created_at)`],
