@@ -48,8 +48,13 @@ export async function sendViaBlueBubbles(
 ): Promise<{ sid: string; testMode: boolean }> {
   const testPhone  = process.env.TEST_RECIPIENT_PHONE?.trim()
   const showTestLabel = process.env.SMS_TEST_LABEL === "true"
-  const actualTo   = testPhone ?? to
-  const actualBody = (testPhone && showTestLabel) ? `[TEST to ${to}]\n${body}` : body
+  // SMS_LIVE_ALLOWLIST: comma-separated E.164 numbers that bypass TEST_RECIPIENT_PHONE redirect.
+  // Use for Stage 2+ contacts who should receive real messages.
+  const allowlist  = (process.env.SMS_LIVE_ALLOWLIST ?? "").split(",").map(s => s.trim()).filter(Boolean)
+  const norm       = (n: string) => (n.startsWith("+") ? n : "+" + n.replace(/\D/g, ""))
+  const isLive     = allowlist.some(n => norm(n) === norm(to))
+  const actualTo   = (testPhone && !isLive) ? testPhone : to
+  const actualBody = (testPhone && !isLive && showTestLabel) ? `[TEST to ${to}]\n${body}` : body
 
   // chatGuid service prefix. Default "any" lets the Private API pick iMessage/SMS.
   // BLUEBUBBLES_SERVICE=iMessage forces a real service for the AppleScript path
