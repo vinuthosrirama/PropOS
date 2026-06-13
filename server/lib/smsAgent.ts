@@ -142,6 +142,84 @@ ${HARD_RULES}`
   }
 }
 
+// ── Suggestions (3 options for Vinuth to pick from) ─────────────────────────────
+
+export interface SuggestionResult {
+  suggestions: Array<{
+    draft: string
+    tone: string       // e.g. "casual", "direct", "warm"
+    charCount: number
+  }>
+  context: string      // one-line summary of what the AI picked up on
+}
+
+export async function generateSuggestions(contact: SmsContact): Promise<SuggestionResult> {
+  const first = contact.name.split(" ")[0]
+  const fallback: SuggestionResult = {
+    suggestions: [
+      { draft: `Hey ${first}, how's things?`, tone: "casual", charCount: 0 },
+      { draft: `${first} you free for a catch up this week?`, tone: "direct", charCount: 0 },
+      { draft: `Hey ${first}, been meaning to reach out. How are you going?`, tone: "warm", charCount: 0 },
+    ],
+    context: "No LLM available, using templates",
+  }
+  fallback.suggestions.forEach(s => { s.charCount = s.draft.length })
+
+  if (!llmConfigured()) return fallback
+
+  const vp = await getVoiceProfile()
+  const history = await threadBlock(contact)
+  const objective = contact.conversation_objective ?? "Have a natural conversation."
+
+  const prompt = `You are drafting 3 different text message options for Vinuth Srirama to send to ${contact.name}, his ${relationshipLabel(contact.relationship)}.
+
+VINUTH'S VOICE PROFILE:
+${formatVoiceProfileForPrompt(vp)}
+
+RELATIONSHIP VOICE ADJUSTMENTS:
+${JSON.stringify(contact.voice_override ?? {})}
+
+HYPER-PERSONALISATION NOTES:
+${JSON.stringify(contact.personalisation ?? {}, null, 2)}
+
+CONVERSATION OBJECTIVE:
+${objective}
+
+CONVERSATION HISTORY:
+${history}
+
+Draft 3 DIFFERENT text message options. Each should:
+- Sound exactly like Vinuth wrote it
+- Be contextually aware of the conversation history
+- Advance the objective naturally
+- Take a different tone/approach from the others
+
+If there is conversation history, each suggestion should be a natural REPLY or follow-up. If no history, each should be a natural opener.
+
+Return ONLY this JSON (no markdown):
+{"suggestions":[{"draft":"...","tone":"casual|direct|warm|playful|professional"},{"draft":"...","tone":"..."},{"draft":"...","tone":"..."}],"context":"one line about what you picked up on from the history/notes"}
+
+${HARD_RULES}`
+
+  try {
+    const raw = await generateChatJSON(prompt, 600)
+    const parsed = JSON.parse(raw) as SuggestionResult
+    if (!Array.isArray(parsed.suggestions) || parsed.suggestions.length === 0) return fallback
+    parsed.suggestions = parsed.suggestions.slice(0, 3).map(s => ({
+      draft: clampSMS(clean(s.draft ?? "")),
+      tone: s.tone ?? "casual",
+      charCount: 0,
+    }))
+    parsed.suggestions.forEach(s => { s.charCount = s.draft.length })
+    parsed.suggestions = parsed.suggestions.filter(s => s.draft.length > 0)
+    if (parsed.suggestions.length === 0) return fallback
+    return parsed
+  } catch (err) {
+    console.warn("[smsAgent] generateSuggestions failed, using fallback:", (err as Error).message)
+    return fallback
+  }
+}
+
 // ── Reply (respond to an inbound message) ───────────────────────────────────────
 
 const SIMPLE_ACK = /^(ok|okay|cool|sweet|nice|great|sounds good|sg|thanks|thank you|ta|cheers|\u{1F44D}|yep|yup|yeah|haha|lol)[.! ]*$/iu
