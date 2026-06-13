@@ -22,12 +22,17 @@ import {
 import { generateOpener } from "./smsAgent.js"
 import { saveAgentDraft } from "./smsAgentDrafts.js"
 import { recalibrateVoice } from "./voiceCalibration.js"
-import { DEFAULT_VOICE_ID } from "./voiceProfile.js"
+import { DEFAULT_VOICE_ID, getAgentVoiceId } from "./voiceProfile.js"
 
 const DAILY_OUTREACH_CAP = Math.max(0, parseInt(process.env.SMS_AGENT_DAILY_CAP ?? "3", 10))
 const FOLLOWUP_AFTER_DAYS = Math.max(1, parseInt(process.env.SMS_AGENT_FOLLOWUP_DAYS ?? "3", 10))
 const MAX_FOLLOWUPS = Math.max(1, parseInt(process.env.SMS_AGENT_MAX_FOLLOWUPS ?? "2", 10))
 const RECALIBRATE_THRESHOLD = 15
+
+// Legacy outreach_targets promoter — off by default. The CRM-triggered
+// ready-poller (smsReadyOutreach.ts) is now the single source of truth for
+// new outreach; set SMS_AGENT_PROMOTE_TARGETS=true to re-enable this path.
+const PROMOTE_LEGACY_TARGETS = process.env.SMS_AGENT_PROMOTE_TARGETS === "true"
 
 export interface OrchestrationSummary {
   followUpsQueued: number
@@ -140,7 +145,9 @@ export async function runSmsOrchestration(): Promise<OrchestrationSummary> {
   const followUps = await queueFollowUps()
   actions.push(...followUps.notes)
 
-  const newOutreach = await queueNewOutreach(DAILY_OUTREACH_CAP - followUps.count)
+  const newOutreach = PROMOTE_LEGACY_TARGETS
+    ? await queueNewOutreach(DAILY_OUTREACH_CAP - followUps.count)
+    : { count: 0, notes: [] }
   actions.push(...newOutreach.notes)
 
   const meetings = await meetingPrep()
@@ -154,6 +161,22 @@ export async function runSmsOrchestration(): Promise<OrchestrationSummary> {
     recalibrated = !!result
     if (recalibrated) actions.push(`Voice recalibrated from ${signalsSince} signals`)
   }
+
+  // Per-agent voice health (item 8) — every agent's voice improves from their
+  // own approve/edit/reject history, not just Vinuth's.
+  const agents = await query<{ id: number }>(`SELECT id FROM agents`)
+  for (const agent of agents) {
+    const voiceId = getAgentVoiceId(agent.id)
+    const sinceAgent = await countSignalsSinceCalibration(voiceId)
+    if (sinceAgent >= RECALIBRATE_THRESHOLD) {
+      const result = await recalibrateVoice(voiceId)
+      if (result) {
+        recalibrated = true
+        actions.push(`Voice recalibrated for agent ${agent.id} from ${sinceAgent} signals`)
+      }
+    }
+  }
+
   const brake = await getApprovedAsIsRate(20)
 
   const summary: OrchestrationSummary = {

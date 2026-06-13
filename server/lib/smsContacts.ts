@@ -27,6 +27,8 @@ export interface SmsContact {
   follow_up_at: string | null
   attempts: number
   source: string
+  ready_to_contact: boolean
+  assigned_agent_id: number | null
 }
 
 export interface VoiceSignal {
@@ -49,8 +51,17 @@ export interface CalendarSlot {
 
 // ── Contacts ─────────────────────────────────────────────────────────────────
 
+/**
+ * Normalise to E.164 so hand-entered AU numbers (e.g. "0426 719 845") match the
+ * "+61426719845" format BlueBubbles delivers on inbound. Strips whitespace,
+ * dashes and parens; converts a leading 0 or 61 to +61; leaves existing +… as-is.
+ */
 function normalisePhone(phone: string): string {
-  return phone.trim().replace(/\s+/g, "")
+  const cleaned = phone.trim().replace(/[\s\-()]/g, "")
+  if (cleaned.startsWith("+")) return cleaned
+  if (cleaned.startsWith("0")) return `+61${cleaned.slice(1)}`
+  if (cleaned.startsWith("61")) return `+${cleaned}`
+  return cleaned
 }
 
 function rowToContact(r: Record<string, unknown>): SmsContact {
@@ -74,6 +85,8 @@ function rowToContact(r: Record<string, unknown>): SmsContact {
     follow_up_at: r.follow_up_at ? new Date(r.follow_up_at as string).toISOString() : null,
     attempts: (r.attempts as number) ?? 0,
     source: (r.source as string) ?? "manual",
+    ready_to_contact: !!r.ready_to_contact,
+    assigned_agent_id: (r.assigned_agent_id as number | null) ?? null,
   }
 }
 
@@ -184,6 +197,28 @@ export async function canSendNow(id: number): Promise<boolean> {
 export async function recordAgentMessageSent(id: number): Promise<void> {
   if (!isDbConnected()) return
   await execute(`UPDATE sms_contacts SET last_agent_message_at = NOW() WHERE id = $1`, [id])
+}
+
+/**
+ * Atomically claim contacts ticked `ready_to_contact` (CRM-triggered auto-outreach),
+ * unsetting the flag so overlapping poller ticks don't double-draft. Excludes
+ * opted-out contacts. Returns the claimed contacts, oldest-updated first.
+ */
+export async function claimReadyContacts(limit = 15): Promise<SmsContact[]> {
+  if (!isDbConnected()) return []
+  const rows = await query(
+    `UPDATE sms_contacts
+     SET ready_to_contact = FALSE, updated_at = NOW()
+     WHERE id IN (
+       SELECT id FROM sms_contacts
+       WHERE ready_to_contact = TRUE AND status NOT IN ('opted_out')
+       ORDER BY updated_at ASC
+       LIMIT $1
+     )
+     RETURNING *`,
+    [limit],
+  )
+  return rows.map(rowToContact)
 }
 
 // ── Voice signals (learning data) ────────────────────────────────────────────
