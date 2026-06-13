@@ -151,6 +151,7 @@ export interface BBIncomingMessage {
   body:    string
   isGroup: boolean
   chatId:  string
+  guid:    string   // BlueBubbles message guid, for cross-process dedup
 }
 
 export interface BBSendError {
@@ -178,9 +179,10 @@ export function parseBBWebhook(payload: unknown): BBIncomingMessage | null {
   const chats  = (data.chats as Array<Record<string, unknown>>) ?? []
   const chatId = (chats[0]?.guid as string) ?? ""
   const isGroup = chatId.includes(";+;")
+  const guid   = (data.guid as string) ?? (data.tempGuid as string) ?? ""
 
   if (!from || !body) return null
-  return { from, body, isGroup, chatId }
+  return { from, body, isGroup, chatId, guid }
 }
 
 /**
