@@ -9,13 +9,12 @@
  * substantive (questions about Vinuth/PropOS, hesitation) escalates to approval.
  */
 
-import { getClient, withLLMTimeout } from "./claude.js"
+import { generateChatJSON, llmConfigured } from "./claude.js"
 import { sanitiseText } from "./sanitise.js"
 import { getThread } from "./conversations.js"
 import { getVoiceProfile, formatVoiceProfileForPrompt } from "./voiceProfile.js"
 import { getOpenSlots, getBlockedSlots, type SmsContact } from "./smsContacts.js"
 
-const RUNTIME_MODEL = "claude-sonnet-4-6"
 const SMS_LIMIT = 160
 const MELBOURNE_TZ = "Australia/Melbourne"
 
@@ -87,12 +86,6 @@ function clampSMS(s: string): string {
 }
 function clean(s: string): string { return sanitiseText(s.replace(/^["']|["']$/g, "")).trim() }
 
-interface AnthropicMessage { content: Array<{ type: string; text?: string }> }
-function rawText(m: AnthropicMessage): string {
-  const t = m.content[0]?.type === "text" ? (m.content[0].text ?? "") : ""
-  return t.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
-}
-
 async function threadBlock(contact: SmsContact): Promise<string> {
   try {
     const thread = await getThread(contact.phone)
@@ -116,7 +109,7 @@ export async function negotiateMeeting(contact: SmsContact, inbound: string): Pr
   }
   fallback.charCount = fallback.draft.length
 
-  if (!process.env.ANTHROPIC_API_KEY) return fallback
+  if (!llmConfigured()) return fallback
 
   const vp = await getVoiceProfile()
   const history = await threadBlock(contact)
@@ -157,10 +150,8 @@ HARD RULES:
 - Booking iso MUST be copied exactly from an available slot above when action is BOOK.`
 
   try {
-    const message = await withLLMTimeout(signal =>
-      getClient().messages.create({ model: RUNTIME_MODEL, max_tokens: 450, messages: [{ role: "user", content: prompt }] }, { signal }),
-    )
-    const parsed = JSON.parse(rawText(message)) as {
+    const raw = await generateChatJSON(prompt, 450)
+    const parsed = JSON.parse(raw) as {
       classification?: SchedClass; action?: SchedAction; draft_reply?: string
       voice_confidence?: number; booking?: { iso?: string; location?: string } | null; contact_status?: string
     }

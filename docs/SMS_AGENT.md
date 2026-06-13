@@ -215,13 +215,16 @@ gpt-4o-mini is a weaker model than Sonnet 4.6 for nuanced voice-matching and the
 classifier (Stage 3).
 
 **Fix:** Add a real `ANTHROPIC_API_KEY` to `server/.env` when budget allows. No code change needed —
-`generateChatJSON` automatically prefers Anthropic when the key is present. `calendarAgent.ts` and
-`voiceCalibration.ts` (Fable 5) still hard-require `ANTHROPIC_API_KEY` as of this session and have
-NOT been given the OpenAI fallback — only `smsAgent.ts` (`generateOpener`/`generateReply`) was updated.
-**Gap:** if Stage 3/4 testing is attempted before adding an Anthropic key, calendar negotiation and
-voice recalibration will silently no-op or fall back to defaults. Worth applying the same
-`generateChatJSON` pattern to `calendarAgent.ts` and `voiceCalibration.ts` if testing those stages
-without an Anthropic key.
+`generateChatJSON` automatically prefers Anthropic when the key is present.
+
+**Update (this session):** `calendarAgent.ts` (`negotiateMeeting`) and `voiceCalibration.ts`
+(`calibrateVoice`, `recalibrateVoice`) now also use the `llmConfigured()` / `generateChatJSON`
+OpenAI fallback, same pattern as `smsAgent.ts`. When `ANTHROPIC_API_KEY` is set, calendar
+negotiation still uses `claude-sonnet-4-6` and voice calibration still uses `claude-fable-5`
+directly via `getClient()` (full quality). When only `OPENAI_API_KEY` is set, both fall back to
+`gpt-4o-mini` via `generateChatJSON` — lower quality (especially for voice fingerprinting) but
+no longer a hard no-op, so Stage 3 (calendar negotiation) and Stage 2 (recalibration) can now be
+exercised end-to-end on gpt-4o-mini alone. `tsc --noEmit` clean.
 
 ### 6. gmailInbound poll failure (pre-existing, unrelated)
 **Problem:** Log shows `[gmailInbound] poll failed: Request had insufficient authentication scopes.`

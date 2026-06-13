@@ -12,7 +12,7 @@
  *   recalibrateVoice(voiceId)     -> VoiceProfile | null (Stage 2, from voice_signals)
  */
 
-import { getClient, withLLMTimeout } from "./claude.js"
+import { getClient, withLLMTimeout, generateChatJSON, llmConfigured } from "./claude.js"
 import { sanitiseText } from "./sanitise.js"
 import {
   DEFAULT_VOICE_ID, DEFAULT_VOICE_PROFILE, getVoiceProfile, saveVoiceProfile,
@@ -61,26 +61,32 @@ export async function calibrateVoice(
   voiceId = DEFAULT_VOICE_ID,
 ): Promise<VoiceProfile> {
   const clean = samples.map(s => s.trim()).filter(Boolean)
-  if (clean.length === 0 || !process.env.ANTHROPIC_API_KEY) {
+  if (clean.length === 0 || !llmConfigured()) {
     const fallback = { ...DEFAULT_VOICE_PROFILE, voice_id: voiceId, samples_analysed: clean.length }
     await saveVoiceProfile(fallback)
     return fallback
   }
 
-  try {
-    const message = await withLLMTimeout(signal =>
-      getClient().messages.create({
-        model: CALIBRATION_MODEL,
-        max_tokens: 1600,
-        system: CALIBRATION_SYSTEM,
-        messages: [{
-          role: "user",
-          content: `SAMPLES (${clean.length} real texts from Vinuth):\n${clean.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nProduce the voice profile JSON now.`,
-        }],
-      }, { signal }),
-    )
+  const userContent = `SAMPLES (${clean.length} real texts from Vinuth):\n${clean.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nProduce the voice profile JSON now.`
 
-    const vp = parseProfile(message, voiceId, clean.length)
+  try {
+    let raw: string
+    if (process.env.ANTHROPIC_API_KEY) {
+      const message = await withLLMTimeout(signal =>
+        getClient().messages.create({
+          model: CALIBRATION_MODEL,
+          max_tokens: 1600,
+          system: CALIBRATION_SYSTEM,
+          messages: [{ role: "user", content: userContent }],
+        }, { signal }),
+      )
+      raw = message.content[0]?.type === "text" ? (message.content[0].text ?? "") : ""
+      raw = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+    } else {
+      raw = await generateChatJSON(`${CALIBRATION_SYSTEM}\n\n${userContent}`, 1600)
+    }
+
+    const vp = parseProfile(raw, voiceId, clean.length)
     if (!vp) {
       const fallback = { ...DEFAULT_VOICE_PROFILE, voice_id: voiceId, samples_analysed: clean.length }
       await saveVoiceProfile(fallback)
@@ -120,7 +126,7 @@ Return ONLY the updated voice profile JSON in the SAME shape as the current prof
  * updated profile, or null if there is nothing to learn from / no API key.
  */
 export async function recalibrateVoice(voiceId = DEFAULT_VOICE_ID): Promise<VoiceProfile | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null
+  if (!llmConfigured()) return null
 
   const signals = await getRecentVoiceSignals(40)
   if (signals.length < 5) {
@@ -136,21 +142,27 @@ export async function recalibrateVoice(voiceId = DEFAULT_VOICE_ID): Promise<Voic
     return `${i + 1}. ${s.action.toUpperCase()}: ${s.draft_body}`
   }).join("\n")
 
+  const userContent = `CURRENT PROFILE:\n${JSON.stringify(current.profile, null, 2)}\n\nEDIT SIGNALS (${signals.length}):\n${signalBlock}\n\nProduce the updated voice profile JSON now.`
+
   try {
-    const message = await withLLMTimeout(signal =>
-      getClient().messages.create({
-        model: CALIBRATION_MODEL,
-        max_tokens: 1600,
-        system: RECALIBRATION_SYSTEM,
-        messages: [{
-          role: "user",
-          content: `CURRENT PROFILE:\n${JSON.stringify(current.profile, null, 2)}\n\nEDIT SIGNALS (${signals.length}):\n${signalBlock}\n\nProduce the updated voice profile JSON now.`,
-        }],
-      }, { signal }),
-    )
+    let raw: string
+    if (process.env.ANTHROPIC_API_KEY) {
+      const message = await withLLMTimeout(signal =>
+        getClient().messages.create({
+          model: CALIBRATION_MODEL,
+          max_tokens: 1600,
+          system: RECALIBRATION_SYSTEM,
+          messages: [{ role: "user", content: userContent }],
+        }, { signal }),
+      )
+      raw = message.content[0]?.type === "text" ? (message.content[0].text ?? "") : ""
+      raw = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+    } else {
+      raw = await generateChatJSON(`${RECALIBRATION_SYSTEM}\n\n${userContent}`, 1600)
+    }
 
     const approvedRate = signals.filter(s => s.action === "approved_as_is").length / signals.length
-    const vp = parseProfile(message, voiceId, current.samples_analysed + signals.length)
+    const vp = parseProfile(raw, voiceId, current.samples_analysed + signals.length)
     if (!vp) return null
     // Confidence nudges toward the observed approval rate, capped.
     vp.confidence = Math.min(0.95, Math.max(vp.confidence, approvedRate))
@@ -165,10 +177,7 @@ export async function recalibrateVoice(voiceId = DEFAULT_VOICE_ID): Promise<Voic
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-interface AnthropicMessage { content: Array<{ type: string; text?: string }> }
-
-function parseProfile(message: AnthropicMessage, voiceId: string, samplesAnalysed: number): VoiceProfile | null {
-  const raw = message.content[0]?.type === "text" ? (message.content[0].text ?? "") : ""
+function parseProfile(raw: string, voiceId: string, samplesAnalysed: number): VoiceProfile | null {
   const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
   try {
     const parsed = JSON.parse(cleaned) as Partial<VoiceProfile>
