@@ -299,6 +299,47 @@ export async function bookSlot(input: { contactId: number; proposedTime: string;
   return rows[0]?.id ?? null
 }
 
+export interface UpdateContactInput {
+  personalisation?: Record<string, unknown>
+  rea_data?: Record<string, unknown>
+  conversation_objective?: string | null
+  status?: ContactStatus
+  follow_up_at?: string | null
+}
+
+/** Merge-patch a contact by id. Only the supplied fields are updated; JSONB fields are merged. */
+export async function updateContact(id: number, input: UpdateContactInput): Promise<void> {
+  if (!isDbConnected()) return
+  const sets: string[] = []
+  const params: unknown[] = []
+  let i = 1
+
+  if (input.personalisation !== undefined) {
+    sets.push(`personalisation = personalisation || $${i++}::jsonb`)
+    params.push(JSON.stringify(input.personalisation))
+  }
+  if (input.rea_data !== undefined) {
+    sets.push(`rea_data = rea_data || $${i++}::jsonb`)
+    params.push(JSON.stringify(input.rea_data))
+  }
+  if (input.conversation_objective !== undefined) {
+    sets.push(`conversation_objective = $${i++}`)
+    params.push(input.conversation_objective)
+  }
+  if (input.status !== undefined) {
+    sets.push(`status = $${i++}`)
+    params.push(input.status)
+  }
+  if (input.follow_up_at !== undefined) {
+    sets.push(`follow_up_at = $${i++}`)
+    params.push(input.follow_up_at)
+  }
+  if (sets.length === 0) return
+  sets.push(`updated_at = NOW()`)
+  params.push(id)
+  await execute(`UPDATE sms_contacts SET ${sets.join(", ")} WHERE id = $${i}`, params)
+}
+
 export async function getUpcomingMeetings(withinHours = 48): Promise<Array<CalendarSlot & { contact_name: string; contact_phone: string }>> {
   if (!isDbConnected()) return []
   return query<CalendarSlot & { contact_name: string; contact_phone: string }>(

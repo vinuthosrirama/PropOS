@@ -38,6 +38,8 @@ interface Contact {
   auto_reply: boolean
   last_contact: string | null
   rea_data?: ReaData
+  personalisation?: Record<string, unknown>
+  conversation_objective?: string | null
   prospectability?: number
   interest?: number
   score_label?: "hot" | "warm" | "cold"
@@ -147,6 +149,16 @@ export default function VoiceAgentView() {
   // sort
   const [sortBy, setSortBy] = useState<"score" | "recent">("score")
 
+  // contact editor
+  const [editContactOpen, setEditContactOpen] = useState(false)
+  const [editForm, setEditForm] = useState({ notes: "", agency: "", suburbs: "", listingCount: "", soldAddress: "", soldPrice: "", objective: "", status: "active" })
+  const [editSaving, setEditSaving] = useState(false)
+
+  // new contact form
+  const [newContactOpen, setNewContactOpen] = useState(false)
+  const [newForm, setNewForm] = useState({ name: "", phone: "", relationship: "agent_prospect", agency: "", note: "" })
+  const [newSaving, setNewSaving] = useState(false)
+
   const threadEndRef = useRef<HTMLDivElement | null>(null)
   const selected = contacts.find(c => c.id === selectedId) ?? null
 
@@ -197,7 +209,23 @@ export default function VoiceAgentView() {
   }, [selected, loadThread])
 
   useEffect(() => { threadEndRef.current?.scrollIntoView({ behavior: "smooth" }) }, [thread])
-  useEffect(() => { setSuggestions([]); setSuggestCtx(null); setMrOpen(false); setMrResult(null) }, [selectedId])
+  useEffect(() => {
+    setSuggestions([]); setSuggestCtx(null); setMrOpen(false); setMrResult(null)
+    setEditContactOpen(false)
+    const c = contacts.find(x => x.id === selectedId)
+    if (c) {
+      setEditForm({
+        notes:        String((c.personalisation as Record<string,unknown> | undefined)?.notes ?? ""),
+        agency:       c.rea_data?.agency_name ?? "",
+        suburbs:      (c.rea_data?.target_suburbs ?? []).join(", "),
+        listingCount: String(c.rea_data?.currently_listing_count ?? ""),
+        soldAddress:  c.rea_data?.recently_sold_address ?? "",
+        soldPrice:    c.rea_data?.recently_sold_price ?? "",
+        objective:    c.conversation_objective ?? "",
+        status:       c.status ?? "active",
+      })
+    }
+  }, [selectedId, contacts])
 
   // ── Auth ──────────────────────────────────────────────────────────────────────
   const login = useCallback(async () => {
@@ -342,6 +370,63 @@ export default function VoiceAgentView() {
     finally { setMrRunning(false) }
   }, [selected, mrSuburb, load])
 
+  // ── Save contact edits ────────────────────────────────────────────────────────
+  const saveContactEdit = useCallback(async () => {
+    if (!selected) return
+    setEditSaving(true)
+    try {
+      const suburbList = editForm.suburbs.split(",").map(s => s.trim()).filter(Boolean)
+      const rea_data: ReaData = {}
+      if (editForm.agency) rea_data.agency_name = editForm.agency
+      if (suburbList.length) rea_data.target_suburbs = suburbList
+      if (editForm.listingCount) rea_data.currently_listing_count = parseInt(editForm.listingCount, 10) || 0
+      if (editForm.soldAddress) rea_data.recently_sold_address = editForm.soldAddress
+      if (editForm.soldPrice) rea_data.recently_sold_price = editForm.soldPrice
+
+      const body: Record<string, unknown> = {
+        rea_data: Object.keys(rea_data).length ? rea_data : undefined,
+        conversation_objective: editForm.objective || null,
+        status: editForm.status,
+      }
+      if (editForm.notes !== undefined) body.personalisation = { notes: editForm.notes }
+
+      await authFetch(apiUrl(`/api/sms-agent/contacts/${selected.id}`), {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      setEditContactOpen(false)
+      setActionMsg("Contact updated")
+      await load()
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setEditSaving(false) }
+  }, [selected, editForm, load])
+
+  // ── Create new contact ────────────────────────────────────────────────────────
+  const createContact = useCallback(async () => {
+    if (!newForm.name.trim() || !newForm.phone.trim()) return
+    setNewSaving(true)
+    try {
+      const res = await authFetch(apiUrl("/api/sms-agent/contacts"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newForm.name.trim(),
+          phone: newForm.phone.trim(),
+          relationship: newForm.relationship,
+          rea_data: newForm.agency ? { agency_name: newForm.agency } : undefined,
+          personalisation: newForm.note ? { notes: newForm.note } : undefined,
+          source: "manual_ui",
+        }),
+      })
+      const json = await res.json() as { ok?: boolean; id?: number; error?: string }
+      if (!json.ok) { setActionMsg(json.error ?? "Failed to create contact"); return }
+      setNewContactOpen(false)
+      setNewForm({ name: "", phone: "", relationship: "agent_prospect", agency: "", note: "" })
+      await load()
+      if (json.id) { setSelectedId(json.id); if (!isDesktop) setMobilePanel("thread") }
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setNewSaving(false) }
+  }, [newForm, load, isDesktop])
+
   // ── Sorted contacts ───────────────────────────────────────────────────────────
   const sortedContacts = [...contacts].sort((a, b) => {
     if (sortBy === "score") return (b.prospectability ?? 50) - (a.prospectability ?? 50)
@@ -405,6 +490,34 @@ export default function VoiceAgentView() {
     </div>
   ) : null
 
+  // ── New contact modal ─────────────────────────────────────────────────────────
+  const inp: CSSProperties = { width: "100%", boxSizing: "border-box" as const, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 9, padding: "9px 11px", color: C.text, fontSize: 12.5, fontFamily: FONT, marginBottom: 8 }
+  const NewContactModal = newContactOpen ? (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ ...card, maxWidth: 400, width: "100%" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>New Contact</div>
+        <input value={newForm.name} onChange={e => setNewForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name *" style={inp} />
+        <input value={newForm.phone} onChange={e => setNewForm(f => ({ ...f, phone: e.target.value }))} placeholder="Phone e.g. 0426 719 845 *" style={inp} />
+        <select value={newForm.relationship} onChange={e => setNewForm(f => ({ ...f, relationship: e.target.value }))} style={{ ...inp, marginBottom: 8 }}>
+          <option value="agent_prospect">Agent prospect</option>
+          <option value="business_partner">Business partner</option>
+          <option value="close_friend">Close friend</option>
+          <option value="family">Family</option>
+        </select>
+        <input value={newForm.agency} onChange={e => setNewForm(f => ({ ...f, agency: e.target.value }))} placeholder="Agency (optional)" style={inp} />
+        <input value={newForm.note} onChange={e => setNewForm(f => ({ ...f, note: e.target.value }))} placeholder="Notes (optional)" style={{ ...inp, marginBottom: 14 }} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => void createContact()} disabled={newSaving || !newForm.name.trim() || !newForm.phone.trim()}
+            style={{ ...btn, color: C.bg, background: "var(--accent)", flex: 1, opacity: newSaving || !newForm.name.trim() || !newForm.phone.trim() ? 0.5 : 1 }}>
+            {newSaving ? "Saving..." : "Add contact"}
+          </button>
+          <button onClick={() => { setNewContactOpen(false); setNewForm({ name: "", phone: "", relationship: "agent_prospect", agency: "", note: "" }) }}
+            style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, flex: 1 }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
   // ── Contacts panel ────────────────────────────────────────────────────────────
   const ContactsPanel = (
     <div style={card}>
@@ -413,8 +526,11 @@ export default function VoiceAgentView() {
           Contacts ({contacts.length})
         </div>
         <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={() => setNewContactOpen(true)} style={{ ...btn, fontSize: 10, padding: "3px 8px", color: "var(--accent)", background: "transparent", border: `1px solid ${"var(--accent)"}40` }}>
+            + New
+          </button>
           <button onClick={() => setSortBy("score")} style={{ ...btn, fontSize: 10, padding: "3px 8px", color: sortBy === "score" ? C.text : C.faint, background: sortBy === "score" ? C.bg3 : "transparent", border: `1px solid ${sortBy === "score" ? C.border : "transparent"}` }}>
-            By score
+            Score
           </button>
           <button onClick={() => setSortBy("recent")} style={{ ...btn, fontSize: 10, padding: "3px 8px", color: sortBy === "recent" ? C.text : C.faint, background: sortBy === "recent" ? C.bg3 : "transparent", border: `1px solid ${sortBy === "recent" ? C.border : "transparent"}` }}>
             Recent
@@ -491,14 +607,72 @@ export default function VoiceAgentView() {
                 )}
               </div>
             </div>
-            {selected.prospectability !== undefined && (
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ fontSize: 10, color: C.faint }}>Prospect</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: scoreColor(selected.score_label) }}>{selected.prospectability}</div>
-                <div style={{ fontSize: 9, color: C.faint }}>Interest {selected.interest}</div>
-              </div>
-            )}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, gap: 4 }}>
+              {selected.prospectability !== undefined && (
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 10, color: C.faint }}>Prospect</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: scoreColor(selected.score_label) }}>{selected.prospectability}</div>
+                  <div style={{ fontSize: 9, color: C.faint }}>Interest {selected.interest}</div>
+                </div>
+              )}
+              <button onClick={() => setEditContactOpen(v => !v)} style={{ ...btn, fontSize: 10, padding: "3px 8px", color: editContactOpen ? C.text : C.faint, background: editContactOpen ? C.bg3 : "transparent", border: `1px solid ${C.border}` }}>
+                {editContactOpen ? "Close" : "Edit"}
+              </button>
+            </div>
           </div>
+
+          {/* Inline contact editor */}
+          {editContactOpen && (
+            <div style={{ background: C.bg3, borderRadius: 12, padding: 12, marginBottom: 12, border: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Edit Contact</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                <div>
+                  <div style={{ fontSize: 9.5, color: C.faint, marginBottom: 2 }}>Agency</div>
+                  <input value={editForm.agency} onChange={e => setEditForm(f => ({ ...f, agency: e.target.value }))} placeholder="Harcourts Dandenong" style={{ ...inp, marginBottom: 0 }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 9.5, color: C.faint, marginBottom: 2 }}>Active listings</div>
+                  <input value={editForm.listingCount} onChange={e => setEditForm(f => ({ ...f, listingCount: e.target.value }))} placeholder="2" type="number" style={{ ...inp, marginBottom: 0 }} />
+                </div>
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 9.5, color: C.faint, marginBottom: 2 }}>Target suburbs (comma-separated)</div>
+                <input value={editForm.suburbs} onChange={e => setEditForm(f => ({ ...f, suburbs: e.target.value }))} placeholder="Berwick, Narre Warren, Cranbourne" style={{ ...inp, marginBottom: 0 }} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6 }}>
+                <div>
+                  <div style={{ fontSize: 9.5, color: C.faint, marginBottom: 2 }}>Last sold address</div>
+                  <input value={editForm.soldAddress} onChange={e => setEditForm(f => ({ ...f, soldAddress: e.target.value }))} placeholder="12 Park Ave Dandenong" style={{ ...inp, marginBottom: 0 }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 9.5, color: C.faint, marginBottom: 2 }}>Last sold price</div>
+                  <input value={editForm.soldPrice} onChange={e => setEditForm(f => ({ ...f, soldPrice: e.target.value }))} placeholder="$742,000" style={{ ...inp, marginBottom: 0 }} />
+                </div>
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 9.5, color: C.faint, marginBottom: 2 }}>Conversation objective</div>
+                <input value={editForm.objective} onChange={e => setEditForm(f => ({ ...f, objective: e.target.value }))} placeholder="Book a listing appraisal" style={{ ...inp, marginBottom: 0 }} />
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 9.5, color: C.faint, marginBottom: 2 }}>Notes</div>
+                <textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} placeholder="Met at open home — keen on Berwick area" rows={2}
+                  style={{ ...inp, resize: "vertical" as const, marginBottom: 0 }} />
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center" }}>
+                <select value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
+                  style={{ ...inp, marginBottom: 0, width: "auto", flex: 1 }}>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="backlog">Backlog</option>
+                  <option value="completed">Completed</option>
+                  <option value="opted_out">Opted out</option>
+                </select>
+                <button onClick={() => void saveContactEdit()} disabled={editSaving} style={{ ...btn, color: C.bg, background: "var(--accent)", opacity: editSaving ? 0.5 : 1 }}>
+                  {editSaving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Thread */}
           <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, marginBottom: 12, maxHeight: isMobile ? "40vh" : undefined }}>
@@ -615,6 +789,7 @@ export default function VoiceAgentView() {
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: `${isDesktop ? 84 : 70}px ${isMobile ? 12 : 16}px 60px` }}>
       {AutoSendModal}
+      {NewContactModal}
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
