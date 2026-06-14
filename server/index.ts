@@ -50,6 +50,7 @@ import { publicRouter as pitchesPublicRouter, authedRouter as pitchesAuthedRoute
 import outreachTargetsRouter from "./routes/outreach-targets.js"
 import smsAgentRouter from "./routes/sms-agent.js"
 import agentboxRouter from "./routes/agentbox.js"
+import demoRouter from "./routes/demo.js"
 import smsShortcutRouter, { registerReplyHandler } from "./routes/sms-shortcut.js"
 import { parseHttpSmsWebhook } from "./lib/httpsms.js"
 import { loadConversations, addReplyToThread } from "./lib/conversations.js"
@@ -236,6 +237,7 @@ app.use("/api/market-update",    marketUpdateRouter)
 app.use("/api/outreach-targets", outreachTargetsRouter)
 app.use("/api/sms-agent",        smsAgentRouter)
 app.use("/api/agentbox",         agentboxRouter)
+app.use("/api/demo",             demoRouter)
 
 // ── Shared reply handler (all transports feed here) ──────────────────────────
 async function handleIncomingReply(from: string, body: string, guid?: string): Promise<void> {
