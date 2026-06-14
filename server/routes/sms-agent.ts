@@ -34,13 +34,15 @@ import {
 import { getVoiceProfile } from "../lib/voiceProfile.js"
 import { calibrateVoice, recalibrateVoice } from "../lib/voiceCalibration.js"
 import {
-  getPendingAgentDrafts, approveAgentDraft, rejectAgentDraft, markAgentDraftSent,
+  getPendingAgentDrafts, approveAgentDraft, rejectAgentDraft, markAgentDraftSent, saveAgentDraft,
 } from "../lib/smsAgentDrafts.js"
 import { generateOpener, generateSuggestions } from "../lib/smsAgent.js"
 import { runSmsOrchestration } from "../lib/smsOrchestrator.js"
 import { runReadyOutreach } from "../lib/smsReadyOutreach.js"
 import { getAgentContext } from "../lib/agentContext.js"
 import { getSetting, setSetting } from "../lib/appSettings.js"
+import { scoreContacts } from "../lib/prospectability.js"
+import { generateMarketReport } from "../lib/marketReport.js"
 import { buildStage1TestContact, buildStage2Contact, STARTER_VOICE_SAMPLES } from "../data/smsAgentSeed.js"
 
 const router = Router()
@@ -56,7 +58,12 @@ router.get("/contacts", async (req, res) => {
   const stage = req.query.stage ? parseInt(String(req.query.stage), 10) : undefined
   const status = req.query.status ? String(req.query.status) as never : undefined
   const contacts = await listContacts({ stage, status })
-  res.json({ contacts })
+  const scores = await scoreContacts(contacts)
+  const enriched = contacts.map(c => {
+    const s = scores.get(c.id)
+    return { ...c, prospectability: s?.prospectability ?? 50, interest: s?.interest ?? 20, score_label: s?.label ?? "warm", score_highlights: s?.highlights ?? [] }
+  })
+  res.json({ contacts: enriched })
 })
 
 router.post("/contacts", async (req, res) => {
@@ -184,6 +191,52 @@ router.get("/meetings", async (_req, res) => {
 router.post("/orchestrate", async (_req, res) => {
   const summary = await runSmsOrchestration()
   res.json(summary)
+})
+
+// ── Market reports ──────────────────────────────────────────────────────────────
+
+router.get("/market-report/:suburb", async (req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  const suburb = req.params.suburb.replace(/-/g, " ")
+  const all = await listContacts({})
+  const relevant = all.filter(c => {
+    const subs = (c.rea_data?.target_suburbs ?? []) as string[]
+    return subs.some(s => s.toLowerCase().includes(suburb.toLowerCase()))
+  })
+  const agentCtx = await getAgentContext((req as any).agentId)
+  const report = await generateMarketReport(suburb, relevant.length > 0 ? relevant : all.slice(0, 5), agentCtx)
+  res.json(report)
+})
+
+router.post("/sequences/market-report", async (req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  const contactId = req.body?.contactId ? parseInt(String(req.body.contactId), 10) : NaN
+  const suburb = req.body?.suburb ? String(req.body.suburb).trim() : ""
+  if (isNaN(contactId) || !suburb) return res.status(400).json({ error: "contactId and suburb required" })
+
+  const contact = await getContactById(contactId)
+  if (!contact) return res.status(404).json({ error: "Contact not found" })
+
+  const agentCtx = await getAgentContext((req as any).agentId)
+  const marketData = await generateMarketReport(suburb, [contact], agentCtx)
+
+  const objective = `Offer ${contact.name.split(" ")[0]} a free market report for ${suburb}. Key stat: ${marketData.keyStat ?? "strong recent sales"}. Market sentiment: ${marketData.sentiment}. Sequence: (1) Brief natural opener offering the report. (2) If they say yes, send the key stat summary. (3) Offer a free appraisal of their next listing. Keep each message under 160 chars.`
+
+  await upsertContact({ name: contact.name, phone: contact.phone, conversation_objective: objective })
+
+  const updated = await getContactById(contactId)
+  if (!updated) return res.status(500).json({ error: "Contact update failed" })
+
+  const opener = await generateOpener(updated, agentCtx)
+  const draftId = await saveAgentDraft({
+    contactId: updated.id,
+    draftBody: opener.draft,
+    kind: "opener",
+    reasoning: `Market report sequence — ${suburb}`,
+    voiceConfidence: opener.voiceConfidence,
+  })
+
+  res.json({ ok: true, draftId, preview: opener.draft, suburb, report: marketData })
 })
 
 // ── Ready-queue (CRM-triggered auto-outreach) ───────────────────────────────────
