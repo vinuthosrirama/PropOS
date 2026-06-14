@@ -28,7 +28,8 @@ import { sendSMS, smsConfigured } from "../lib/sms.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"
 import {
   listContacts, upsertContact, getContactById, markContacted, recordVoiceSignal,
-  getUpcomingMeetings, canSendNow, recordAgentMessageSent, type Relationship,
+  getUpcomingMeetings, canSendNow, recordAgentMessageSent, countSignalsSinceCalibration,
+  type Relationship,
 } from "../lib/smsContacts.js"
 import { getVoiceProfile } from "../lib/voiceProfile.js"
 import { calibrateVoice, recalibrateVoice } from "../lib/voiceCalibration.js"
@@ -123,6 +124,16 @@ router.post("/drafts/:id/approve", async (req, res) => {
     contact_id: result.contactId,
   })
 
+  // Continuous voice improvement: recalibrate after every 5 signals (async, non-blocking).
+  const agentCtx = await getAgentContext((req as any).agentId)
+  void countSignalsSinceCalibration(agentCtx.voiceId).then(n => {
+    if (n >= 5) {
+      void recalibrateVoice(agentCtx.voiceId).then(vp => {
+        if (vp) console.log(`[voice] auto-recalibrated ${agentCtx.voiceId} after ${n} signals (conf ${vp.confidence.toFixed(2)})`)
+      }).catch(() => {})
+    }
+  }).catch(() => {})
+
   if (!smsConfigured()) {
     return res.json({ ok: true, sent: false, message: "Approved but SMS not configured", body: result.body })
   }
@@ -149,6 +160,16 @@ router.post("/drafts/:id/reject", async (req, res) => {
   const result = await rejectAgentDraft(id)
   if (!result) return res.status(404).json({ error: "Draft not found or already actioned" })
   await recordVoiceSignal({ draft_body: result.draftBody, action: "rejected", contact_id: result.contactId })
+
+  const agentCtxR = await getAgentContext((req as any).agentId)
+  void countSignalsSinceCalibration(agentCtxR.voiceId).then(n => {
+    if (n >= 5) {
+      void recalibrateVoice(agentCtxR.voiceId).then(vp => {
+        if (vp) console.log(`[voice] auto-recalibrated ${agentCtxR.voiceId} after ${n} signals (conf ${vp.confidence.toFixed(2)})`)
+      }).catch(() => {})
+    }
+  }).catch(() => {})
+
   res.json({ ok: true })
 })
 

@@ -619,6 +619,9 @@ async function migrate(): Promise<void> {
     ["ALTER sms_contacts assigned_agent_id", `
       ALTER TABLE sms_contacts ADD COLUMN IF NOT EXISTS assigned_agent_id INTEGER REFERENCES agents(id) ON DELETE SET NULL`],
 
+    ["ALTER sms_contacts rea_data", `
+      ALTER TABLE sms_contacts ADD COLUMN IF NOT EXISTS rea_data JSONB NOT NULL DEFAULT '{}'`],
+
     ["INDEX sms_contacts_status",   `CREATE INDEX IF NOT EXISTS sms_contacts_status_idx   ON sms_contacts(status, stage)`],
     ["INDEX sms_contacts_followup", `CREATE INDEX IF NOT EXISTS sms_contacts_followup_idx ON sms_contacts(follow_up_at) WHERE follow_up_at IS NOT NULL`],
     ["INDEX sms_contacts_ready",    `CREATE INDEX IF NOT EXISTS sms_contacts_ready_idx     ON sms_contacts(ready_to_contact) WHERE ready_to_contact = TRUE`],
