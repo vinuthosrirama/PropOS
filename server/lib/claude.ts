@@ -58,7 +58,7 @@ export async function generateChatJSON(prompt: string, maxTokens = 400): Promise
     const { getOpenAIClient } = await import("./openai.js")
     const completion = await withLLMTimeout(signal =>
       getOpenAIClient().chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
         max_tokens: maxTokens,
         response_format: { type: "json_object" },
