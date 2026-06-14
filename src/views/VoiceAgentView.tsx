@@ -154,6 +154,9 @@ export default function VoiceAgentView() {
   const [editForm, setEditForm] = useState({ notes: "", agency: "", suburbs: "", listingCount: "", soldAddress: "", soldPrice: "", objective: "", status: "active" })
   const [editSaving, setEditSaving] = useState(false)
 
+  // pitch link
+  const [pitchLinkGenerating, setPitchLinkGenerating] = useState(false)
+
   // new contact form
   const [newContactOpen, setNewContactOpen] = useState(false)
   const [newForm, setNewForm] = useState({ name: "", phone: "", relationship: "agent_prospect", agency: "", note: "" })
@@ -400,6 +403,20 @@ export default function VoiceAgentView() {
     } catch (e) { setActionMsg((e as Error).message) }
     finally { setEditSaving(false) }
   }, [selected, editForm, load])
+
+  // ── Generate pitch link ───────────────────────────────────────────────────────
+  const generatePitchLink = useCallback(async () => {
+    if (!selected) return
+    setPitchLinkGenerating(true)
+    try {
+      const res = await authFetch(apiUrl(`/api/sms-agent/contacts/${selected.id}/pitch`), { method: "POST" })
+      const json = await res.json() as { url?: string; error?: string }
+      if (json.error) { setActionMsg(json.error); return }
+      setActionMsg(`Pitch link ready — ${json.url}`)
+      await load()
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setPitchLinkGenerating(false) }
+  }, [selected, load])
 
   // ── Create new contact ────────────────────────────────────────────────────────
   const createContact = useCallback(async () => {
@@ -657,6 +674,33 @@ export default function VoiceAgentView() {
                 <div style={{ fontSize: 9.5, color: C.faint, marginBottom: 2 }}>Notes</div>
                 <textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} placeholder="Met at open home — keen on Berwick area" rows={2}
                   style={{ ...inp, resize: "vertical" as const, marginBottom: 0 }} />
+              </div>
+              {/* Pitch link */}
+              <div style={{ marginTop: 8, padding: "8px 10px", background: C.bg2, borderRadius: 9, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 9.5, color: C.faint, marginBottom: 6 }}>Pitch report link</div>
+                {selected?.personalisation?.pitch_url ? (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <a href={selected.personalisation.pitch_url as string} target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: 11, color: "var(--accent)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {selected.personalisation.pitch_url as string}
+                    </a>
+                    <button onClick={() => {
+                      void navigator.clipboard.writeText(selected.personalisation!.pitch_url as string)
+                      setActionMsg("Link copied")
+                    }} style={{ ...btn, fontSize: 10, padding: "3px 8px", color: C.muted, background: "transparent", border: `1px solid ${C.border}`, flexShrink: 0 }}>
+                      Copy
+                    </button>
+                    <button onClick={() => void generatePitchLink()} disabled={pitchLinkGenerating}
+                      style={{ ...btn, fontSize: 10, padding: "3px 8px", color: C.faint, background: "transparent", border: `1px solid ${C.border}`, flexShrink: 0, opacity: pitchLinkGenerating ? 0.5 : 1 }}>
+                      Regen
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => void generatePitchLink()} disabled={pitchLinkGenerating}
+                    style={{ ...btn, fontSize: 11, padding: "5px 12px", color: "var(--accent)", background: "var(--accent-dim, rgba(123,53,190,0.12))", border: `1px solid ${"var(--accent)"}40`, opacity: pitchLinkGenerating ? 0.5 : 1 }}>
+                    {pitchLinkGenerating ? "Generating report..." : "Generate report link"}
+                  </button>
+                )}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center" }}>
                 <select value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}

@@ -17,6 +17,7 @@
  * POST /api/sms-agent/seed-stage1              — seed the Stage 1 test contact + voice samples
  * POST /api/sms-agent/seed-stage2              — seed a Stage 2 contact (real number, not redirected)
  * POST /api/sms-agent/contacts/:id/suggest     — AI-generate 3 message suggestions from thread history
+ * POST /api/sms-agent/contacts/:id/pitch       — generate appraisal pitch link from contact's rea_data
  * POST /api/sms-agent/run-ready                — run the CRM-triggered ready-queue poller now
  * GET  /api/sms-agent/settings                 — current toggles (e.g. { autoSend })
  * POST /api/sms-agent/settings                 — update toggles (e.g. { autoSend: true })
@@ -25,7 +26,7 @@
  */
 
 import { Router } from "express"
-import { isDbConnected } from "../lib/db.js"
+import { isDbConnected, execute } from "../lib/db.js"
 import { sendSMS, smsConfigured } from "../lib/sms.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"
 import {
@@ -48,6 +49,8 @@ import { getSetting, setSetting } from "../lib/appSettings.js"
 import { scoreContacts } from "../lib/prospectability.js"
 import { generateMarketReport } from "../lib/marketReport.js"
 import { buildStage1TestContact, buildStage2Contact, STARTER_VOICE_SAMPLES } from "../data/smsAgentSeed.js"
+import { generateAppraisalPayload } from "../lib/appraisalGenerator.js"
+import { randomBytes } from "crypto"
 
 const router = Router()
 
@@ -360,6 +363,55 @@ router.post("/contacts/:id/send", async (req, res) => {
   } catch (err) {
     res.status(502).json({ ok: false, sent: false, error: (err as Error).message })
   }
+})
+
+// ── Generate appraisal pitch link ───────────────────────────────────────────────
+
+router.post("/contacts/:id/pitch", async (req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) return res.status(400).json({ error: "invalid id" })
+
+  const contact = await getContactById(id)
+  if (!contact) return res.status(404).json({ error: "Contact not found" })
+
+  const rd = (contact.rea_data ?? {}) as Record<string, unknown>
+  const address = ((rd.recently_sold_address as string | undefined) ?? "").trim()
+  const suburbs = rd.target_suburbs as string[] | undefined
+  const suburb  = (suburbs?.[0] ?? "").trim()
+
+  if (!address || !suburb) {
+    return res.status(400).json({
+      error: "Contact needs a last sold address and at least one target suburb to generate a pitch",
+    })
+  }
+
+  const agentCtx = await getAgentContext(req.agentId ? Number(req.agentId) : null)
+
+  let payload: Awaited<ReturnType<typeof generateAppraisalPayload>>
+  try {
+    payload = await generateAppraisalPayload({
+      property: { address, suburb, beds: 3, baths: 2, parking: 1, propertyType: "House" },
+      agent:    { name: agentCtx.name, agency: agentCtx.agency, suburb },
+    })
+  } catch (err) {
+    return res.status(500).json({ error: `Pitch generation failed: ${(err as Error).message}` })
+  }
+
+  const slug    = randomBytes(6).toString("base64url")
+  const agentId = req.agentId ? String(req.agentId) : "default"
+  const base    = process.env.BASE_URL ?? "https://propos.addvantage.site"
+  const url     = `${base}/p/${slug}`
+
+  await execute(
+    `INSERT INTO pitches (type, slug, agent_id, payload_json, status) VALUES ('appraisal', $1, $2, $3, 'draft')`,
+    [slug, agentId, JSON.stringify(payload)],
+  )
+
+  // Merge pitch_url into personalisation so the opener prompt sees it automatically
+  await updateContact(id, { personalisation: { pitch_url: url } })
+
+  res.json({ url, slug })
 })
 
 // ── Initiate (generate + send an opener) ────────────────────────────────────────
