@@ -616,6 +616,48 @@ The full integration plan is in `docs/GOOGLE_SHEETS_CRM.md`. Summary:
 
 ---
 
+## Demo: Past Client Reconnection (2026-06-14)
+
+A self-contained demo module for showing prospective REA agents how the Voice Agent
+reconnects with past buyers in their own voice. Lives entirely behind the "Demo" toggle
+in the Voice tab — does not affect the real Stage 1-4 flow.
+
+**3 fictional personas** (`server/data/smsAgentSeed.ts` → `buildDemoPastClientPersonas()`),
+seeded via `POST /api/sms-agent/seed-demo-pastclients`:
+
+- **Sarah Mitchell** (+61400000101) — FHB now landlord (relocated to Brisbane, renting out Berwick property)
+- **Daniel Osei** (+61400000102) — FHB now investor-curious (Hampton Park owner, budget $500-650k in Pakenham/Officer)
+- **Rebecca Tan** (+61400000103) — past buyer, possible seller 1.5 years on (Officer, equity grown $580k → $660k est.)
+
+Each persona has a `conversation_objective` and `rea_data` (universal CRM lead schema:
+`buyer_type`, `current_status`, `purchase_history`, `budget_min/max`, `target_suburbs`,
+`current_estimate`, `tags`) following the AgentBox/Box+Dice/VaultRE/Rex/Agentpoint shape.
+`source: "seed:demo_pastclient"` tags them for the redirect logic below.
+
+**New endpoints** (`server/routes/sms-agent.ts`):
+
+- `GET /api/sms-agent/demo/target` — returns `{ phone }`, the REA agent's number for this demo (from `app_settings` key `demo_target_phone`).
+- `POST /api/sms-agent/demo/target` — sets the demo target phone.
+- `POST /api/sms-agent/seed-demo-pastclients` — upserts the 3 personas above.
+- `POST /api/sms-agent/contacts/:id/queue-opener` — runs `generateOpener` for the contact and saves the result as a pending draft (kind `"opener"`) via `saveAgentDraft`. Does not send.
+
+**Send redirect**: in `POST /api/sms-agent/drafts/:id/approve`, after the existing cooldown
+check, if the draft's contact has `source` starting with `"seed:demo"`, the send target is
+swapped from the contact's placeholder phone to `demo_target_phone` (if set). Approved demo
+drafts therefore land on the REA agent's real phone instead of the fake `+614000001xx` numbers.
+
+**UI** (`src/views/VoiceAgentView.tsx`): "Demo" header button toggles a panel with a phone
+input + "Save number" (writes `demo_target_phone`) and "Seed demo personas" button. Selecting
+a seeded persona shows a "Queue opener" action button alongside the existing Suggest/Generate
+opener/Market report buttons; queued openers appear in the normal drafts-awaiting-approval
+queue and go through the same Approve+send / Edit / Reject flow.
+
+**Demo script**: set `demo_target_phone` to the REA agent's number → seed personas → open
+each persona → "Queue opener" → review the generated text → Approve + send. Verified
+2026-06-14 end-to-end with `demo_target_phone` set to Vinuth's own test number.
+
+---
+
 ## How another Claude Code instance continues this
 
 1. `cd` into the PropOS repo, `git fetch && git checkout sms-agent && git pull`.

@@ -140,6 +140,14 @@ export default function VoiceAgentView() {
   const [calibrateText, setCalibrateText]   = useState("")
   const [calibrating, setCalibrating]       = useState(false)
 
+  // demo: past client reconnection
+  const [demoOpen, setDemoOpen]         = useState(false)
+  const [demoPhone, setDemoPhone]       = useState<string | null>(null)
+  const [demoPhoneInput, setDemoPhoneInput] = useState("")
+  const [savingDemo, setSavingDemo]     = useState(false)
+  const [seedingDemo, setSeedingDemo]   = useState(false)
+  const [queueingOpener, setQueueingOpener] = useState(false)
+
   // market report sequence
   const [mrOpen, setMrOpen]         = useState(false)
   const [mrSuburb, setMrSuburb]     = useState("")
@@ -168,11 +176,12 @@ export default function VoiceAgentView() {
   // ── Load ──────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     try {
-      const [cRes, dRes, vRes, sRes] = await Promise.all([
+      const [cRes, dRes, vRes, sRes, tRes] = await Promise.all([
         authFetch(apiUrl("/api/sms-agent/contacts")),
         authFetch(apiUrl("/api/sms-agent/drafts")),
         authFetch(apiUrl("/api/sms-agent/voice-profile")),
         authFetch(apiUrl("/api/sms-agent/settings")),
+        authFetch(apiUrl("/api/sms-agent/demo/target")),
       ])
       if ([cRes, dRes, vRes].some(r => r.status === 401)) { setAuthRequired(true); return }
       setAuthRequired(false)
@@ -184,6 +193,9 @@ export default function VoiceAgentView() {
       if (!vJson.error) setVoice(vJson)
       const sJson = await sRes.json() as { autoSend?: boolean }
       setAutoSend(!!sJson.autoSend)
+      const tJson = await tRes.json() as { phone?: string | null }
+      setDemoPhone(tJson.phone ?? null)
+      setDemoPhoneInput(tJson.phone ?? "")
     } catch (e) { setActionMsg((e as Error).message) }
     finally { setLoading(false) }
   }, [])
@@ -278,6 +290,48 @@ export default function VoiceAgentView() {
       await load()
     } catch (e) { setActionMsg((e as Error).message) }
   }, [load])
+
+  // ── Demo: past client reconnection ───────────────────────────────────────────
+  const saveDemoPhone = useCallback(async () => {
+    if (!demoPhoneInput.trim()) return
+    setSavingDemo(true)
+    try {
+      const res = await authFetch(apiUrl("/api/sms-agent/demo/target"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: demoPhoneInput.trim() }),
+      })
+      const json = await res.json() as { ok?: boolean; phone?: string; error?: string }
+      if (!json.ok) { setActionMsg(json.error ?? "Failed"); return }
+      setDemoPhone(json.phone ?? null)
+      setActionMsg("Demo number saved")
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setSavingDemo(false) }
+  }, [demoPhoneInput])
+
+  const seedDemoPersonas = useCallback(async () => {
+    setSeedingDemo(true)
+    try {
+      const res = await authFetch(apiUrl("/api/sms-agent/seed-demo-pastclients"), { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+      const json = await res.json() as { ok?: boolean; error?: string }
+      if (!json.ok) { setActionMsg(json.error ?? "Failed to seed demo personas"); return }
+      setActionMsg("Demo personas seeded")
+      await load()
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setSeedingDemo(false) }
+  }, [load])
+
+  const queueOpener = useCallback(async () => {
+    if (!selected) return
+    setQueueingOpener(true)
+    try {
+      const res = await authFetch(apiUrl(`/api/sms-agent/contacts/${selected.id}/queue-opener`), { method: "POST" })
+      const json = await res.json() as { ok?: boolean; draftId?: number | null; preview?: string; error?: string }
+      if (!json.ok) { setActionMsg(json.error ?? "Failed"); return }
+      setActionMsg(`Draft queued: "${json.preview}"`)
+      await load()
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setQueueingOpener(false) }
+  }, [selected, load])
 
   // ── Send ──────────────────────────────────────────────────────────────────────
   const send = useCallback(async () => {
@@ -816,6 +870,9 @@ export default function VoiceAgentView() {
                 Generate opener
               </button>
             )}
+            <button onClick={() => void queueOpener()} disabled={queueingOpener} style={{ ...btn, color: C.green, background: "transparent", border: `1px solid ${C.green}40`, opacity: queueingOpener ? 0.5 : 1, fontSize: 10.5 }}>
+              {queueingOpener ? "Queuing..." : "Queue opener"}
+            </button>
             <button onClick={() => { setMrOpen(v => !v); setMrResult(null) }} style={{ ...btn, color: C.orange, background: "transparent", border: `1px solid ${C.orange}40`, fontSize: 10.5 }}>
               {mrOpen ? "Close report" : "Market report"}
             </button>
@@ -870,6 +927,9 @@ export default function VoiceAgentView() {
           <button onClick={() => setCalibrateOpen(v => !v)} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, fontSize: isMobile ? 11 : 11.5 }}>
             {calibrateOpen ? "Close" : "Calibrate"}
           </button>
+          <button onClick={() => setDemoOpen(v => !v)} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, fontSize: isMobile ? 11 : 11.5 }}>
+            {demoOpen ? "Close" : "Demo"}
+          </button>
           <button onClick={() => void load()} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, fontSize: isMobile ? 11 : 11.5 }}>↻</button>
         </div>
       </div>
@@ -898,6 +958,30 @@ export default function VoiceAgentView() {
               {calibrating ? "Calibrating..." : "Calibrate"}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Demo: Past Client Reconnection panel */}
+      {demoOpen && (
+        <div style={{ ...card, marginBottom: 16, borderColor: `${C.orange}40` }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Demo: Past Client Reconnection</div>
+          <p style={{ fontSize: 11.5, color: C.muted, margin: "0 0 8px" }}>
+            Seeds 3 fictional past-buyer personas (now a landlord, now investor-curious, and a possible seller). Set the REA agent's number below — approved drafts for these personas are sent there instead of their placeholder numbers.
+          </p>
+          <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+            <input
+              value={demoPhoneInput} onChange={e => setDemoPhoneInput(e.target.value)}
+              placeholder="+614xx xxx xxx (REA agent's number)"
+              style={{ flex: 1, minWidth: 200, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 9, padding: "8px 10px", color: C.text, fontSize: 12.5, fontFamily: FONT, boxSizing: "border-box" }}
+            />
+            <button onClick={() => void saveDemoPhone()} disabled={savingDemo || !demoPhoneInput.trim()} style={{ ...btn, color: C.bg, background: C.orange, opacity: savingDemo || !demoPhoneInput.trim() ? 0.5 : 1 }}>
+              {savingDemo ? "Saving..." : "Save number"}
+            </button>
+          </div>
+          {demoPhone && <div style={{ fontSize: 10.5, color: C.faint, marginBottom: 8 }}>Currently sending demo replies to {demoPhone}</div>}
+          <button onClick={() => void seedDemoPersonas()} disabled={seedingDemo} style={{ ...btn, color: C.bg, background: "var(--accent)", opacity: seedingDemo ? 0.5 : 1 }}>
+            {seedingDemo ? "Seeding..." : "Seed demo personas"}
+          </button>
         </div>
       )}
 
