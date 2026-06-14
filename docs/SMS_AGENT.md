@@ -129,6 +129,47 @@ iPhone ──► BlueBubbles (Mac) ──► PropOS /api/webhook/bluebubbles ─
   about a coffee catch-up? always good to chat") already existed for her — confirms the
   re-fire/dedup guard (Verification item 5) works. **Draft #11 remains pending in the Voice tab,
   not approved/sent** — needs Vinuth's review before any real iMessage goes to Aneesha.
+- [x] **AgentContext + per-agent voice (code, 2026-06-13, commit d849392)** — `AgentContext`
+  interface (`{ name, agency, voiceId }`) threaded through `generateOpener`, `generateReply`, and
+  `voiceCalibration.ts`. Each agent's voice is keyed as `agent_<id>` in `voice_profiles`. JWT path
+  and the ready-poller both call `getAgentContext(agentId?)` from `server/lib/agentContext.ts`.
+  Provider selection (Sonnet 4.6 vs GPT-4o-mini) also centralised here.
+- [x] **`rea_data` JSONB + seed data (code + live DB, 2026-06-14)** — added `rea_data JSONB NOT NULL DEFAULT '{}'`
+  column to `sms_contacts` (db.ts migration step). Stores REA-specific fields:
+  `agency_name`, `years_active`, `currently_listing`, `currently_listing_count`,
+  `target_suburbs`, `recently_sold_address`, `recently_sold_price`, `recently_sold_days_on_market`.
+  Merge-on-conflict (`rea_data = sms_contacts.rea_data || EXCLUDED.rea_data`) so partial updates
+  preserve other keys. Seed upserted to live Supabase:
+  - Aneesha: Harcourts Dandenong, 4 years, 2 active listings (Hallam + Berwick), sold $742k
+    Dandenong 18 DOM, target suburbs: Dandenong/Hallam/Berwick/Narre Warren/Cranbourne.
+  - Test Partner: PropOS Realty (test), 1 year, 1 listing, Clayton/Glen Waverley corridor.
+- [x] **Continuous voice learning (code, 2026-06-14)** — `recalibrateVoice()` now fires after
+  every ≥5 approve/reject signals (threshold check inline with approve/reject routes in
+  `server/routes/sms-agent.ts` → `countSignalsSinceCalibration → if ≥5 → async recalibrateVoice`),
+  not just at 7am nightly. Non-blocking async so the approve/reject HTTP response is instant.
+- [x] **Prospectability + interest scoring (code, 2026-06-14)** — `server/lib/prospectability.ts`:
+  - `prospectability` (0-100): base 50 + active listing bonus + years_active + DOM speed bonus +
+    suburb count + never-contacted bonus + overdue bonus − recently-contacted − many-attempts − opted-out.
+  - `interest` (0-100): base 20 + stage bonuses (stage 2+20, stage 3+40, booked+60) + recent-contact
+    recency + net voice signals (approved − rejected).
+  - Single batched SQL for signals (one query for all contacts, not N queries).
+  - `GET /contacts` enriches each contact with `{ prospectability, interest, score_label, score_highlights }`.
+- [x] **Market Report outreach sequence (code, 2026-06-14)** — `server/lib/marketReport.ts`
+  generates a 2-3 sentence suburb snapshot from `rea_data` across matching contacts (sold prices,
+  DOM, listing count), using Sonnet 4.6 / GPT-4o-mini fallback. Two new routes in `sms-agent.ts`:
+  - `GET /market-report/:suburb` — generates suburb snapshot on-demand.
+  - `POST /sequences/market-report` — sets `conversation_objective`, generates hyper-personalised
+    opener referencing the suburb stats, queues draft. Direct equivalent of RiTA's #1 use case.
+- [x] **Mobile/tablet responsive VoiceAgentView (code, 2026-06-14)** — full redesign of
+  `src/views/VoiceAgentView.tsx` (~680 lines). Single-panel mobile (contact list ↔ thread with
+  back button), 260px sidebar tablet, 2-col grid desktop. Score badge + highlights row on each
+  contact card. Sort by prospectability (default) or last_contact. Auto-send confirm modal before
+  enabling. Market Report panel with suburb chip selector. Prospectability/interest mini-widget in
+  thread header.
+- [x] **SOLD_DB launchd cron (live, 2026-06-14)** — macOS launchd plist at
+  `~/Library/LaunchAgents/com.propos.sold_scraper.plist` runs `sold_scraper.py --pages 8` every 3
+  days at 6:30am (days 1/4/7/10/13/16/19/22/25/28). Registered and confirmed in `launchctl list`.
+  Logs to `~/Library/Logs/sold_scraper.log`.
 
 > All four build stages are code-complete and type-clean on the `sms-agent` branch.
 > Outbound (opener generation + send) and inbound (reply generation, conversation memory,
@@ -550,20 +591,45 @@ fields. Once present, the ready-poller (#3) has real hooks to reference in gener
 
 ---
 
+## Planned: Supabase + Google Sheets CRM (2026-06-14 — next session)
+
+The full integration plan is in `docs/GOOGLE_SHEETS_CRM.md`. Summary:
+
+1. **`sold_properties` table** — add SQL migration to `server/lib/db.ts` (schema in CRM doc).
+   SOLD_DB → optional `--supabase` flag on `sold_scraper.py` to write rows here.
+
+2. **Supabase anon + service_role keys** — get from Supabase dashboard → Project Settings → API.
+   DO NOT commit either key. Anon key is read-only; service_role is write. Store service_role only
+   in Apps Script `PropertiesService.getScriptProperties()`.
+   **Note:** The management token Vinuth provided is NOT the service_role key — these are
+   service_role key — these are different. Get service_role from the dashboard.
+
+3. **SMS CRM tab** in sheet `1lsDviIB9guT-e9n4jKh1WJcuvBaMXGsLpXPLZNTSEBE` — new tab with
+   17 columns (layout in CRM doc). Column O = `ready_to_contact` checkbox → `onEdit` fires
+   PATCH to Supabase → PropOS 2-min poller picks up → draft in Voice tab.
+
+4. **Apps Script** (`syncFromSupabase()` every 5 min + `onEdit` handler) — full pseudocode in
+   CRM doc. Key: `UrlFetchApp.fetch` to Supabase REST API with service_role bearer token.
+
+5. **End-to-end verify**: tick col O for Aneesha → Supabase `ready_to_contact=true` within 5s →
+   PropOS poller generates opener → draft appears in Voice tab → approve → real iMessage.
+
+---
+
 ## How another Claude Code instance continues this
 
 1. `cd` into the PropOS repo, `git fetch && git checkout sms-agent && git pull`.
-2. Read this doc's **Stage status** for the next unchecked box — as of 2026-06-13 the 8-item
-   CRM-Triggered Auto-Outreach build is **code-complete**; the only remaining work is the
-   **Verification checklist** (items 1-8) under "Planned: CRM-Triggered Auto-Outreach + MVP
-   Hardening" below — start there. Vinuth authorised writing live verification data to the
-   `sms_contacts` / `sms_agent_drafts` tables on 2026-06-13 for this purpose.
-3. Before relying on inbound auto-drafting in local dev (including the ready-poller), read
-   Known issue #7 (possible local/production double-processing) — confirm with Vinuth how to
-   handle it first.
-4. `cd server && npx tsc --noEmit` must be clean before any commit (repo rule).
-5. No em-dashes anywhere (repo rule). All generated text already routes through `sanitiseText`.
-6. Commit + `git push origin sms-agent` after each stage. Update the Stage status checkboxes.
+2. Read **Stage status** above — all four stages are code-complete. The two open build items are:
+   (a) **Verification checklist** under "CRM-Triggered Auto-Outreach + MVP Hardening" (items 3-8)
+   (b) **Supabase + Google Sheets CRM** (see "Planned" section directly above and `docs/GOOGLE_SHEETS_CRM.md`).
+   Start with (a) to confirm the ready-poller is working end-to-end, then move to (b).
+3. Vinuth authorised writing live verification data to `sms_contacts` / `sms_agent_drafts` on 2026-06-13.
+4. Before relying on inbound auto-drafting in local dev (ready-poller), read Known issue #7 — confirm
+   local/production double-processing is understood before running the poller on the shared DB.
+5. `cd server && npx tsc --noEmit` must be clean before any commit (repo rule).
+6. No em-dashes anywhere (repo rule). All generated text routes through `sanitiseText`.
+7. Commit + `git push origin sms-agent` after each stage. Update the Stage status checkboxes.
+8. **Never push to main** without Vinuth's explicit instruction — main = production Railway deploy.
 
 ## Env vars this agent reads
 
