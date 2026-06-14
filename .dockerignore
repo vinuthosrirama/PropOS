@@ -1,0 +1,28 @@
+# Excludes files that don't belong in the Docker image.
+# Without this, Docker copies node_modules (~500MB) into the build context,
+# making every `fly deploy` take 5-10x longer than necessary.
+
+# Dependencies (rebuilt inside Docker via npm ci)
+node_modules/
+server/node_modules/
+
+# Build outputs (rebuilt inside Docker via npm run build)
+dist/
+dist_backup_*/
+server/dist/
+
+# Secrets — never go in Docker images
+.env
+server/.env
+*.local
+
+# Dev / OS artifacts
+.DS_Store
+*.log
+
+# Large dev-only dirs
+backups/
+src_snapshot_*/
+
+# Git internals
+.git/
