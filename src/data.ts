@@ -139,7 +139,7 @@ export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
 }
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
-export type ViewId = "demo" | "setup" | "principal" | "campaign"
+export type ViewId = "demo" | "setup" | "principal" | "campaign" | "voiceagent"
 
 export type LeadStatus =
   | "outreach_sent"

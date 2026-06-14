@@ -1,0 +1,330 @@
+# PropOS SMS Agent — Complete Guide (as of 2026-06-13)
+
+> Written for someone seeing this feature for the first time. No prior context assumed.
+
+---
+
+## 1. What is this, in one paragraph?
+
+PropOS has a built-in **AI assistant that texts people on Vinuth's behalf** — using Vinuth's
+**real phone number** (via iMessage/SMS), in **Vinuth's own writing style**. It can start
+conversations with leads, reply to incoming texts, negotiate meeting times, and learn from
+Vinuth's edits over time so it sounds more like him the longer it runs. Every message it wants
+to send is shown to Vinuth (or another agent) for approval first — it never sends anything
+without a human in the loop, unless that's explicitly turned on for very low-risk replies.
+
+Today's session added the final missing piece: **a way to trigger this automatically from the
+CRM**. Tick one box next to a contact's name in the database, and within 2 minutes a
+personalised opening message is drafted and waiting for approval — no manual "go" command
+needed.
+
+---
+
+## 2. The big picture — how a message actually gets sent
+
+```
+                         ┌─────────────────────────────────────────┐
+                         │            sms_contacts (CRM)            │
+                         │  Vinuth (or an agent) ticks a box:       │
+                         │  "ready_to_contact = TRUE" on a lead      │
+                         └───────────────────┬───────────────────────┘
+                                              │ every 2 minutes, a background
+                                              │ job checks for ticked contacts
+                                              ▼
+                         ┌─────────────────────────────────────────┐
+                         │     Ready-queue poller (smsReadyOutreach)  │
+                         │  "claims" the contact, reads everything   │
+                         │  known about them (name, relationship,    │
+                         │  recent topics, etc.)                     │
+                         └───────────────────┬───────────────────────┘
+                                              │
+                                              ▼
+                         ┌─────────────────────────────────────────┐
+                         │   AI writes an opening message            │
+                         │   (Sonnet 4.6, in Vinuth's calibrated      │
+                         │   voice, referencing something personal)   │
+                         └───────────────────┬───────────────────────┘
+                                              │
+                                              ▼
+                         ┌─────────────────────────────────────────┐
+                         │   Draft lands in the "Voice" tab of       │
+                         │   PropOS, waiting for approval             │
+                         └───────────────────┬───────────────────────┘
+                                              │  Vinuth reads it, optionally
+                                              │  edits it, clicks Approve
+                                              ▼
+                         ┌─────────────────────────────────────────┐
+                         │   Sent as a real iMessage from Vinuth's   │
+                         │   own phone (via a Mac running BlueBubbles)│
+                         └───────────────────┬───────────────────────┘
+                                              │
+                                              ▼
+                         ┌─────────────────────────────────────────┐
+                         │   If the lead replies, it comes back into │
+                         │   PropOS, and the AI drafts a reply too —  │
+                         │   same approval flow                       │
+                         └─────────────────────────────────────────┘
+```
+
+A second loop runs quietly in the background: every time Vinuth **approves a message as-is,
+edits it, or rejects it**, that decision is recorded. Once enough decisions pile up, the AI
+**recalibrates its writing style** to better match what Vinuth actually wants — for every agent
+using the system individually, not just Vinuth.
+
+---
+
+## 3. Key terms (read this before anything else)
+
+| Term | What it means here |
+|---|---|
+| **Contact** | A row in `sms_contacts` — one person the agent might text. Has a name, phone number, relationship type (business partner / close friend / family / prospective lead), and notes. |
+| **`ready_to_contact`** | A yes/no checkbox on a contact. Ticking it is the trigger — "the AI should reach out to this person now." |
+| **Draft** | A message the AI has written but **not sent yet**. Sits in an approval queue. |
+| **Opener** | The first message in a new conversation (as opposed to a reply to something the person said). |
+| **Voice profile** | A description of "how Vinuth writes texts" — tone, common phrases, length, etc. Generated by analysing real text samples. Each agent gets their own. |
+| **Voice confidence** | A 0-1 score for how well-calibrated the voice profile is. Currently **0.4 (low)** because it's based on 15 generic placeholder examples, not Vinuth's real texts. |
+| **Approval queue** | The list of drafts waiting for a human to approve, edit, or reject — shown in PropOS's "Voice" tab. |
+| **BlueBubbles** | Software running on a Mac that lets PropOS send/receive real iMessages from Vinuth's actual phone number. If that Mac is asleep or offline, sending stops working. |
+| **Auto-send** | A setting (currently OFF) that would let the AI send certain very simple, low-risk replies (like "ok thanks 👍") without waiting for approval. |
+| **Recalibration** | The AI updating its voice profile based on what Vinuth approved, edited, or rejected — i.e. it "learns" over time. |
+
+---
+
+## 4. What was built across the whole project (Stages 1-4) — the foundation
+
+Before today, four "stages" were built and are all code-complete and working:
+
+1. **Stage 1 — Basic conversation.** The AI can write an opener and a reply, using a voice
+   profile, and send/receive real iMessages via BlueBubbles. Verified by actually sending a
+   message to Vinuth's own phone and getting it back into the approval queue.
+2. **Stage 2 — Relationships + simple auto-replies.** Different "voice tweaks" per relationship
+   type (e.g., texting a close friend differently than a business prospect), plus the groundwork
+   for auto-sending trivial replies (currently still off).
+3. **Stage 3 — Meeting scheduling.** The AI can read a reply like "yeah Thursday arvo works" and
+   turn it into a proposed/booked meeting slot.
+4. **Stage 4 — Daily housekeeping.** Every morning at 7am, a background job checks for
+   follow-ups that are due, preps for upcoming meetings, and checks if the AI's writing style has
+   "drifted" (i.e., if Vinuth keeps rejecting drafts, something's off).
+
+Also built along the way (operational hardening, not "stages" but essential):
+- **Inbound messages actually reach the AI** (a webhook-authentication bug was found and fixed).
+- **A full in-app "Voice" tab** in PropOS — type/send messages, view conversations, approve/edit/
+  reject drafts, run voice calibration — all without touching a terminal.
+- **Rate limiting** — won't send two messages to the same person within 6 seconds (stops
+  accidental double-sends).
+- **Uptime monitoring** — emails Vinuth if BlueBubbles (the Mac sending the messages) goes down.
+- **Confirmed live**: a real message sent from the Voice tab arrived on Vinuth's actual phone.
+
+---
+
+## 5. What was built TODAY (2026-06-13) — CRM-triggered auto-outreach
+
+Today's session closed the last gap: **before today, nothing automatically started a new
+conversation** — everything required someone to manually call an API. Today's 8-part build fixes
+that. In plain English, here's each piece:
+
+### 1. New CRM fields
+Two new fields were added to every contact:
+- **`ready_to_contact`** (the trigger checkbox, defaults to "no")
+- **`assigned_agent_id`** (which agent's voice/writing-style should be used for this contact —
+  defaults to Vinuth if not set)
+
+Plus some database indexes added purely for performance (so these lookups stay fast as the
+contact list grows).
+
+### 2. Phone number cleanup
+Phone numbers can be typed in many formats — `0426 719 845`, `61426719845`, `+61426719845`. The
+system now automatically converts all of these to one standard format (`+61426719845`) whenever
+a contact is saved or looked up. **Why this matters**: without this, a hand-typed Australian
+number wouldn't match the format that arrives when that person replies — creating a duplicate,
+empty-history "ghost" contact and losing all the personalisation notes about them.
+
+### 3. The "ready-queue poller" — the core of today's build
+A background job that runs **every 2 minutes**:
+1. Looks for any contact with `ready_to_contact = TRUE`.
+2. "Claims" them (flips the box back to "no" immediately, so it can't double-process if it runs
+   again before finishing).
+3. Skips them if they've already opted out of texts, or if there's already a pending draft for
+   them.
+4. Otherwise, generates a personalised opener (using that contact's notes — relationship,
+   recent topics, etc.) and adds it to the approval queue.
+
+A manual "run now" button (via an API endpoint) also exists so this doesn't have to wait the full
+2 minutes during a demo.
+
+### 4. Shared "which agent's voice should I use" logic
+Previously this logic was duplicated. Now there's one shared piece of code that both (a) the
+normal PropOS screens and (b) the new background poller both use — so a contact assigned to
+"Agent #3" gets Agent #3's writing style no matter which path generates the message.
+
+### 5. Manual trigger endpoint
+`POST /api/sms-agent/run-ready` — lets someone (or a demo) say "check for ready contacts right
+now" instead of waiting up to 2 minutes for the next automatic check.
+
+### 6. Removed a conflicting old pathway
+There was an older, half-built mechanism that also tried to start new conversations from a
+different (legacy) table. It's now switched off by default, so there's exactly **one** way new
+outreach gets triggered: the `ready_to_contact` checkbox. (It can be switched back on with an
+environment variable if ever needed.)
+
+### 7. Voice tab label fix
+In the approval queue, drafts that are **replies** show "X said: '...'" so you know what you're
+replying to. But **opener** drafts (new conversations) don't have an incoming message to quote —
+they were showing a confusing blank/empty quote. Now they correctly show "New opener for
+[Contact Name]".
+
+### 8. "Gets better over time" — for every agent, not just Vinuth
+Whenever someone approves, edits, or rejects a draft, that's recorded as a learning signal.
+Previously, only Vinuth's overall writing style got automatically recalibrated overnight from
+these signals. Now **every agent's** voice profile recalibrates overnight from their own
+approve/edit/reject history — so as more agents use PropOS, each one's AI gets more "them"
+specifically, automatically.
+
+---
+
+## 6. Proof this works (what was actually tested today)
+
+- The two new database fields were added live without breaking anything — confirmed via the
+  server's startup log ("all 121 migration steps ok") and a direct read of the database showing
+  both existing contacts now have the new fields with sensible defaults.
+- The 2-minute background job is confirmed running (visible in server startup logs).
+- **End-to-end live test**: Vinuth's own test contact ("Test Partner") was ticked
+  `ready_to_contact = TRUE`. Within seconds of triggering the check, the system:
+  - found the contact,
+  - generated a personalised opener: *"Hey mate, how did the demo prep go? Keen to catch up on
+    the PropOS updates and wrap up the investor deck this week"*,
+  - and placed it in the approval queue (draft #12) — ready for Vinuth to approve and have it
+    sent as a real iMessage to his own phone.
+- All code passes strict type-checking (`tsc --noEmit`) with zero errors, for both the server and
+  the PropOS frontend.
+
+---
+
+## 7. What PropOS's SMS Agent can do RIGHT NOW (current capability)
+
+✅ Hold a "contact card" for each person — name, phone, relationship, personal notes, why we're
+texting them.
+
+✅ Be told "this person is ready" via a single checkbox, and automatically draft a personalised
+opening message within 2 minutes — no manual step needed.
+
+✅ Write that opener referencing something specific about the person (not generic "hey, how's it
+going").
+
+✅ Receive real replies on Vinuth's phone and draft sensible responses, including knowing when
+**not** to bother replying (e.g. a bare "ok thanks").
+
+✅ Negotiate a meeting time from a reply like "Thursday arvo works" and create a calendar entry.
+
+✅ Queue everything for human approval — nothing goes out without a person clicking "approve"
+(or editing first).
+
+✅ Send and receive real iMessages from Vinuth's actual phone number.
+
+✅ Learn from every approve/edit/reject decision and automatically tune its writing style
+overnight — separately for each agent.
+
+✅ Alert Vinuth by email if the messaging connection (BlueBubbles on the Mac) goes down.
+
+✅ A full visual interface in PropOS (the "Voice" tab) to do all of the above without a terminal.
+
+---
+
+## 8. What is NOT done yet — the path to "completely functional"
+
+These are the remaining gaps, roughly in priority order:
+
+### 8.1 The AI doesn't sound like Vinuth yet (biggest gap)
+The "voice profile" is currently based on **15 generic placeholder text samples**, giving a
+confidence score of only **0.4 out of 1**. The messages it writes are grammatically fine and
+"in the ballpark" of casual Australian texting, but not indistinguishable from Vinuth's actual
+style.
+
+**Fix**: Export ~20-30 of Vinuth's real texts (from Messages.app, with anything sensitive
+removed) and run them through the calibration tool. This is the single highest-impact remaining
+step — it directly improves every message the AI ever writes.
+
+### 8.2 No one has approved/edited/rejected a real draft yet
+The "gets better over time" mechanism (item 8 above) needs **actual decisions** to learn from.
+Right now `voice_signals` (the learning data) is essentially empty. The more Vinuth uses the
+Voice tab — approving, editing, rejecting — the faster the AI improves.
+
+### 8.3 A real personalisation data gap
+The system can reference details like "recently sold a property at X for $Y" or "currently has
+a listing in [suburb]" — but right now the contact records only have **conversational** notes
+(tone, recent topics, things to ask about), not **real-estate** specifics. Adding those details
+to a contact's record (in the CRM) lets the AI write much more compelling, specific openers
+("Hey, saw your place on Smith St just sold — congrats! How's the search for the next one
+going?").
+
+### 8.4 A known data-duplication risk (unresolved)
+Both the local development copy of PropOS and the live production version
+(`propos.addvantage.site`) currently point at the **same shared database**. There's early
+evidence this can cause a single incoming text to be processed twice (once by each copy),
+producing a duplicate message in the conversation history. This needs to be sorted out — either
+by making message-processing "idempotent" (safe to run twice with no duplicate effect, the
+recommended long-term fix) or by temporarily disconnecting one of the two copies during testing.
+**Until this is resolved, be cautious about leaning hard on the automatic poller in local
+development at the same time as the production site is live.**
+
+### 8.5 Live test with a real second person
+So far, all live sends have gone to Vinuth's own phone (the designated test number). The next
+real milestone is running this with an actual business partner or lead — someone other than
+Vinuth — and watching a full back-and-forth conversation happen with AI-drafted, human-approved
+messages.
+
+### 8.6 Auto-send is still fully off
+Every single message — no matter how trivial ("ok thanks!") — currently requires manual
+approval. This is the safe default. Turning on auto-send for truly trivial replies is a
+deliberate future step, only after the voice quality (8.1) and approval history (8.2) give
+confidence the AI won't send something embarrassing unsupervised.
+
+### 8.7 Email reply-capture is broken (unrelated, pre-existing)
+Separately from the SMS agent: PropOS's email inbox-checking is failing due to a permissions
+issue with its Google account connection. Doesn't affect texting at all, but means any outreach
+that relies on email replies isn't currently being picked up.
+
+### 8.8 Scaling beyond the test list
+Right now this only operates for an "allowlist" of test contacts (Vinuth + one other test
+contact). Expanding it to the **full real lead database** is a deliberate, separate switch to
+flip once the above items (especially 8.1, 8.2, and 8.4) give confidence in the output quality
+and safety.
+
+---
+
+## 9. "I want to try this — what do I actually do?"
+
+1. Open PropOS and go to the **Voice** tab.
+2. To start a new conversation with someone: in the database (Supabase), find their contact row
+   and tick `ready_to_contact`. Within 2 minutes (or immediately if someone clicks "run now"), a
+   draft opener will appear in the Voice tab's approval queue.
+3. Read the draft. You can:
+   - **Approve as-is** → sent as a real iMessage from Vinuth's number.
+   - **Edit, then approve** → your edited version is sent, *and* the AI remembers what you
+     changed for next time.
+   - **Reject** → nothing is sent, and the AI remembers this wasn't the right message.
+4. If that person replies, their message appears in the conversation thread, and (usually) a
+   draft reply will appear in the approval queue too — same approve/edit/reject flow.
+5. Nothing is ever sent without step 3. There is no "fully automatic" mode currently active.
+
+---
+
+## 10. Where the code lives (for developers)
+
+- **Repo**: PropOS, branch `sms-agent` (this is all on a feature branch — not yet on the live
+  production site, which deploys from `main`).
+- **Server logic**: `server/lib/sms*.ts`, `server/lib/voice*.ts`, `server/lib/agentContext.ts`,
+  `server/lib/calendarAgent.ts`.
+- **API routes**: `server/routes/sms-agent.ts`.
+- **Frontend**: `src/views/VoiceAgentView.tsx` (the "Voice" tab).
+- **Full technical spec & history**: `docs/SMS_AGENT.md` (the detailed build log this overview
+  was summarised from).
+
+---
+
+## 11. One-sentence summary
+
+**PropOS can now run AI-drafted, human-approved text conversations from Vinuth's real phone,
+automatically kicked off by ticking a box in the CRM — the main thing left to make it feel
+genuinely "like Vinuth" is feeding it real examples of his texting style and letting it learn
+from a few weeks of real approve/edit decisions.**

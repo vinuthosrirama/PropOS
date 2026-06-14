@@ -529,6 +529,140 @@ async function migrate(): Promise<void> {
       DELETE FROM shortcut_queue
         WHERE status IN ('sent','failed')
           AND created_at < NOW() - INTERVAL '7 days'`],
+
+    // ── Phase 8: Conversational SMS Agent (Stages 1-4 — see docs/SMS_AGENT.md)
+
+    ["CREATE voice_profiles", `
+      CREATE TABLE IF NOT EXISTS voice_profiles (
+        voice_id         TEXT PRIMARY KEY,
+        profile          JSONB NOT NULL DEFAULT '{}',
+        confidence       NUMERIC NOT NULL DEFAULT 0,
+        samples_analysed INTEGER NOT NULL DEFAULT 0,
+        calibration_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["CREATE sms_contacts", `
+      CREATE TABLE IF NOT EXISTS sms_contacts (
+        id                     SERIAL PRIMARY KEY,
+        name                   TEXT NOT NULL,
+        phone                  TEXT NOT NULL UNIQUE,
+        relationship           TEXT NOT NULL DEFAULT 'agent_prospect'
+                               CHECK (relationship IN ('business_partner','close_friend','family','agent_prospect')),
+        stage                  INTEGER NOT NULL DEFAULT 1,
+        personalisation        JSONB NOT NULL DEFAULT '{}',
+        voice_override         JSONB NOT NULL DEFAULT '{}',
+        conversation_objective TEXT,
+        last_contact           TIMESTAMPTZ,
+        status                 TEXT NOT NULL DEFAULT 'active'
+                               CHECK (status IN ('active','paused','completed','opted_out','backlog','booked')),
+        auto_reply             BOOLEAN NOT NULL DEFAULT FALSE,
+        follow_up_at           TIMESTAMPTZ,
+        attempts               INTEGER NOT NULL DEFAULT 0,
+        source                 TEXT NOT NULL DEFAULT 'manual',
+        created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["CREATE sms_agent_drafts", `
+      CREATE TABLE IF NOT EXISTS sms_agent_drafts (
+        id              SERIAL PRIMARY KEY,
+        contact_id      INTEGER NOT NULL REFERENCES sms_contacts(id) ON DELETE CASCADE,
+        inbound_body    TEXT NOT NULL DEFAULT '',
+        draft_body      TEXT NOT NULL,
+        reasoning       TEXT,
+        voice_confidence NUMERIC NOT NULL DEFAULT 0,
+        auto_send       BOOLEAN NOT NULL DEFAULT FALSE,
+        send_at         TIMESTAMPTZ,
+        channel         TEXT NOT NULL DEFAULT 'sms',
+        kind            TEXT NOT NULL DEFAULT 'reply'
+                        CHECK (kind IN ('opener','reply','followup','schedule')),
+        status          TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','approved','rejected','sent')),
+        edited_body     TEXT,
+        sent_at         TIMESTAMPTZ,
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["CREATE voice_signals", `
+      CREATE TABLE IF NOT EXISTS voice_signals (
+        id           SERIAL PRIMARY KEY,
+        draft_body   TEXT NOT NULL,
+        action       TEXT NOT NULL CHECK (action IN ('approved_as_is','edited','rejected')),
+        edited_body  TEXT,
+        edit_diff    TEXT,
+        contact_id   INTEGER REFERENCES sms_contacts(id) ON DELETE SET NULL,
+        relationship TEXT,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["CREATE calendar_slots", `
+      CREATE TABLE IF NOT EXISTS calendar_slots (
+        id            SERIAL PRIMARY KEY,
+        contact_id    INTEGER REFERENCES sms_contacts(id) ON DELETE CASCADE,
+        proposed_time TIMESTAMPTZ NOT NULL,
+        status        TEXT NOT NULL DEFAULT 'proposed'
+                      CHECK (status IN ('proposed','accepted','declined','rescheduled','blocked')),
+        location      TEXT,
+        notes         TEXT,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["ALTER sms_contacts last_agent_message_at", `
+      ALTER TABLE sms_contacts ADD COLUMN IF NOT EXISTS last_agent_message_at TIMESTAMPTZ`],
+
+    ["ALTER sms_contacts ready_to_contact", `
+      ALTER TABLE sms_contacts ADD COLUMN IF NOT EXISTS ready_to_contact BOOLEAN NOT NULL DEFAULT FALSE`],
+
+    ["ALTER sms_contacts assigned_agent_id", `
+      ALTER TABLE sms_contacts ADD COLUMN IF NOT EXISTS assigned_agent_id INTEGER REFERENCES agents(id) ON DELETE SET NULL`],
+
+    ["ALTER sms_contacts rea_data", `
+      ALTER TABLE sms_contacts ADD COLUMN IF NOT EXISTS rea_data JSONB NOT NULL DEFAULT '{}'`],
+
+    ["INDEX sms_contacts_status",   `CREATE INDEX IF NOT EXISTS sms_contacts_status_idx   ON sms_contacts(status, stage)`],
+    ["INDEX sms_contacts_followup", `CREATE INDEX IF NOT EXISTS sms_contacts_followup_idx ON sms_contacts(follow_up_at) WHERE follow_up_at IS NOT NULL`],
+    ["INDEX sms_contacts_ready",    `CREATE INDEX IF NOT EXISTS sms_contacts_ready_idx     ON sms_contacts(ready_to_contact) WHERE ready_to_contact = TRUE`],
+    ["INDEX sms_agent_drafts_status", `CREATE INDEX IF NOT EXISTS sms_agent_drafts_status_idx ON sms_agent_drafts(status, created_at)`],
+    ["INDEX sms_agent_drafts_contact", `CREATE INDEX IF NOT EXISTS sms_agent_drafts_contact_idx ON sms_agent_drafts(contact_id)`],
+    ["INDEX voice_signals_contact",  `CREATE INDEX IF NOT EXISTS voice_signals_contact_idx ON voice_signals(contact_id, created_at)`],
+    ["INDEX calendar_slots_contact", `CREATE INDEX IF NOT EXISTS calendar_slots_contact_idx ON calendar_slots(contact_id, proposed_time)`],
+
+    ["TABLE processed_message_guids", `
+      CREATE TABLE IF NOT EXISTS processed_message_guids (
+        guid       TEXT PRIMARY KEY,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["TABLE app_settings", `
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key        TEXT PRIMARY KEY,
+        value      TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["TABLE sold_properties", `
+      CREATE TABLE IF NOT EXISTS sold_properties (
+        id               SERIAL PRIMARY KEY,
+        address          TEXT NOT NULL,
+        suburb           TEXT NOT NULL,
+        price            INTEGER,
+        sold_date        DATE,
+        land_size        INTEGER,
+        bedrooms         INTEGER,
+        bathrooms        INTEGER,
+        car_spaces       INTEGER,
+        days_on_market   INTEGER,
+        agent_name       TEXT,
+        agency_name      TEXT,
+        domain_url       TEXT,
+        scraped_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (address, sold_date)
+      )`],
+    ["INDEX sold_properties_suburb", `CREATE INDEX IF NOT EXISTS sold_properties_suburb_idx ON sold_properties(suburb)`],
+    ["INDEX sold_properties_date",   `CREATE INDEX IF NOT EXISTS sold_properties_date_idx   ON sold_properties(sold_date DESC)`],
   ]
 
   let failed = 0
