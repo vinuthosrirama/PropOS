@@ -47,23 +47,40 @@ export async function sendViaBlueBubbles(
   body: string,
 ): Promise<{ sid: string; testMode: boolean }> {
   const testPhone  = process.env.TEST_RECIPIENT_PHONE?.trim()
-  const actualTo   = testPhone ?? to
-  const actualBody = testPhone ? `[TEST to ${to}]\n${body}` : body
+  const showTestLabel = process.env.SMS_TEST_LABEL === "true"
+  // SMS_LIVE_ALLOWLIST: comma-separated E.164 numbers that bypass TEST_RECIPIENT_PHONE redirect.
+  // Use for Stage 2+ contacts who should receive real messages.
+  const allowlist  = (process.env.SMS_LIVE_ALLOWLIST ?? "").split(",").map(s => s.trim()).filter(Boolean)
+  const norm       = (n: string) => (n.startsWith("+") ? n : "+" + n.replace(/\D/g, ""))
+  const isLive     = allowlist.some(n => norm(n) === norm(to))
+  const actualTo   = (testPhone && !isLive) ? testPhone : to
+  const actualBody = (testPhone && !isLive && showTestLabel) ? `[TEST to ${to}]\n${body}` : body
 
-  // "any;-;+number" — BlueBubbles tries iMessage first, falls back to SMS
+  // chatGuid service prefix. Default "any" lets the Private API pick iMessage/SMS.
+  // BLUEBUBBLES_SERVICE=iMessage forces a real service for the AppleScript path
+  // (AppleScript cannot use "any" — it errors -1700). Set this when the Private
+  // API helper is not connected and you are messaging iMessage contacts.
+  const service    = process.env.BLUEBUBBLES_SERVICE?.trim() || "any"
   const safeNumber = actualTo.startsWith("+") ? actualTo : "+" + actualTo.replace(/\D/g, "")
-  const chatGuid   = `any;-;${safeNumber}`
+  const chatGuid   = `${service};-;${safeNumber}`
   const tempGuid   = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
   const MAX_ATTEMPTS = 3
   let lastErr: unknown
+
+  // Optional override: "private-api" (reliable, supports new chats — needs Private
+  // API enabled) or "apple-script" (works for existing chats without Private API).
+  // Unset lets BlueBubbles pick its default.
+  const method = process.env.BLUEBUBBLES_METHOD?.trim()
+  const payload: Record<string, unknown> = { chatGuid, tempGuid, message: actualBody }
+  if (method) payload.method = method
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const res = await fetch(bbUrl("/api/v1/message/text"), {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ chatGuid, tempGuid, message: actualBody }),
+        body:    JSON.stringify(payload),
         signal:  AbortSignal.timeout(SEND_TIMEOUT_MS),
       })
 
@@ -134,6 +151,7 @@ export interface BBIncomingMessage {
   body:    string
   isGroup: boolean
   chatId:  string
+  guid:    string   // BlueBubbles message guid, for cross-process dedup
 }
 
 export interface BBSendError {
@@ -161,9 +179,10 @@ export function parseBBWebhook(payload: unknown): BBIncomingMessage | null {
   const chats  = (data.chats as Array<Record<string, unknown>>) ?? []
   const chatId = (chats[0]?.guid as string) ?? ""
   const isGroup = chatId.includes(";+;")
+  const guid   = (data.guid as string) ?? (data.tempGuid as string) ?? ""
 
   if (!from || !body) return null
-  return { from, body, isGroup, chatId }
+  return { from, body, isGroup, chatId, guid }
 }
 
 /**

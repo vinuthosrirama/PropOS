@@ -48,6 +48,7 @@ import gdprRouter from "./routes/gdpr.js"
 import marketUpdateRouter from "./routes/market-update.js"
 import { publicRouter as pitchesPublicRouter, authedRouter as pitchesAuthedRouter } from "./routes/pitches.js"
 import outreachTargetsRouter from "./routes/outreach-targets.js"
+import smsAgentRouter from "./routes/sms-agent.js"
 import agentboxRouter from "./routes/agentbox.js"
 import smsShortcutRouter, { registerReplyHandler } from "./routes/sms-shortcut.js"
 import { parseHttpSmsWebhook } from "./lib/httpsms.js"
@@ -56,6 +57,11 @@ import { initDb, isDbConnected, query } from "./lib/db.js"
 import { startScheduler, cancelNurtureJobs } from "./lib/scheduler.js"
 import { startOutreachScheduler } from "./lib/outreachScheduler.js"
 import { handleOutreachInbound } from "./lib/outreachAgent.js"
+import { handleSmsAgentInbound } from "./lib/smsAgentInbound.js"
+import { claimMessageGuid } from "./lib/messageDedup.js"
+import { startSmsAgentScheduler } from "./lib/smsOrchestrator.js"
+import { startReadyOutreachScheduler } from "./lib/smsReadyOutreach.js"
+import { startTransportHealthMonitor } from "./lib/transportHealthMonitor.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
@@ -201,6 +207,8 @@ app.post("/api/test-sms", express.json(), async (req: Request, res: Response) =>
 // Auto-enforces when DATABASE_URL is set (production).
 // No-op when DATABASE_URL is missing (demo/dev mode) so the demo runs without accounts.
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  // Webhook routes have their own gate (verifyWebhookSecret, below) — never JWT-gated.
+  if (req.path.startsWith("/webhook/")) return next()
   if (!isDbConnected()) return next()
   return requireAuth(req, res, next)
 })
@@ -226,10 +234,15 @@ app.use("/api/pitches",          pitchesAuthedRouter)
 app.use("/api/gdpr",             gdprRouter)
 app.use("/api/market-update",    marketUpdateRouter)
 app.use("/api/outreach-targets", outreachTargetsRouter)
+app.use("/api/sms-agent",        smsAgentRouter)
 app.use("/api/agentbox",         agentboxRouter)
 
 // ── Shared reply handler (all transports feed here) ──────────────────────────
-async function handleIncomingReply(from: string, body: string): Promise<void> {
+async function handleIncomingReply(from: string, body: string, guid?: string): Promise<void> {
+  if (guid && !(await claimMessageGuid(guid))) {
+    console.log(`[reply-handler] duplicate message guid=${guid}, skipping (already processed)`)
+    return
+  }
   const lowerBody = body.toLowerCase().trim()
   try {
     if (["stop", "unsubscribe", "cancel", "quit", "end", "stopall"].includes(lowerBody)) {
@@ -243,6 +256,10 @@ async function handleIncomingReply(from: string, body: string): Promise<void> {
       // 2. Also check if this is one of our outreach targets (Vinuth self-outreach campaign)
       //    Non-fatal — runs in parallel with the lead pipeline above
       void handleOutreachInbound(from, body)
+
+      // 3. Conversational SMS agent (sms_contacts — Stages 1-4, see docs/SMS_AGENT.md)
+      //    Non-fatal — parallel with the pipelines above
+      void handleSmsAgentInbound(from, body)
     }
   } catch (err) {
     console.error("[reply-handler] error:", (err as Error).message)
@@ -282,7 +299,7 @@ app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Respons
   // Handle incoming reply
   const msg = parseBBWebhook(req.body)
   if (msg && !msg.isGroup) {
-    void handleIncomingReply(msg.from, msg.body)
+    void handleIncomingReply(msg.from, msg.body, msg.guid)
     return
   }
 
@@ -418,9 +435,12 @@ app.listen(PORT, async () => {
     console.warn("  ⚠️  Set DATABASE_URL before enabling the nurture scheduler in production.")
   }
 
-  // 3. Start schedulers (both no-op if no DB)
+  // 3. Start schedulers (all no-op if no DB)
   startScheduler()
   startOutreachScheduler()
+  startSmsAgentScheduler()
+  startReadyOutreachScheduler()
+  startTransportHealthMonitor()
 
   // 4. Wire up transport-specific init
   // Webhook callback URLs carry ?secret= so the verifyWebhookSecret gate passes.
@@ -433,23 +453,30 @@ app.listen(PORT, async () => {
     console.warn("  ⚠️  WEBHOOK_SECRET not set — /api/webhook/* accepts unauthenticated POSTs")
   }
 
-  if (smsTransport === "bluebubbles" && process.env.BASE_URL) {
+  // Where this server receives inbound webhooks. Normally BASE_URL, but in local dev
+  // BASE_URL is the public production domain (used for email links) which does NOT route
+  // to this machine — so inbound replies would never arrive. Set WEBHOOK_BASE_URL to a
+  // URL the SMS provider can reach this server at (e.g. http://localhost:3001 when the
+  // provider runs on the same Mac, or a tunnel) to receive replies locally.
+  const webhookBase = process.env.WEBHOOK_BASE_URL?.trim() || process.env.BASE_URL?.trim()
+
+  if (smsTransport === "bluebubbles" && webhookBase) {
     // Register incoming webhook with BlueBubbles so replies flow into PropOS
-    const webhookUrl = `${process.env.BASE_URL}/api/webhook/bluebubbles${webhookSecretQS}`
+    const webhookUrl = `${webhookBase}/api/webhook/bluebubbles${webhookSecretQS}`
     registerBlueBubblesWebhook(webhookUrl)
       .then(() => console.log(`  BlueBubbles webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  BlueBubbles webhook register failed:", e.message))
   }
 
-  if (smsTransport === "android-gateway" && process.env.BASE_URL) {
-    const webhookUrl = `${process.env.BASE_URL}/api/webhook/android-gateway${webhookSecretQS}`
+  if (smsTransport === "android-gateway" && webhookBase) {
+    const webhookUrl = `${webhookBase}/api/webhook/android-gateway${webhookSecretQS}`
     registerAndroidGatewayWebhook(webhookUrl)
       .then(() => console.log(`  AndroidGateway webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  AndroidGateway webhook register failed:", e.message))
   }
 
-  if (smsTransport === "telelink" && process.env.BASE_URL) {
-    const webhookUrl = `${process.env.BASE_URL}/api/webhook/telelink${webhookSecretQS}`
+  if (smsTransport === "telelink" && webhookBase) {
+    const webhookUrl = `${webhookBase}/api/webhook/telelink${webhookSecretQS}`
     registerTeleLinkWebhook(webhookUrl)
       .then(() => console.log(`  TeleLink webhook registered → ${webhookUrl}`))
       .catch(e => console.warn("  TeleLink webhook register failed:", e.message))
