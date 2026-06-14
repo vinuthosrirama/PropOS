@@ -1,8 +1,10 @@
 /**
  * Conversational SMS Agent API (Stages 1-4 — see docs/SMS_AGENT.md)
  *
- * GET  /api/sms-agent/contacts                 — list contacts (?stage= ?status=)
- * POST /api/sms-agent/contacts                 — add / update a contact
+ * GET    /api/sms-agent/contacts                 — list contacts (?stage= ?status=)
+ * POST   /api/sms-agent/contacts                 — add / update a contact
+ * PATCH  /api/sms-agent/contacts/:id             — merge-patch contact fields
+ * GET    /api/sms-agent/suburb-stats/:suburb      — real sold stats from sold_properties (?days=90)
  * GET  /api/sms-agent/voice-profile            — current calibrated voice profile
  * POST /api/sms-agent/calibrate                — calibrate voice from { samples: [] }
  * POST /api/sms-agent/recalibrate              — recalibrate from accumulated signals
@@ -29,8 +31,10 @@ import { addAgentMessageToThread } from "../lib/conversations.js"
 import {
   listContacts, upsertContact, getContactById, markContacted, recordVoiceSignal,
   getUpcomingMeetings, canSendNow, recordAgentMessageSent, countSignalsSinceCalibration,
+  updateContact,
   type Relationship,
 } from "../lib/smsContacts.js"
+import { getSuburbStats } from "../lib/suburbStats.js"
 import { getVoiceProfile } from "../lib/voiceProfile.js"
 import { calibrateVoice, recalibrateVoice } from "../lib/voiceCalibration.js"
 import {
@@ -82,6 +86,22 @@ router.post("/contacts", async (req, res) => {
     source: req.body.source,
   })
   res.json({ ok: true, id })
+})
+
+router.patch("/contacts/:id", async (req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) return res.status(400).json({ error: "invalid id" })
+  const { personalisation, rea_data, conversation_objective, status, follow_up_at } = req.body ?? {}
+  await updateContact(id, { personalisation, rea_data, conversation_objective, status, follow_up_at })
+  res.json({ ok: true })
+})
+
+router.get("/suburb-stats/:suburb", async (req, res) => {
+  if (!isDbConnected()) return res.json({ suburb: req.params.suburb, saleCount: 0, medianPrice: null, fromSoldDb: false })
+  const days = parseInt(String(req.query.days ?? "90"), 10)
+  const stats = await getSuburbStats(req.params.suburb, isNaN(days) ? 90 : days)
+  res.json(stats)
 })
 
 // ── Voice ─────────────────────────────────────────────────────────────────────
