@@ -48,8 +48,12 @@ export async function sendEmail(params: {
   const actualTo   = testEmail ?? params.to
   const actualSubj = params.subject
 
+  // GMAIL_SEND_AS = verified "Send as" alias (e.g. yourpartners@addvantage.site).
+  // Gmail API will send through the OAuth credentials but display this address.
+  const fromEmail = process.env.GMAIL_SEND_AS?.trim() || process.env.GMAIL_USER
+
   const raw = makeRaw(
-    `"${params.fromName}" <${process.env.GMAIL_USER}>`,
+    `"${params.fromName}" <${fromEmail}>`,
     actualTo,
     actualSubj,
     params.htmlBody,

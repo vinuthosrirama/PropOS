@@ -12,6 +12,7 @@
 import { getClient } from "./claude.js"
 import { sanitiseText } from "./sanitise.js"
 import { sendEmail, gmailConfigured } from "./gmail.js"
+import { sendViaBlueBubbles, blueBubblesConfigured } from "./bluebubbles.js"
 import type { MorningBrief } from "./outreachAgent.js"
 
 const DAYS   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
@@ -148,6 +149,45 @@ function buildHTMLBody(paragraphs: string[], brief: MorningBrief): string {
     AddVantage AI &middot; <a href="https://propos.addvantage.site" style="color:#ccc;text-decoration:none">propos.addvantage.site</a>
   </p>
 </div>`
+}
+
+/** Send a short iMessage morning brief to Vinuth's phone via BlueBubbles. */
+export async function sendPMBriefSMS(brief: MorningBrief): Promise<void> {
+  if (!blueBubblesConfigured()) return
+  const to = process.env.VINUTH_PHONE?.trim() || process.env.TEST_RECIPIENT_PHONE?.trim()
+  if (!to) return
+
+  const d = new Date()
+  const dateStr = `${d.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]}`
+  const parts: string[] = [`PropOS ${dateStr}:`]
+
+  if (brief.newReplies.length > 0) {
+    parts.push(`${brief.newReplies.length} repl${brief.newReplies.length === 1 ? "y" : "ies"}`)
+  }
+  if (brief.pendingDrafts > 0) {
+    parts.push(`${brief.pendingDrafts} draft${brief.pendingDrafts === 1 ? "" : "s"} to approve`)
+  }
+  if (brief.followUpsDue.length > 0) {
+    parts.push(`${brief.followUpsDue.length} follow-up${brief.followUpsDue.length === 1 ? "" : "s"} due`)
+  }
+  if (brief.newReplies.length === 0 && brief.pendingDrafts === 0 && brief.followUpsDue.length === 0) {
+    parts.push("all quiet overnight")
+  }
+
+  let msg = parts.join(" ") + `. Funnel: ${brief.totalContacted} contacted / ${brief.totalReplied} replied / ${brief.totalDemoBooked} demo booked.`
+
+  if (brief.newReplies.length > 0) {
+    const top = brief.newReplies[0]
+    const snippet = top.body?.slice(0, 50).replace(/\n/g, " ") ?? ""
+    msg += ` ${top.name.split(" ")[0]}: "${snippet}${snippet.length >= 50 ? "..." : ""}"`
+  }
+
+  try {
+    await sendViaBlueBubbles(to, msg)
+    console.log(`[pmBrief] iMessage brief sent to ${to}`)
+  } catch (err) {
+    console.warn("[pmBrief] iMessage brief failed:", (err as Error).message)
+  }
 }
 
 /** Send the morning PM brief to Vinuth's email. No-ops silently if Gmail isn't configured. */

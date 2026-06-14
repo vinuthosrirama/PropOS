@@ -28,8 +28,11 @@ const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_U
 
 const authUrl = oAuth2Client.generateAuthUrl({
   access_type: "offline",
-  scope:       ["https://www.googleapis.com/auth/gmail.send"],
-  prompt:      "consent",   // force refresh_token every time
+  scope: [
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.modify",
+  ],
+  prompt: "consent",
 })
 
 console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
