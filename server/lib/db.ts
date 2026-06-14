@@ -642,6 +642,27 @@ async function migrate(): Promise<void> {
         value      TEXT NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`],
+
+    ["TABLE sold_properties", `
+      CREATE TABLE IF NOT EXISTS sold_properties (
+        id               SERIAL PRIMARY KEY,
+        address          TEXT NOT NULL,
+        suburb           TEXT NOT NULL,
+        price            INTEGER,
+        sold_date        DATE,
+        land_size        INTEGER,
+        bedrooms         INTEGER,
+        bathrooms        INTEGER,
+        car_spaces       INTEGER,
+        days_on_market   INTEGER,
+        agent_name       TEXT,
+        agency_name      TEXT,
+        domain_url       TEXT,
+        scraped_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (address, sold_date)
+      )`],
+    ["INDEX sold_properties_suburb", `CREATE INDEX IF NOT EXISTS sold_properties_suburb_idx ON sold_properties(suburb)`],
+    ["INDEX sold_properties_date",   `CREATE INDEX IF NOT EXISTS sold_properties_date_idx   ON sold_properties(sold_date DESC)`],
   ]
 
   let failed = 0
