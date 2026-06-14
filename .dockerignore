@@ -24,5 +24,9 @@ server/.env
 backups/
 src_snapshot_*/
 
+# Cloudflare Pages-only assets (not needed in Docker image)
+# Without this, /app/public exists but has no index.html, breaking the SPA catch-all
+public/
+
 # Git internals
 .git/
