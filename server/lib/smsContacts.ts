@@ -29,6 +29,7 @@ export interface SmsContact {
   source: string
   ready_to_contact: boolean
   assigned_agent_id: number | null
+  rea_data: Record<string, unknown>
 }
 
 export interface VoiceSignal {
@@ -87,6 +88,7 @@ function rowToContact(r: Record<string, unknown>): SmsContact {
     source: (r.source as string) ?? "manual",
     ready_to_contact: !!r.ready_to_contact,
     assigned_agent_id: (r.assigned_agent_id as number | null) ?? null,
+    rea_data: json(r.rea_data),
   }
 }
 
@@ -123,6 +125,7 @@ export interface UpsertContactInput {
   conversation_objective?: string
   auto_reply?: boolean
   source?: string
+  rea_data?: Record<string, unknown>
 }
 
 /** Insert or update a contact by phone. Returns the contact id, or null if no DB. */
@@ -130,8 +133,8 @@ export async function upsertContact(input: UpsertContactInput): Promise<number |
   if (!isDbConnected()) return null
   const rows = await query<{ id: number }>(
     `INSERT INTO sms_contacts
-       (name, phone, relationship, stage, personalisation, voice_override, conversation_objective, auto_reply, source, updated_at)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, NOW())
+       (name, phone, relationship, stage, personalisation, voice_override, conversation_objective, auto_reply, source, rea_data, updated_at)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10::jsonb, NOW())
      ON CONFLICT (phone) DO UPDATE SET
        name = EXCLUDED.name,
        relationship = EXCLUDED.relationship,
@@ -140,6 +143,7 @@ export async function upsertContact(input: UpsertContactInput): Promise<number |
        voice_override = EXCLUDED.voice_override,
        conversation_objective = COALESCE(EXCLUDED.conversation_objective, sms_contacts.conversation_objective),
        auto_reply = EXCLUDED.auto_reply,
+       rea_data = sms_contacts.rea_data || EXCLUDED.rea_data,
        updated_at = NOW()
      RETURNING id`,
     [
@@ -152,6 +156,7 @@ export async function upsertContact(input: UpsertContactInput): Promise<number |
       input.conversation_objective ?? null,
       input.auto_reply ?? false,
       input.source ?? "manual",
+      JSON.stringify(input.rea_data ?? {}),
     ],
   )
   return rows[0]?.id ?? null
