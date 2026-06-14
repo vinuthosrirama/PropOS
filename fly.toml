@@ -1,0 +1,35 @@
+# Fly.io deployment config for PropOS API server
+# Region: Sydney (syd) — closest to Melbourne + Supabase AU
+# Free tier: 3x shared-cpu-1x 256MB VMs included in Fly.io free allowances
+#
+# CRITICAL: auto_stop_machines = "off" + min_machines_running = 1
+# These TWO settings together ensure the node-cron jobs (2-min ready poller,
+# 7am orchestrator) always run. If the machine stops, crons stop.
+
+app = "addvantageadvisory"
+primary_region = "syd"
+
+[build]
+
+[env]
+  PORT = "3001"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "30s"
+    method = "GET"
+    path = "/api/health"
+    timeout = "10s"
+    protocol = "http"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
