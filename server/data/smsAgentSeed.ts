@@ -91,3 +91,112 @@ export function buildStage2Contact(name: string, phone: string, personalisation?
     },
   }
 }
+
+/**
+ * Demo: Past Client Reconnection (fictional personas for sales demos).
+ *
+ * Three CRM-style past-buyer records covering common "reconnect with an old
+ * client" scenarios — used to show prospective REA agents how the agent
+ * generates hyper-personalised reconnection texts in their own voice. Phones
+ * are placeholders (never texted directly); approved drafts for these contacts
+ * are redirected to whatever number is set via POST /api/sms-agent/demo/target
+ * (the REA agent being demoed).
+ *
+ * rea_data fields follow the universal buyer-lead schema common across
+ * AgentBox / Box+Dice / VaultRE / Rex / Agentpoint: purchase_history,
+ * buyer_type, current_status, budget range, target suburbs, tags.
+ */
+export function buildDemoPastClientPersonas(): UpsertContactInput[] {
+  return [
+    {
+      name: "Sarah Mitchell",
+      phone: "+61400000101",
+      relationship: "agent_prospect",
+      stage: 1,
+      auto_reply: false,
+      source: "seed:demo_pastclient",
+      conversation_objective: "Reconnect with Sarah, a first-home buyer who purchased in Berwick ~2 years ago and has since relocated to Brisbane for work, now renting the Berwick property out. Check in on how being a landlord is going and offer a free rental appraisal / market update for Berwick.",
+      personalisation: {
+        scenario: "FHB now landlord",
+        tone: "Warm, low-pressure, checking in on a past client",
+        things_to_ask: ["How's the tenant situation going?", "Has the property manager been good to deal with?"],
+      },
+      rea_data: {
+        buyer_type: "first_home_buyer",
+        current_status: "landlord",
+        purchase_history: {
+          address: "12 Wirraway Street, Berwick VIC 3806",
+          purchase_date: "2024-08",
+          purchase_price: 620000,
+          property_type: "House",
+          beds: 3,
+          baths: 2,
+        },
+        current_situation: "Relocated to Brisbane for work ~6 months ago, now renting out the Berwick property",
+        target_suburbs: ["Berwick"],
+        tags: ["past_buyer", "now_landlord", "relocated"],
+      },
+    },
+    {
+      name: "Daniel Osei",
+      phone: "+61400000102",
+      relationship: "agent_prospect",
+      stage: 1,
+      auto_reply: false,
+      source: "seed:demo_pastclient",
+      conversation_objective: "Reconnect with Daniel, a first-home buyer from ~3 years ago who previously mentioned wanting to buy an investment property once he had more equity. Re-engage about investment opportunities in Pakenham/Officer given current market conditions.",
+      personalisation: {
+        scenario: "FHB now investor",
+        tone: "Friendly, opportunity-focused but not pushy",
+        things_to_ask: ["Still thinking about an investment property?"],
+      },
+      rea_data: {
+        buyer_type: "first_home_buyer",
+        current_status: "owner_occupier_considering_investment",
+        purchase_history: {
+          address: "8 Hampton Crescent, Hampton Park VIC 3976",
+          purchase_date: "2023-11",
+          purchase_price: 540000,
+          property_type: "House",
+          beds: 3,
+          baths: 1,
+        },
+        budget_min: 500000,
+        budget_max: 650000,
+        property_type_preferences: ["house", "townhouse"],
+        target_suburbs: ["Pakenham", "Officer"],
+        timeline: "6_months",
+        tags: ["past_buyer", "investor_interest"],
+      },
+    },
+    {
+      name: "Rebecca Tan",
+      phone: "+61400000103",
+      relationship: "agent_prospect",
+      stage: 1,
+      auto_reply: false,
+      source: "seed:demo_pastclient",
+      conversation_objective: "Reconnect with Rebecca, who bought in Officer about 1.5 years ago. Property values in Officer have grown noticeably since. Let her know what her place might be worth now and gauge whether she's thought about upgrading or selling.",
+      personalisation: {
+        scenario: "Past buyer, possible seller 1.5 years on",
+        tone: "Helpful, informative, no pressure to sell",
+        things_to_ask: ["Have you thought about what's next for you guys?"],
+      },
+      rea_data: {
+        buyer_type: "owner_occupier",
+        current_status: "possible_seller",
+        purchase_history: {
+          address: "21 Hillside Avenue, Officer VIC 3809",
+          purchase_date: "2024-12",
+          purchase_price: 580000,
+          property_type: "House",
+          beds: 4,
+          baths: 2,
+        },
+        current_estimate: 660000,
+        target_suburbs: ["Officer"],
+        tags: ["past_buyer", "possible_seller", "equity_growth"],
+      },
+    },
+  ]
+}
