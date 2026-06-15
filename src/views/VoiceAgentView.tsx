@@ -835,43 +835,57 @@ export default function VoiceAgentView() {
       {AutoSendModal}
       {NewContactModal}
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-        <div>
-          <h1 style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.text, margin: 0, letterSpacing: -0.4 }}>Voice Agent</h1>
-          {!isMobile && <p style={{ fontSize: 12, color: C.muted, margin: "3px 0 0" }}>Conversational SMS via BlueBubbles · iMessage from your real number</p>}
+      {/* Header — Peake purple band */}
+      <div style={{ borderRadius: 16, background: "var(--accent)", padding: isDesktop ? "40px 40px 0" : "28px 20px 0", marginBottom: 16 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: 18 }}>
+          Voice Agent
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          {voiceProfile && (
-            <span style={{
-              fontSize: 10.5, fontWeight: 700, borderRadius: 8, padding: "4px 9px",
-              color: confPct >= 70 ? C.green : C.orange,
-              background: confPct >= 70 ? C.greenDim : C.orangeDim,
-              border: `1px solid ${(confPct >= 70 ? C.green : C.orange)}40`,
-            }}>
-              {confPct}% voice
-            </span>
-          )}
-          <button
-            onClick={() => void toggleAutoSend(false)}
-            disabled={togglingAutoSend}
-            title="Auto-sends only trivial replies (<50 chars, >90% confidence) without approval"
-            style={{
-              ...btn,
-              color: autoSend ? C.green : C.muted,
-              background: autoSend ? C.greenDim : "transparent",
-              border: `1px solid ${autoSend ? C.green + "40" : C.border}`,
-              opacity: togglingAutoSend ? 0.6 : 1,
-              fontSize: isMobile ? 11 : 11.5,
-            }}
-          >
-            Auto {autoSend ? "ON" : "OFF"}
-          </button>
-          <button onClick={() => setCalibrateOpen(v => !v)} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, fontSize: isMobile ? 11 : 11.5 }}>
-            {calibrateOpen ? "Close" : "Calibrate"}
-          </button>
-          <button onClick={() => void load()} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, fontSize: isMobile ? 11 : 11.5 }}>↻</button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ fontSize: isDesktop ? 32 : 24, fontWeight: 800, color: "#fff", letterSpacing: -1, lineHeight: 1.15, marginBottom: 28 }}>
+            SMS from your<br />real number
+          </div>
+          <div style={{ textAlign: "right", marginBottom: 28, flexShrink: 0 }}>
+            <div style={{ fontSize: isDesktop ? 60 : 44, fontWeight: 800, color: C.green, letterSpacing: -2.5, lineHeight: 1 }}>
+              {contacts.length}
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>contacts · BlueBubbles</div>
+          </div>
         </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+          {[
+            { value: contacts.length, label: "contacts" },
+            { value: drafts.length, label: "pending drafts" },
+            { value: voiceProfile ? `${confPct}%` : "—", label: "voice match" },
+            { value: autoSend ? "ON" : "OFF", label: "auto-send" },
+          ].map((s, i) => (
+            <div key={s.label} style={{ padding: "16px 0", textAlign: "center", borderRight: i < 3 ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: -0.5, lineHeight: 1 }}>{s.value}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Controls row */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+        <button
+          onClick={() => void toggleAutoSend(false)}
+          disabled={togglingAutoSend}
+          title="Auto-sends only trivial replies (<50 chars, >90% confidence) without approval"
+          style={{
+            ...btn,
+            color: autoSend ? C.green : C.muted,
+            background: autoSend ? C.greenDim : "transparent",
+            border: `1px solid ${autoSend ? C.green + "40" : C.border}`,
+            opacity: togglingAutoSend ? 0.6 : 1,
+          }}
+        >
+          Auto {autoSend ? "ON" : "OFF"}
+        </button>
+        <button onClick={() => setCalibrateOpen(v => !v)} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}` }}>
+          {calibrateOpen ? "Close" : "Calibrate"}
+        </button>
+        <button onClick={() => void load()} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}` }}>↻</button>
       </div>
 
       {/* Action banner */}

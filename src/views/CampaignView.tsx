@@ -250,28 +250,51 @@ export default function CampaignView() {
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: `${isDesktop ? 84 : 70}px 16px 60px` }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: 0, letterSpacing: -0.4 }}>Outreach Campaign</h1>
-          <p style={{ fontSize: 12.5, color: C.muted, margin: "4px 0 0" }}>
-            Agent acquisition pipeline. Delivered and replied are tracked; SMS has no read receipt.
-          </p>
+      {/* Header — Peake purple band */}
+      <div style={{ borderRadius: 16, background: "var(--accent)", padding: isDesktop ? "40px 40px 0" : "28px 20px 0", marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: 18 }}>
+            Outreach Campaign
+          </div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 18 }}>
+            {brief?.scheduler?.testMode && (
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#f59e0b", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 8, padding: "3px 8px" }}>
+                TEST MODE
+              </span>
+            )}
+            {isDemo && (
+              <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.1)", borderRadius: 8, padding: "3px 8px" }}>
+                SAMPLE DATA
+              </span>
+            )}
+            <button onClick={() => void load()} style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: "3px 10px", cursor: "pointer", fontFamily: FONT }}>
+              ↻
+            </button>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {brief?.scheduler?.testMode && (
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: C.orange, background: C.orangeDim, border: `1px solid ${C.orange}55`, borderRadius: 8, padding: "4px 9px" }}>
-              TEST MODE · {brief.scheduler.testPhone}
-            </span>
-          )}
-          {isDemo && (
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: C.blue, background: C.blueDim, border: `1px solid ${C.blue}40`, borderRadius: 8, padding: "4px 9px" }}>
-              SAMPLE DATA
-            </span>
-          )}
-          <button onClick={() => void load()} style={{ fontSize: 11, fontWeight: 600, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 11px", cursor: "pointer", fontFamily: FONT }}>
-            Refresh
-          </button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ fontSize: isDesktop ? 32 : 24, fontWeight: 800, color: "#fff", letterSpacing: -1, lineHeight: 1.15, marginBottom: 28 }}>
+            Agent acquisition<br />pipeline
+          </div>
+          <div style={{ textAlign: "right", marginBottom: 28, flexShrink: 0 }}>
+            <div style={{ fontSize: isDesktop ? 60 : 44, fontWeight: 800, color: C.green, letterSpacing: -2.5, lineHeight: 1 }}>
+              {loading ? "—" : contactedPlus}
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>in pipeline · {loading ? "—" : replyRate}% reply rate</div>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+          {[
+            { value: loading ? "—" : targets.length, label: "total" },
+            { value: loading ? "—" : (counts.contacted ?? 0), label: "contacted" },
+            { value: loading ? "—" : repliedPlus, label: "replied" },
+            { value: loading ? "—" : (counts.demo_booked ?? 0), label: "demo booked" },
+          ].map((s, i) => (
+            <div key={s.label} style={{ padding: "16px 0", textAlign: "center", borderRight: i < 3 ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: -0.5, lineHeight: 1 }}>{s.value}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>{s.label}</div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -280,8 +303,8 @@ export default function CampaignView() {
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             fontFamily: FONT, fontSize: 13, fontWeight: tab === t.id ? 700 : 500,
-            color: tab === t.id ? C.text : C.muted,
-            background: "transparent", border: "none", borderBottom: tab === t.id ? `2px solid ${C.text}` : "2px solid transparent",
+            color: tab === t.id ? "var(--accent)" : C.muted,
+            background: "transparent", border: "none", borderBottom: tab === t.id ? `2px solid var(--accent)` : "2px solid transparent",
             padding: "8px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
           }}>
             {t.label}
