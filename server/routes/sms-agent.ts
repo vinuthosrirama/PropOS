@@ -48,7 +48,7 @@ import { getAgentContext } from "../lib/agentContext.js"
 import { getSetting, setSetting } from "../lib/appSettings.js"
 import { scoreContacts } from "../lib/prospectability.js"
 import { generateMarketReport } from "../lib/marketReport.js"
-import { buildStage1TestContact, buildStage2Contact, STARTER_VOICE_SAMPLES } from "../data/smsAgentSeed.js"
+import { buildStage1TestContact, buildStage2Contact, buildDemoPastClientPersonas, STARTER_VOICE_SAMPLES } from "../data/smsAgentSeed.js"
 import { generateAppraisalPayload } from "../lib/appraisalGenerator.js"
 import { randomBytes } from "crypto"
 
@@ -172,9 +172,17 @@ router.post("/drafts/:id/approve", async (req, res) => {
     return res.status(429).json({ ok: false, sent: false, error: "Send cooldown active — try again in a few seconds" })
   }
 
+  // Demo contacts: redirect the send to the REA agent's number being demoed.
+  let sendTo = result.contactPhone
+  const draftContact = await getContactById(result.contactId)
+  if (draftContact?.source.startsWith("seed:demo")) {
+    const demoPhone = await getSetting("demo_target_phone")
+    if (demoPhone) sendTo = demoPhone
+  }
+
   try {
-    await sendSMS(result.contactPhone, result.body)
-    await addAgentMessageToThread(result.contactPhone, result.body)
+    await sendSMS(sendTo, result.body)
+    await addAgentMessageToThread(sendTo, result.body)
     await markContacted(result.contactId)
     await recordAgentMessageSent(result.contactId)
     await markAgentDraftSent(id)
@@ -289,6 +297,50 @@ router.post("/settings", async (req, res) => {
   }
   await setSetting("sms_agent_autosend", req.body.autoSend ? "true" : "false")
   res.json({ ok: true, autoSend: req.body.autoSend })
+})
+
+// ── Demo: Past Client Reconnection ──────────────────────────────────────────────
+
+router.get("/demo/target", async (_req, res) => {
+  if (!isDbConnected()) return res.json({ phone: null })
+  const phone = await getSetting("demo_target_phone")
+  res.json({ phone })
+})
+
+router.post("/demo/target", async (req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : ""
+  if (!phone) return res.status(400).json({ error: "phone (string) is required" })
+  await setSetting("demo_target_phone", phone)
+  res.json({ ok: true, phone })
+})
+
+router.post("/seed-demo-pastclients", async (_req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  const ids = []
+  for (const persona of buildDemoPastClientPersonas()) {
+    ids.push(await upsertContact(persona))
+  }
+  res.json({ ok: true, ids })
+})
+
+// Generate an opener and queue it for approval (does not send).
+router.post("/contacts/:id/queue-opener", async (req, res) => {
+  if (!isDbConnected()) return noDb(res)
+  const id = parseInt(req.params.id, 10)
+  const contact = await getContactById(id)
+  if (!contact) return res.status(404).json({ error: "Contact not found" })
+
+  const agentCtx = await getAgentContext((req as any).agentId)
+  const opener = await generateOpener(contact, agentCtx)
+  const draftId = await saveAgentDraft({
+    contactId: contact.id,
+    draftBody: opener.draft,
+    kind: "opener",
+    reasoning: (contact.personalisation?.scenario as string) ?? "Queued opener",
+    voiceConfidence: opener.voiceConfidence,
+  })
+  res.json({ ok: true, draftId, preview: opener.draft })
 })
 
 // ── Seed (Stage 1 test bed) ─────────────────────────────────────────────────────
