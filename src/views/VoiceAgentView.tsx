@@ -140,6 +140,20 @@ export default function VoiceAgentView() {
   const [calibrateText, setCalibrateText]   = useState("")
   const [calibrating, setCalibrating]       = useState(false)
 
+  // demo system
+  const [demoOpen, setDemoOpen]             = useState(false)
+  const [demoPhone, setDemoPhone]           = useState<string | null>(null)
+  const [demoPhoneInput, setDemoPhoneInput] = useState("")
+  const [_savingDemo, _setSavingDemo]       = useState(false)
+  const [seedingDemo, setSeedingDemo]       = useState(false)
+  const [queueingOpener, setQueueingOpener] = useState(false)
+  const [demoContacts, setDemoContacts]     = useState<Array<{
+    id: number; key: string; name: string; phone: string; fakePhone: string
+    tag: string; summary: string; status: string; ready_to_contact: boolean; isActive: boolean
+  }>>([])
+  const [demoActivating, setDemoActivating] = useState<string | null>(null)
+  const [demoResetting, setDemoResetting]   = useState(false)
+
   // market report sequence
   const [mrOpen, setMrOpen]         = useState(false)
   const [mrSuburb, setMrSuburb]     = useState("")
@@ -168,11 +182,12 @@ export default function VoiceAgentView() {
   // ── Load ──────────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     try {
-      const [cRes, dRes, vRes, sRes] = await Promise.all([
+      const [cRes, dRes, vRes, sRes, tRes] = await Promise.all([
         authFetch(apiUrl("/api/sms-agent/contacts")),
         authFetch(apiUrl("/api/sms-agent/drafts")),
         authFetch(apiUrl("/api/sms-agent/voice-profile")),
         authFetch(apiUrl("/api/sms-agent/settings")),
+        authFetch(apiUrl("/api/sms-agent/demo/target")),
       ])
       if ([cRes, dRes, vRes].some(r => r.status === 401)) { setAuthRequired(true); return }
       setAuthRequired(false)
@@ -184,6 +199,9 @@ export default function VoiceAgentView() {
       if (!vJson.error) setVoice(vJson)
       const sJson = await sRes.json() as { autoSend?: boolean }
       setAutoSend(!!sJson.autoSend)
+      const tJson = await tRes.json() as { phone?: string | null }
+      setDemoPhone(tJson.phone ?? null)
+      setDemoPhoneInput(tJson.phone ?? "")
     } catch (e) { setActionMsg((e as Error).message) }
     finally { setLoading(false) }
   }, [])
@@ -278,6 +296,69 @@ export default function VoiceAgentView() {
       await load()
     } catch (e) { setActionMsg((e as Error).message) }
   }, [load])
+
+  // ── Demo system ───────────────────────────────────────────────────────────────
+  const loadDemoContacts = useCallback(async () => {
+    try {
+      const res = await authFetch(apiUrl("/api/demo/contacts"))
+      const json = await res.json() as { ok?: boolean; contacts?: typeof demoContacts }
+      if (json.ok) setDemoContacts(json.contacts ?? [])
+    } catch { /* non-fatal */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const seedDemo = useCallback(async () => {
+    setSeedingDemo(true)
+    try {
+      const res = await authFetch(apiUrl("/api/demo/seed"), { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+      const json = await res.json() as { ok?: boolean; seeded?: unknown[]; error?: string }
+      if (!json.ok) { setActionMsg(json.error ?? "Failed to seed demo contacts"); return }
+      setActionMsg(`${json.seeded?.length ?? 0} demo contacts ready`)
+      await loadDemoContacts(); await load()
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setSeedingDemo(false) }
+  }, [load, loadDemoContacts])
+
+  const activateDemo = useCallback(async (key: string) => {
+    if (!demoPhoneInput.trim()) { setActionMsg("Enter the REA agent's number first"); return }
+    setDemoActivating(key)
+    try {
+      const res = await authFetch(apiUrl(`/api/demo/activate/${key}`), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientPhone: demoPhoneInput.trim() }),
+      })
+      const json = await res.json() as { ok?: boolean; activated?: { name: string; phone: string; scenario: string }; message?: string; error?: string }
+      if (!json.ok) { setActionMsg(json.error ?? "Failed to activate"); return }
+      setActionMsg(json.message ?? `Activated — tick ready_to_contact to fire the opener`)
+      await loadDemoContacts(); await load()
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setDemoActivating(null) }
+  }, [demoPhoneInput, load, loadDemoContacts])
+
+  const resetDemo = useCallback(async () => {
+    setDemoResetting(true)
+    try {
+      await authFetch(apiUrl("/api/demo/reset"), { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+      setActionMsg("Demo reset — all contacts back to placeholder phones")
+      await loadDemoContacts(); await load()
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setDemoResetting(false) }
+  }, [load, loadDemoContacts])
+
+  useEffect(() => { if (demoOpen) void loadDemoContacts() }, [demoOpen, loadDemoContacts])
+
+  const queueOpener = useCallback(async () => {
+    if (!selected) return
+    setQueueingOpener(true)
+    try {
+      const res = await authFetch(apiUrl(`/api/sms-agent/contacts/${selected.id}/queue-opener`), { method: "POST" })
+      const json = await res.json() as { ok?: boolean; draftId?: number | null; preview?: string; error?: string }
+      if (!json.ok) { setActionMsg(json.error ?? "Failed"); return }
+      setActionMsg(`Draft queued: "${json.preview}"`)
+      await load()
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setQueueingOpener(false) }
+  }, [selected, load])
 
   // ── Send ──────────────────────────────────────────────────────────────────────
   const send = useCallback(async () => {
@@ -816,6 +897,9 @@ export default function VoiceAgentView() {
                 Generate opener
               </button>
             )}
+            <button onClick={() => void queueOpener()} disabled={queueingOpener} style={{ ...btn, color: C.green, background: "transparent", border: `1px solid ${C.green}40`, opacity: queueingOpener ? 0.5 : 1, fontSize: 10.5 }}>
+              {queueingOpener ? "Queuing..." : "Queue opener"}
+            </button>
             <button onClick={() => { setMrOpen(v => !v); setMrResult(null) }} style={{ ...btn, color: C.orange, background: "transparent", border: `1px solid ${C.orange}40`, fontSize: 10.5 }}>
               {mrOpen ? "Close report" : "Market report"}
             </button>
@@ -844,12 +928,40 @@ export default function VoiceAgentView() {
           <div style={{ fontSize: isDesktop ? 32 : 24, fontWeight: 800, color: "#fff", letterSpacing: -1, lineHeight: 1.15, marginBottom: 28 }}>
             SMS from your<br />real number
           </div>
-          <div style={{ textAlign: "right", marginBottom: 28, flexShrink: 0 }}>
-            <div style={{ fontSize: isDesktop ? 60 : 44, fontWeight: 800, color: C.green, letterSpacing: -2.5, lineHeight: 1 }}>
-              {contacts.length}
-            </div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>contacts · BlueBubbles</div>
-          </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 28 }}>
+          {voiceProfile && (
+            <span style={{
+              fontSize: 10.5, fontWeight: 700, borderRadius: 8, padding: "4px 9px",
+              color: confPct >= 70 ? C.green : C.orange,
+              background: confPct >= 70 ? C.greenDim : C.orangeDim,
+              border: `1px solid ${(confPct >= 70 ? C.green : C.orange)}40`,
+            }}>
+              {confPct}% voice
+            </span>
+          )}
+          <button
+            onClick={() => void toggleAutoSend(false)}
+            disabled={togglingAutoSend}
+            title="Auto-sends only trivial replies (<50 chars, >90% confidence) without approval"
+            style={{
+              ...btn,
+              color: autoSend ? C.green : C.muted,
+              background: autoSend ? C.greenDim : "transparent",
+              border: `1px solid ${autoSend ? C.green + "40" : C.border}`,
+              opacity: togglingAutoSend ? 0.6 : 1,
+              fontSize: isMobile ? 11 : 11.5,
+            }}
+          >
+            Auto {autoSend ? "ON" : "OFF"}
+          </button>
+          <button onClick={() => setCalibrateOpen(v => !v)} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, fontSize: isMobile ? 11 : 11.5 }}>
+            {calibrateOpen ? "Close" : "Calibrate"}
+          </button>
+          <button onClick={() => setDemoOpen(v => !v)} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, fontSize: isMobile ? 11 : 11.5 }}>
+            {demoOpen ? "Close" : "Demo"}
+          </button>
+          <button onClick={() => void load()} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, fontSize: isMobile ? 11 : 11.5 }}>↻</button>
+        </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
           {[
@@ -912,6 +1024,81 @@ export default function VoiceAgentView() {
               {calibrating ? "Calibrating..." : "Calibrate"}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Demo Mode panel */}
+      {demoOpen && (
+        <div style={{ ...card, marginBottom: 16, borderColor: `${C.orange}40` }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Demo Mode — Live Scenarios</div>
+          <p style={{ fontSize: 11.5, color: C.muted, margin: "0 0 10px", lineHeight: 1.5 }}>
+            4 buyer lifecycle scenarios. Enter the REA agent&apos;s number, then Activate a scenario — their phone will receive an iMessage from yours (via BlueBubbles) once you tick ready_to_contact.
+          </p>
+
+          {/* Recipient phone + seed/reset row */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+            <input
+              value={demoPhoneInput} onChange={e => setDemoPhoneInput(e.target.value)}
+              placeholder="REA agent's number e.g. 0426 719 845"
+              style={{ flex: 1, minWidth: 180, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 9, padding: "8px 10px", color: C.text, fontSize: 12.5, fontFamily: FONT, boxSizing: "border-box" }}
+            />
+            <button onClick={() => void seedDemo()} disabled={seedingDemo}
+              style={{ ...btn, color: C.bg, background: "var(--accent)", opacity: seedingDemo ? 0.5 : 1, flexShrink: 0 }}>
+              {seedingDemo ? "Seeding..." : "Seed contacts"}
+            </button>
+            <button onClick={() => void resetDemo()} disabled={demoResetting}
+              style={{ ...btn, color: C.faint, background: "transparent", border: `1px solid ${C.border}`, opacity: demoResetting ? 0.5 : 1, flexShrink: 0 }}>
+              {demoResetting ? "Resetting..." : "Reset"}
+            </button>
+          </div>
+          {demoPhone && <div style={{ fontSize: 10.5, color: C.faint, marginBottom: 10 }}>Legacy demo target: {demoPhone}</div>}
+
+          {/* Scenario cards */}
+          {demoContacts.length === 0 ? (
+            <div style={{ fontSize: 11.5, color: C.faint }}>No demo contacts yet — click &quot;Seed contacts&quot; to load the 4 scenarios.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {demoContacts.map(dc => (
+                <div key={dc.key} style={{
+                  background: dc.isActive ? `${C.green}18` : C.bg3,
+                  border: `1px solid ${dc.isActive ? C.green + "60" : C.border}`,
+                  borderRadius: 11, padding: "10px 12px",
+                  display: "flex", alignItems: "flex-start", gap: 10,
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text }}>{dc.name}</span>
+                      <span style={{
+                        fontSize: 9.5, fontWeight: 700, borderRadius: 5, padding: "1px 6px",
+                        color: dc.isActive ? C.green : C.orange,
+                        background: dc.isActive ? C.greenDim : C.orangeDim,
+                      }}>{dc.tag}</span>
+                      {dc.isActive && <span style={{ fontSize: 9.5, color: C.green }}>LIVE → {dc.phone}</span>}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: C.faint, lineHeight: 1.4 }}>{dc.summary}</div>
+                  </div>
+                  <button
+                    onClick={() => void activateDemo(dc.key)}
+                    disabled={demoActivating === dc.key || !demoPhoneInput.trim()}
+                    title={!demoPhoneInput.trim() ? "Enter recipient phone first" : undefined}
+                    style={{
+                      ...btn, flexShrink: 0, fontSize: 11,
+                      color: dc.isActive ? C.faint : C.bg,
+                      background: dc.isActive ? "transparent" : C.green,
+                      border: dc.isActive ? `1px solid ${C.border}` : "none",
+                      opacity: demoActivating === dc.key || (!dc.isActive && !demoPhoneInput.trim()) ? 0.5 : 1,
+                    }}
+                  >
+                    {demoActivating === dc.key ? "..." : dc.isActive ? "Deactivate" : "Activate"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p style={{ fontSize: 10.5, color: C.faint, margin: "10px 0 0", lineHeight: 1.5 }}>
+            After activating: go to the contact in the list, tick ready_to_contact (or use Queue opener), then approve the draft.
+          </p>
         </div>
       )}
 

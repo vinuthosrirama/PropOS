@@ -30,6 +30,7 @@ export interface SmsContact {
   ready_to_contact: boolean
   assigned_agent_id: number | null
   rea_data: Record<string, unknown>
+  buyer_profile: Record<string, unknown>
 }
 
 export interface VoiceSignal {
@@ -89,6 +90,7 @@ function rowToContact(r: Record<string, unknown>): SmsContact {
     ready_to_contact: !!r.ready_to_contact,
     assigned_agent_id: (r.assigned_agent_id as number | null) ?? null,
     rea_data: json(r.rea_data),
+    buyer_profile: json(r.buyer_profile),
   }
 }
 

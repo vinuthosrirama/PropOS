@@ -122,13 +122,16 @@ ${formatVoiceProfileForPrompt(vp)}
 RELATIONSHIP VOICE ADJUSTMENTS (apply on top of the base profile):
 ${JSON.stringify(contact.voice_override ?? {})}
 
-HYPER-PERSONALISATION NOTES (specific things ${agentFirst} knows about ${contact.name.split(" ")[0]}):
+CRM PROFILE (structured data — budget, history, property match, life events):
+${JSON.stringify(contact.buyer_profile && Object.keys(contact.buyer_profile).length ? contact.buyer_profile : null, null, 2)}
+
+AGENT'S PERSONAL NOTES (specific things ${agentFirst} knows about ${contact.name.split(" ")[0]}):
 ${JSON.stringify(contact.personalisation ?? {}, null, 2)}
 
 OBJECTIVE (this is the reason for texting — nobody texts without one):
 ${objective}
 
-This is the first message in a new thread (or resuming after a gap). Give it a clear, natural reason. Reference one personalisation detail so it is specific, not "hey how are you". If the objective is to meet up, suggest a specific day rather than "sometime".
+This is the first message in a new thread (or resuming after a gap). Give it a clear, natural reason. If buyer_profile has a new_listing_match, reference the property specifically. Reference one personal detail from the agent's notes so it reads human. If the objective is to meet up, suggest a specific day rather than "sometime".
 
 Return ONLY this JSON (no markdown):
 {"draft_message":"...","voice_confidence":0.0,"personalisation_hook":"which note was referenced","follow_up_if_no_reply":{"wait_hours":48,"follow_up_message":"..."}}
