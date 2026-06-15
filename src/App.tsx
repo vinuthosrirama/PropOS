@@ -77,7 +77,7 @@ export default function App() {
   const productMode = APP_PRODUCT_MODE
 
   const [lightMode, setLightMode] = useState<boolean>(() => {
-    try { return localStorage.getItem("propos_light_mode") === "1" } catch { return false }
+    try { return localStorage.getItem("propos_light_mode") !== "0" } catch { return true }
   })
 
   // Apply CSS vars and html class whenever mode changes
@@ -180,6 +180,14 @@ export default function App() {
       "--accent-dim": theme.dim,
       "--accent-glow":theme.glow,
     } as CSSProperties & Record<`--${string}`, string>}>
+      <style>{`
+        @keyframes pk-pulse{0%,100%{transform:scale(.95);box-shadow:0 0 0 0 rgba(182,194,171,.7)}70%{transform:scale(1);box-shadow:0 0 0 9px rgba(182,194,171,0)}}
+        .pk-pulse{animation:pk-pulse 2.1s infinite}
+        .pk-input{width:100%;border:none;border-bottom:1px solid rgba(59,31,119,.22);background:none;padding:9px 4px;font-size:15px;color:#3b1f77;outline:none;box-sizing:border-box;transition:border-color .2s;font-family:inherit;letter-spacing:-.1px}
+        .pk-input::placeholder{color:rgba(59,31,119,.28)}
+        .pk-input:focus{border-bottom-color:#3b1f77}
+        .pk-label{display:block;font-size:10px;font-weight:600;color:rgba(59,31,119,.5);letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px}
+      `}</style>
       <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn}
            onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge}
            mode={mode} onSwitchMode={productMode ? undefined : setMode}

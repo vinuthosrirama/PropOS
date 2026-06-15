@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { C, FONT, DEFAULT_THEME, type AgentProfile, type AgencyTheme, type ViewId, type DemoMode } from "../data"
+import { FONT, DEFAULT_THEME, type AgentProfile, type AgencyTheme, type ViewId, type DemoMode } from "../data"
 import { useBreakpoint } from "../hooks/useBreakpoint"
-import { getContrastText } from "../lib/contrast"
 
 // Get product display name based on mode
 function productLabel(mode: DemoMode | null): string {
@@ -20,7 +19,7 @@ export const VIEWS: { id: ViewId; label: string; short: string; principalOnly?: 
 ]
 
 export default function Nav({
-  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0, mode, onSwitchMode, lightMode = false, onToggleLightMode, productMode,
+  view, setView, agent, sheetStatus = "idle", theme: _theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0, mode, onSwitchMode, lightMode = false, onToggleLightMode, productMode,
 }: {
   view: ViewId
   setView: (v: ViewId) => void
@@ -69,33 +68,26 @@ export default function Nav({
   }
 
   const sheetChip = sheetStatus === "live" ? (
-    <div style={{ padding: "3px 8px", borderRadius: 10, background: "rgba(100,208,144,0.12)", border: "1px solid rgba(100,208,144,0.3)", fontSize: 10, fontWeight: 600, color: "rgb(100,208,144)", whiteSpace: "nowrap", flexShrink: 0 }}>
+    <div style={{ padding: "3px 8px", borderRadius: 10, background: "rgba(182,194,171,0.12)", border: "1px solid rgba(182,194,171,0.25)", fontSize: 10, fontWeight: 600, color: "#b6c2ab", whiteSpace: "nowrap", flexShrink: 0 }}>
       ● Sheet live
     </div>
   ) : sheetStatus === "loading" ? (
-    <div style={{ padding: "3px 8px", borderRadius: 10, background: "rgba(166,218,255,0.1)", fontSize: 10, color: C.muted, whiteSpace: "nowrap", flexShrink: 0 }}>
+    <div style={{ padding: "3px 8px", borderRadius: 10, background: "rgba(255,255,255,0.06)", fontSize: 10, color: "rgba(255,255,255,.4)", whiteSpace: "nowrap", flexShrink: 0 }}>
       ○ Connecting...
     </div>
   ) : null
 
   const logoBlock = (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-      <div style={{
-        width: 32, height: 32, borderRadius: 9,
-        background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 9, fontWeight: 800, letterSpacing: -0.5, flexShrink: 0,
-        color: getContrastText(theme.gradient[0]),
-        transition: "background 0.5s",
-      }}>{theme.logo}</div>
-      {bp !== "mobile" && (
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.text, lineHeight: 1 }}>
-            {productLabel(productMode ?? mode ?? null)}
-          </div>
-          <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.3 }}>{agent.name} · {agent.agency}</div>
-        </div>
-      )}
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+      <span style={{
+        fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: 0.5,
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        lineHeight: 1,
+      }}>Peake</span>
+      <div style={{ width: 1, height: 14, background: "rgba(255,255,255,.2)", flexShrink: 0 }} />
+      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", color: "rgba(255,255,255,.5)", whiteSpace: "nowrap" as const }}>
+        {productLabel(productMode ?? mode ?? null)}
+      </span>
     </div>
   )
 
@@ -114,16 +106,15 @@ export default function Nav({
           position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
           height: 52, padding: "0 16px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          background: lightMode ? "rgba(245,247,250,0.97)" : "rgba(4,7,13,0.97)", backdropFilter: "blur(20px)",
-          borderBottom: `1px solid ${C.border}`,
+          background: "rgba(44,27,89,0.97)", backdropFilter: "blur(20px)",
+          borderBottom: "1px solid rgba(182,194,171,0.14)",
         }}>
           {logoBlock}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {sheetChip}
             <div style={{
-              fontSize: 11, color: lightMode ? theme.primary : "rgb(225, 205, 255)", fontWeight: 600,
-              background: theme.dim, padding: "3px 8px", borderRadius: 12,
-              transition: "color 0.4s, background 0.4s",
+              fontSize: 11, color: "#b6c2ab", fontWeight: 600,
+              background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 12,
             }}>
               {VIEWS.find(v => v.id === view)?.short}
             </div>
@@ -144,7 +135,7 @@ export default function Nav({
                     y: i === 0 ? 7 : i === 2 ? -7 : 0,
                     opacity: i === 1 ? 0 : 1,
                   } : { rotate: 0, y: 0, opacity: 1 }}
-                  style={{ width: 22, height: 2, background: C.text, borderRadius: 2 }} />
+                  style={{ width: 22, height: 2, background: "rgba(255,255,255,.8)", borderRadius: 2 }} />
               ))}
             </button>
           </div>
@@ -156,8 +147,8 @@ export default function Nav({
               initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
               style={{
                 position: "fixed", top: 52, left: 0, right: 0, zIndex: 99,
-                background: lightMode ? "rgba(245,247,250,0.98)" : "rgba(4,7,13,0.98)", backdropFilter: "blur(20px)",
-                borderBottom: `1px solid ${C.border}`,
+                background: "rgba(20,7,46,0.98)", backdropFilter: "blur(20px)",
+                borderBottom: "1px solid rgba(182,194,171,0.14)",
                 padding: "12px 0", maxHeight: "80vh", overflowY: "auto",
               }}>
               {VIEWS.filter(v => !v.principalOnly || agent.role === "principal").map((v, i) => (
@@ -166,43 +157,41 @@ export default function Nav({
                   style={{
                     width: "100%", padding: "14px 20px",
                     display: "flex", alignItems: "center", gap: 14,
-                    background: view === v.id ? theme.dim : "transparent",
+                    background: view === v.id ? "rgba(255,255,255,.08)" : "transparent",
                     border: "none", cursor: "pointer", fontFamily: FONT,
-                    borderLeft: `3px solid ${view === v.id ? (lightMode ? theme.primary : "rgb(225, 205, 255)") : "transparent"}`,
+                    borderLeft: `3px solid ${view === v.id ? "#b6c2ab" : "transparent"}`,
                     transition: "background 0.15s, border-color 0.15s",
                   }}>
                   <div style={{ textAlign: "left" }}>
-                    <div style={{ fontSize: 14, fontWeight: view === v.id ? 700 : 400, color: view === v.id ? (lightMode ? theme.primary : "rgb(225, 205, 255)") : C.text }}>
+                    <div style={{ fontSize: 14, fontWeight: view === v.id ? 700 : 400, color: view === v.id ? "#fff" : "rgba(255,255,255,.55)" }}>
                       {v.label}
                     </div>
-                    <div style={{ fontSize: 10, color: C.faint }}>Step {i + 1}</div>
+                    <div style={{ fontSize: 10, color: "rgba(255,255,255,.25)" }}>Step {i + 1}</div>
                   </div>
-                  {i < currentIdx && <span style={{ marginLeft: "auto", color: C.green, fontSize: 12 }}>✓</span>}
+                  {i < currentIdx && <span style={{ marginLeft: "auto", color: "#b6c2ab", fontSize: 12 }}>✓</span>}
                 </button>
               ))}
               {view === "demo" && mode === "buyer" && (
                 <button onClick={() => { window.dispatchEvent(new CustomEvent("propos:captureLead")); setMenuOpen(false) }} style={{
                   width: "100%", padding: "14px 20px",
                   display: "flex", alignItems: "center",
-                  background: theme.dim, border: "none", cursor: "pointer",
-                  fontFamily: FONT, borderLeft: `3px solid ${theme.primary}`,
-                  borderTop: `1px solid ${C.border}`, marginTop: 4,
+                  background: "rgba(182,194,171,.1)", border: "none", cursor: "pointer",
+                  fontFamily: FONT, borderLeft: "3px solid #b6c2ab",
+                  borderTop: "1px solid rgba(182,194,171,.12)", marginTop: 4,
                 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: lightMode ? theme.primary : "rgb(225,205,255)" }}>
-                    + Capture Lead
-                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#b6c2ab" }}>+ Capture Lead</div>
                 </button>
               )}
               {onSwitchMode && mode && (
                 <button onClick={() => { onSwitchMode(mode === "buyer" ? "vendor" : "buyer"); setMenuOpen(false) }} style={{
                   width: "100%", padding: "14px 20px",
                   display: "flex", alignItems: "center",
-                  background: mode === "vendor" ? theme.dim : "rgba(100,208,144,0.06)", border: "none", cursor: "pointer",
-                  fontFamily: FONT, borderLeft: `3px solid ${mode === "vendor" ? theme.primary : C.green}`,
-                  borderTop: `1px solid ${C.border}`, marginTop: 4,
+                  background: "rgba(255,255,255,.04)", border: "none", cursor: "pointer",
+                  fontFamily: FONT, borderLeft: "3px solid rgba(255,255,255,.2)",
+                  borderTop: "1px solid rgba(182,194,171,.12)", marginTop: 4,
                 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: mode === "vendor" ? (lightMode ? theme.primary : "rgb(225,205,255)") : C.green }}>
-                    {mode === "buyer" ? "Switch to Vendor mode" : "Switch to Buyer mode"}
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.7)" }}>
+                    {mode === "buyer" ? "Switch to VendorOS" : "Switch to BuyerOS"}
                   </div>
                 </button>
               )}
@@ -211,10 +200,10 @@ export default function Nav({
                   width: "100%", padding: "14px 20px",
                   display: "flex", alignItems: "center",
                   background: "transparent", border: "none", cursor: "pointer",
-                  fontFamily: FONT, borderLeft: `3px solid ${theme.primary}`,
-                  borderTop: `1px solid ${C.border}`, marginTop: 4,
+                  fontFamily: FONT, borderLeft: "3px solid rgba(255,255,255,.2)",
+                  borderTop: "1px solid rgba(182,194,171,.12)", marginTop: 4,
                 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: theme.primary }}>← Portfolio</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.7)" }}>← Portfolio</div>
                 </button>
               )}
               {onToggleLightMode && (
@@ -223,10 +212,10 @@ export default function Nav({
                   display: "flex", alignItems: "center", gap: 10,
                   background: "transparent", border: "none", cursor: "pointer",
                   fontFamily: FONT, borderLeft: "3px solid transparent",
-                  borderTop: `1px solid ${C.border}`, marginTop: 4,
+                  borderTop: "1px solid rgba(182,194,171,.12)", marginTop: 4,
                 }}>
                   <span style={{ fontSize: 16 }}>{lightMode ? "🌙" : "☀️"}</span>
-                  <div style={{ fontSize: 13, color: C.muted }}>
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,.5)" }}>
                     {lightMode ? "Switch to dark mode" : "Switch to light mode"}
                   </div>
                 </button>
@@ -237,9 +226,9 @@ export default function Nav({
                   display: "flex", alignItems: "center",
                   background: "transparent", border: "none", cursor: "pointer",
                   fontFamily: FONT, borderLeft: "3px solid transparent",
-                  borderTop: `1px solid ${C.border}`, marginTop: 4,
+                  borderTop: "1px solid rgba(182,194,171,.12)", marginTop: 4,
                 }}>
-                  <div style={{ fontSize: 13, color: C.muted }}>Switch Profile</div>
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,.4)" }}>Switch Profile</div>
                 </button>
               )}
             </motion.div>
@@ -255,17 +244,17 @@ export default function Nav({
       position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
       height: 56, padding: "0 20px",
       display: "flex", alignItems: "center", gap: 0,
-      background: lightMode ? (scrolled ? "rgba(245,247,250,0.97)" : "rgba(245,247,250,0.85)") : (scrolled ? "rgba(4,7,13,0.97)" : "rgba(4,7,13,0.85)"),
+      background: scrolled ? "rgba(44,27,89,0.98)" : "rgba(44,27,89,0.95)",
       backdropFilter: "blur(20px)",
-      borderBottom: `1px solid ${C.border}`,
+      borderBottom: "1px solid rgba(182,194,171,0.14)",
     }}>
       <div style={{ marginRight: 20, flexShrink: 0 }}>{logoBlock}</div>
 
       {onBack && (
         <button onClick={onBack} style={{
           marginRight: 10, flexShrink: 0,
-          padding: "4px 10px", borderRadius: 7, border: `1px solid ${C.border}`,
-          background: theme.dim, color: theme.gradient[0],
+          padding: "4px 10px", borderRadius: 7, border: "1px solid rgba(255,255,255,.15)",
+          background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.8)",
           fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
           whiteSpace: "nowrap",
         }}>
@@ -285,13 +274,13 @@ export default function Nav({
             <button key={v.id} onClick={() => navigate(v.id)}
               aria-current={active ? "page" : undefined}
               style={{
-                padding: bp === "tablet" ? "4px 8px" : "4px 11px",
+                padding: bp === "tablet" ? "4px 8px" : "5px 12px",
                 borderRadius: 7, border: "none", cursor: "pointer",
                 fontSize: bp === "tablet" ? 10 : 11,
                 fontWeight: active ? 700 : 400,
                 whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT,
-                background: active ? theme.dim : "transparent",
-                color: active ? (lightMode ? theme.primary : "rgb(225, 205, 255)") : past ? C.muted : (lightMode ? C.faint : "rgba(200,160,255,0.45)"),
+                background: active ? "rgba(255,255,255,.16)" : "transparent",
+                color: active ? "#fff" : past ? "rgba(255,255,255,.5)" : "rgba(255,255,255,.38)",
                 transition: "all 0.15s",
               }}>
               {bp === "tablet" ? v.short : v.label}
@@ -304,11 +293,11 @@ export default function Nav({
           <button
             onClick={() => window.dispatchEvent(new CustomEvent("propos:captureLead"))}
             style={{
-              padding: bp === "tablet" ? "4px 8px" : "4px 11px",
+              padding: bp === "tablet" ? "4px 8px" : "5px 12px",
               borderRadius: 7,
-              border: `1px solid ${theme.primary}55`,
-              background: theme.dim,
-              color: lightMode ? theme.primary : "rgb(225,205,255)",
+              border: "1px solid rgba(182,194,171,.3)",
+              background: "rgba(182,194,171,.1)",
+              color: "#b6c2ab",
               fontSize: bp === "tablet" ? 10 : 11,
               fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT, cursor: "pointer",
               transition: "all 0.15s",
@@ -318,56 +307,54 @@ export default function Nav({
           </button>
         )}
 
-        {/* Mode toggle — Buyer / Vendor */}
+        {/* Mode toggle — BuyerOS / VendorOS */}
         {onSwitchMode && mode && (
           <button onClick={() => onSwitchMode(mode === "buyer" ? "vendor" : "buyer")} style={{
-            padding: bp === "tablet" ? "4px 8px" : "4px 11px",
-            borderRadius: 7, border: `1px solid ${mode === "vendor" ? theme.primary + "55" : "rgba(100,208,144,0.3)"}`,
-            background: mode === "vendor" ? theme.dim : "rgba(100,208,144,0.08)",
-            color: mode === "vendor" ? (lightMode ? theme.primary : "rgb(225, 205, 255)") : C.green,
+            padding: bp === "tablet" ? "4px 8px" : "5px 12px",
+            borderRadius: 7, border: "1px solid rgba(255,255,255,.15)",
+            background: "rgba(255,255,255,.08)",
+            color: "rgba(255,255,255,.7)",
             fontSize: bp === "tablet" ? 10 : 11,
             fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT, cursor: "pointer",
             transition: "all 0.2s",
           }}>
-            {mode === "buyer" ? "Buyer" : "Vendor"}
+            {mode === "buyer" ? "BuyerOS ⇄" : "VendorOS ⇄"}
           </button>
         )}
 
-        {/* AI Reply Agent status pill */}
+        {/* AI status pill */}
         {view === "demo" && bp === "desktop" && (
           <div style={{
             display: "flex", alignItems: "center", gap: 5,
             padding: "3px 9px", borderRadius: 20,
-            background: "rgba(100,208,144,0.08)", border: "1px solid rgba(100,208,144,0.2)",
+            background: "rgba(182,194,171,.08)", border: "1px solid rgba(182,194,171,.2)",
             flexShrink: 0,
           }}>
             <motion.div
               animate={{ opacity: [1, 0.4, 1] }}
               transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-              style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, flexShrink: 0 }}
+              style={{ width: 6, height: 6, borderRadius: "50%", background: "#b6c2ab", flexShrink: 0 }}
             />
-            <span style={{ fontSize: 10, fontWeight: 700, color: C.green, whiteSpace: "nowrap" }}>AI Replies: Active</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#b6c2ab", whiteSpace: "nowrap" }}>AI Replies: Active</span>
           </div>
         )}
 
-        {/* Inbox button — inline with nav tabs */}
+        {/* Inbox */}
         {onInbox && (
           <button onClick={onInbox} style={{
             position: "relative",
-            padding: bp === "tablet" ? "4px 8px" : "4px 11px",
+            padding: bp === "tablet" ? "4px 8px" : "5px 12px",
             borderRadius: 7, border: "none", cursor: "pointer",
-            fontSize: bp === "tablet" ? 10 : 11,
-            fontWeight: 400,
+            fontSize: bp === "tablet" ? 10 : 11, fontWeight: 400,
             whiteSpace: "nowrap", flexShrink: 0, fontFamily: FONT,
-            background: "transparent",
-            color: C.faint,
+            background: "transparent", color: "rgba(255,255,255,.38)",
             transition: "all 0.15s",
           }}>
             Inbox
             {inboxBadge > 0 && (
               <span style={{
                 position: "absolute", top: 0, right: 0,
-                background: "#f59e0b", color: C.bg,
+                background: "#f59e0b", color: "#fff",
                 borderRadius: "50%", width: 14, height: 14,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 8, fontWeight: 800,
@@ -379,6 +366,22 @@ export default function Nav({
 
       {sheetChip && <div style={{ marginLeft: 12 }}>{sheetChip}</div>}
 
+      {/* Agent name chip */}
+      {bp === "desktop" && (
+        <div style={{
+          marginLeft: 12, flexShrink: 0,
+          display: "flex", alignItems: "center", gap: 7,
+          padding: "4px 10px", borderRadius: 20,
+          border: "1px solid rgba(255,255,255,.12)",
+          background: "rgba(255,255,255,.06)",
+        }}>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#b6c2ab" }} />
+          <span style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,.6)", whiteSpace: "nowrap" }}>
+            {agent.name.split(" ")[0]} · {agent.agency}
+          </span>
+        </div>
+      )}
+
       {/* Light / dark toggle */}
       {onToggleLightMode && (
         <button
@@ -387,8 +390,8 @@ export default function Nav({
           style={{
             marginLeft: 8, flexShrink: 0,
             padding: "4px 8px", borderRadius: 8,
-            border: `1px solid rgba(216,231,242,0.25)`,
-            background: "rgba(216,231,242,0.07)", color: C.muted,
+            border: "1px solid rgba(255,255,255,.12)",
+            background: "rgba(255,255,255,.06)", color: "rgba(255,255,255,.5)",
             fontSize: 14, cursor: "pointer", lineHeight: 1,
             transition: "color 0.15s",
           }}
@@ -402,8 +405,8 @@ export default function Nav({
         <button onClick={onLogout} title="Switch profile"
           style={{
             marginLeft: 8, flexShrink: 0,
-            padding: "4px 10px", borderRadius: 8, border: `1px solid rgba(216,231,242,0.25)`,
-            background: "rgba(216,231,242,0.07)", color: C.muted,
+            padding: "4px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,.12)",
+            background: "rgba(255,255,255,.06)", color: "rgba(255,255,255,.45)",
             fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
             transition: "color 0.15s", whiteSpace: "nowrap",
           }}

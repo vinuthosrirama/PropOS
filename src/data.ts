@@ -26,30 +26,36 @@ export const C = {
   redDim:      "rgba(255, 110, 110, 0.12)",
   purple:      "rgb(200, 160, 255)",
   purpleDim:   "rgba(200, 160, 255, 0.12)",
+  // Peake brand tokens — fixed across light/dark
+  peakePurple: "#3b1f77",
+  peakeDark:   "#2c1b59",
+  peakeCharc:  "#2c2d30",
+  peakeSage:   "#b6c2ab",
+  peakeSilver: "#f7f7f8",
 } as const
 
 // ── Theme variable blocks ─────────────────────────────────────────────────────
 
 export const DARK_CSS_VARS = `
-  --c-bg:           rgb(4, 7, 13);
-  --c-bg2:          rgb(14, 18, 28);
-  --c-bg3:          rgb(22, 27, 40);
-  --c-text:         rgb(213, 219, 230);
-  --c-muted:        rgba(213, 219, 230, 0.50);
-  --c-faint:        rgba(213, 219, 230, 0.30);
-  --c-border:       rgba(216, 231, 242, 0.13);
-  --c-border-hover: rgba(216, 231, 242, 0.18);
+  --c-bg:           #14072e;
+  --c-bg2:          #2c1b59;
+  --c-bg3:          #351c6b;
+  --c-text:         rgba(255, 255, 255, 0.92);
+  --c-muted:        rgba(255, 255, 255, 0.52);
+  --c-faint:        rgba(255, 255, 255, 0.25);
+  --c-border:       rgba(182, 194, 171, 0.14);
+  --c-border-hover: rgba(182, 194, 171, 0.28);
 `
 
 export const LIGHT_CSS_VARS = `
-  --c-bg:           #f5f7fa;
+  --c-bg:           #f7f7f8;
   --c-bg2:          #ffffff;
-  --c-bg3:          #edf0f5;
-  --c-text:         #0f172a;
-  --c-muted:        #475569;
-  --c-faint:        #94a3b8;
-  --c-border:       rgba(15, 23, 42, 0.10);
-  --c-border-hover: rgba(15, 23, 42, 0.18);
+  --c-bg3:          #f1f1f2;
+  --c-text:         #2c2d30;
+  --c-muted:        rgba(59, 31, 119, 0.58);
+  --c-faint:        rgba(59, 31, 119, 0.32);
+  --c-border:       rgba(59, 31, 119, 0.12);
+  --c-border-hover: rgba(59, 31, 119, 0.24);
 `
 
 export const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
@@ -70,7 +76,7 @@ export interface AgencyTheme {
 // LJ Hooker: #E8001D from ljhooker.com · Others: best available public source
 export const AGENCY_THEMES: Record<string, AgencyTheme> = {
   // ── Verified ──────────────────────────────────────────────────────────────
-  "Peake":                    { name: "Peake",                    primary: "#3f0278",             dim: "rgba(63,2,120,0.12)",       glow: "rgba(63,2,120,0.07)",       logo: "PK", gradient: ["#7B35BE", "#3f0278"]                       },
+  "Peake":                    { name: "Peake",                    primary: "#3b1f77",             dim: "rgba(59,31,119,0.10)",      glow: "rgba(59,31,119,0.06)",      logo: "PK", gradient: ["#553990", "#3b1f77"]                       },
   "Ray White":                { name: "Ray White",                primary: "#FFD200",             dim: "rgba(255,210,0,0.12)",      glow: "rgba(255,210,0,0.07)",      logo: "RW", gradient: ["#FFD200", "#E8A800"]                       },
   "Barry Plant":              { name: "Barry Plant",              primary: "#001FB9",             dim: "rgba(232,0,45,0.14)",       glow: "rgba(232,0,45,0.10)",       logo: "BP", gradient: ["#E8002D", "#C0001A"]                       },
   "Barry Plant Berwick":      { name: "Barry Plant Berwick",      primary: "#001FB9",             dim: "rgba(232,0,45,0.14)",       glow: "rgba(232,0,45,0.10)",       logo: "BP", gradient: ["#E8002D", "#C0001A"]                       },
