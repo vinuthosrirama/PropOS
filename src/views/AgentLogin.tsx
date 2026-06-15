@@ -1,21 +1,11 @@
 import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { C, FONT, getAgencyTheme, isCamKnoll, isPasSunilchandra, isManpreetSingh, MANPREET_DEFAULT_AGENT, type AgentProfile, type AgencyTheme, type DemoMode } from "../data"
+import { FONT, getAgencyTheme, isCamKnoll, isPasSunilchandra, isManpreetSingh, MANPREET_DEFAULT_AGENT, type AgentProfile, type AgencyTheme, type DemoMode } from "../data"
 import { readAgentProfileFromSheet, sheetsConnected } from "../lib/sheet"
 import { apiUrl } from "../lib/api"
 import { setAccessToken } from "../lib/authFetch"
 import { useBreakpoint } from "../hooks/useBreakpoint"
 
-// Returns true if the hex colour is perceptually dark (luminance < 128)
-function isDarkHex(hex: string): boolean {
-  if (!hex.startsWith("#") || hex.length !== 7) return false
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return 0.299 * r + 0.587 * g + 0.114 * b < 128
-}
-
-// Peake first (local Berwick agency), Area Specialist second (Pas), then alphabetical
 const AGENCIES = [
   "Peake",
   "Area Specialist",
@@ -34,10 +24,21 @@ const SUBURBS = [
   "Other",
 ]
 
-// ── Agency dropdown with colour swatches ─────────────────────────────────────
+// Peake wordmark
+function PeakeLogo({ height = 18, color = "#fff" }: { height?: number; color?: string }) {
+  return (
+    <span style={{
+      fontSize: height, fontWeight: 800, color, letterSpacing: 0.5,
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      lineHeight: 1, display: "inline-block",
+    }}>Peake</span>
+  )
+}
+
+// ── Agency dropdown — Peake underline style ───────────────────────────────────
 function AgencyDropdown({
-  value, onChange, error, accentColor,
-}: { value: string; onChange: (v: string) => void; error?: string; accentColor?: string }) {
+  value, onChange, error,
+}: { value: string; onChange: (v: string) => void; error?: string }) {
   const [open, setOpen] = useState(false)
   const [focusedIdx, setFocusedIdx] = useState(-1)
   const ref = useRef<HTMLDivElement>(null)
@@ -51,9 +52,7 @@ function AgencyDropdown({
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
-  useEffect(() => {
-    if (!open) setFocusedIdx(-1)
-  }, [open])
+  useEffect(() => { if (!open) setFocusedIdx(-1) }, [open])
 
   const selectedTheme = value ? getAgencyTheme(value) : null
 
@@ -78,61 +77,46 @@ function AgencyDropdown({
         aria-expanded={open}
         aria-label={value ? `Agency: ${value}` : "Select your agency"}
         style={{
-          width: "100%", background: C.bg3,
-          border: `1px solid ${error ? C.red + "88" : accentColor ? accentColor + "55" : C.border}`,
-          borderRadius: 10, padding: "11px 14px",
-          color: value ? C.text : C.faint, fontSize: 14, fontFamily: FONT,
+          width: "100%", background: "none", border: "none",
+          borderBottom: `1px solid ${error ? "#e53e3e" : open ? "#3b1f77" : "rgba(59,31,119,.22)"}`,
+          padding: "9px 4px",
+          color: value ? "#3b1f77" : "rgba(59,31,119,.28)",
+          fontSize: 15, fontFamily: "inherit",
           cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
-          transition: "border 0.15s",
+          transition: "border-color .2s", outline: "none", letterSpacing: "-.1px",
         }}
       >
         {value && selectedTheme && (
-          <span aria-hidden="true" style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: selectedTheme.primary, flexShrink: 0,
-            boxShadow: `0 0 6px ${selectedTheme.primary}88`,
-          }} />
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: selectedTheme.primary, flexShrink: 0 }} />
         )}
         <span style={{ flex: 1, textAlign: "left" }}>{value || "Select your agency..."}</span>
-        <span aria-hidden="true" style={{ color: C.faint, fontSize: 10 }}>{open ? "▲" : "▼"}</span>
+        <span style={{ color: "rgba(59,31,119,.32)", fontSize: 9 }}>{open ? "▲" : "▼"}</span>
       </button>
       {open && (
-        <div
-          ref={listRef}
-          role="listbox"
-          aria-label="Agency options"
-          style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-            background: C.bg3, border: `1px solid ${C.border}`,
-            borderRadius: 10, zIndex: 200, overflow: "hidden",
-            boxShadow: "0 12px 32px rgba(0,0,0,0.5)", maxHeight: 280, overflowY: "auto",
-          }}>
+        <div ref={listRef} role="listbox" aria-label="Agency options" style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          background: "#fff", border: "1px solid rgba(59,31,119,.12)",
+          borderRadius: 10, zIndex: 200, overflow: "hidden",
+          boxShadow: "0 12px 32px rgba(59,31,119,0.12)", maxHeight: 280, overflowY: "auto",
+        }}>
           {AGENCIES.map((agency, idx) => {
             const t = getAgencyTheme(agency)
             const isFocused = focusedIdx === idx
             return (
-              <div
-                key={agency}
-                role="option"
-                aria-selected={agency === value}
-                tabIndex={-1}
+              <div key={agency} role="option" aria-selected={agency === value} tabIndex={-1}
                 onClick={() => { onChange(agency); setOpen(false) }}
                 onMouseEnter={() => setFocusedIdx(idx)}
                 style={{
                   display: "flex", alignItems: "center", gap: 12,
                   padding: "10px 14px", cursor: "pointer",
-                  background: isFocused || agency === value ? C.bg2 : "transparent",
+                  background: isFocused || agency === value ? "rgba(59,31,119,.04)" : "transparent",
                   transition: "background 0.1s",
                 }}
               >
-                <span aria-hidden="true" style={{
-                  width: 10, height: 10, borderRadius: "50%",
-                  background: t.primary, flexShrink: 0,
-                  boxShadow: `0 0 5px ${t.primary}66`,
-                }} />
-                <span style={{ fontSize: 14, color: C.text }}>{agency}</span>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: t.primary, flexShrink: 0 }} />
+                <span style={{ fontSize: 14, color: "#2c2d30" }}>{agency}</span>
                 {agency === value && (
-                  <span aria-hidden="true" style={{ marginLeft: "auto", color: t.primary, fontSize: 12, fontWeight: 700 }}>✓</span>
+                  <span style={{ marginLeft: "auto", color: t.primary, fontSize: 11, fontWeight: 700 }}>✓</span>
                 )}
               </div>
             )
@@ -143,16 +127,15 @@ function AgencyDropdown({
   )
 }
 
-// ── Suburb searchable autocomplete ────────────────────────────────────────────
+// ── Suburb autocomplete — Peake underline style ───────────────────────────────
 function SuburbAutocomplete({
-  value, onChange, error, accentColor,
-}: { value: string; onChange: (v: string) => void; error?: string; accentColor?: string }) {
+  value, onChange, error,
+}: { value: string; onChange: (v: string) => void; error?: string }) {
   const [query, setQuery] = useState(value)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => { setQuery(value) }, [value])
-
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
@@ -168,18 +151,11 @@ function SuburbAutocomplete({
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <input
-        type="text"
-        value={query}
-        placeholder="Type suburb name..."
+        type="text" value={query} placeholder="Type suburb name..."
+        className="pk-input"
+        style={error ? { borderBottomColor: "#e53e3e" } : undefined}
         onChange={e => { setQuery(e.target.value); onChange(""); setOpen(true) }}
         onFocus={() => setOpen(true)}
-        style={{
-          width: "100%", background: C.bg3,
-          border: `1px solid ${error ? C.red + "88" : accentColor ? accentColor + "55" : C.border}`,
-          borderRadius: 10, padding: "11px 14px",
-          color: C.text, fontSize: 14, fontFamily: FONT,
-          outline: "none", boxSizing: "border-box", transition: "border 0.15s",
-        }}
         onKeyDown={e => {
           if (e.key === "Escape") setOpen(false)
           if (e.key === "Enter" && filtered.length === 1) {
@@ -190,23 +166,20 @@ function SuburbAutocomplete({
       {open && filtered.length > 0 && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-          background: C.bg3, border: `1px solid ${C.border}`,
+          background: "#fff", border: "1px solid rgba(59,31,119,.12)",
           borderRadius: 10, zIndex: 200, overflow: "hidden",
-          boxShadow: "0 12px 32px rgba(0,0,0,0.5)", maxHeight: 220, overflowY: "auto",
+          boxShadow: "0 12px 32px rgba(59,31,119,0.12)", maxHeight: 220, overflowY: "auto",
         }}>
           {filtered.map(suburb => (
-            <div
-              key={suburb}
+            <div key={suburb}
               onClick={() => { onChange(suburb); setQuery(suburb); setOpen(false) }}
-              style={{
-                padding: "10px 14px", cursor: "pointer", fontSize: 14, color: C.text,
-                background: suburb === value ? C.bg2 : "transparent", transition: "background 0.1s",
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = C.bg2 }}
-              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = suburb === value ? C.bg2 : "transparent" }}
+              style={{ padding: "10px 14px", cursor: "pointer", fontSize: 14, color: "#2c2d30", transition: "background 0.1s",
+                background: suburb === value ? "rgba(59,31,119,.04)" : "transparent" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = "rgba(59,31,119,.04)" }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = suburb === value ? "rgba(59,31,119,.04)" : "transparent" }}
             >
               {suburb}
-              {suburb === value && <span style={{ float: "right", color: accentColor ?? C.blue, fontWeight: 700, fontSize: 12 }}>✓</span>}
+              {suburb === value && <span style={{ float: "right", color: "#3b1f77", fontWeight: 700, fontSize: 11 }}>✓</span>}
             </div>
           ))}
         </div>
@@ -215,12 +188,10 @@ function SuburbAutocomplete({
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Auth login panel ──────────────────────────────────────────────────────────
-
-function AuthLoginPanel({ onSuccess }: {
+// ── Auth login panel — Peake style ────────────────────────────────────────────
+function AuthLoginPanel({ onSuccess, mode }: {
   onSuccess: (agent: AgentProfile, theme: AgencyTheme, mode: DemoMode) => void
+  mode?: DemoMode
 }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -231,14 +202,14 @@ function AuthLoginPanel({ onSuccess }: {
   const [regError, setRegError] = useState("")
   const [regLoading, setRegLoading] = useState(false)
 
+  const btnBg = mode === "vendor" ? "#2c2d30" : "#3b1f77"
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(""); setLoginLoading(true)
     try {
       const res = await fetch(apiUrl("/api/auth/login"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ email, password }),
       })
       const data = await res.json() as { accessToken?: string; agent?: { name: string; agency: string; email: string; phone: string; suburb: string; tagline: string; role?: string }; error?: string }
@@ -262,9 +233,7 @@ function AuthLoginPanel({ onSuccess }: {
     setRegError(""); setRegLoading(true)
     try {
       const res = await fetch(apiUrl("/api/auth/register"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify(regForm),
       })
       const data = await res.json() as { accessToken?: string; agent?: { name: string; agency: string; email: string; phone: string; suburb: string; tagline: string }; error?: string }
@@ -282,25 +251,16 @@ function AuthLoginPanel({ onSuccess }: {
     } catch { setRegError("Network error — please try again"); setRegLoading(false) }
   }
 
-  const inputStyle = (id: string) => ({
-    id,
-    "aria-label": id,
-    width: "100%", background: C.bg3, border: `1px solid ${C.border}`,
-    borderRadius: 10, padding: "11px 14px", color: C.text, fontSize: 14,
-    fontFamily: FONT, outline: "none", boxSizing: "border-box" as const,
-  })
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Tab switcher */}
-      <div style={{ display: "flex", background: C.bg3, borderRadius: 10, padding: 3, border: `1px solid ${C.border}` }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid rgba(59,31,119,.10)", marginBottom: 4 }}>
         {(["login", "register"] as const).map(t => (
           <button key={t} type="button" onClick={() => setTab(t)} style={{
-            flex: 1, padding: "8px 0", borderRadius: 8, border: "none",
-            background: tab === t ? C.bg2 : "transparent",
-            color: tab === t ? C.text : C.faint,
-            fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
-            outline: tab === t ? `1px solid ${C.border}` : "none",
+            padding: "8px 16px", border: "none", background: "none",
+            color: tab === t ? "#3b1f77" : "rgba(59,31,119,.35)",
+            fontSize: 13, fontWeight: tab === t ? 700 : 500, cursor: "pointer", fontFamily: "inherit",
+            borderBottom: `2px solid ${tab === t ? "#3b1f77" : "transparent"}`,
+            marginBottom: -1, letterSpacing: "-.1px",
           }}>
             {t === "login" ? "Sign in" : "Create account"}
           </button>
@@ -308,31 +268,37 @@ function AuthLoginPanel({ onSuccess }: {
       </div>
 
       {tab === "login" ? (
-        <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required {...inputStyle("auth-email")} />
-          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required {...inputStyle("auth-password")} />
-          {error && <div role="alert" style={{ fontSize: 12, color: C.red }}>{error}</div>}
+        <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div><label className="pk-label">Email</label>
+            <input className="pk-input" type="email" placeholder="you@agency.com.au" value={email} onChange={e => setEmail(e.target.value)} required /></div>
+          <div><label className="pk-label">Password</label>
+            <input className="pk-input" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required /></div>
+          {error && <div role="alert" style={{ fontSize: 12, color: "#e53e3e" }}>{error}</div>}
           <button type="submit" disabled={loginLoading} style={{
-            padding: "12px", borderRadius: 10, border: "none",
-            background: "linear-gradient(135deg, #4fa3e0, #64d090)",
-            color: C.bg, fontSize: 14, fontWeight: 700, cursor: loginLoading ? "default" : "pointer", fontFamily: FONT,
+            padding: "13px", borderRadius: 20, border: "none",
+            background: btnBg, color: "#fff", fontSize: 14, fontWeight: 600,
+            cursor: loginLoading ? "default" : "pointer", fontFamily: "inherit", letterSpacing: "-.1px",
           }}>
             {loginLoading ? "Signing in…" : "Sign in →"}
           </button>
         </form>
       ) : (
-        <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <input type="text" placeholder="Full name" value={regForm.name} onChange={e => setRegForm(f => ({ ...f, name: e.target.value }))} required {...inputStyle("auth-name")} />
-          <input type="text" placeholder="Agency" value={regForm.agency} onChange={e => setRegForm(f => ({ ...f, agency: e.target.value }))} {...inputStyle("auth-agency")} />
-          <input type="email" placeholder="Email" value={regForm.email} onChange={e => setRegForm(f => ({ ...f, email: e.target.value }))} required {...inputStyle("auth-reg-email")} />
-          <input type="password" placeholder="Password (min 8 chars)" value={regForm.password} onChange={e => setRegForm(f => ({ ...f, password: e.target.value }))} required {...inputStyle("auth-reg-password")} />
-          {regError && <div role="alert" style={{ fontSize: 12, color: C.red }}>{regError}</div>}
+        <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div><label className="pk-label">Full name</label>
+            <input className="pk-input" type="text" placeholder="Cameron Knoll" value={regForm.name} onChange={e => setRegForm(f => ({ ...f, name: e.target.value }))} required /></div>
+          <div><label className="pk-label">Agency</label>
+            <input className="pk-input" type="text" placeholder="Peake Real Estate" value={regForm.agency} onChange={e => setRegForm(f => ({ ...f, agency: e.target.value }))} /></div>
+          <div><label className="pk-label">Email</label>
+            <input className="pk-input" type="email" placeholder="you@agency.com.au" value={regForm.email} onChange={e => setRegForm(f => ({ ...f, email: e.target.value }))} required /></div>
+          <div><label className="pk-label">Password</label>
+            <input className="pk-input" type="password" placeholder="Min 8 characters" value={regForm.password} onChange={e => setRegForm(f => ({ ...f, password: e.target.value }))} required /></div>
+          {regError && <div role="alert" style={{ fontSize: 12, color: "#e53e3e" }}>{regError}</div>}
           <button type="submit" disabled={regLoading} style={{
-            padding: "12px", borderRadius: 10, border: "none",
-            background: "linear-gradient(135deg, #4fa3e0, #64d090)",
-            color: C.bg, fontSize: 14, fontWeight: 700, cursor: regLoading ? "default" : "pointer", fontFamily: FONT,
+            padding: "13px", borderRadius: 20, border: "none",
+            background: btnBg, color: "#fff", fontSize: 14, fontWeight: 600,
+            cursor: regLoading ? "default" : "pointer", fontFamily: "inherit", letterSpacing: "-.1px",
           }}>
-            {regLoading ? "Creating account…" : "Create account & start →"}
+            {regLoading ? "Creating account…" : "Create account →"}
           </button>
         </form>
       )}
@@ -344,22 +310,10 @@ function AuthLoginPanel({ onSuccess }: {
 
 interface Props {
   onLogin: (agent: AgentProfile, theme: AgencyTheme, mode: DemoMode) => void
-  productMode?: DemoMode | null  // pre-selected mode from URL param (?product=buyeros/vendoros)
+  productMode?: DemoMode | null
 }
 
 type Phase = "form" | "welcoming" | "done"
-
-// Product branding helpers
-function getProductName(pm: DemoMode | null | undefined): string {
-  if (pm === "buyer") return "BuyerOS"
-  if (pm === "vendor") return "VendorOS"
-  return "PropOS"
-}
-function getProductTagline(pm: DemoMode | null | undefined): string {
-  if (pm === "buyer") return "Buyer outreach intelligence · by AddVantage"
-  if (pm === "vendor") return "Vendor prospecting intelligence · by AddVantage"
-  return "by AddVantage · Enter your details to begin"
-}
 
 export default function AgentLogin({ onLogin, productMode }: Props) {
   const bp = useBreakpoint()
@@ -367,13 +321,22 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
   const [phase, setPhase] = useState<Phase>("form")
   const [mode, setMode] = useState<DemoMode>(productMode ?? "buyer")
   const [showAuth, setShowAuth] = useState(false)
-  const [welcomeName, setWelcomeName] = useState("")  // set by both guest and auth paths
+  const [welcomeName, setWelcomeName] = useState("")
   const [form, setForm] = useState({
     firstName: "", lastName: "", agency: "", suburb: "", email: "", phone: "",
   })
   const [errors, setErrors] = useState<Partial<typeof form>>({})
 
-  const theme = form.agency ? getAgencyTheme(form.agency) : null
+  // Auto-link agency + suburb from known agent names
+  useEffect(() => {
+    const fn = form.firstName.toLowerCase().trim()
+    const ln = form.lastName.toLowerCase().trim()
+    if (fn.startsWith("cam") && ln.includes("knoll")) {
+      setForm(f => ({ ...f, agency: f.agency || "Peake", suburb: f.suburb || "Berwick" }))
+    } else if ((fn.includes("manpreet") || (fn.includes("manny") && ln.includes("singh"))) && ln.includes("singh")) {
+      setForm(f => ({ ...f, agency: f.agency || "Barry Plant Berwick", suburb: f.suburb || "Berwick" }))
+    }
+  }, [form.firstName, form.lastName])
 
   const validate = () => {
     const e: Partial<typeof form> = {}
@@ -386,7 +349,6 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
     return Object.keys(e).length === 0
   }
 
-  // Normalise Australian mobile to +61 format
   const normalisePhone = (p: string): string => {
     const digits = p.replace(/\D/g, "")
     if (digits.startsWith("61") && digits.length === 11) return `+${digits}`
@@ -411,16 +373,13 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
       suburb:  form.suburb,
       tagline: `${form.suburb} specialist.`,
       voiceProfile: {
-        greeting: "Hi", closing: "Cheers",
-        lengthStyle: "short", formalityScore: 2,
-        aussieIndex: 2, specificity: 3,
-        emojiUsage: "occasional", examplesCount: 0,
+        greeting: "Hi", closing: "Cheers", lengthStyle: "short", formalityScore: 2,
+        aussieIndex: 2, specificity: 3, emojiUsage: "occasional", examplesCount: 0,
         confidence: 0, detectedTraits: [],
       },
       trainingCorpus: [],
     }
 
-    // Offline demo fallbacks — used when no sheet is connected or sheet lookup fails
     if (isCamKnoll(agent)) {
       if (!form.phone) agent.phone = "0428 762 148"
       if (!form.email) agent.email = "cameronk@peakere.com.au"
@@ -435,8 +394,6 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
       agent.voiceProfile = MANPREET_DEFAULT_AGENT.voiceProfile
     }
 
-    // Sheet-first: if sheet is connected, overwrite phone/email/tagline with live data
-    // This ensures nothing is hardcoded when a real agent is using their own sheet
     if (sheetsConnected()) {
       readAgentProfileFromSheet(agent.name, agent.agency).then(profile => {
         if (profile) {
@@ -445,346 +402,329 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
           if (profile.tagline) agent.tagline = profile.tagline
           if (profile.suburb)  agent.suburb  = profile.suburb
         }
-      }).catch(() => { /* fail silently — fallback already set */ })
+      }).catch(() => {})
     }
 
     setTimeout(() => onLogin(agent, t, mode), 2800)
   }
 
-  const field = (
-    key: keyof typeof form,
-    label: string,
-    placeholder: string,
-    type = "text",
-    flex?: string
-  ) => (
-    <div style={{ flex: flex ?? "1", display: "flex", flexDirection: "column", gap: 6 }}>
-      <label htmlFor={`field-${key}`} style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>
-        {label}{errors[key] && <span id={`field-${key}-error`} role="alert" style={{ color: C.red, marginLeft: 6, fontSize: 10 }}>{errors[key]}</span>}
+  // Left panel background — buyer = Peake purple, vendor = charcoal
+  const leftBg = mode === "buyer" ? "#2c1b59" : "#2c2d30"
+  const modeLabel = mode === "buyer" ? "BuyerOS" : "VendorOS"
+  const modeSubtitle = mode === "buyer"
+    ? "Re-engage open home leads and match them to new listings automatically."
+    : "Turn recent sold results into new vendor listing appointments."
+
+  // Form field — Peake underline style
+  const field = (key: keyof typeof form, label: string, placeholder: string, type = "text") => (
+    <div style={{ flex: 1 }}>
+      <label className="pk-label" htmlFor={`field-${key}`}>
+        {label}
+        {errors[key] && <span role="alert" style={{ color: "#e53e3e", marginLeft: 6, fontSize: 9 }}>{errors[key]}</span>}
       </label>
       <input
-        id={`field-${key}`}
-        type={type}
-        value={form[key]}
-        placeholder={placeholder}
+        id={`field-${key}`} type={type} value={form[key]} placeholder={placeholder}
+        className="pk-input"
+        style={errors[key] ? { borderBottomColor: "#e53e3e" } : undefined}
         aria-invalid={!!errors[key]}
-        aria-describedby={errors[key] ? `field-${key}-error` : undefined}
         onChange={e => { setForm(f => ({ ...f, [key]: e.target.value })); setErrors(er => ({ ...er, [key]: "" })) }}
-        style={{
-          background: C.bg3,
-          border: `1px solid ${errors[key] ? C.red + "88" : C.border}`,
-          borderRadius: 10, padding: "11px 14px",
-          color: C.text, fontSize: 14, fontFamily: FONT,
-          outline: "none", transition: "border 0.15s",
-        }}
-        onFocus={e => { e.currentTarget.style.borderColor = theme?.primary ?? C.blue }}
-        onBlur={e => { e.currentTarget.style.borderColor = errors[key] ? C.red + "88" : C.border }}
       />
     </div>
   )
 
-  return (
-    <div style={{
-      minHeight: "100vh", background: C.bg,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontFamily: FONT, padding: "24px 16px",
-    }}>
-      {/* ── Form phase ─────────────────────────────────────────────────────── */}
-      <AnimatePresence mode="wait">
-        {phase === "form" && (
-          <motion.div key="form"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12, transition: { duration: 0.35 } }}
-            style={{ width: "100%", maxWidth: 480 }}
-          >
-            {/* Logo + branding */}
-            <div style={{ textAlign: "center", marginBottom: 36 }}>
-              <motion.div
-                animate={theme ? { background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})` } : {}}
-                transition={{ duration: 0.5 }}
-                style={{
-                  width: 56, height: 56, borderRadius: 16,
-                  background: "linear-gradient(135deg, rgb(166,218,255), rgb(100,208,144))",
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 18, fontWeight: 800, color: C.bg, letterSpacing: -1,
-                  marginBottom: 16, boxShadow: theme
-                    ? `0 0 32px ${theme.glow}, 0 8px 24px rgba(0,0,0,0.4)`
-                    : "0 8px 24px rgba(0,0,0,0.4)",
-                  transition: "box-shadow 0.5s",
-                }}
-              >AV</motion.div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: C.text, letterSpacing: -0.5, marginBottom: 4 }}>
-                {getProductName(productMode)}
-              </div>
-              <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
-                {getProductTagline(productMode)}
-              </div>
-              {/* Setup time + social proof strip */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0, flexWrap: "wrap" }}>
-                {[
-                  { value: "<10 min", label: "setup" },
-                  { value: "No",      label: "CRM migration" },
-                  { value: "Free",    label: "to try" },
-                ].map((stat, i, arr) => (
-                  <div key={stat.label} style={{ display: "flex", alignItems: "center" }}>
-                    <div style={{ padding: "4px 14px", textAlign: "center" }}>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: theme ? theme.primary : C.blue, letterSpacing: -0.3 }}>
-                        {stat.value}
-                      </div>
-                      <div style={{ fontSize: 10, color: C.faint, marginTop: 1 }}>{stat.label}</div>
-                    </div>
-                    {i < arr.length - 1 && (
-                      <div style={{ width: 1, height: 24, background: C.border, flexShrink: 0 }} />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Form card */}
-            <div style={{
-              background: C.bg2, borderRadius: 18,
-              border: `1px solid ${theme ? theme.primary + "22" : C.border}`,
-              padding: "28px 24px",
-              boxShadow: theme ? `0 0 40px ${theme.glow}` : undefined,
-              transition: "border 0.4s, box-shadow 0.4s",
-            }}>
-              {/* Mode toggle — hidden when productMode is pre-set via URL */}
-              <div style={{ marginBottom: 24, display: productMode ? "none" : "block" }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.5, marginBottom: 8 }}>
-                  What do you want to do today?
-                </div>
-                <div style={{
-                  display: "flex", background: C.bg3,
-                  borderRadius: 10, padding: 3, gap: 0,
-                  border: `1px solid ${C.border}`,
-                }}>
-                  {(["buyer", "vendor"] as DemoMode[]).map(m => {
-                    const active = mode === m
-                    const label = m === "buyer" ? "Buyer Outreach" : "Vendor Prospecting"
-                    const desc  = m === "buyer" ? "Re-engage open home leads for new listings" : "Turn sold results into new vendor listings"
-                    return (
-                      <button key={m} onClick={() => setMode(m)} type="button" style={{
-                        flex: 1, padding: "10px 12px", borderRadius: 8, border: "none",
-                        cursor: "pointer", fontFamily: FONT, textAlign: "left",
-                        background: active
-                          ? (theme ? `linear-gradient(135deg, ${theme.gradient[0]}22, ${theme.gradient[1]}18)` : "rgba(166,218,255,0.1)")
-                          : "transparent",
-                        outline: active ? `1px solid ${theme?.primary ?? C.blue}44` : "none",
-                        transition: "all 0.15s",
-                      }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: active ? "#ffffff" : C.muted, marginBottom: 2 }}>
-                          {label}
-                        </div>
-                        <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.3 }}>{desc}</div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Sign in with account */}
-              {showAuth ? (
-                <div style={{ marginBottom: 20 }}>
-                  <AuthLoginPanel onSuccess={(agent, t, m) => {
-                    setWelcomeName(agent.name.split(" ")[0])
-                    setPhase("welcoming")
-                    setTimeout(() => onLogin(agent, t, m), 2800)
-                  }} />
-                  <button type="button" onClick={() => setShowAuth(false)} style={{
-                    background: "none", border: "none", color: C.faint,
-                    fontSize: 11, cursor: "pointer", marginTop: 10, fontFamily: FONT,
-                  }}>
-                    ← Continue as guest instead
-                  </button>
-                  <div style={{ height: 1, background: C.border, margin: "16px 0" }} />
-                </div>
-              ) : (
-                <div style={{ marginBottom: 20 }}>
-                  <button type="button" onClick={() => setShowAuth(true)} style={{
-                    width: "100%", padding: "10px 14px", borderRadius: 10,
-                    border: `1px solid ${C.border}`, background: C.bg3,
-                    color: C.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                  }}>
-                    <span>Sign in with your PropOS account</span>
-                    <span style={{ color: C.faint, fontSize: 11 }}>→</span>
-                  </button>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, marginBottom: 14 }}>
-                    <div style={{ flex: 1, height: 1, background: C.border }} />
-                    <span style={{ fontSize: 11, color: C.faint }}>or continue as guest</span>
-                    <div style={{ flex: 1, height: 1, background: C.border }} />
-                  </div>
-                </div>
-              )}
-
-              {!showAuth && (<>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 20 }}>
-                Agent Details
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {/* Name row — stacks on mobile */}
-                <div style={{ display: "flex", gap: 12, flexDirection: isMobile ? "column" : "row" }}>
-                  {field("firstName", "First Name", "Sarah")}
-                  {field("lastName",  "Last Name",  "Chen")}
-                </div>
-
-                {/* Agency */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>
-                    Agency{errors.agency && <span style={{ color: C.red, marginLeft: 6, fontSize: 10 }}>{errors.agency}</span>}
-                  </label>
-                  <AgencyDropdown
-                    value={form.agency}
-                    onChange={v => { setForm(f => ({ ...f, agency: v })); setErrors(er => ({ ...er, agency: "" })) }}
-                    error={errors.agency}
-                    accentColor={theme?.primary}
-                  />
-                </div>
-
-                {/* Suburb */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.5 }}>
-                    Suburb Specialty{errors.suburb && <span style={{ color: C.red, marginLeft: 6, fontSize: 10 }}>{errors.suburb}</span>}
-                  </label>
-                  <SuburbAutocomplete
-                    value={form.suburb}
-                    onChange={v => { setForm(f => ({ ...f, suburb: v })); setErrors(er => ({ ...er, suburb: "" })) }}
-                    error={errors.suburb}
-                    accentColor={theme?.primary}
-                  />
-                </div>
-
-                {/* Email + Phone — stacks on mobile */}
-                <div style={{ display: "flex", gap: 12, flexDirection: isMobile ? "column" : "row" }}>
-                  {field("email", "Email (optional)", "you@agency.com.au", "email")}
-                  {field("phone", "Mobile (optional)", "04xx xxx xxx", "tel")}
-                </div>
-
-                {/* Submit */}
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleSubmit}
-                  style={{
-                    width: "100%", padding: "14px",
-                    borderRadius: 12, border: "none",
-                    background: theme
-                      ? `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
-                      : "linear-gradient(135deg, rgb(166,218,255), rgb(100,208,144))",
-                    color: theme && isDarkHex(theme.gradient[0]) ? "#fff" : C.bg, fontSize: 15, fontWeight: 700,
-                    cursor: "pointer", fontFamily: FONT,
-                    marginTop: 4, letterSpacing: -0.3,
-                    boxShadow: theme ? `0 4px 20px ${theme.glow}` : undefined,
-                    transition: "background 0.4s, box-shadow 0.4s",
-                  }}
-                >
-                  Start Session →
-                </motion.button>
-              </div>
-              </>)}
-            </div>
-
-            <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: C.faint }}>
-              Your data stays on-device. Nothing is stored or shared.
-            </div>
-            <div style={{ textAlign: "center", marginTop: 8, fontSize: 10, color: C.faint, opacity: 0.5 }}>
-              v1.5.0
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── Welcome animation phase ──────────────────────────────────────── */}
-        {phase === "welcoming" && (
+  // ── Welcoming animation — Peake purple backdrop ──────────────────────────────
+  if (phase === "welcoming") {
+    const t = form.agency ? getAgencyTheme(form.agency) : null
+    return (
+      <div style={{
+        minHeight: "100vh", background: leftBg,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: FONT,
+      }}>
+        <AnimatePresence>
           <motion.div key="welcome"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{
-              textAlign: "center", display: "flex",
-              flexDirection: "column", alignItems: "center", gap: 0,
-            }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}
           >
-            {/* AV logo pulse */}
             <motion.div
               initial={{ scale: 0.7, opacity: 0 }}
               animate={{ scale: [0.7, 1.08, 1], opacity: 1 }}
               transition={{ duration: 0.55, times: [0, 0.6, 1] }}
               style={{
                 width: 72, height: 72, borderRadius: 20,
-                background: theme
-                  ? `linear-gradient(135deg, ${theme!.gradient[0]}, ${theme!.gradient[1]})`
-                  : "linear-gradient(135deg, rgb(166,218,255), rgb(100,208,144))",
+                background: t
+                  ? `linear-gradient(135deg, ${t.gradient[0]}, ${t.gradient[1]})`
+                  : "linear-gradient(135deg, #553990, #3b1f77)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 22, fontWeight: 800, color: C.bg, letterSpacing: -0.5,
+                fontSize: 22, fontWeight: 800, color: "#fff", letterSpacing: -0.5,
                 marginBottom: 24,
-                boxShadow: theme
-                  ? `0 0 60px ${theme!.primary}55, 0 16px 40px rgba(0,0,0,0.5)`
-                  : "0 16px 40px rgba(0,0,0,0.5)",
+                boxShadow: "0 0 60px rgba(59,31,119,.55), 0 16px 40px rgba(0,0,0,0.5)",
               }}
-            >{theme?.logo ?? "AV"}</motion.div>
+            >{t?.logo ?? "PK"}</motion.div>
 
-            {/* "Welcome back, FirstName" — all on one line, simultaneous */}
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.35, duration: 0.5 }}
-              style={{
-                display: "flex", alignItems: "baseline", gap: 10,
-                flexWrap: "wrap", justifyContent: "center", marginBottom: 10,
-              }}
+              style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", justifyContent: "center", marginBottom: 10 }}
             >
-              <span style={{ fontSize: 44, color: C.muted, fontWeight: 300, letterSpacing: -1.5, lineHeight: 1 }}>
-                Welcome back,
-              </span>
-              <span style={{
-                fontSize: 44, fontWeight: 800, letterSpacing: -1.5,
-                color: theme?.primary ?? C.blue,
-                filter: theme ? `drop-shadow(0 0 20px ${theme!.glow})` : undefined,
-                lineHeight: 1,
-              }}>
-                {welcomeName}
-              </span>
+              <span style={{ fontSize: 44, color: "rgba(255,255,255,.45)", fontWeight: 300, letterSpacing: -1.5, lineHeight: 1 }}>Welcome back,</span>
+              <span style={{ fontSize: 44, fontWeight: 800, letterSpacing: -1.5, color: "#b6c2ab", lineHeight: 1 }}>{welcomeName}</span>
             </motion.div>
 
-            {/* Agency name */}
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               transition={{ delay: 0.55, duration: 0.45 }}
-              style={{ fontSize: 13, color: C.muted, fontWeight: 500, marginBottom: 32 }}
+              style={{ fontSize: 13, color: "rgba(255,255,255,.42)", fontWeight: 500, marginBottom: 32 }}
             >
               {[form.agency, form.suburb].filter(Boolean).join(" · ")}
             </motion.div>
 
-            {/* Loading bar */}
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               transition={{ delay: 1.4 }}
-              style={{
-                width: 200, height: 2, background: C.bg3,
-                borderRadius: 2, overflow: "hidden",
-              }}
+              style={{ width: 200, height: 2, background: "rgba(255,255,255,.10)", borderRadius: 2, overflow: "hidden" }}
             >
               <motion.div
-                initial={{ width: "0%" }}
-                animate={{ width: "100%" }}
+                initial={{ width: "0%" }} animate={{ width: "100%" }}
                 transition={{ delay: 1.5, duration: 1.2, ease: "easeInOut" }}
-                style={{
-                  height: "100%",
-                  background: theme
-                    ? `linear-gradient(90deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
-                    : `linear-gradient(90deg, ${C.blue}, ${C.green})`,
-                  borderRadius: 2,
-                }}
+                style={{ height: "100%", background: "linear-gradient(90deg, #553990, #b6c2ab)", borderRadius: 2 }}
               />
             </motion.div>
           </motion.div>
+        </AnimatePresence>
+      </div>
+    )
+  }
+
+  // ── Form phase — Peake split panel ────────────────────────────────────────────
+  return (
+    <div style={{
+      minHeight: "100vh", display: "flex",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      flexDirection: isMobile ? "column" : "row",
+    }}>
+      {/* ── Left panel: Peake brand ──────────────────────────────────────────── */}
+      {!isMobile ? (
+        <motion.div
+          initial={{ background: leftBg }}
+          animate={{ background: leftBg }}
+          transition={{ duration: 0.4 }}
+          style={{
+            width: "40%", minHeight: "100vh",
+            display: "flex", flexDirection: "column",
+            padding: "48px 40px", position: "relative", overflow: "hidden",
+          }}
+        >
+          {/* Logo + mode badge */}
+          <div style={{ marginBottom: "auto" }}>
+            <PeakeLogo height={20} color="#fff" />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
+              <span style={{ fontSize: 9, color: "rgba(255,255,255,.3)", fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase" as const }}>PropOS</span>
+              <div style={{ width: 1, height: 10, background: "rgba(255,255,255,.18)" }} />
+              <span style={{ fontSize: 9, fontWeight: 700, color: "#b6c2ab", letterSpacing: ".04em", background: "rgba(182,194,171,.12)", padding: "2px 8px", borderRadius: 10 }}>
+                {modeLabel}
+              </span>
+            </div>
+          </div>
+
+          {/* Main copy — vertically centred */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", paddingBottom: 32 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
+              <div className="pk-pulse" style={{ width: 8, height: 8, borderRadius: "50%", background: "#b6c2ab", flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,.52)", letterSpacing: ".02em" }}>
+                Cameron Knoll · Peake Real Estate · Berwick
+              </span>
+            </div>
+
+            <h1 style={{
+              fontSize: 36, fontWeight: 800, color: "#fff",
+              letterSpacing: "-1px", lineHeight: 1.1, margin: "0 0 16px",
+            }}>
+              Your partner<br />in property<br />success.
+            </h1>
+
+            <p style={{
+              fontSize: 14, color: "rgba(255,255,255,.48)", lineHeight: 1.65,
+              maxWidth: 264, margin: "0 0 40px", letterSpacing: "-.1px",
+            }}>
+              {modeSubtitle}
+            </p>
+
+          </div>
+
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,.22)", letterSpacing: ".06em", textTransform: "uppercase" }}>
+            © 2026 Peake Real Estate
+          </div>
+
+          {/* Decorative rings */}
+          <div style={{ position: "absolute", right: -80, top: "50%", transform: "translateY(-50%)", width: 280, height: 280, borderRadius: "50%", border: "1px solid rgba(255,255,255,.05)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", right: -140, top: "50%", transform: "translateY(-50%)", width: 420, height: 420, borderRadius: "50%", border: "1px solid rgba(255,255,255,.03)", pointerEvents: "none" }} />
+        </motion.div>
+      ) : (
+        /* Mobile: header strip */
+        <motion.div
+          initial={{ background: leftBg }}
+          animate={{ background: leftBg }}
+          transition={{ duration: 0.4 }}
+          style={{ padding: "18px 24px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <PeakeLogo height={14} color="#fff" />
+            <div style={{ width: 1, height: 12, background: "rgba(255,255,255,.2)" }} />
+            <span style={{ fontSize: 9, color: "rgba(255,255,255,.5)", fontWeight: 700, letterSpacing: ".12em" }}>{modeLabel}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div className="pk-pulse" style={{ width: 6, height: 6, borderRadius: "50%", background: "#b6c2ab" }} />
+            <span style={{ fontSize: 9, color: "rgba(255,255,255,.45)", letterSpacing: ".04em" }}>Active</span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── Right panel: form ────────────────────────────────────────────────── */}
+      <div style={{
+        flex: 1, background: "#fff",
+        display: "flex", flexDirection: "column", justifyContent: "center",
+        padding: isMobile ? "28px 24px 40px" : "48px 56px",
+        overflowY: "auto", minHeight: isMobile ? undefined : "100vh",
+      }}>
+        {/* Eyebrow */}
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", color: "rgba(59,31,119,.35)", textTransform: "uppercase", marginBottom: 8 }}>
+          Welcome back
+        </div>
+
+        {/* Heading + mode toggle */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 28 }}>
+          <h2 style={{ fontSize: isMobile ? 22 : 26, fontWeight: 800, color: "#2c2d30", letterSpacing: "-1px", margin: 0, lineHeight: 1.1 }}>
+            Sign in to {modeLabel}
+          </h2>
+
+          {!productMode && (
+            <div style={{ display: "flex", background: "#f7f7f8", borderRadius: 20, padding: 3, border: "1px solid rgba(59,31,119,.10)", flexShrink: 0 }}>
+              {(["buyer", "vendor"] as DemoMode[]).map(m => (
+                <button key={m} type="button" onClick={() => setMode(m)} style={{
+                  padding: "5px 14px", borderRadius: 20, border: "none",
+                  background: mode === m ? (m === "buyer" ? "#2c1b59" : "#2c2d30") : "transparent",
+                  color: mode === m ? "#fff" : "rgba(59,31,119,.4)",
+                  fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  letterSpacing: "-.1px", transition: "all .2s",
+                }}>
+                  {m === "buyer" ? "BuyerOS" : "VendorOS"}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Quick access — instant login */}
+        <button type="button" onClick={() => {
+          const agent: AgentProfile = {
+            name: "Cameron Knoll", agency: "Peake",
+            email: "cameronk@peakere.com.au", phone: "0428 762 148",
+            suburb: "Berwick", tagline: "Berwick specialist.",
+            voiceProfile: { greeting: "Hi", closing: "Cheers", lengthStyle: "short", formalityScore: 2, aussieIndex: 2, specificity: 3, emojiUsage: "occasional", examplesCount: 0, confidence: 0, detectedTraits: [] },
+            trainingCorpus: [],
+          }
+          onLogin(agent, getAgencyTheme("Peake"), mode)
+        }} style={{
+          width: "100%", padding: "14px 18px", borderRadius: 20, border: "none",
+          background: "#3b1f77", color: "#fff",
+          fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          letterSpacing: "-.1px", marginBottom: 20,
+        }}>
+          <span>Cameron Knoll · Peake · Berwick</span>
+          <span style={{ opacity: 0.55, fontSize: 12 }}>Quick access →</span>
+        </button>
+
+        {/* Auth section */}
+        {showAuth ? (
+          <div style={{ marginBottom: 24 }}>
+            <AuthLoginPanel mode={mode} onSuccess={(agent, t, m) => {
+              setWelcomeName(agent.name.split(" ")[0])
+              setPhase("welcoming")
+              setTimeout(() => onLogin(agent, t, m), 2800)
+            }} />
+          </div>
+        ) : (
+          <div style={{ marginBottom: 20 }}>
+            <button type="button" onClick={() => setShowAuth(true)} style={{
+              width: "100%", padding: "11px 16px", borderRadius: 20,
+              border: "1px solid rgba(59,31,119,.13)", background: "#f7f7f8",
+              color: "#2c2d30", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+              display: "flex", alignItems: "center", justifyContent: "space-between", letterSpacing: "-.1px",
+            }}>
+              <span>Sign in with your PropOS account</span>
+              <span style={{ color: "rgba(59,31,119,.3)", fontSize: 11 }}>→</span>
+            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16, marginBottom: 16 }}>
+              <div style={{ flex: 1, height: 1, background: "rgba(59,31,119,.09)" }} />
+              <span style={{ fontSize: 11, color: "rgba(59,31,119,.32)" }}>or continue as guest</span>
+              <div style={{ flex: 1, height: 1, background: "rgba(59,31,119,.09)" }} />
+            </div>
+          </div>
         )}
-      </AnimatePresence>
+
+        {!showAuth && (<>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", color: "rgba(59,31,119,.35)", textTransform: "uppercase", marginBottom: 20 }}>
+            Agent Details
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div style={{ display: "flex", gap: 20, flexDirection: isMobile ? "column" : "row" }}>
+              {field("firstName", "First name", "Cameron")}
+              {field("lastName",  "Last name",  "Knoll")}
+            </div>
+
+            <div>
+              <label className="pk-label">
+                Agency{errors.agency && <span role="alert" style={{ color: "#e53e3e", marginLeft: 6, fontSize: 9 }}>{errors.agency}</span>}
+              </label>
+              <AgencyDropdown
+                value={form.agency}
+                onChange={v => { setForm(f => ({ ...f, agency: v })); setErrors(er => ({ ...er, agency: "" })) }}
+                error={errors.agency}
+              />
+            </div>
+
+            <div>
+              <label className="pk-label">
+                Suburb Specialty{errors.suburb && <span role="alert" style={{ color: "#e53e3e", marginLeft: 6, fontSize: 9 }}>{errors.suburb}</span>}
+              </label>
+              <SuburbAutocomplete
+                value={form.suburb}
+                onChange={v => { setForm(f => ({ ...f, suburb: v })); setErrors(er => ({ ...er, suburb: "" })) }}
+                error={errors.suburb}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 20, flexDirection: isMobile ? "column" : "row" }}>
+              {field("email", "Email (optional)", "you@agency.com.au", "email")}
+              {field("phone", "Mobile (optional)", "04xx xxx xxx", "tel")}
+            </div>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              onClick={handleSubmit}
+              style={{
+                width: "100%", padding: "14px", borderRadius: 20, border: "none",
+                background: mode === "buyer" ? "#3b1f77" : "#2c2d30",
+                color: "#fff", fontSize: 14, fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit", letterSpacing: "-.1px", marginTop: 4,
+              }}
+            >
+              Start Session →
+            </motion.button>
+          </div>
+        </>)}
+
+        {/* Footer */}
+        <div style={{ marginTop: 32, display: "flex", alignItems: "center", gap: 7 }}>
+          <div className="pk-pulse-green" style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
+          <span style={{ fontSize: 10, color: "rgba(59,31,119,.3)", letterSpacing: ".04em" }}>
+            Powered by AddVantageAI
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
