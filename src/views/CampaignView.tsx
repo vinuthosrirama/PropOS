@@ -49,7 +49,6 @@ const STATUS_META: Record<string, { label: string; color: string; dim: string }>
   won:            { label: "Won",            color: C.green,  dim: C.greenDim },
   not_interested: { label: "Not interested", color: C.red,    dim: C.redDim },
 }
-const FUNNEL_ORDER = ["new", "contacted", "replied", "demo_booked", "won"] as const
 
 function statusMeta(status: string) {
   return STATUS_META[status] ?? { label: status, color: C.muted, dim: "rgba(213,219,230,0.08)" }
@@ -105,15 +104,16 @@ export default function CampaignView() {
   const bp = useBreakpoint()
   const isDesktop = bp === "desktop"
 
-  const [tab, setTab]             = useState<Tab>("pipeline")
-  const [targets, setTargets]     = useState<Target[]>([])
-  const [brief, setBrief]         = useState<Brief | null>(null)
-  const [drafts, setDrafts]       = useState<Draft[]>([])
-  const [isDemo, setIsDemo]       = useState(false)
-  const [loading, setLoading]     = useState(true)
-  const [selectedId, setSelected] = useState<number | null>(null)
-  const [thread, setThread]       = useState<ThreadMessage[]>([])
-  const [actionMsg, setActionMsg] = useState<string | null>(null)
+  const [tab, setTab]                   = useState<Tab>("pipeline")
+  const [targets, setTargets]           = useState<Target[]>([])
+  const [brief, setBrief]               = useState<Brief | null>(null)
+  const [drafts, setDrafts]             = useState<Draft[]>([])
+  const [isDemo, setIsDemo]             = useState(false)
+  const [loading, setLoading]           = useState(true)
+  const [selectedId, setSelected]       = useState<number | null>(null)
+  const [thread, setThread]             = useState<ThreadMessage[]>([])
+  const [actionMsg, setActionMsg]       = useState<string | null>(null)
+  const [contactFilter, setContactFilter] = useState<"all" | "replied" | "contacted" | "new">("all")
 
   // Meta-test / add-lead form state
   const [leadName, setLeadName]     = useState("")
@@ -321,97 +321,112 @@ export default function CampaignView() {
         <div style={{ ...card, textAlign: "center", color: C.muted, fontSize: 13 }}>Loading campaign...</div>
       ) : (
         <>
-          {/* ─── PIPELINE TAB ─────────────────────────────────────────────── */}
-          {tab === "pipeline" && (
-            <>
-              {/* Funnel strip */}
-              <div style={{ display: "grid", gridTemplateColumns: `repeat(${isDesktop ? 6 : 3}, 1fr)`, gap: 10, marginBottom: 18 }}>
-                {FUNNEL_ORDER.map(s => {
-                  const m = statusMeta(s)
-                  return (
-                    <div key={s} style={{ ...card, padding: 14 }}>
-                      <div style={{ fontSize: 24, fontWeight: 800, color: m.color, lineHeight: 1 }}>{counts[s] ?? 0}</div>
-                      <div style={{ fontSize: 10.5, color: C.faint, marginTop: 5, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 }}>{m.label}</div>
-                    </div>
-                  )
-                })}
-                <div style={{ ...card, padding: 14 }}>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: C.green, lineHeight: 1 }}>{replyRate}%</div>
-                  <div style={{ fontSize: 10.5, color: C.faint, marginTop: 5, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 }}>Reply rate</div>
+          {/* ─── PIPELINE TAB — split cockpit ────────────────────────────── */}
+          {tab === "pipeline" && (() => {
+            const initials = (name: string) => name.split(" ").map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase()
+            const filteredTargets = contactFilter === "all" ? targets
+              : contactFilter === "replied" ? targets.filter(t => ["replied", "demo_booked", "won"].includes(t.status))
+              : targets.filter(t => t.status === contactFilter)
+            const selectedDraft = selected
+              ? drafts.find(d => selected.reply_body && d.inbound_body === selected.reply_body) ?? null
+              : null
+            const FILTERS: { id: typeof contactFilter; label: string; count: number }[] = [
+              { id: "all",      label: "All",       count: targets.length },
+              { id: "replied",  label: "Replied",   count: targets.filter(t => ["replied","demo_booked","won"].includes(t.status)).length },
+              { id: "contacted",label: "Contacted", count: counts.contacted ?? 0 },
+              { id: "new",      label: "New",       count: counts.new ?? 0 },
+            ]
+            return (
+              <>
+                {/* Filter chips */}
+                <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+                  {FILTERS.map(f => (
+                    <button key={f.id} onClick={() => setContactFilter(f.id)} style={{
+                      fontSize: 12, fontWeight: contactFilter === f.id ? 700 : 500,
+                      color: contactFilter === f.id ? "#fff" : C.muted,
+                      background: contactFilter === f.id ? "var(--accent)" : "transparent",
+                      border: `1px solid ${contactFilter === f.id ? "var(--accent)" : C.border}`,
+                      borderRadius: 20, padding: "5px 14px", cursor: "pointer", fontFamily: FONT,
+                      transition: "all 0.15s",
+                    }}>
+                      {f.label} {f.count > 0 ? `(${f.count})` : ""}
+                    </button>
+                  ))}
+                  {actionMsg && (
+                    <span style={{ fontSize: 12, color: C.green, alignSelf: "center", marginLeft: 8 }}>{actionMsg}</span>
+                  )}
                 </div>
-              </div>
 
-              {/* Pending drafts */}
-              {drafts.length > 0 && (
-                <div style={{ ...card, marginBottom: 18, borderColor: `${C.orange}40` }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.orange, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    {drafts.length} AI {drafts.length === 1 ? "draft" : "drafts"} awaiting your approval
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {drafts.map(d => (
-                      <div key={d.id} style={{ background: C.bg3, borderRadius: 12, padding: 14 }}>
-                        <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>They said: "{d.inbound_body}"</div>
-                        <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.5, marginBottom: 12 }}>{d.draft_body}</div>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button onClick={() => void draftAction(d.id, "approve-draft")} style={{ fontSize: 11.5, fontWeight: 700, color: C.bg, background: C.green, border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontFamily: FONT }}>
-                            Approve and send
+                {/* Split cockpit */}
+                <div style={{ display: "grid", gridTemplateColumns: isDesktop ? "1fr 1.6fr" : "1fr", gap: 12 }}>
+
+                  {/* Left — contact list */}
+                  <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+                    {filteredTargets.length === 0 ? (
+                      <div style={{ padding: 20, fontSize: 12.5, color: C.muted, textAlign: "center" }}>No contacts in this filter.</div>
+                    ) : (
+                      filteredTargets.map(t => {
+                        const m = statusMeta(t.status)
+                        const active = t.id === selectedId
+                        return (
+                          <button key={t.id} onClick={() => void openThread(t)} style={{
+                            width: "100%", textAlign: "left", background: active ? `var(--accent)18` : "transparent",
+                            border: "none", borderBottom: `1px solid ${C.border}`,
+                            padding: "12px 14px", cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", gap: 10,
+                          }}>
+                            <div style={{
+                              width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                              background: active ? "var(--accent)" : `var(--accent)18`,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              fontSize: 11, fontWeight: 700, color: active ? "#fff" : "var(--accent)",
+                            }}>
+                              {initials(t.name)}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
+                                <span style={{ fontSize: 9.5, fontWeight: 700, color: m.color, background: m.dim, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>{m.label}</span>
+                              </div>
+                              <div style={{ fontSize: 11, color: C.faint, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {t.reply_body ? `"${t.reply_body}"` : (t.agency + (t.last_contact_date ? ` · ${timeAgo(t.last_contact_date)}` : ""))}
+                              </div>
+                            </div>
                           </button>
-                          <button onClick={() => void draftAction(d.id, "reject-draft")} style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontFamily: FONT }}>
-                            Reject
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                        )
+                      })
+                    )}
                   </div>
-                </div>
-              )}
 
-              {actionMsg && <div style={{ fontSize: 12, color: C.green, marginBottom: 14 }}>{actionMsg}</div>}
-
-              {/* Two-column: list + thread */}
-              <div style={{ display: "grid", gridTemplateColumns: isDesktop ? "1.3fr 1fr" : "1fr", gap: 16 }}>
-                <div style={card}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    Contacts ({targets.length})
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {targets.map(t => {
-                      const m = statusMeta(t.status)
-                      const active = t.id === selectedId
-                      return (
-                        <button key={t.id} onClick={() => void openThread(t)} style={{
-                          textAlign: "left", background: active ? C.bg3 : "transparent", border: `1px solid ${active ? C.borderHover : "transparent"}`,
-                          borderRadius: 10, padding: "10px 12px", cursor: "pointer", fontFamily: FONT, width: "100%",
-                        }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                            <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text }}>{t.name}</div>
-                            <span style={{ fontSize: 9.5, fontWeight: 700, color: m.color, background: m.dim, borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: 0.3 }}>{m.label}</span>
+                  {/* Right — thread + draft */}
+                  <div style={{ ...card, padding: 0, display: "flex", flexDirection: "column" }}>
+                    {selected ? (
+                      <>
+                        {/* Contact header */}
+                        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: `var(--accent)18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "var(--accent)", flexShrink: 0 }}>
+                            {initials(selected.name)}
                           </div>
-                          <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{t.agency}{t.suburb ? ` · ${t.suburb}` : ""}{t.last_contact_date ? ` · ${timeAgo(t.last_contact_date)}` : ""}</div>
-                          {t.reply_body && <div style={{ fontSize: 11.5, color: C.green, marginTop: 5 }}>"{t.reply_body}"</div>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{selected.name}</div>
+                            <div style={{ fontSize: 11, color: C.faint }}>{selected.agency}{selected.suburb ? ` · ${selected.suburb}` : ""}</div>
+                          </div>
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: statusMeta(selected.status).color, background: statusMeta(selected.status).dim, borderRadius: 6, padding: "2px 8px" }}>
+                            {statusMeta(selected.status).label}
+                          </span>
+                        </div>
 
-                <div style={card}>
-                  {selected ? (
-                    <>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 2 }}>{selected.name}</div>
-                      <div style={{ fontSize: 11, color: C.faint, marginBottom: 14 }}>{selected.agency}{selected.suburb ? ` · ${selected.suburb}` : ""}</div>
-                      {thread.length === 0 ? (
-                        <div style={{ fontSize: 12.5, color: C.muted }}>No messages yet.</div>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {thread.map((msg, i) => (
+                        {/* Thread messages */}
+                        <div style={{ flex: 1, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                          {thread.length === 0 ? (
+                            <div style={{ fontSize: 12.5, color: C.muted, textAlign: "center", padding: "24px 0" }}>No messages yet.</div>
+                          ) : thread.map((msg, i) => (
                             <div key={i} style={{ alignSelf: msg.role === "agent" ? "flex-end" : "flex-start", maxWidth: "85%" }}>
                               <div style={{
-                                fontSize: 12.5, lineHeight: 1.5, padding: "9px 12px", borderRadius: 14,
-                                background: msg.role === "agent" ? "var(--accent-dim, rgba(123,53,190,0.18))" : C.bg3,
+                                fontSize: 12.5, lineHeight: 1.55, padding: "9px 13px", borderRadius: 14,
+                                background: msg.role === "agent" ? "var(--accent-dim, rgba(59,31,119,0.12))" : C.bg3,
                                 color: C.text,
-                                borderBottomRightRadius: msg.role === "agent" ? 4 : 14,
-                                borderBottomLeftRadius:  msg.role === "agent" ? 14 : 4,
+                                borderBottomRightRadius: msg.role === "agent" ? 3 : 14,
+                                borderBottomLeftRadius:  msg.role === "agent" ? 14 : 3,
                               }}>{msg.body}</div>
                               <div style={{ fontSize: 9.5, color: C.faint, marginTop: 3, textAlign: msg.role === "agent" ? "right" : "left" }}>
                                 {msg.role === "agent" ? "You" : selected.name.split(" ")[0]} · {timeAgo(msg.ts)}
@@ -419,17 +434,35 @@ export default function CampaignView() {
                             </div>
                           ))}
                         </div>
-                      )}
-                    </>
-                  ) : (
-                    <div style={{ fontSize: 12.5, color: C.muted, textAlign: "center", padding: "40px 0" }}>
-                      Select a contact to see the conversation.
-                    </div>
-                  )}
+
+                        {/* Draft approval — always at bottom when draft exists for this contact */}
+                        {selectedDraft && (
+                          <div style={{ borderTop: `1px solid ${C.border}`, padding: "12px 16px" }}>
+                            <div style={{ fontSize: 11, color: C.orange, fontWeight: 700, marginBottom: 6 }}>AI draft ready</div>
+                            <div style={{ fontSize: 12.5, color: C.text, background: C.bg3, borderRadius: 10, padding: "10px 12px", lineHeight: 1.55, marginBottom: 10 }}>
+                              {selectedDraft.draft_body}
+                            </div>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button onClick={() => void draftAction(selectedDraft.id, "approve-draft")} style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: C.green, border: "none", borderRadius: 8, padding: "7px 16px", cursor: "pointer", fontFamily: FONT }}>
+                                Approve + send
+                              </button>
+                              <button onClick={() => void draftAction(selectedDraft.id, "reject-draft")} style={{ fontSize: 12, fontWeight: 600, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontFamily: FONT }}>
+                                Reject
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 12.5, color: C.muted, textAlign: "center", padding: "60px 20px" }}>
+                        Select a contact to see the conversation.
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            )
+          })()}
 
           {/* ─── INBOX TAB ────────────────────────────────────────────────── */}
           {tab === "inbox" && (
