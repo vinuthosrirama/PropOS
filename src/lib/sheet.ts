@@ -176,22 +176,49 @@ export async function postEvent(event: SheetEventV2): Promise<void> {
 // ── New: read leads for a specific property from Leads tab ──────────────────
 
 export interface SheetLead {
+  // ── Core identity (Agentbox/BoxDice standard) ────────────────────────────────
   id: string
-  name: string
-  phone: string
+  name: string          // full name — firstName + lastName joined
+  firstName?: string
+  lastName?: string
+  phone: string         // primary mobile
   email: string
-  budget: number
-  timeline: string
-  persona: string
-  notes: string
-  inspectedProperty: string
+  // ── Property search criteria ─────────────────────────────────────────────────
+  budget: number        // priceMax — upper end of buyer budget
+  budgetMin?: number    // priceMin — lower end of buyer budget
+  bedroomsMin?: number
+  bedroomsMax?: number
+  carSpacesMin?: number
+  preferredSuburbs?: string[]       // suburbs buyer is open to
+  propertyType?: "house" | "unit" | "townhouse" | "land" | "any"
+  enquiryType?: "buy" | "sell" | "rent"
+  // ── Status & workflow ────────────────────────────────────────────────────────
+  rating?: "hot" | "warm" | "cold"
+  status?: "new" | "contacted" | "active" | "under-offer" | "sold" | "archived"
+  source?: "open-home" | "web-enquiry" | "referral" | "sign-call" | "social" | "other"
+  // ── Finance ──────────────────────────────────────────────────────────────────
+  financeStatus?: "not-started" | "pre-approved" | "approved" | "cash"
+  preApprovalAmount?: number
+  isFirstHomeBuyer?: boolean
+  // ── Timeline & follow-up ─────────────────────────────────────────────────────
+  timeline: string      // e.g. "3 months", "ASAP"
+  nextFollowUp?: string // ISO date
   lastContact: string
+  lastContactDate?: string  // ISO date of last outreach send
+  // ── Buyer profile ────────────────────────────────────────────────────────────
+  persona: string       // "family" | "investor" | "downsizer" | etc.
+  buyerType?: "investor" | "owner-occupier" | "upgrader" | "downsizer" | "first-home-buyer"
+  notes: string         // free-text agent notes
+  inspectedProperty: string
   questions: string[]
-  // Outreach history — written back by patch_lead_outreach, read by getAllLeads
+  // ── Voice note personalisation (PropOS extension) ─────────────────────────────
+  suburb?: string       // buyer's current suburb
+  occupation?: string
+  voiceNoteHighlights?: string[]   // key facts extracted from voice notes
+  // ── Outreach history ────────────────────────────────────────────────────────
   generatedSMS?: string
   generatedEmail?: string
   emailSubject?: string
-  lastContactDate?: string  // ISO date of last outreach send
 }
 
 // Fallback questions for known demo leads — used when Sheet data is corrupted
@@ -216,29 +243,67 @@ const DEMO_FALLBACK_QUESTIONS: Record<string, string[]> = {
 // ── Lead row mapper (shared) ──────────────────────────────────────────────────
 
 function mapLeadRow(row: Record<string, unknown>): SheetLead {
+  const fullName = String(row.name ?? "")
+  const nameParts = fullName.trim().split(/\s+/)
+  const firstName = nameParts[0] ?? ""
+  const lastName  = nameParts.slice(1).join(" ")
+
+  const str  = (k: string) => row[k] ? String(row[k]) : undefined
+  const num  = (k: string) => row[k] ? Number(row[k]) : undefined
+  const bool = (k: string) => row[k] !== undefined ? Boolean(row[k]) : undefined
+
+  // Parse preferred suburbs — semicolon or comma separated
+  const rawSuburbs = str("preferredSuburbs")
+  const preferredSuburbs = rawSuburbs
+    ? rawSuburbs.split(/[;,]/).map(s => s.trim()).filter(Boolean)
+    : undefined
+
+  // Parse voice note highlights
+  const rawHighlights = str("voiceNoteHighlights")
+  const voiceNoteHighlights = rawHighlights
+    ? rawHighlights.split(/[;|]/).map(s => s.trim()).filter(Boolean)
+    : undefined
+
   return {
     id:                String(row.id ?? ""),
-    name:              String(row.name ?? ""),
+    name:              fullName,
+    firstName:         firstName || undefined,
+    lastName:          lastName  || undefined,
     phone:             String(row.phone ?? ""),
     email:             String(row.email ?? ""),
     budget:            Number(row.budget ?? 0),
+    budgetMin:         num("budgetMin"),
+    bedroomsMin:       num("bedroomsMin"),
+    bedroomsMax:       num("bedroomsMax"),
+    carSpacesMin:      num("carSpacesMin"),
+    preferredSuburbs,
+    propertyType:      str("propertyType") as SheetLead["propertyType"],
+    enquiryType:       (str("enquiryType") ?? "buy") as SheetLead["enquiryType"],
+    rating:            str("rating") as SheetLead["rating"],
+    status:            (str("status") ?? "new") as SheetLead["status"],
+    source:            (str("source") ?? "open-home") as SheetLead["source"],
+    financeStatus:     str("financeStatus") as SheetLead["financeStatus"],
+    preApprovalAmount: num("preApprovalAmount"),
+    isFirstHomeBuyer:  bool("isFirstHomeBuyer"),
     timeline:          String(row.timeline ?? ""),
+    nextFollowUp:      str("nextFollowUp"),
+    lastContact:       String(row.lastContact ?? ""),
+    lastContactDate:   str("lastContactDate"),
     persona:           String(row.persona ?? ""),
+    buyerType:         str("buyerType") as SheetLead["buyerType"],
     notes:             String(row.notes ?? ""),
     inspectedProperty: String(row.inspectedProperty ?? ""),
-    lastContact:       String(row.lastContact ?? ""),
-    generatedSMS:      row.generatedSMS  ? String(row.generatedSMS)  : undefined,
-    generatedEmail:    row.generatedEmail ? String(row.generatedEmail) : undefined,
-    emailSubject:      row.emailSubject  ? String(row.emailSubject)  : undefined,
-    lastContactDate:   row.lastContactDate ? String(row.lastContactDate) : undefined,
+    suburb:            str("suburb"),
+    occupation:        str("occupation"),
+    voiceNoteHighlights,
+    generatedSMS:      str("generatedSMS"),
+    generatedEmail:    str("generatedEmail"),
+    emailSubject:      str("emailSubject"),
     questions:         (() => {
       const raw = String(row.questions ?? "")
-      // Guard: if the questions field is suspiciously long (>200 chars), it's likely
-      // corrupted with email body text from a prior /api/transcript POST. Discard it.
+      // Guard: if questions field is suspiciously long it's corrupted with email body text
       if (raw.length > 200) {
-        // Try to recover from demo fallback data by lead name
-        const leadName = String(row.name ?? "").trim()
-        const fallback = DEMO_FALLBACK_QUESTIONS[leadName.toLowerCase()]
+        const fallback = DEMO_FALLBACK_QUESTIONS[fullName.trim().toLowerCase()]
         return fallback ?? []
       }
       return raw.split(";").map(q => q.trim()).filter(Boolean)

@@ -38,6 +38,7 @@ import conversationsRouter from "./routes/conversations.js"
 import replyAgentRouter from "./routes/reply-agent.js"
 import slmAnswerRouter from "./routes/slm-answer.js"
 import slmAnswerBatchRouter from "./routes/slm-answer-batch.js"
+import ragRouter from "./routes/rag.js"
 import addContactRouter from "./routes/add-contact.js"
 import importContactsRouter from "./routes/import-contacts.js"
 import agentStateRouter from "./routes/agent-state.js"
@@ -174,6 +175,7 @@ app.use("/api/sms-shortcut", smsShortcutRouter)
 // SLM answer routes also public (called from buyer-facing demo)
 app.use("/api/slm-answer",        slmAnswerRouter)
 app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
+app.use("/api/rag",               ragRouter)
 // Pitch view-tracking + by-slug fetch — public, accessed from /p/:slug links
 app.use("/api/pitches",           pitchesPublicRouter)
 
