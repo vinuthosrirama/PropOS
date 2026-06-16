@@ -83,7 +83,8 @@ export const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', san
 // ─── AGENCY THEMES ────────────────────────────────────────────────────────────
 export interface AgencyTheme {
   name:    string
-  primary: string
+  primary: string   // true brand colour — use on light backgrounds and filled buttons
+  accent?: string   // bright variant for text/borders on dark page backgrounds; defaults to primary
   dim:     string
   glow:    string
   logo:    string   // emoji or short text
@@ -96,32 +97,32 @@ export interface AgencyTheme {
 // LJ Hooker: #E8001D from ljhooker.com · Others: best available public source
 export const AGENCY_THEMES: Record<string, AgencyTheme> = {
   // ── Verified ──────────────────────────────────────────────────────────────
-  "Peake":                    { name: "Peake",                    primary: "#3b1f77",             dim: "rgba(59,31,119,0.10)",      glow: "rgba(59,31,119,0.06)",      logo: "PK", gradient: ["#553990", "#3b1f77"]                       },
+  "Peake":                    { name: "Peake",                    primary: "#3b1f77", accent: "#9d74f5", dim: "rgba(59,31,119,0.10)",      glow: "rgba(59,31,119,0.06)",      logo: "PK", gradient: ["#553990", "#3b1f77"]                       },
   "Ray White":                { name: "Ray White",                primary: "#FFD200",             dim: "rgba(255,210,0,0.12)",      glow: "rgba(255,210,0,0.07)",      logo: "RW", gradient: ["#FFD200", "#E8A800"]                       },
-  "Barry Plant":              { name: "Barry Plant",              primary: "#001FB9",             dim: "rgba(232,0,45,0.14)",       glow: "rgba(232,0,45,0.10)",       logo: "BP", gradient: ["#E8002D", "#C0001A"]                       },
-  "Barry Plant Berwick":      { name: "Barry Plant Berwick",      primary: "#001FB9",             dim: "rgba(232,0,45,0.14)",       glow: "rgba(232,0,45,0.10)",       logo: "BP", gradient: ["#E8002D", "#C0001A"]                       },
+  "Barry Plant":              { name: "Barry Plant",              primary: "#001FB9", accent: "#6b99ff", dim: "rgba(232,0,45,0.14)",       glow: "rgba(232,0,45,0.10)",       logo: "BP", gradient: ["#E8002D", "#C0001A"]                       },
+  "Barry Plant Berwick":      { name: "Barry Plant Berwick",      primary: "#001FB9", accent: "#6b99ff", dim: "rgba(232,0,45,0.14)",       glow: "rgba(232,0,45,0.10)",       logo: "BP", gradient: ["#E8002D", "#C0001A"]                       },
   "Jellis Craig":             { name: "Jellis Craig",             primary: "#8EC6B5",             dim: "rgba(142,198,181,0.12)",    glow: "rgba(142,198,181,0.07)",    logo: "JC", gradient: ["#8EC6B5", "#4A9B88"]                       },
   // ── Well-documented ───────────────────────────────────────────────────────
-  "Harcourts":                { name: "Harcourts",                primary: "#C8102E",             dim: "rgba(200,16,46,0.12)",      glow: "rgba(200,16,46,0.07)",      logo: "HC", gradient: ["#E8384F", "#C8102E"]                       },
+  "Harcourts":                { name: "Harcourts",                primary: "#C8102E", accent: "#f87171", dim: "rgba(200,16,46,0.12)",      glow: "rgba(200,16,46,0.07)",      logo: "HC", gradient: ["#E8384F", "#C8102E"]                       },
   "McGrath Estate Agents":    { name: "McGrath Estate Agents",    primary: "#E67200",             dim: "rgba(230,114,0,0.12)",      glow: "rgba(230,114,0,0.07)",      logo: "MC", gradient: ["#FF8C00", "#E67200"]                       },
-  "LJ Hooker":                { name: "LJ Hooker",                primary: "#E8001D",             dim: "rgba(232,0,29,0.12)",       glow: "rgba(232,0,29,0.07)",       logo: "LJ", gradient: ["#FF3040", "#E8001D"]                       },
+  "LJ Hooker":                { name: "LJ Hooker",                primary: "#E8001D", accent: "#ff6b7a", dim: "rgba(232,0,29,0.12)",       glow: "rgba(232,0,29,0.07)",       logo: "LJ", gradient: ["#FF3040", "#E8001D"]                       },
   // ── Best available ────────────────────────────────────────────────────────
   "Nelson Alexander":         { name: "Nelson Alexander",         primary: "#C8705A",             dim: "rgba(200,112,90,0.12)",     glow: "rgba(200,112,90,0.07)",     logo: "NA", gradient: ["#D4845E", "#8B3A2C"]                       },
-  "Fletchers Real Estate":    { name: "Fletchers Real Estate",    primary: "#00897B",             dim: "rgba(0,137,123,0.12)",      glow: "rgba(0,137,123,0.07)",      logo: "FL", gradient: ["#26A69A", "#00897B"]                       },
+  "Fletchers Real Estate":    { name: "Fletchers Real Estate",    primary: "#00897B", accent: "#26c5b4", dim: "rgba(0,137,123,0.12)",      glow: "rgba(0,137,123,0.07)",      logo: "FL", gradient: ["#26A69A", "#00897B"]                       },
   "Buxton Real Estate":       { name: "Buxton Real Estate",       primary: "#B8966E",             dim: "rgba(184,150,110,0.12)",    glow: "rgba(184,150,110,0.07)",    logo: "BX", gradient: ["#C8A87E", "#8C6040"]                       },
   "Raine & Horne":            { name: "Raine & Horne",            primary: "#C9A84C",             dim: "rgba(201,168,76,0.12)",     glow: "rgba(201,168,76,0.07)",     logo: "RH", gradient: ["#D4B84C", "#8C6800"]                       },
   "Century 21":               { name: "Century 21",               primary: "#D4A017",             dim: "rgba(212,160,23,0.12)",     glow: "rgba(212,160,23,0.07)",     logo: "C21",gradient: ["#D4A017", "#8C6400"]                       },
-  "First National Real Estate":{ name: "First National Real Estate",primary:"#005CA9",            dim: "rgba(0,92,169,0.12)",       glow: "rgba(0,92,169,0.07)",       logo: "FN", gradient: ["#0078D4", "#005CA9"]                       },
+  "First National Real Estate":{ name: "First National Real Estate",primary:"#005CA9", accent: "#5b9fd4", dim: "rgba(0,92,169,0.12)",       glow: "rgba(0,92,169,0.07)",       logo: "FN", gradient: ["#0078D4", "#005CA9"]                       },
   "Kay & Burton":             { name: "Kay & Burton",             primary: "#B0A090",             dim: "rgba(176,160,144,0.12)",    glow: "rgba(176,160,144,0.07)",    logo: "KB", gradient: ["#C0B0A0", "#786050"]                       },
-  "Biggin & Scott":           { name: "Biggin & Scott",           primary: "#4C78CC",             dim: "rgba(76,120,204,0.12)",     glow: "rgba(76,120,204,0.07)",     logo: "BS", gradient: ["#6492E0", "#4C78CC"]                       },
-  "Area Specialist":          { name: "Area Specialist",          primary: "#111111",              dim: "rgba(17,17,17,0.12)",       glow: "rgba(17,17,17,0.07)",       logo: "AS", gradient: ["#484848", "#111111"]                       },
+  "Biggin & Scott":           { name: "Biggin & Scott",           primary: "#4C78CC", accent: "#7ba3e8", dim: "rgba(76,120,204,0.12)",     glow: "rgba(76,120,204,0.07)",     logo: "BS", gradient: ["#6492E0", "#4C78CC"]                       },
+  "Area Specialist":          { name: "Area Specialist",          primary: "#111111", accent: "#a0a8b0", dim: "rgba(17,17,17,0.12)",       glow: "rgba(17,17,17,0.07)",       logo: "AS", gradient: ["#484848", "#111111"]                       },
   // ── New agents (June 2026) — hex from live site CSS extraction where possible ──
   // 5th Avenue Real Estate: #e1b530 confirmed from .bg-primary/.text-primary in site CSS (the5thavenue.com.au)
   "5th Avenue Real Estate":   { name: "5th Avenue Real Estate",   primary: "#e1b530",             dim: "rgba(225,181,48,0.12)",     glow: "rgba(225,181,48,0.07)",     logo: "5A", gradient: ["#f0cf6a", "#e1b530"]                       },
   // Uphill Real Estate: #f18017 best available from uphillrealestate.com.au site CSS (orange brand accent)
   "Uphill Real Estate":       { name: "Uphill Real Estate",       primary: "#f18017",             dim: "rgba(241,128,23,0.12)",     glow: "rgba(241,128,23,0.07)",     logo: "UH", gradient: ["#ffa64d", "#f18017"]                       },
   // Gill Estate Agents: site unreachable for CSS extraction — best-available placeholder (navy), verify before brand use
-  "Gill Estate Agents":       { name: "Gill Estate Agents",       primary: "#14274e",             dim: "rgba(20,39,78,0.12)",       glow: "rgba(20,39,78,0.07)",       logo: "GE", gradient: ["#3a5a99", "#14274e"]                       },
+  "Gill Estate Agents":       { name: "Gill Estate Agents",       primary: "#14274e", accent: "#7ba2d4", dim: "rgba(20,39,78,0.12)",       glow: "rgba(20,39,78,0.07)",       logo: "GE", gradient: ["#3a5a99", "#14274e"]                       },
   "Other":                    { name: "Other",                    primary: "rgb(166,218,255)",    dim: "rgba(166,218,255,0.12)",    glow: "rgba(166,218,255,0.06)",    logo: "AV", gradient: ["rgb(166,218,255)", "rgb(100,208,144)"]      },
 }
 

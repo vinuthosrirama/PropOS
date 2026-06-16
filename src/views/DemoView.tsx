@@ -9446,6 +9446,8 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const fname = buyer.name.split("&")[0].split(" ")[0].trim()
   const bubbleColor = theme?.primary ?? "rgb(0,122,255)"
   const avatarGrad = `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
+  // Bright variant for text/borders on the dark page background (primary may be too dark)
+  const accentColor = theme.accent ?? theme.primary
 
   // ── Pitch-angle carousel ─────────────────────────────────────────────────────
   const agentFirstRV = agent.nickname ?? agent.name.split(" ")[0]
@@ -9770,13 +9772,13 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobileRV ? "76px 16px 48px" : "80px 32px 48px", fontFamily: FONT }}>
       <button onClick={onBack} aria-label="Go back" style={{
         background: "transparent", border: "none", cursor: "pointer",
-        color: theme.primary, fontSize: 13, fontWeight: 700, fontFamily: FONT,
+        color: accentColor, fontSize: 13, fontWeight: 700, fontFamily: FONT,
         display: "flex", alignItems: "center", gap: 6, marginBottom: 24, padding: "8px 0", lineHeight: 1, minHeight: 44,
       }}>← Back</button>
 
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: theme.primary, textTransform: "uppercase", marginBottom: 4 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: accentColor, textTransform: "uppercase", marginBottom: 4 }}>
           Review outreach
         </div>
         <div style={{ fontSize: isMobileRV ? 18 : 24, fontWeight: 800, color: C.text, letterSpacing: -0.8 }}>
@@ -9807,7 +9809,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
             <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>SMS</div>
             <button onClick={() => setEditMode(editMode === "sms" ? null : "sms")} style={{
               background: "transparent", border: "none", cursor: "pointer",
-              color: theme.primary, fontSize: 12, fontFamily: FONT, fontWeight: 600,
+              color: accentColor, fontSize: 12, fontFamily: FONT, fontWeight: 600,
             }}>
               {editMode === "sms" ? "Done" : "Edit"}
             </button>
@@ -9902,7 +9904,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
             <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>Email</div>
             <button onClick={() => setEditMode(editMode === "email" ? null : "email")} style={{
               background: "transparent", border: "none", cursor: "pointer",
-              color: theme.primary, fontSize: 12, fontFamily: FONT, fontWeight: 600,
+              color: accentColor, fontSize: 12, fontFamily: FONT, fontWeight: 600,
             }}>
               {editMode === "email" ? "Done" : "Edit"}
             </button>
@@ -10011,7 +10013,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
             onClick={onBack}
             style={{
               flexShrink: 0, padding: "8px 14px", borderRadius: 10, border: "none",
-              background: `${theme.primary}20`, color: theme.primary,
+              background: `${accentColor}20`, color: accentColor,
               fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap",
             }}
           >
@@ -10027,8 +10029,8 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           width: "100%", padding: "13px",
           borderRadius: 14, marginTop: 12,
           background: "transparent",
-          border: `1px solid ${theme.primary}55`,
-          color: sentToSelf ? C.green : theme.primary,
+          border: `1px solid ${accentColor}55`,
+          color: sentToSelf ? C.green : accentColor,
           fontSize: 14, fontWeight: 600, cursor: sendingToSelf || sentToSelf ? "default" : "pointer",
           fontFamily: FONT, letterSpacing: -0.2,
         }}
@@ -10066,9 +10068,9 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           disabled={appraisalBooked || savingMilestone}
           style={{
             padding: "10px 20px", borderRadius: 10,
-            border: `1px solid ${appraisalBooked ? C.green + "44" : theme.primary + "44"}`,
+            border: `1px solid ${appraisalBooked ? C.green + "44" : accentColor + "44"}`,
             background: appraisalBooked ? C.green + "22" : theme.dim,
-            color: appraisalBooked ? C.green : theme.primary,
+            color: appraisalBooked ? C.green : accentColor,
             fontSize: 13, fontWeight: 700, cursor: appraisalBooked ? "default" : "pointer",
             fontFamily: FONT,
           }}
@@ -10142,7 +10144,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>30-day vendor nurture sequence</div>
           <button onClick={() => setShowNurture(v => !v)} style={{
             background: "transparent", border: "none", cursor: "pointer",
-            color: theme.primary, fontSize: 12, fontFamily: FONT, fontWeight: 600,
+            color: accentColor, fontSize: 12, fontFamily: FONT, fontWeight: 600,
           }}>
             {showNurture ? "Hide" : "Preview →"}
           </button>
