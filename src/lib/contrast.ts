@@ -25,10 +25,8 @@ function linearise(c: number): number {
 
 /** Relative luminance (WCAG 2.1) of any CSS colour string */
 export function relativeLuminance(color: string): number {
-  const rgb = parseColor(color)
-  if (!rgb) return 0
-  const [r, g, b] = rgb.map(linearise)
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  const [r, g, b] = resolveColor(color)
+  return 0.2126 * linearise(r) + 0.7152 * linearise(g) + 0.0722 * linearise(b)
 }
 
 /** WCAG contrast ratio between two colours */
@@ -40,66 +38,16 @@ export function contrastRatio(a: string, b: string): number {
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-// ── Parser — supports hex, rgb(), rgba(), hsl(), named colours ────────────────
-
-const NAMED: Record<string, [number, number, number]> = {
-  white: [255, 255, 255], black: [0, 0, 0],
-  red: [255, 0, 0], green: [0, 128, 0], blue: [0, 0, 255],
-  yellow: [255, 255, 0], cyan: [0, 255, 255], magenta: [255, 0, 255],
-  orange: [255, 165, 0], purple: [128, 0, 128], pink: [255, 192, 203],
-  gray: [128, 128, 128], grey: [128, 128, 128],
-  transparent: [255, 255, 255],
-}
-
-function hueToRgb(p: number, q: number, t: number): number {
-  if (t < 0) t += 1
-  if (t > 1) t -= 1
-  if (t < 1 / 6) return p + (q - p) * 6 * t
-  if (t < 1 / 2) return q
-  if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
-  return p
-}
+// ── Parser — hex fast-path only; everything else resolved via DOM in resolveColor ──
 
 export function parseColor(color: string): [number, number, number] | null {
   if (!color) return null
-  const s = color.trim().toLowerCase()
-
-  // CSS custom property (var(--..)) — can't resolve at parse time; assume mid-grey
-  if (s.startsWith("var(")) return [128, 128, 128]
-
-  // Named colours
-  if (s in NAMED) return NAMED[s]
-
-  // Hex: #rgb, #rrggbb, #rrggbbaa
-  const hex3 = s.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i)
-  if (hex3) return [parseInt(hex3[1] + hex3[1], 16), parseInt(hex3[2] + hex3[2], 16), parseInt(hex3[3] + hex3[3], 16)]
-
+  const s = color.trim()
+  if (s.startsWith("var(")) return null   // must be resolved via DOM
   const hex6 = s.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i)
   if (hex6) return [parseInt(hex6[1], 16), parseInt(hex6[2], 16), parseInt(hex6[3], 16)]
-
-  // rgb / rgba
-  const rgb = s.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/)
-  if (rgb) return [parseFloat(rgb[1]), parseFloat(rgb[2]), parseFloat(rgb[3])]
-
-  // hsl / hsla
-  const hsl = s.match(/hsla?\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%/)
-  if (hsl) {
-    const h = parseFloat(hsl[1]) / 360
-    const sat = parseFloat(hsl[2]) / 100
-    const l = parseFloat(hsl[3]) / 100
-    if (sat === 0) {
-      const v = Math.round(l * 255)
-      return [v, v, v]
-    }
-    const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat
-    const p = 2 * l - q
-    return [
-      Math.round(hueToRgb(p, q, h + 1 / 3) * 255),
-      Math.round(hueToRgb(p, q, h) * 255),
-      Math.round(hueToRgb(p, q, h - 1 / 3) * 255),
-    ]
-  }
-
+  const hex3 = s.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i)
+  if (hex3) return [parseInt(hex3[1]+hex3[1], 16), parseInt(hex3[2]+hex3[2], 16), parseInt(hex3[3]+hex3[3], 16)]
   return null
 }
 
@@ -165,20 +113,20 @@ export function getAccentText(accentColor: string): string {
  * NOTE: synchronous, requires browser environment (returns [128,128,128] in SSR).
  */
 export function resolveColor(cssValue: string): [number, number, number] {
-  // Direct parse first (avoids DOM hit for most values)
+  // Hex fast-path — avoids DOM entirely
   const direct = parseColor(cssValue)
-  if (direct && !(cssValue.startsWith("var("))) return direct
+  if (direct) return direct
 
-  // CSS var — resolve via DOM
+  // Non-hex (rgb(), var(), named) — let the browser compute it
   if (typeof document !== "undefined") {
     const temp = document.createElement("div")
     temp.style.color = cssValue
     temp.style.display = "none"
     document.body.appendChild(temp)
-    const resolved = getComputedStyle(temp).color
+    const resolved = getComputedStyle(temp).color  // always "rgb(r, g, b)"
     document.body.removeChild(temp)
-    const parsed = parseColor(resolved)
-    if (parsed) return parsed
+    const m = resolved.match(/(\d+),\s*(\d+),\s*(\d+)/)
+    if (m) return [+m[1], +m[2], +m[3]]
   }
 
   return [128, 128, 128]

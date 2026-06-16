@@ -11,13 +11,7 @@
  * Cost: ~$0.001 per contact (Haiku at ~500 tokens in/out)
  */
 
-import Anthropic from "@anthropic-ai/sdk"
-
-let _client: Anthropic | null = null
-function getClient(): Anthropic {
-  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  return _client
-}
+import { getClient } from "./claude.js"
 
 // ---------------------------------------------------------------------------
 // Types

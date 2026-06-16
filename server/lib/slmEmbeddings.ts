@@ -9,15 +9,9 @@
  * fine — re-embedding the same small corpus takes <100ms per property.
  */
 
-import OpenAI from "openai"
+import { getOpenAIClient } from "./openai.js"
 
 const EMBEDDING_MODEL = "text-embedding-3-small"
-
-let _client: OpenAI | null = null
-function getClient(): OpenAI {
-  if (!_client) _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  return _client
-}
 
 // In-memory embedding cache: text → unit-normalised float32 vector
 const _cache = new Map<string, number[]>()
@@ -27,7 +21,7 @@ export async function embed(text: string): Promise<number[]> {
   const key = text.trim().toLowerCase()
   if (_cache.has(key)) return _cache.get(key)!
 
-  const res = await getClient().embeddings.create({
+  const res = await getOpenAIClient().embeddings.create({
     model: EMBEDDING_MODEL,
     input: key,
     encoding_format: "float",
@@ -44,7 +38,7 @@ export async function embedBatch(texts: string[]): Promise<Map<string, number[]>
   const missing = unique.filter(t => !_cache.has(t))
 
   if (missing.length > 0) {
-    const res = await getClient().embeddings.create({
+    const res = await getOpenAIClient().embeddings.create({
       model: EMBEDDING_MODEL,
       input: missing,
       encoding_format: "float",
