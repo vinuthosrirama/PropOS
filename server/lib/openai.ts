@@ -1,6 +1,7 @@
 import OpenAI from "openai"
 import fs from "fs"
 import { sanitiseResult } from "./sanitise.js"
+import { withLLMTimeout } from "./llmUtils.js"
 
 // Lazy init — only creates the client when actually called (avoids crash when key is empty)
 let _openai: OpenAI | null = null
@@ -37,14 +38,6 @@ export interface GenerateParams {
 export interface GenerateResult {
   sms: string
   email: { subject: string; body: string[] }
-}
-
-const LLM_TIMEOUT_MS = 30_000
-
-function withLLMTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
-  return fn(controller.signal).finally(() => clearTimeout(timer))
 }
 
 export async function generateMessage(params: GenerateParams): Promise<GenerateResult> {
