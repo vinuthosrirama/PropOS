@@ -14,18 +14,18 @@ export const C = {
   faint:       "var(--c-faint)",
   border:      "var(--c-border)",
   borderHover: "var(--c-border-hover)",
-  // Accent colours — unchanged across modes
-  blue:        "rgb(166, 218, 255)",
-  blueDim:     "rgba(166, 218, 255, 0.12)",
+  // Accent colours — mode-aware via CSS vars (dark: pastels, light: saturated)
+  blue:        "var(--c-blue)",
+  blueDim:     "var(--c-blue-dim)",
   blueGlow:    "rgba(166, 218, 255, 0.06)",
-  green:       "rgb(100, 208, 144)",
-  greenDim:    "rgba(100, 208, 144, 0.12)",
-  orange:      "rgb(255, 184, 100)",
-  orangeDim:   "rgba(255, 184, 100, 0.12)",
-  red:         "rgb(255, 110, 110)",
-  redDim:      "rgba(255, 110, 110, 0.12)",
-  purple:      "rgb(200, 160, 255)",
-  purpleDim:   "rgba(200, 160, 255, 0.12)",
+  green:       "var(--c-green)",
+  greenDim:    "var(--c-green-dim)",
+  orange:      "var(--c-orange)",
+  orangeDim:   "var(--c-orange-dim)",
+  red:         "var(--c-red)",
+  redDim:      "var(--c-red-dim)",
+  purple:      "var(--c-purple)",
+  purpleDim:   "var(--c-purple-dim)",
   // Peake brand tokens — fixed across light/dark
   peakePurple: "#3b1f77",
   peakeDark:   "#2c1b59",
@@ -45,6 +45,16 @@ export const DARK_CSS_VARS = `
   --c-faint:        rgba(255, 255, 255, 0.25);
   --c-border:       rgba(182, 194, 171, 0.14);
   --c-border-hover: rgba(182, 194, 171, 0.28);
+  --c-green:        rgb(100, 208, 144);
+  --c-green-dim:    rgba(100, 208, 144, 0.12);
+  --c-blue:         rgb(166, 218, 255);
+  --c-blue-dim:     rgba(166, 218, 255, 0.12);
+  --c-orange:       rgb(255, 184, 100);
+  --c-orange-dim:   rgba(255, 184, 100, 0.12);
+  --c-red:          rgb(255, 110, 110);
+  --c-red-dim:      rgba(255, 110, 110, 0.12);
+  --c-purple:       rgb(200, 160, 255);
+  --c-purple-dim:   rgba(200, 160, 255, 0.12);
 `
 
 export const LIGHT_CSS_VARS = `
@@ -56,6 +66,16 @@ export const LIGHT_CSS_VARS = `
   --c-faint:        rgba(59, 31, 119, 0.32);
   --c-border:       rgba(59, 31, 119, 0.12);
   --c-border-hover: rgba(59, 31, 119, 0.24);
+  --c-green:        #15803d;
+  --c-green-dim:    rgba(21, 128, 61, 0.10);
+  --c-blue:         #1d4ed8;
+  --c-blue-dim:     rgba(29, 78, 216, 0.10);
+  --c-orange:       #c2410c;
+  --c-orange-dim:   rgba(194, 65, 12, 0.10);
+  --c-red:          #dc2626;
+  --c-red-dim:      rgba(220, 38, 38, 0.10);
+  --c-purple:       #7c3aed;
+  --c-purple-dim:   rgba(124, 58, 237, 0.10);
 `
 
 export const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
@@ -145,7 +165,7 @@ export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
 }
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
-export type ViewId = "demo" | "setup" | "principal" | "campaign" | "voiceagent"
+export type ViewId = "demo" | "setup" | "principal" | "campaign" | "voiceagent" | "insights"
 
 export type LeadStatus =
   | "outreach_sent"
