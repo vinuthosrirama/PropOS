@@ -7557,6 +7557,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const pl = PIPELINE_LABELS[segment.pipeline]
   const fname = buyer.name.split("&")[0].split(" ")[0].trim()
   const agentFirst = agent.nickname ?? agent.name.split(" ")[0]
+  const accentColor = theme.accent ?? theme.primary
 
   // Is this a secondary (not-yet-ready) contact? Show relationship strategies instead of just generate.
   const isSecondary = segment.pipeline === "renter-to-buyer" || segment.pipeline === "investor-to-rebalance"
@@ -7732,7 +7733,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   return (
     <div style={{ maxWidth: 1020, margin: "0 auto", padding: isMobileVP ? "80px 16px 48px" : "88px 28px 48px", fontFamily: FONT }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <button onClick={onBack} aria-label="Go back" style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 13, fontWeight: 700, fontFamily: FONT, padding: "8px 0", minHeight: 44 }}>← Back</button>
+        <button onClick={onBack} aria-label="Go back" style={{ background: "transparent", border: "none", cursor: "pointer", color: accentColor, fontSize: 13, fontWeight: 700, fontFamily: FONT, padding: "8px 0", minHeight: 44 }}>← Back</button>
         {allEntries && entryIdx !== undefined && allEntries.length > 1 && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
@@ -7790,9 +7791,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
             <div style={{
               width: 56, height: 56, borderRadius: 12, flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
-              background: `${theme.primary}14`, border: `1.5px solid ${theme.primary}25`,
+              background: `${accentColor}14`, border: `1.5px solid ${accentColor}25`,
             }}>
-              <span style={{ fontSize: 22, fontWeight: 800, color: theme.primary, letterSpacing: -0.5 }}>
+              <span style={{ fontSize: 22, fontWeight: 800, color: accentColor, letterSpacing: -0.5 }}>
                 {buyer.name.charAt(0).toUpperCase()}
               </span>
             </div>
@@ -7800,7 +7801,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
               <div style={{ fontSize: isMobileVP ? 20 : 24, fontWeight: 800, color: C.text, letterSpacing: -0.8, lineHeight: 1.1, marginBottom: 4 }}>
                 {buyer.name}
               </div>
-              <div style={{ fontSize: 13, color: theme.primary, fontWeight: 600 }}>
+              <div style={{ fontSize: 13, color: accentColor, fontWeight: 600 }}>
                 {buyer.purchaseAddress}
               </div>
               {buyer.suburb && (
@@ -7857,8 +7858,8 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
             background: "none", border: "none", cursor: "pointer",
             fontSize: isMobileVP ? 11 : 12, fontWeight: 700, fontFamily: FONT,
             whiteSpace: "nowrap", flexShrink: 0, letterSpacing: 0,
-            color: profileTab === tab.id ? theme.primary : C.faint,
-            borderBottom: `2px solid ${profileTab === tab.id ? theme.primary : "transparent"}`,
+            color: profileTab === tab.id ? accentColor : C.faint,
+            borderBottom: `2px solid ${profileTab === tab.id ? accentColor : "transparent"}`,
             marginBottom: -1.5,
             transition: "color 0.15s, border-color 0.15s",
           }}>
@@ -7878,9 +7879,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
           {/* Financial Snapshot */}
           <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
             <div style={{
-              fontSize: 10, fontWeight: 800, letterSpacing: 2, color: theme.primary,
+              fontSize: 10, fontWeight: 800, letterSpacing: 2, color: accentColor,
               textTransform: "uppercase", paddingBottom: 7,
-              borderBottom: `2px solid ${theme.primary}`, marginBottom: 18, display: "inline-block",
+              borderBottom: `2px solid ${accentColor}`, marginBottom: 18, display: "inline-block",
             }}>
               Financial snapshot
             </div>
@@ -7898,7 +7899,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                       onBlur={commitEditValue}
                       onKeyDown={e => { if (e.key === "Enter") commitEditValue(); if (e.key === "Escape") setEditingValue(false) }}
                       style={{
-                        width: 110, padding: "3px 8px", background: C.bg3, border: `1px solid ${theme.primary}`,
+                        width: 110, padding: "3px 8px", background: C.bg3, border: `1px solid ${accentColor}`,
                         borderRadius: 6, color: C.text, fontSize: 12, fontFamily: FONT,
                       }}
                     />
@@ -7914,7 +7915,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                       }}
                     >
                       <span style={{ fontSize: 12, color: C.green, fontWeight: 700, fontFamily: FONT }}>Now {fmtDollar(fin.currentEstimate)}</span>
-                      {overrideValue && <span style={{ fontSize: 9, color: theme.primary, background: theme.primary + "18", padding: "1px 5px", borderRadius: 4 }}>{avmSource ?? "custom"}</span>}
+                      {overrideValue && <span style={{ fontSize: 9, color: accentColor, background: accentColor + "18", padding: "1px 5px", borderRadius: 4 }}>{avmSource ?? "custom"}</span>}
                       <span style={{ fontSize: 9, color: C.faint }}>✏️</span>
                     </button>
                     <button
@@ -7925,7 +7926,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                         background: avmRefreshing ? "none" : C.bg3,
                         border: `1px solid ${C.border}`,
                         borderRadius: 6, padding: "5px 10px",
-                        fontSize: 11, color: avmRefreshing ? C.faint : theme.primary,
+                        fontSize: 11, color: avmRefreshing ? C.faint : accentColor,
                         cursor: avmRefreshing ? "default" : "pointer", fontFamily: FONT, fontWeight: 600,
                         minHeight: 28,
                       }}
@@ -8103,7 +8104,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
             <VendorAppraisalPanel buyer={buyer} theme={theme} showEquityScenarios={vendorSettings?.showEquityScenarios} showComparableMap={vendorSettings?.showComparableMap} />
             <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => setShowPrintAppraisal(true)}
-                style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${theme.primary}40`, background: `${theme.primary}10`, color: theme.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", gap: 6 }}>
+                style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${accentColor}40`, background: `${accentColor}10`, color: accentColor, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", gap: 6 }}>
                 🖨️ Print Appraisal Report
               </button>
             </div>
@@ -8126,8 +8127,8 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                     title={vendorVoice.supported ? undefined : "Voice notes require Chrome or Edge"}
                     style={{
                       fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
-                      background: theme.primary + "15", color: theme.primary,
-                      border: `1px solid ${theme.primary}30`,
+                      background: accentColor + "15", color: accentColor,
+                      border: `1px solid ${accentColor}30`,
                       cursor: vendorVoice.supported ? "pointer" : "default",
                       opacity: vendorVoice.supported ? 1 : 0.5,
                       fontFamily: FONT, display: "flex", alignItems: "center", gap: 4,
@@ -8160,15 +8161,15 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
             {buyer.notes && <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.55 }}>{buyer.notes}</div>}
             {/* Live transcript while recording */}
             {vendorVoice.phase === "recording" && vendorVoice.liveTranscript && (
-              <div style={{ fontSize: 12, color: theme.primary, fontStyle: "italic", marginTop: 8, padding: "8px 10px", background: theme.primary + "0a", borderRadius: 6, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: accentColor, fontStyle: "italic", marginTop: 8, padding: "8px 10px", background: accentColor + "0a", borderRadius: 6, lineHeight: 1.5 }}>
                 🎙️ {vendorVoice.liveTranscript}
               </div>
             )}
             {/* Saved voice notes + upsert button */}
             {voiceNotes && (
-              <div style={{ fontSize: 12, color: C.text, marginTop: 8, padding: "8px 10px", background: theme.primary + "10", borderRadius: 6, lineHeight: 1.5, border: `1px solid ${theme.primary}20` }}>
+              <div style={{ fontSize: 12, color: C.text, marginTop: 8, padding: "8px 10px", background: accentColor + "10", borderRadius: 6, lineHeight: 1.5, border: `1px solid ${accentColor}20` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: theme.primary, textTransform: "uppercase", letterSpacing: 0.8 }}>🎙️ Voice note · included in outreach</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: accentColor, textTransform: "uppercase", letterSpacing: 0.8 }}>🎙️ Voice note · included in outreach</span>
                   <button
                     onClick={async () => {
                       // Append voice transcript to notes — save to both Sheets and Supabase
@@ -8187,8 +8188,8 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                     }}
                     style={{
                       fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 5,
-                      background: theme.primary + "20", color: theme.primary,
-                      border: `1px solid ${theme.primary}40`, cursor: "pointer", fontFamily: FONT, flexShrink: 0, marginLeft: 8,
+                      background: accentColor + "20", color: accentColor,
+                      border: `1px solid ${accentColor}40`, cursor: "pointer", fontFamily: FONT, flexShrink: 0, marginLeft: 8,
                     }}
                   >
                     ✓ Save to notes
@@ -8329,15 +8330,15 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
 
           {/* Negotiation Coach button */}
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowNegotiationCoach(true)}
-            style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${theme.primary}40`, background: `${theme.primary}10`, color: theme.primary, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${accentColor}40`, background: `${accentColor}10`, color: accentColor, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
             Generate call script for {fname} →
           </motion.button>
 
           {/* Contact info */}
           <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "16px 20px" }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Contact</div>
-            <a href={`tel:${buyer.phone}`} style={{ fontSize: 14, color: theme.primary, fontWeight: 600, textDecoration: "none", display: "block", marginBottom: 6 }}>{buyer.phone}</a>
-            {buyer.email && <a href={`mailto:${buyer.email}`} style={{ fontSize: 13, color: theme.primary, fontWeight: 600, textDecoration: "none" }}>{buyer.email}</a>}
+            <a href={`tel:${buyer.phone}`} style={{ fontSize: 14, color: accentColor, fontWeight: 600, textDecoration: "none", display: "block", marginBottom: 6 }}>{buyer.phone}</a>
+            {buyer.email && <a href={`mailto:${buyer.email}`} style={{ fontSize: 13, color: accentColor, fontWeight: 600, textDecoration: "none" }}>{buyer.email}</a>}
             {buyer.lastContactDate && (
               <div style={{ fontSize: 10, color: C.faint, marginTop: 8 }}>
                 Last contacted: {(() => { try { return new Date(buyer.lastContactDate).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) } catch { return buyer.lastContactDate } })()}
@@ -8414,7 +8415,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
               // Market Timing
               {
                 id: "timing", icon: "📈", title: "Market Timing",
-                hook: `${range.clearanceRate}% clearance rate`, sub: `Avg ${range.daysOnMarket} days on market`, color: theme.primary,
+                hook: `${range.clearanceRate}% clearance rate`, sub: `Avg ${range.daysOnMarket} days on market`, color: accentColor,
                 buildOutreach: () => {
                   const smsRaw = `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} is running at ${range.clearanceRate}% clearance right now. Good time to know your options. ${signoff}, ${agentFirst}`
                   const sms = stripDashes(smsRaw.slice(0, 160))
@@ -8491,7 +8492,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
 
                 {/* ── Full AI generate button — always visible ── */}
                 <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={handleGenerate} disabled={generating}
-                  style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${theme.primary}50`, background: generating ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}18, ${theme.gradient[1]}12)`, color: generating ? C.faint : theme.primary, fontSize: 13, fontWeight: 700, cursor: generating ? "default" : "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${accentColor}50`, background: generating ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}18, ${theme.gradient[1]}12)`, color: generating ? C.faint : accentColor, fontSize: 13, fontWeight: 700, cursor: generating ? "default" : "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   {generating ? "✨ Writing personalised outreach..." : "✨ Write personalised SMS + Email →"}
                 </motion.button>
                 {voiceNotes && <div style={{ textAlign: "center", fontSize: 10, color: C.green }}>✅ Voice note included in generation</div>}
@@ -8546,7 +8547,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         return (
           <div style={{ marginTop: 4 }}>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
                 PROPERTY PITCH
               </div>
               <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
@@ -8668,7 +8669,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         return (
           <div style={{ marginTop: 4 }}>
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
                 PRICE UPDATE PITCH
               </div>
               <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
@@ -8728,15 +8729,15 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 10,
                   padding: "8px 14px", borderRadius: 10, marginBottom: 14,
-                  background: `${theme.primary}14`, border: `1px solid ${theme.primary}33`,
+                  background: `${accentColor}14`, border: `1px solid ${accentColor}33`,
                 }}
               >
                 <motion.div
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                  style={{ width: 8, height: 8, borderRadius: "50%", background: theme.primary, flexShrink: 0 }}
+                  style={{ width: 8, height: 8, borderRadius: "50%", background: accentColor, flexShrink: 0 }}
                 />
-                <span style={{ fontSize: 12, fontWeight: 700, color: theme.primary }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: accentColor }}>
                   Drafted in {agent.name.split(" ")[0]}'s voice
                 </span>
                 <span style={{ fontSize: 12, color: C.muted }}>
@@ -8751,7 +8752,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 style={{
                   display: "flex", alignItems: "center", gap: 14, padding: "16px 18px", marginBottom: 16,
                   borderRadius: 14, background: `linear-gradient(135deg, ${theme.gradient[0]}22, ${theme.gradient[1]}22)`,
-                  border: `1px solid ${theme.primary}66`, boxShadow: `0 8px 28px ${theme.glow}`,
+                  border: `1px solid ${accentColor}66`, boxShadow: `0 8px 28px ${theme.glow}`,
                 }}>
                 <motion.div
                   animate={{ scale: [1, 1.35, 1], opacity: [1, 0.6, 1] }}
@@ -8794,7 +8795,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   onClick={e => e.stopPropagation()}
                   style={{ width: "100%", maxWidth: 520, maxHeight: "85vh", overflow: "auto", background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 18, padding: 26, fontFamily: FONT }}
                 >
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
                     Strike while the iron is hot
                   </div>
                   <div style={{ fontSize: 19, fontWeight: 800, color: C.text, marginBottom: 4 }}>
@@ -8924,7 +8925,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         return (
           <div style={{ marginTop: 4 }}>
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
                 DIGITAL INTRODUCTION
               </div>
               <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
@@ -8987,7 +8988,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
             {introUrl && (
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.bg2, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 16 }}>
                 <span style={{ fontSize: 11, color: C.muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{introUrl}</span>
-                <button onClick={() => navigator.clipboard.writeText(introUrl)} style={{ fontSize: 11, color: theme.primary, background: "none", border: "none", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>
+                <button onClick={() => navigator.clipboard.writeText(introUrl)} style={{ fontSize: 11, color: accentColor, background: "none", border: "none", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>
                   Copy link
                 </button>
               </div>
@@ -9100,7 +9101,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         return (
           <div style={{ marginTop: 4 }}>
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
                 LISTING PROPOSAL
               </div>
               <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
@@ -9118,7 +9119,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 disabled={proposalGenerating}
                 style={{
                   padding: "12px 24px", borderRadius: 12, border: "none", cursor: proposalGenerating ? "default" : "pointer",
-                  background: theme.primary, color: "#fff", fontWeight: 700, fontSize: 14, fontFamily: FONT,
+                  background: accentColor, color: "#fff", fontWeight: 700, fontSize: 14, fontFamily: FONT,
                   opacity: proposalGenerating ? 0.7 : 1,
                 }}
               >
@@ -9145,7 +9146,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
 
             {proposalUrl && (
               <div style={{ marginBottom: 16 }}>
-                <a href={proposalUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: theme.primary, wordBreak: "break-all" }}>
+                <a href={proposalUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: accentColor, wordBreak: "break-all" }}>
                   {proposalUrl}
                 </a>
               </div>
@@ -9252,7 +9253,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         <div style={{ marginTop: 4 }}>
           {/* Header */}
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
               MARKET UPDATE
             </div>
             <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
@@ -9264,9 +9265,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
           </div>
 
           {/* Value estimate card */}
-          <div style={{ background: C.bg2, borderRadius: 14, padding: 20, border: `1px solid ${theme.primary}30`, marginBottom: 16 }}>
+          <div style={{ background: C.bg2, borderRadius: 14, padding: 20, border: `1px solid ${accentColor}30`, marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>ESTIMATED VALUE RANGE</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: theme.primary, letterSpacing: -0.5 }}>
+            <div style={{ fontSize: 28, fontWeight: 900, color: accentColor, letterSpacing: -0.5 }}>
               {fmtDollar(muRange.low)} – {fmtDollar(muRange.high)}
             </div>
             <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
@@ -9285,7 +9286,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
 
           {/* Comparable sales */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: theme.primary, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>COMPARABLE SALES ({allComps.length})</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: accentColor, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>COMPARABLE SALES ({allComps.length})</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {allComps.map((c, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: C.bg2, borderRadius: 10, border: `1px solid ${C.border}` }}>
@@ -9304,7 +9305,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
 
           {/* Equity gain callout */}
           {fin.equityGain > 0 && (
-            <div style={{ background: `linear-gradient(135deg, ${theme.primary}08, ${theme.primary}15)`, borderRadius: 12, padding: 16, border: `1px solid ${theme.primary}25`, marginBottom: 16, textAlign: "center" }}>
+            <div style={{ background: `linear-gradient(135deg, ${accentColor}08, ${accentColor}15)`, borderRadius: 12, padding: 16, border: `1px solid ${accentColor}25`, marginBottom: 16, textAlign: "center" }}>
               <div style={{ fontSize: 11, color: C.muted }}>Estimated equity gain since purchase</div>
               <div style={{ fontSize: 22, fontWeight: 900, color: C.green, marginTop: 4 }}>+{fmtDollar(fin.equityGain)}</div>
             </div>
