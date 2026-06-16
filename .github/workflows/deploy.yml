@@ -30,10 +30,5 @@ jobs:
       - name: Install wrangler
         run: npm install -g wrangler@latest
 
-      # Create the Pages project if it doesn't exist yet
-      - name: Create Pages project (idempotent)
-        run: wrangler pages project create openhome-engine --production-branch=main || echo "Project already exists or skipping"
-        continue-on-error: true
-
       - name: Deploy to Cloudflare Pages
-        run: wrangler pages deploy dist --project-name=openhome-engine --branch=main --commit-dirty=true
+        run: wrangler pages deploy dist --project-name=propos-demo --branch=main --commit-dirty=true
