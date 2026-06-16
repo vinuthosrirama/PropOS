@@ -52,9 +52,8 @@ export interface Trigger {
 
 // ── Seeded demo data ──────────────────────────────────────────────────────────
 
-// Today in demo world
-const TODAY_STR = "2026-06-03"
-const TODAY = new Date(TODAY_STR)
+const TODAY = new Date()
+const TODAY_STR = TODAY.toISOString().slice(0, 10)
 
 interface SuburbSale {
   address: string

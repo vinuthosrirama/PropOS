@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense, type CSSProperties } from "react"
+import { useState, useEffect, lazy, Suspense, Component, type CSSProperties, type ReactNode } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, DEFAULT_AGENT, DEFAULT_THEME, DEFAULT_VENDOR_SETTINGS,
@@ -17,7 +17,29 @@ const SettingsView   = lazy(() => import("./views/SettingsView"))
 const PrincipalView  = lazy(() => import("./views/PrincipalView"))
 const PitchView      = lazy(() => import("./views/PitchView"))
 const CampaignView   = lazy(() => import("./views/CampaignView"))
-const VoiceAgentView = lazy(() => import("./views/VoiceAgentView"))
+const VoiceAgentView   = lazy(() => import("./views/VoiceAgentView"))
+const DocInsightsView  = lazy(() => import("./views/DocInsightsView"))
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { error: null }
+  }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 40, fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ fontSize: 32, marginBottom: 16 }}>⚠️</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#2c2d30", marginBottom: 8 }}>Something went wrong</div>
+          <div style={{ fontSize: 13, color: "#888", maxWidth: 420, textAlign: "center", marginBottom: 24 }}>{this.state.error.message}</div>
+          <button onClick={() => this.setState({ error: null })} style={{ padding: "10px 24px", borderRadius: 10, border: "none", background: "#3b1f77", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Try again</button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 function LoadingSpinner() {
   return (
@@ -195,6 +217,7 @@ export default function App() {
            productMode={productMode} />
       <BillingBanner />
 
+      <ErrorBoundary>
       <Suspense fallback={<LoadingSpinner />}>
         <AnimatePresence mode="wait">
           <motion.div id="main-content" key={view}
@@ -210,9 +233,11 @@ export default function App() {
             {view === "principal" && <PrincipalView agent={agent} theme={theme} />}
             {view === "campaign"  && <CampaignView />}
             {view === "voiceagent" && <VoiceAgentView />}
+            {view === "insights"   && <DocInsightsView />}
           </motion.div>
         </AnimatePresence>
       </Suspense>
+      </ErrorBoundary>
     </div>
   )
 }

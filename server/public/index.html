@@ -16,28 +16,46 @@
     <!-- Apply saved theme before React hydrates to prevent flash -->
     <script>
       try {
-        var light = localStorage.getItem("propos_light_mode") === "1"
+        var light = localStorage.getItem("propos_light_mode") !== "0"
         var el = document.documentElement
         if (light) el.classList.add("light-mode")
         el.style.cssText = light
-          ? "--c-bg:#f5f7fa;--c-bg2:#ffffff;--c-bg3:#edf0f5;--c-text:#0f172a;--c-muted:#475569;--c-faint:#94a3b8;--c-border:rgba(15,23,42,0.10);--c-border-hover:rgba(15,23,42,0.18)"
-          : "--c-bg:rgb(4,7,13);--c-bg2:rgb(14,18,28);--c-bg3:rgb(22,27,40);--c-text:rgb(213,219,230);--c-muted:rgba(213,219,230,0.50);--c-faint:rgba(213,219,230,0.30);--c-border:rgba(216,231,242,0.13);--c-border-hover:rgba(216,231,242,0.18)"
+          ? "--c-bg:#f7f7f8;--c-bg2:#ffffff;--c-bg3:#f1f1f2;--c-text:#2c2d30;--c-muted:rgba(59,31,119,0.58);--c-faint:rgba(59,31,119,0.32);--c-border:rgba(59,31,119,0.12);--c-border-hover:rgba(59,31,119,0.24)"
+          : "--c-bg:#14072e;--c-bg2:#2c1b59;--c-bg3:#351c6b;--c-text:rgba(255,255,255,0.92);--c-muted:rgba(255,255,255,0.52);--c-faint:rgba(255,255,255,0.25);--c-border:rgba(182,194,171,0.14);--c-border-hover:rgba(182,194,171,0.28)"
       } catch(e) {}
     </script>
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body, #root { height: 100%; }
       body {
-        background: var(--c-bg, rgb(4, 7, 13));
-        color: var(--c-text, rgb(213, 219, 230));
+        background: var(--c-bg, #f7f7f8);
+        color: var(--c-text, #2c2d30);
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         -webkit-font-smoothing: antialiased;
         transition: background 0.25s, color 0.25s;
       }
+      /* Peake design system — global classes */
+      @keyframes pk-pulse{0%,100%{transform:scale(.95);box-shadow:0 0 0 0 rgba(182,194,171,.7)}70%{transform:scale(1);box-shadow:0 0 0 9px rgba(182,194,171,0)}}
+      .pk-pulse{animation:pk-pulse 2.1s infinite}
+      @keyframes pk-pulse-green{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.7)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}}
+      .pk-pulse-green{animation:pk-pulse-green 2s infinite}
+      .pk-input{width:100%;border:none;border-bottom:1px solid rgba(59,31,119,.22);background:none;padding:9px 4px;font-size:15px;color:#3b1f77;outline:none;box-sizing:border-box;transition:border-color .2s;font-family:inherit;letter-spacing:-.1px}
+      .pk-input::placeholder{color:rgba(59,31,119,.28)}
+      .pk-input:focus{border-bottom-color:#3b1f77}
+      .pk-label{display:block;font-size:10px;font-weight:600;color:rgba(59,31,119,.5);letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px}
       ::-webkit-scrollbar { width: 6px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: rgba(216, 231, 242, 0.15); border-radius: 3px; }
       input, textarea, select { font-family: inherit; }
+      /* Override browser autofill dark background */
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover,
+      input:-webkit-autofill:focus {
+        -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+        -webkit-text-fill-color: #3b1f77 !important;
+        caret-color: #3b1f77;
+        transition: background-color 5000s ease-in-out 0s;
+      }
       @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
       .skip-nav {
         position: absolute; top: -56px; left: 16px;
@@ -49,15 +67,23 @@
       }
       .skip-nav:focus { top: 8px; }
       @media print {
-        body > *:not(#buyer-pitch-report) { display: none !important; }
-        #buyer-pitch-report { display: block !important; position: static !important;
-          width: 100% !important; max-height: none !important; overflow: visible !important;
-          box-shadow: none !important; border-radius: 0 !important; }
-        .no-print { display: none !important; }
+        body * { visibility: hidden; }
+        #buyer-pitch-report, #buyer-pitch-report * { visibility: visible; }
+        #buyer-pitch-report {
+          position: absolute !important;
+          top: 0 !important; left: 0 !important;
+          width: 100% !important;
+          max-height: none !important;
+          overflow: visible !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          background: #ffffff !important;
+        }
+        .no-print { display: none !important; visibility: hidden !important; }
         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       }
     </style>
-    <script type="module" crossorigin data-cfasync="false" src="/assets/index-BHorMTlc.js"></script>
+    <script type="module" crossorigin data-cfasync="false" src="/assets/index-D_qEVWn9.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-framer-DaUpJ-T_.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-react-BR8h7yyW.js">
   </head>

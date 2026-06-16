@@ -51,7 +51,13 @@ export async function sendViaBlueBubbles(
   // SMS_LIVE_ALLOWLIST: comma-separated E.164 numbers that bypass TEST_RECIPIENT_PHONE redirect.
   // Use for Stage 2+ contacts who should receive real messages.
   const allowlist  = (process.env.SMS_LIVE_ALLOWLIST ?? "").split(",").map(s => s.trim()).filter(Boolean)
-  const norm       = (n: string) => (n.startsWith("+") ? n : "+" + n.replace(/\D/g, ""))
+  // Normalize to E.164: handles AU mobile (04xxxxxxxx → +614xxxxxxxx) and already-E164 numbers
+  const norm = (n: string): string => {
+    const d = n.replace(/\D/g, "")
+    if (d.startsWith("61") && d.length === 11) return "+" + d
+    if (d.startsWith("0") && d.length === 10)  return "+61" + d.slice(1)
+    return "+" + d
+  }
   const isLive     = allowlist.some(n => norm(n) === norm(to))
   const actualTo   = (testPhone && !isLive) ? testPhone : to
   const actualBody = (testPhone && !isLive && showTestLabel) ? `[TEST to ${to}]\n${body}` : body
@@ -61,7 +67,7 @@ export async function sendViaBlueBubbles(
   // (AppleScript cannot use "any" — it errors -1700). Set this when the Private
   // API helper is not connected and you are messaging iMessage contacts.
   const service    = process.env.BLUEBUBBLES_SERVICE?.trim() || "any"
-  const safeNumber = actualTo.startsWith("+") ? actualTo : "+" + actualTo.replace(/\D/g, "")
+  const safeNumber = norm(actualTo)
   const chatGuid   = `${service};-;${safeNumber}`
   const tempGuid   = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
 

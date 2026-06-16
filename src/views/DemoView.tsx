@@ -77,6 +77,7 @@ type Stage =
   | { kind: "generating"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; transcript: string; allLeads: ScoredLead[] }
   | { kind: "review"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; transcript: string; sms: string; emailSubject: string; emailBody: string[]; allLeads: ScoredLead[] }
   | { kind: "missedOut"; auctionProperty: PortfolioProperty; leads: SheetLead[] }
+  | { kind: "matchQueue" }
   // ── Vendor prospecting stages ──────────────────────────────────────────
   | { kind: "vendorPortfolio" }
   | { kind: "vendorAnalysing"; segmented: SegmentedBuyer[] }
@@ -485,6 +486,65 @@ function SoldCard({ property, leads, loading, theme, onClick }: {
   )
 }
 
+// ── Inline doc summary chip for lead cards ────────────────────────────────────
+
+interface DocSummary { docsSent: number; lastOpened: string | null; totalScore: number }
+
+function LeadDocChip({ leadId, phone }: { leadId: string; phone?: string }) {
+  const [summary, setSummary] = useState<DocSummary | null>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (leadId) params.set("leadId", leadId)
+    if (phone)  params.set("phone", phone.replace(/\s+/g, ""))
+    authFetch(apiUrl(`/api/doc-track/contact-summary?${params}`))
+      .then(r => r.json())
+      .then((d: DocSummary) => { if (d.docsSent > 0) setSummary(d) })
+      .catch(() => {/* non-fatal */})
+  }, [leadId, phone])
+
+  if (!summary) return null
+
+  const ago = (iso: string | null) => {
+    if (!iso) return null
+    const diff = Date.now() - new Date(iso).getTime()
+    const h = Math.floor(diff / 3_600_000)
+    if (h < 1) return "just now"
+    if (h < 24) return `${h}h ago`
+    return `${Math.floor(h / 24)}d ago`
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 5 }}>
+      <span style={{
+        fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 10,
+        background: "rgba(79,163,224,0.12)", border: "1px solid rgba(79,163,224,0.25)",
+        color: C.blue,
+      }}>
+        {summary.docsSent} doc{summary.docsSent !== 1 ? "s" : ""} sent
+      </span>
+      {summary.lastOpened && (
+        <span style={{
+          fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 10,
+          background: "rgba(100,208,144,0.10)", border: "1px solid rgba(100,208,144,0.22)",
+          color: C.green,
+        }}>
+          Opened {ago(summary.lastOpened)}
+        </span>
+      )}
+      {summary.totalScore > 0 && (
+        <span style={{
+          fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 10,
+          background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.22)",
+          color: "#f59e0b",
+        }}>
+          +{summary.totalScore} pts
+        </span>
+      )}
+    </div>
+  )
+}
+
 // ── Stage 0b — Sold Property Attendees ───────────────────────────────────────
 
 function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
@@ -680,6 +740,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
                         {lead.notes.slice(0, 120)}{lead.notes.length > 120 ? "…" : ""}
                       </div>
                     )}
+                    <LeadDocChip leadId={lead.id} phone={lead.phone} />
                   </div>
 
                   {/* Best match recommendation — score badge always visible; arc + ticks on hover */}
@@ -761,6 +822,429 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
           From Sheets
         </span>
       </div>
+    </div>
+  )
+}
+
+// ── BuyerOS Match Queue ───────────────────────────────────────────────────────
+
+interface BuyerCandidate {
+  id:            number
+  name:          string
+  firstName:     string
+  lastName:      string
+  phone:         string | null
+  email:         string | null
+  leadType:      string
+  suburb:        string | null
+  address:       string | null
+  beds:          number | null
+  baths:         number | null
+  priceRangeMin: number | null
+  priceRangeMax: number | null
+  openHomeDate:  string | null
+  notes:         string | null
+  questionsAsked: string | null
+  docsSent:      number
+  lastOpened:    string | null
+  totalScore:    number
+}
+
+interface QueuePair {
+  contact:  BuyerCandidate
+  listing:  PortfolioProperty
+  score:    number
+  reasons:  string[]
+}
+
+function computePairScore(c: BuyerCandidate, p: PortfolioProperty): { score: number; reasons: string[] } {
+  let score = 0
+  const reasons: string[] = []
+
+  const cSuburb = (c.suburb ?? "").toLowerCase().trim()
+  const pSuburb = p.suburb.toLowerCase().trim()
+  if (cSuburb && (cSuburb.includes(pSuburb) || pSuburb.includes(cSuburb))) {
+    score += 30; reasons.push("Same suburb")
+  }
+
+  const budgetMax = c.priceRangeMax ?? 0
+  const budgetMin = c.priceRangeMin ?? 0
+  const priceLow  = p.priceMin ?? Math.round(p.price * 0.92)
+  const priceHigh = p.priceMax ?? Math.round(p.price * 1.08)
+  if (budgetMax >= priceLow && (budgetMin === 0 || budgetMin <= priceHigh)) {
+    score += 25; reasons.push("Budget fits")
+  } else if (budgetMax >= priceLow * 0.88) {
+    score += 10; reasons.push("Near budget")
+  }
+
+  if (c.beds && c.beds === p.beds) {
+    score += 20; reasons.push(`${p.beds} beds`)
+  } else if (c.beds && Math.abs(c.beds - p.beds) === 1) {
+    score += 8
+  }
+
+  if (c.leadType === "open_home_attendee") { score += 12; reasons.push("Open home attendee") }
+  else if (c.leadType === "previous_buyer") { score += 6 }
+
+  const engBoost = Math.min(c.totalScore, 15)
+  if (engBoost > 0) { score += engBoost; if (c.docsSent > 0) reasons.push("Engaged with doc") }
+
+  return { score, reasons }
+}
+
+function BuyerMatchQueuePage({ agent, theme, onBack }: {
+  agent: AgentProfile
+  theme: AgencyTheme
+  onBack: () => void
+}) {
+  const { active: agentActive } = getPortfolioForAgent(agent)
+  const [candidates, setCandidates] = useState<BuyerCandidate[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [skipped, setSkipped]       = useState<Set<string>>(new Set())
+  const [sending, setSending]       = useState<string | null>(null)
+  const [sent, setSent]             = useState<Set<string>>(new Set())
+  const [toast, setToast]           = useState<string | null>(null)
+  const [focusIdx, setFocusIdx]     = useState(0)
+
+  const agentName = agent.name
+
+  useEffect(() => {
+    authFetch(apiUrl(`/api/pitches/buyer-brief/matches?agentName=${encodeURIComponent(agentName)}`))
+      .then(r => r.json())
+      .then((d: { candidates?: BuyerCandidate[] }) => {
+        setCandidates(d.candidates ?? [])
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [agentName])
+
+  // Build ranked pairs from all candidates × all active listings
+  const allPairs: QueuePair[] = []
+  for (const c of candidates) {
+    for (const p of agentActive) {
+      const { score, reasons } = computePairScore(c, p)
+      if (score > 0) allPairs.push({ contact: c, listing: p, score, reasons })
+    }
+  }
+  allPairs.sort((a, b) => b.score - a.score)
+
+  const pairKey = (pair: QueuePair) => `${pair.contact.id}-${pair.listing.id}`
+  const visible = allPairs.filter(p => !skipped.has(pairKey(p)) && !sent.has(pairKey(p)))
+
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleApprove = async (pair: QueuePair) => {
+    const key = pairKey(pair)
+    setSending(key)
+    try {
+      await authFetch(apiUrl("/api/pitches/buyer-brief"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contactId:       pair.contact.id,
+          propertyAddress: pair.listing.address,
+          suburb:          pair.listing.suburb,
+          beds:            pair.listing.beds,
+          baths:           pair.listing.baths,
+          parking:         pair.listing.cars,
+          propertyType:    pair.listing.type,
+          landSqm:         pair.listing.land,
+          priceGuide:      { low: pair.listing.priceMin ?? pair.listing.price, high: pair.listing.priceMax ?? pair.listing.price },
+          matchReason:     pair.reasons.join(", "),
+        }),
+      })
+      setSent(prev => new Set([...prev, key]))
+      showToast(`Brief sent to ${pair.contact.name}`)
+    } catch {
+      showToast("Failed to create brief — check connection")
+    }
+    setSending(null)
+    if (focusIdx > 0) setFocusIdx(i => i - 1)
+  }
+
+  const handleSkip = (pair: QueuePair) => {
+    setSkipped(prev => new Set([...prev, pairKey(pair)]))
+    if (focusIdx > 0 && focusIdx >= visible.length - 1) setFocusIdx(i => i - 1)
+  }
+
+  const fmtBudget = (min: number | null, max: number | null) => {
+    if (!max) return "—"
+    if (!min || min === 0) return fmt(max)
+    return `${fmt(min)} – ${fmt(max)}`
+  }
+
+  const fmtDate = (iso: string | null) => {
+    if (!iso) return null
+    try { return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short" }) }
+    catch { return null }
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: FONT, color: C.text, paddingBottom: 100 }}>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 24px", paddingTop: 32 }}>
+        <button onClick={onBack} style={{
+          background: "none", border: "none", color: C.muted, cursor: "pointer",
+          fontSize: 12, fontWeight: 700, fontFamily: FONT, padding: 0, marginBottom: 20,
+          display: "flex", alignItems: "center", gap: 4,
+        }}>
+          ← Back
+        </button>
+
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.12em", color: theme.primary, textTransform: "uppercase" as const, marginBottom: 8 }}>
+            BuyerOS · Match Queue
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 8 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 900, color: C.text, letterSpacing: -0.8, margin: 0 }}>
+              Buyer Match Queue
+            </h1>
+            {!loading && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: theme.primary,
+                background: withAlpha(theme.primary, 0.1), border: `1px solid ${withAlpha(theme.primary, 0.2)}`,
+                borderRadius: 20, padding: "4px 12px",
+              }}>
+                {visible.length} to review
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 13, color: C.muted, maxWidth: 560, lineHeight: 1.6 }}>
+            AI-ranked contacts matched to your active listings. Approve to send a personalised buyer brief — skip to dismiss.
+          </div>
+        </div>
+
+        {/* Stats row */}
+        {!loading && (
+          <div style={{ display: "flex", gap: 10, marginBottom: 28, flexWrap: "wrap" }}>
+            {[
+              { label: "Contacts", value: String(candidates.length), color: C.text },
+              { label: "Pairs", value: String(allPairs.length), color: C.blue },
+              { label: "Sent", value: String(sent.size), color: C.green },
+              { label: "Skipped", value: String(skipped.size), color: C.muted },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{
+                background: C.bg2, border: `1px solid ${C.border}`,
+                borderRadius: 10, padding: "10px 16px",
+              }}>
+                <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 3 }}>{label}</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Queue ──────────────────────────────────────────────────────────── */}
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 24px" }}>
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}>
+            <div style={{ fontSize: 14 }}>Matching contacts to listings…</div>
+          </div>
+        ) : visible.length === 0 ? (
+          <div style={{
+            background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 16,
+            padding: "48px 32px", textAlign: "center",
+          }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>✓</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 8 }}>Queue complete</div>
+            <div style={{ fontSize: 13, color: C.muted }}>
+              {sent.size > 0 ? `${sent.size} brief${sent.size > 1 ? "s" : ""} sent` : "No matches found — try importing more contacts."}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {visible.map((pair, i) => {
+              const key = pairKey(pair)
+              const isSending = sending === key
+              const scoreColor_ = scoreColor(pair.score)
+              const isFocused = i === focusIdx
+
+              return (
+                <motion.div
+                  key={key}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, x: -40 }}
+                  transition={{ delay: Math.min(i, 5) * 0.04 }}
+                  style={{
+                    background: isFocused ? C.bg2 : C.bg3,
+                    border: `1px solid ${isFocused ? withAlpha(theme.primary, 0.35) : C.border}`,
+                    borderRadius: 16, overflow: "hidden",
+                    boxShadow: isFocused ? `0 0 24px ${theme.glow}` : "none",
+                    transition: "all 0.2s",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setFocusIdx(i)}
+                >
+                  {/* Match score band */}
+                  <div style={{
+                    height: 3,
+                    background: `linear-gradient(to right, ${withAlpha(scoreColor_, 0.3)}, ${scoreColor_})`,
+                  }} />
+
+                  <div style={{ padding: "18px 20px" }}>
+                    {/* Top row: contact ←→ listing + score ring */}
+                    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+
+                      {/* Contact card */}
+                      <div style={{
+                        flex: 1, background: C.bg, border: `1px solid ${C.border}`,
+                        borderRadius: 12, padding: "14px 16px",
+                      }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: C.muted, marginBottom: 6 }}>
+                          {pair.contact.leadType === "open_home_attendee" ? "Open Home" : "Previous Buyer"}
+                        </div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 4 }}>
+                          {pair.contact.name}
+                        </div>
+                        <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>
+                          {pair.contact.suburb ?? "Suburb unknown"}
+                          {pair.contact.beds && ` · ${pair.contact.beds}bd`}
+                        </div>
+                        <div style={{ fontSize: 12, color: theme.primary, fontWeight: 600, marginBottom: 4 }}>
+                          {fmtBudget(pair.contact.priceRangeMin, pair.contact.priceRangeMax)}
+                        </div>
+                        {pair.contact.openHomeDate && (
+                          <div style={{ fontSize: 10, color: C.faint }}>
+                            Open home: {fmtDate(pair.contact.openHomeDate)}
+                          </div>
+                        )}
+                        {/* Engagement badges */}
+                        {(pair.contact.docsSent > 0 || pair.contact.totalScore > 0) && (
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
+                            {pair.contact.docsSent > 0 && (
+                              <span style={{
+                                fontSize: 9, padding: "2px 6px", borderRadius: 8,
+                                background: "rgba(79,163,224,0.12)", color: C.blue,
+                                border: "1px solid rgba(79,163,224,0.2)", fontWeight: 600,
+                              }}>
+                                {pair.contact.docsSent} doc{pair.contact.docsSent > 1 ? "s" : ""}
+                              </span>
+                            )}
+                            {pair.contact.totalScore > 0 && (
+                              <span style={{
+                                fontSize: 9, padding: "2px 6px", borderRadius: 8,
+                                background: "rgba(100,208,144,0.10)", color: C.green,
+                                border: "1px solid rgba(100,208,144,0.2)", fontWeight: 600,
+                              }}>
+                                +{pair.contact.totalScore} eng
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Score + arrow connector */}
+                      <div style={{
+                        display: "flex", flexDirection: "column", alignItems: "center",
+                        gap: 8, paddingTop: 16, flexShrink: 0, width: 56,
+                      }}>
+                        <ScoreRing score={pair.score} size={48} strokeWidth={3} label="fit" />
+                        <div style={{ fontSize: 16, color: withAlpha(theme.primary, 0.5) }}>→</div>
+                      </div>
+
+                      {/* Listing card */}
+                      <div style={{
+                        flex: 1, background: C.bg, border: `1px solid ${C.border}`,
+                        borderRadius: 12, padding: "14px 16px", overflow: "hidden",
+                      }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: theme.primary, marginBottom: 6 }}>
+                          Active Listing
+                        </div>
+                        {/* Property image strip */}
+                        <div style={{
+                          height: 52, borderRadius: 8, overflow: "hidden",
+                          background: C.bg2, marginBottom: 8,
+                        }}>
+                          <img src={pair.listing.image} alt={pair.listing.address}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            onError={e => { (e.target as HTMLImageElement).style.display = "none" }}
+                          />
+                        </div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 2, lineHeight: 1.2 }}>
+                          {pair.listing.address}
+                        </div>
+                        <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>
+                          {pair.listing.suburb} · {pair.listing.beds}bd {pair.listing.baths}ba
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: theme.primary }}>
+                          {pair.listing.priceMin && pair.listing.priceMax
+                            ? `${fmt(pair.listing.priceMin)} – ${fmt(pair.listing.priceMax)}`
+                            : fmt(pair.listing.price)
+                          }
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Match reasons */}
+                    {pair.reasons.length > 0 && (
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 12 }}>
+                        {pair.reasons.map((r, ri) => (
+                          <span key={ri} style={{
+                            fontSize: 10, padding: "3px 8px", borderRadius: 10,
+                            background: withAlpha(scoreColor_, 0.12),
+                            border: `1px solid ${withAlpha(scoreColor_, 0.25)}`,
+                            color: scoreColor_, fontWeight: 600,
+                          }}>
+                            ✓ {r}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                      <button
+                        onClick={e => { e.stopPropagation(); void handleApprove(pair) }}
+                        disabled={isSending}
+                        style={{
+                          flex: 1, padding: "10px 0", borderRadius: 10, border: "none",
+                          background: isSending ? C.bg3 : C.green,
+                          color: isSending ? C.muted : "#0a0f1a",
+                          fontSize: 12, fontWeight: 800, fontFamily: FONT, cursor: isSending ? "default" : "pointer",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {isSending ? "Sending…" : "Send Brief →"}
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); handleSkip(pair) }}
+                        style={{
+                          padding: "10px 20px", borderRadius: 10,
+                          border: `1px solid ${C.border}`,
+                          background: C.bg3, color: C.muted,
+                          fontSize: 12, fontWeight: 700, fontFamily: FONT, cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        Skip
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)",
+          background: C.bg2, border: `1px solid ${C.border}`,
+          borderRadius: 12, padding: "12px 20px",
+          fontSize: 13, color: C.text, fontWeight: 600,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+          zIndex: 300, whiteSpace: "nowrap",
+        }}>
+          {toast}
+        </div>
+      )}
     </div>
   )
 }
@@ -852,11 +1336,12 @@ function isRealLead(lead: SheetLead): boolean {
 
 // ── Stage 0 — Portfolio ───────────────────────────────────────────────────────
 
-function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSettings, agent, theme }: {
+function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSettings, onMatchQueue, agent, theme }: {
   onSelectActive: (p: PortfolioProperty, soldLeads: Record<number, SheetLead[]>) => void
   onSelectSold: (p: PortfolioProperty, leads: SheetLead[]) => void
   onAuctionSaved: (property: PortfolioProperty, leads: SheetLead[]) => void
   onSettings?: () => void
+  onMatchQueue?: () => void
   agent: AgentProfile
   theme: AgencyTheme
 }) {
@@ -926,12 +1411,34 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
       return () => { mounted = false }
     }
 
-    // If Sheets not configured, stop here — cache or fallback is sufficient
-    if (!sheetsConnected()) {
-      if ((!cached || cached.length === 0) && agentSold.length > 0) applyLeads(DEMO_FALLBACK_LEADS)
-      else setSheetsLoading(false)
-      return () => { mounted = false }
-    }
+    // ── Primary source: Supabase PropOS_democontacts ──────────────────────────
+    // Try the live CRM before Sheets or hardcoded fallback.
+    // This ensures James Whitfield and all Supabase leads are always visible.
+    authFetch(apiUrl("/api/crm-leads"))
+      .then(r => r.json())
+      .then((data: { leads?: SheetLead[]; count?: number }) => {
+        if (!mounted) return
+        const crmLeads = (data.leads ?? []).filter(isRealLead)
+        if (crmLeads.length > 0) {
+          applyLeads(crmLeads, true)
+          return
+        }
+        // CRM empty — fall through to Sheets / hardcoded fallback
+        loadFromSheets()
+      })
+      .catch(() => {
+        if (mounted) loadFromSheets()
+      })
+
+    return () => { mounted = false }
+
+    function loadFromSheets() {
+      // If Sheets not configured, stop here — cache or fallback is sufficient
+      if (!sheetsConnected()) {
+        if ((!cached || cached.length === 0) && agentSold.length > 0) applyLeads(DEMO_FALLBACK_LEADS)
+        else setSheetsLoading(false)
+        return
+      }
 
     // Race Sheets fetch against 4s timeout — use cache if available, else fallback
     let settled = false
@@ -976,7 +1483,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
         else setSheetsLoading(false)
       })
 
-    return () => { mounted = false; clearTimeout(fallbackTimer) }
+    } // end loadFromSheets
   }, [])
 
   // Preload SLMs from Google Sheets (runs once at startup, populates runtime cache)
@@ -1035,6 +1542,24 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
         <div style={{ fontSize: 13, color: C.muted, maxWidth: 540, lineHeight: 1.6 }}>
           Match every open-home attendee to your active listings by price, beds, and suburb. Generate hyper-personalised SMS and email in your voice — in seconds.
         </div>
+        {onMatchQueue && (
+          <button
+            onClick={onMatchQueue}
+            style={{
+              marginTop: 16, padding: "10px 22px", borderRadius: 10, border: "none",
+              background: theme.primary, color: "#0a0f1a",
+              fontSize: 12, fontWeight: 800, fontFamily: FONT, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: 7,
+              boxShadow: `0 4px 16px ${theme.glow}`,
+              transition: "opacity 0.15s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.88" }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1" }}
+          >
+            <span>BuyerOS Match Queue</span>
+            <span style={{ fontSize: 14 }}>→</span>
+          </button>
+        )}
       </div>
 
       {/* ── SLM completeness warning ────────────────────────────────────────── */}
@@ -1736,18 +2261,18 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
                 return (
                   <div key={cf.label} style={{
                     flex: "1 1 120px", background: highlight ? theme.dim : C.bg2, borderRadius: 12,
-                    border: `1px solid ${highlight ? theme.primary + "33" : C.border}`,
+                    border: `1px solid ${highlight ? theme.primary + "44" : C.border}`,
                     padding: "10px 12px",
                   }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: highlight ? "rgba(255,255,255,0.5)" : C.faint, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
                       {cf.label}
                     </div>
                     <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>
-                      <span style={{ color: highlight ? "rgba(255,255,255,0.75)" : C.text, fontWeight: 600 }}>{cf.soldValue}</span>
+                      <span style={{ color: C.text, fontWeight: 600 }}>{cf.soldValue}</span>
                     </div>
                     <div style={{ fontSize: 11, color: C.muted }}>
                       <span style={{
-                        color: highlight ? "#fff" : dirColor(cf.direction, lead.persona),
+                        color: dirColor(cf.direction, lead.persona),
                         fontWeight: 600,
                       }}>
                         {cf.activeValue}{dirIcon(cf.direction)}
@@ -2329,9 +2854,11 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       }).then(r => r.json()).catch(() => null)
 
       const delivered = deliveryRes?.ok === true
+      const smsTransport: string = deliveryRes?.sms?.transport ?? "sms"
+      const transportLabel = smsTransport === "bluebubbles" ? "BlueBubbles" : smsTransport === "imsg" ? "iMessage" : smsTransport === "twilio" ? "Twilio" : smsTransport
       setDeliveryNote(
         delivered
-          ? "Sent via Twilio + Gmail"
+          ? `Sent via ${transportLabel} + Gmail`
           : deliveryRes?.errors?.length
           ? "Saved to Sheets (delivery: " + deliveryRes.errors[0] + ")"
           : "Saved to Sheets (configure Twilio/Gmail for direct delivery)"
@@ -5800,7 +6327,7 @@ function BulkFireModal({ segmented, agent, theme, onClose }: {
 // 10 AI-powered features shown on the vendor dashboard as a scrollable strip.
 
 const CGT_DEADLINE = new Date("2027-07-01")
-const NOW_DATE     = new Date("2026-05-27")
+const NOW_DATE     = new Date()
 const DAYS_TO_CGT  = Math.round((CGT_DEADLINE.getTime() - NOW_DATE.getTime()) / (1000 * 60 * 60 * 24))
 
 // ── CGT Urgency Modal ─────────────────────────────────────────────────────────
@@ -9105,7 +9632,9 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         }),
       }).then(r => r.json()).catch(() => null)
       const delivered = deliveryRes?.ok === true
-      setDeliveryNote(delivered ? "Sent via Twilio + Gmail" : "Saved to Sheets (configure Twilio/Gmail for direct delivery)")
+      const vTransport: string = deliveryRes?.sms?.transport ?? "sms"
+      const vTransportLabel = vTransport === "bluebubbles" ? "BlueBubbles" : vTransport === "imsg" ? "iMessage" : vTransport === "twilio" ? "Twilio" : vTransport
+      setDeliveryNote(delivered ? `Sent via ${vTransportLabel} + Gmail` : "Saved to Sheets (configure Twilio/Gmail for direct delivery)")
 
       // Write today's date + last message to both Google Sheets AND Supabase
       const lastMsg = sms || bodyText.split("\n\n")[0]?.slice(0, 200)
@@ -10105,6 +10634,16 @@ export default function DemoView({
       </AnimatePresence>
 
     <AnimatePresence mode="wait">
+      {stage.kind === "matchQueue" && (
+        <motion.div key="matchQueue" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+          <BuyerMatchQueuePage
+            agent={agent}
+            theme={theme}
+            onBack={() => setStage({ kind: "portfolio" })}
+          />
+        </motion.div>
+      )}
+
       {stage.kind === "portfolio" && (
         <motion.div key="portfolio" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
           <PortfolioPage
@@ -10118,6 +10657,7 @@ export default function DemoView({
               setStage({ kind: "missedOut", auctionProperty: property, leads })
             }
             onSettings={onSettings}
+            onMatchQueue={() => setStage({ kind: "matchQueue" })}
             agent={agent}
             theme={theme}
           />
