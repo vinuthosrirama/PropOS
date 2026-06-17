@@ -111,12 +111,13 @@ router.post("/seed", async (_req: Request, res: Response) => {
   for (const s of DEMO_SCENARIOS) {
     const rows = await query<{ id: number }>(
       `INSERT INTO sms_contacts
-         (name, phone, relationship, stage, conversation_objective, personalisation,
+         (name, phone, email, relationship, stage, conversation_objective, personalisation,
           voice_override, buyer_profile, rea_data, source, status, auto_reply, ready_to_contact, updated_at)
-       VALUES ($1, $2, 'agent_prospect', 1, $3, $4::jsonb, '{}'::jsonb, $5::jsonb, $6::jsonb,
-               $7, 'active', false, false, NOW())
+       VALUES ($1, $2, $3, 'agent_prospect', 1, $4, $5::jsonb, '{}'::jsonb, $6::jsonb, $7::jsonb,
+               $8, 'active', false, false, NOW())
        ON CONFLICT (phone) DO UPDATE SET
          name                   = EXCLUDED.name,
+         email                  = EXCLUDED.email,
          conversation_objective = EXCLUDED.conversation_objective,
          personalisation        = EXCLUDED.personalisation,
          buyer_profile          = EXCLUDED.buyer_profile,
@@ -127,6 +128,7 @@ router.post("/seed", async (_req: Request, res: Response) => {
       [
         s.contact.name,
         s.fakePhone,
+        s.fakeEmail,
         s.contact.conversation_objective,
         JSON.stringify(s.contact.personalisation),
         JSON.stringify(s.contact.buyer_profile),
@@ -175,7 +177,7 @@ router.post("/activate/:key", async (req: Request, res: Response) => {
   if (!isDbConnected()) return res.status(503).json({ error: "Database not connected" })
 
   const { key } = req.params
-  const { recipientPhone } = req.body as { recipientPhone?: string }
+  const { recipientPhone, recipientEmail } = req.body as { recipientPhone?: string; recipientEmail?: string }
 
   if (!recipientPhone?.trim()) {
     return res.status(400).json({ error: "recipientPhone is required in request body" })
@@ -191,19 +193,20 @@ router.post("/activate/:key", async (req: Request, res: Response) => {
     return res.status(404).json({ error: `Unknown scenario key '${key}'. Valid: ${DEMO_SCENARIOS.map(s => s.key).join(", ")}` })
   }
 
-  // 1. Reset ALL demo contacts to their fake phones first (avoids conflicts / stale live numbers)
+  // 1. Reset ALL demo contacts to their fake phones+emails first
   for (const s of DEMO_SCENARIOS) {
     await execute(
-      `UPDATE sms_contacts SET phone = $1, updated_at = NOW() WHERE source = $2`,
-      [s.fakePhone, `${DEMO_SOURCE_PREFIX}${s.key}`],
+      `UPDATE sms_contacts SET phone = $1, email = $2, updated_at = NOW() WHERE source = $3`,
+      [s.fakePhone, s.fakeEmail, `${DEMO_SOURCE_PREFIX}${s.key}`],
     )
   }
 
-  // 2. Swap the target contact to the real phone
+  // 2. Swap the target contact to the real phone (and optionally real email)
+  const liveEmail = recipientEmail?.trim() || scenario.fakeEmail
   const rows = await query<{ id: number; name: string }>(
-    `UPDATE sms_contacts SET phone = $1, ready_to_contact = false, updated_at = NOW()
-     WHERE source = $2 RETURNING id, name`,
-    [e164, `${DEMO_SOURCE_PREFIX}${key}`],
+    `UPDATE sms_contacts SET phone = $1, email = $2, ready_to_contact = false, updated_at = NOW()
+     WHERE source = $3 RETURNING id, name`,
+    [e164, liveEmail, `${DEMO_SOURCE_PREFIX}${key}`],
   )
 
   if (!rows[0]) {
@@ -212,8 +215,8 @@ router.post("/activate/:key", async (req: Request, res: Response) => {
 
   res.json({
     ok: true,
-    activated: { id: rows[0].id, name: rows[0].name, phone: e164, scenario: scenario.tag },
-    message: `${rows[0].name}'s number is now set to ${e164}. Tick ready_to_contact to fire the opener.`,
+    activated: { id: rows[0].id, name: rows[0].name, phone: e164, email: liveEmail, scenario: scenario.tag },
+    message: `${rows[0].name} activated — SMS → ${e164}, email → ${liveEmail}. Tick ready_to_contact to fire the opener.`,
   })
 })
 
@@ -225,13 +228,13 @@ router.post("/reset", async (_req: Request, res: Response) => {
 
   for (const s of DEMO_SCENARIOS) {
     await execute(
-      `UPDATE sms_contacts SET phone = $1, ready_to_contact = false, updated_at = NOW()
-       WHERE source = $2`,
-      [s.fakePhone, `${DEMO_SOURCE_PREFIX}${s.key}`],
+      `UPDATE sms_contacts SET phone = $1, email = $2, ready_to_contact = false, updated_at = NOW()
+       WHERE source = $3`,
+      [s.fakePhone, s.fakeEmail, `${DEMO_SOURCE_PREFIX}${s.key}`],
     )
   }
 
-  res.json({ ok: true, message: "All demo contacts reset to placeholder phones." })
+  res.json({ ok: true, message: "All demo contacts reset to placeholder phones and emails." })
 })
 
 export default router

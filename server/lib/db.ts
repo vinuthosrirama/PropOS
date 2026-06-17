@@ -610,6 +610,8 @@ async function migrate(): Promise<void> {
         created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`],
 
+    ["ALTER sms_contacts email",                `ALTER TABLE sms_contacts ADD COLUMN IF NOT EXISTS email TEXT`],
+
     ["ALTER sms_contacts last_agent_message_at", `
       ALTER TABLE sms_contacts ADD COLUMN IF NOT EXISTS last_agent_message_at TIMESTAMPTZ`],
 
