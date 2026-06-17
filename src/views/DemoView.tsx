@@ -316,8 +316,8 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
         )}
       </div>
       <div style={{ padding: "14px 16px 16px" }}>
-        {/* Price — prominent, Peake primary colour */}
-        <div style={{ fontSize: 15, fontWeight: 800, color: theme.primary, letterSpacing: -0.3, marginBottom: 6, lineHeight: 1 }}>
+        {/* Price */}
+        <div style={{ fontSize: 15, fontWeight: 800, color: C.text, letterSpacing: -0.3, marginBottom: 6, lineHeight: 1 }}>
           {property.priceMin && property.priceMax
             ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
             : fmt(property.price)}
@@ -337,9 +337,9 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
             property.land ? `${property.land} m²` : null,
           ].filter(Boolean).map(s => (
             <span key={s} style={{
-              fontSize: 10, fontWeight: 600, color: theme.primary,
-              background: withAlpha(theme.primary, 0.07),
-              border: `1px solid ${withAlpha(theme.primary, 0.14)}`,
+              fontSize: 10, fontWeight: 600, color: C.muted,
+              background: "rgba(255,255,255,0.06)",
+              border: `1px solid ${C.border}`,
               borderRadius: 20, padding: "2px 8px",
             }}>{s}</span>
           ))}
@@ -1528,14 +1528,14 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
 
       {/* ── BuyerOS hero header ─────────────────────────────────────────────── */}
       <div style={{ marginBottom: 36 }}>
-        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: theme.primary, textTransform: "uppercase" as const, marginBottom: 10 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: C.muted, textTransform: "uppercase" as const, marginBottom: 10 }}>
           Buyer Outreach
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 10 }}>
           <h1 style={{ fontSize: bpPP === "mobile" ? 22 : 30, fontWeight: 800, color: C.text, letterSpacing: -1, lineHeight: 1.1, margin: 0 }}>
             Re-engage your open home database
           </h1>
-          <span style={{ fontSize: 11, fontWeight: 700, color: theme.primary, background: withAlpha(theme.primary, 0.08), border: `1px solid ${withAlpha(theme.primary, 0.18)}`, borderRadius: 20, padding: "4px 12px", letterSpacing: 0.3, whiteSpace: "nowrap" as const }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.text, background: "rgba(255,255,255,0.08)", border: `1px solid ${C.borderHover}`, borderRadius: 20, padding: "4px 12px", letterSpacing: 0.3, whiteSpace: "nowrap" as const }}>
             {agentActive.length} {agentActive.length === 1 ? "listing" : "listings"}
           </span>
         </div>
@@ -1547,7 +1547,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
             onClick={onMatchQueue}
             style={{
               marginTop: 16, padding: "10px 22px", borderRadius: 10, border: "none",
-              background: theme.primary, color: "#0a0f1a",
+              background: theme.primary, color: "#fff",
               fontSize: 12, fontWeight: 800, fontFamily: FONT, cursor: "pointer",
               display: "inline-flex", alignItems: "center", gap: 7,
               boxShadow: `0 4px 16px ${theme.glow}`,
@@ -1594,7 +1594,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
       {/* ── Active listings ─────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 36 }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 18 }}>
-          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: theme.primary, textTransform: "uppercase" as const, paddingBottom: 7, borderBottom: `2px solid ${theme.primary}` }}>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: C.muted, textTransform: "uppercase" as const, paddingBottom: 7, borderBottom: `1px solid ${C.border}` }}>
             Active Listings
           </div>
         </div>
@@ -1624,7 +1624,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
       {/* ── Sold listings ───────────────────────────────────────────────────── */}
       <div>
         <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: theme.primary, textTransform: "uppercase" as const, paddingBottom: 7, borderBottom: `2px solid ${theme.primary}` }}>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: C.muted, textTransform: "uppercase" as const, paddingBottom: 7, borderBottom: `1px solid ${C.border}` }}>
             Comparable Sales
           </div>
         </div>
