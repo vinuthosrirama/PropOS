@@ -20,6 +20,7 @@ export interface DemoScenario {
   tag: string          // short badge e.g. "FHB → Landlord"
   summary: string      // one-line shown in the UI card
   fakePhone: string
+  fakeEmail: string    // demo-safe email; swapped to real recipient via /api/demo/activate
   contact: {
     name: string
     relationship: "agent_prospect"
@@ -38,6 +39,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     tag: "FHB → Landlord",
     summary: "Bought Berwick 2023 · has equity · exploring investment",
     fakePhone: "+61400000001",
+    fakeEmail: "vinuth.srirama@outlook.com",
     contact: {
       name: "Sarah Chen",
       relationship: "agent_prospect",
@@ -94,6 +96,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     tag: "FHB → Investor",
     summary: "Pre-approved $520k · researching IP · Pakenham new build ready",
     fakePhone: "+61400000002",
+    fakeEmail: "vinuth.srirama@outlook.com",
     contact: {
       name: "James Ngo",
       relationship: "agent_prospect",
@@ -157,6 +160,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     tag: "Buyer → Seller?",
     summary: "Bought Officer Nov 2024 · market +12% · baby on the way",
     fakePhone: "+61400000003",
+    fakeEmail: "vinuth.srirama@outlook.com",
     contact: {
       name: "Michael Fraser",
       relationship: "agent_prospect",
@@ -209,6 +213,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     tag: "Open Home → New Listing",
     summary: "Attended 45 Wattle Rd · $640k too high · 38 Acacia Dr just listed at $618k",
     fakePhone: "+61400000004",
+    fakeEmail: "vinuth.srirama@outlook.com",
     contact: {
       name: "Priya Sharma",
       relationship: "agent_prospect",
