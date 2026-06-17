@@ -123,11 +123,11 @@ export default function VendorOutreachView() {
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: C.muted, textTransform: "uppercase", marginBottom: 6 }}>
-          VendorOS · Outreach Tracker
+          Email Outreach
         </div>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Past Buyer Campaigns</h1>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.text }}>Lead Campaigns</h1>
         <p style={{ margin: "6px 0 0", fontSize: 13, color: C.muted }}>
-          Outreach to your past buyers from the CRM — tracked in real time.
+          Email outreach sent to your leads — tracked in real time.
         </p>
       </div>
 

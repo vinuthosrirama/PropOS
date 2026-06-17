@@ -232,7 +232,7 @@ export default function App() {
                                               vendorSettings={vendorSettings} />}
             {view === "setup"     && <SettingsView agent={agent} vendorSettings={vendorSettings} onVendorSettingsChange={handleVendorSettings} lightMode={lightMode} onToggleLightMode={() => setLightMode(m => !m)} />}
             {view === "principal" && <PrincipalView agent={agent} theme={theme} />}
-            {view === "campaign"  && (mode === "vendor" ? <VendorOutreachView /> : <CampaignView />)}
+            {view === "campaign"  && <VendorOutreachView />}
             {view === "voiceagent" && <VoiceAgentView />}
             {view === "insights"   && <DocInsightsView />}
           </motion.div>
