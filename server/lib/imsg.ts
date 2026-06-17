@@ -42,10 +42,12 @@ export function imsgConfigured(): boolean {
 export async function sendViaImsg(
   to: string,
   body: string,
+  liveMode = false,
 ): Promise<{ sid: string; testMode: boolean }> {
   const testPhone  = process.env.TEST_RECIPIENT_PHONE?.trim()
-  const actualTo   = testPhone ?? to
-  const actualBody = testPhone ? `[TEST to ${to}]\n${body}` : body
+  const redirect   = testPhone && !liveMode
+  const actualTo   = redirect ? testPhone : to
+  const actualBody = redirect ? `[TEST to ${to}]\n${body}` : body
 
   // Sanitise body: escape chars that would break the shell argument
   const safeBody = actualBody
@@ -66,7 +68,7 @@ export async function sendViaImsg(
   }
 
   const guid = stdout.trim() || `imsg-${Date.now()}`
-  return { sid: guid, testMode: !!testPhone }
+  return { sid: guid, testMode: !!redirect }
 }
 
 /**

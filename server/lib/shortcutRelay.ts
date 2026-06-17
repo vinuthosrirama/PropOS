@@ -65,12 +65,14 @@ export function verifyShortcutSecret(secret: string): boolean {
 export async function enqueueShortcutMessage(
   to: string,
   body: string,
+  liveMode = false,
 ): Promise<{ sid: string; testMode: boolean }> {
   if (!isDbConnected()) throw new Error("shortcut-relay: database not connected")
 
   const testPhone  = process.env.TEST_RECIPIENT_PHONE?.trim()
-  const actualTo   = testPhone ?? to
-  const actualBody = testPhone ? `[TEST to ${to}]\n${body}` : body
+  const redirect   = testPhone && !liveMode
+  const actualTo   = redirect ? testPhone : to
+  const actualBody = redirect ? `[TEST to ${to}]\n${body}` : body
   const deviceId   = process.env.SHORTCUT_RELAY_DEVICE_ID?.trim()
 
   if (!deviceId) throw new Error("SHORTCUT_RELAY_DEVICE_ID not set")
@@ -84,7 +86,7 @@ export async function enqueueShortcutMessage(
   const id = rows[0]?.id
   if (!id) throw new Error("shortcut-relay: failed to queue message")
 
-  return { sid: id, testMode: !!testPhone }
+  return { sid: id, testMode: !!redirect }
 }
 
 /**

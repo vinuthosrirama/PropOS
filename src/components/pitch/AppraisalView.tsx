@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { FONT, getAgencyTheme, DEFAULT_THEME } from "../../data"
 import type { PitchAgentInfo, PitchCompSale } from "./PriceUpdateTemplate"
+import TrackedSection from "./TrackedSection"
 
 // ── Payload types (mirrors server/lib/pitchGenerator.ts) ──────────────────────
 
@@ -214,6 +215,7 @@ export default function AppraisalView({ payload, vendorEmail, slug }: Props) {
       }}>
 
         {/* Cover strip */}
+        <TrackedSection id="cover">
         <div style={{
           background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
           padding: "32px 36px",
@@ -232,21 +234,23 @@ export default function AppraisalView({ payload, vendorEmail, slug }: Props) {
             Prepared {generatedDate}
           </div>
         </div>
+        </TrackedSection>
 
         <div style={{ padding: "32px 36px" }}>
 
           {/* Executive summary */}
           {executiveSummary && (
-            <div style={{ marginBottom: 32 }}>
+            <TrackedSection id="executive-summary" style={{ marginBottom: 32 }}>
               {executiveSummary.split("\n\n").map((para, i) => (
                 <p key={i} style={{ margin: "0 0 14px", fontSize: 15, lineHeight: 1.7, color: "#2d2d2d" }}>
                   {para}
                 </p>
               ))}
-            </div>
+            </TrackedSection>
           )}
 
           {/* Price guide */}
+          <TrackedSection id="price-guide">
           <div style={{
             background: "#f9f5ff",
             borderRadius: 12,
@@ -310,10 +314,11 @@ export default function AppraisalView({ payload, vendorEmail, slug }: Props) {
               <span style={{ fontSize: 11, color: "#aaa" }}>{priceGuide.method}</span>
             </div>
           </div>
+          </TrackedSection>
 
           {/* Suburb snapshot */}
           {suburbStats && (
-            <div style={{ marginBottom: 28 }}>
+            <TrackedSection id="market-overview" style={{ marginBottom: 28 }}>
               <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 1, color: "#888", marginBottom: 12 }}>
                 {property.suburb} Market Snapshot
               </div>
@@ -333,12 +338,12 @@ export default function AppraisalView({ payload, vendorEmail, slug }: Props) {
                   </div>
                 ))}
               </div>
-            </div>
+            </TrackedSection>
           )}
 
           {/* Comparable sales */}
           {comparableSales && comparableSales.length > 0 && (
-            <div style={{ marginBottom: 28 }}>
+            <TrackedSection id="comparable-sales" style={{ marginBottom: 28 }}>
               <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 1, color: "#888", marginBottom: 12 }}>
                 Recent Comparable Sales
               </div>
@@ -364,7 +369,7 @@ export default function AppraisalView({ payload, vendorEmail, slug }: Props) {
                 </tbody>
               </table>
               <div style={{ fontSize: 11, color: "#bbb", marginTop: 6 }}>Source: PropOS analysis</div>
-            </div>
+            </TrackedSection>
           )}
 
           {/* Methodology */}
@@ -377,6 +382,7 @@ export default function AppraisalView({ payload, vendorEmail, slug }: Props) {
           </div>
 
           {/* Agent card */}
+          <TrackedSection id="agent-profile">
           <div style={{
             display: "flex",
             alignItems: "center",
@@ -407,11 +413,14 @@ export default function AppraisalView({ payload, vendorEmail, slug }: Props) {
               )}
             </div>
           </div>
+          </TrackedSection>
 
           {/* Disclaimer */}
+          <TrackedSection id="next-steps">
           <p style={{ fontSize: 11, color: "#aaa", lineHeight: 1.6, margin: 0, borderTop: "1px solid #eee", paddingTop: 16 }}>
             {disclaimer}
           </p>
+          </TrackedSection>
         </div>
       </div>
     </div>

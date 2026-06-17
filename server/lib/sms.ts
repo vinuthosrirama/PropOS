@@ -143,16 +143,17 @@ async function dispatchSMS(
   transport: SmsTransport,
   to: string,
   body: string,
+  liveMode = false,
 ): Promise<{ sid: string; testMode: boolean }> {
   switch (transport) {
-    case "bluebubbles":    return sendViaBlueBubbles(to, body)
-    case "textingblue":    return sendViaTextingBlue(to, body)
-    case "imsg":           return sendViaImsg(to, body)
-    case "telelink":       return sendViaTeleLink(to, body)
-    case "android-gateway": return sendViaAndroidGateway(to, body)
-    case "httpsms":         return sendViaHttpSms(to, body)
-    case "shortcut-relay":  return enqueueShortcutMessage(to, body)
-    case "twilio":          return twilioSend(to, body)
+    case "bluebubbles":    return sendViaBlueBubbles(to, body, liveMode)
+    case "textingblue":    return sendViaTextingBlue(to, body, liveMode)
+    case "imsg":           return sendViaImsg(to, body, liveMode)
+    case "telelink":       return sendViaTeleLink(to, body, liveMode)
+    case "android-gateway": return sendViaAndroidGateway(to, body, liveMode)
+    case "httpsms":         return sendViaHttpSms(to, body, liveMode)
+    case "shortcut-relay":  return enqueueShortcutMessage(to, body, liveMode)
+    case "twilio":          return twilioSend(to, body, liveMode)
     default:                throw new Error(`Transport "${transport}" is not configured`)
   }
 }
@@ -168,6 +169,7 @@ export async function sendSMS(
   to: string,
   body: string,
   skipTransports: SmsTransport[] = [],
+  liveMode = false,
 ): Promise<SmsSendResult> {
   const chain = getTransportChain().filter(t => !skipTransports.includes(t))
 
@@ -181,7 +183,7 @@ export async function sendSMS(
 
   for (const transport of chain) {
     try {
-      const r = await dispatchSMS(transport, to, body)
+      const r = await dispatchSMS(transport, to, body, liveMode)
       attempts.push({ transport, ok: true })
       const usedFallback = attempts.length > 1
       if (usedFallback) console.warn(`[sms] "${transport}" succeeded for ${to} after ${attempts.length - 1} failed transport(s)`)

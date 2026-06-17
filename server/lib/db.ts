@@ -666,6 +666,57 @@ async function migrate(): Promise<void> {
       )`],
     ["INDEX sold_properties_suburb", `CREATE INDEX IF NOT EXISTS sold_properties_suburb_idx ON sold_properties(suburb)`],
     ["INDEX sold_properties_date",   `CREATE INDEX IF NOT EXISTS sold_properties_date_idx   ON sold_properties(sold_date DESC)`],
+
+    // ── Phase 9: Document Intelligence (VendorOS + BuyerOS engagement tracking)
+
+    ["CREATE document_sessions", `
+      CREATE TABLE IF NOT EXISTS document_sessions (
+        id               SERIAL PRIMARY KEY,
+        pitch_id         TEXT NOT NULL,
+        pitch_type       TEXT NOT NULL,
+        session_id       TEXT NOT NULL UNIQUE,
+        contact_id       INTEGER,
+        agent_id         TEXT,
+        viewer_ip        TEXT,
+        viewer_ua        TEXT,
+        opened_at        TIMESTAMPTZ DEFAULT NOW(),
+        last_active_at   TIMESTAMPTZ,
+        total_time_s     INTEGER DEFAULT 0,
+        sections_viewed  TEXT[] DEFAULT '{}',
+        completion_pct   DECIMAL(5,2) DEFAULT 0,
+        scroll_depth_pct DECIMAL(5,2) DEFAULT 0,
+        page_times_json  JSONB DEFAULT '{}',
+        cursor_samples   JSONB DEFAULT '[]',
+        text_selections  TEXT[] DEFAULT '{}',
+        lead_score_delta INTEGER DEFAULT 0,
+        score_applied    BOOLEAN DEFAULT FALSE
+      )`],
+
+    ["CREATE document_events", `
+      CREATE TABLE IF NOT EXISTS document_events (
+        id          BIGSERIAL PRIMARY KEY,
+        session_id  TEXT NOT NULL,
+        event_type  TEXT NOT NULL,
+        section_id  TEXT,
+        data        JSONB,
+        recorded_at TIMESTAMPTZ DEFAULT NOW()
+      )`],
+
+    ["INDEX document_events_session",  `CREATE INDEX IF NOT EXISTS document_events_session_idx  ON document_events(session_id, recorded_at)`],
+    ["INDEX document_sessions_pitch",  `CREATE INDEX IF NOT EXISTS document_sessions_pitch_idx  ON document_sessions(pitch_id, opened_at DESC)`],
+    ["INDEX document_sessions_contact",`CREATE INDEX IF NOT EXISTS document_sessions_contact_idx ON document_sessions(contact_id) WHERE contact_id IS NOT NULL`],
+
+    // Update pitches type constraint to include buyer_brief
+    ["CONSTRAINT pitches_type_check_v2", `
+      DO $$ BEGIN
+        ALTER TABLE pitches DROP CONSTRAINT IF EXISTS pitches_type_check;
+        ALTER TABLE pitches ADD CONSTRAINT pitches_type_check
+          CHECK (type IN ('price_update','digital_intro','listing_proposal','appraisal','vendor_report','buyer_brief'));
+      EXCEPTION WHEN others THEN NULL;
+      END $$`],
+
+    // Add engagement_score to contacts if missing
+    ["ALTER contacts: engagement_score", `ALTER TABLE contacts ADD COLUMN IF NOT EXISTS engagement_score INTEGER DEFAULT 0`],
   ]
 
   let failed = 0

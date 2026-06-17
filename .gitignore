@@ -6,6 +6,8 @@ dist
 !.claude/settings.json
 !.claude/hooks/
 !.claude/hooks/session-review.sh
+!.claude/skills/
+!.claude/skills/**
 .env
 server/.env
 # server/public is the Railway-deploy copy of dist/ — tracked in git
@@ -16,3 +18,4 @@ dist_backup_*/
 src_snapshot_*/
 .agents/
 skills-lock.json
+*.bak

@@ -16,7 +16,8 @@ const DemoView       = lazy(() => import("./views/DemoView"))
 const SettingsView   = lazy(() => import("./views/SettingsView"))
 const PrincipalView  = lazy(() => import("./views/PrincipalView"))
 const PitchView      = lazy(() => import("./views/PitchView"))
-const CampaignView   = lazy(() => import("./views/CampaignView"))
+const CampaignView        = lazy(() => import("./views/CampaignView"))
+const VendorOutreachView  = lazy(() => import("./views/VendorOutreachView"))
 const VoiceAgentView   = lazy(() => import("./views/VoiceAgentView"))
 const DocInsightsView  = lazy(() => import("./views/DocInsightsView"))
 
@@ -212,7 +213,7 @@ export default function App() {
       `}</style>
       <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn}
            onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge}
-           mode={mode} onSwitchMode={productMode ? undefined : setMode}
+           mode={mode} onSwitchMode={setMode}
            lightMode={lightMode} onToggleLightMode={() => setLightMode(m => !m)}
            productMode={productMode} />
       <BillingBanner />
@@ -231,7 +232,7 @@ export default function App() {
                                               vendorSettings={vendorSettings} />}
             {view === "setup"     && <SettingsView agent={agent} vendorSettings={vendorSettings} onVendorSettingsChange={handleVendorSettings} lightMode={lightMode} onToggleLightMode={() => setLightMode(m => !m)} />}
             {view === "principal" && <PrincipalView agent={agent} theme={theme} />}
-            {view === "campaign"  && <CampaignView />}
+            {view === "campaign"  && (mode === "vendor" ? <VendorOutreachView /> : <CampaignView />)}
             {view === "voiceagent" && <VoiceAgentView />}
             {view === "insights"   && <DocInsightsView />}
           </motion.div>

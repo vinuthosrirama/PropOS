@@ -87,6 +87,10 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "leadId and leadName are required" })
   }
 
+  // liveMode: send to actual CRM contact phone/email, bypassing TEST_RECIPIENT_* redirect.
+  // Self-demo sends ("self_demo" leadId) still go to the test recipient.
+  const liveMode = leadId !== "self_demo"
+
   let compliance: { smsOk: boolean; emailOk: boolean; reason?: string }
   try {
     compliance = await checkCompliance(phone ?? "", email ?? "")
@@ -108,7 +112,7 @@ router.post("/", async (req, res) => {
       results.errors.push("SMS skipped: TWILIO_* env vars not configured")
     } else {
       try {
-        results.sms = await withRetry(() => sendSMS(phone, sms))
+        results.sms = await withRetry(() => sendSMS(phone, sms, [], liveMode))
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         results.errors.push(`SMS failed: ${msg}`)
@@ -161,7 +165,7 @@ router.post("/", async (req, res) => {
         trackingId:      outreachLogId > 0 ? outreachLogId : undefined,
       })
       try {
-        results.email = await withRetry(() => sendEmail({ to: email, fromName: agentName, subject, htmlBody: html }))
+        results.email = await withRetry(() => sendEmail({ to: email, fromName: agentName, subject, htmlBody: html, liveMode }))
         emailActuallySent = true
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)

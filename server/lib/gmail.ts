@@ -43,9 +43,11 @@ export async function sendEmail(params: {
   fromName:  string
   subject:   string
   htmlBody:  string
+  liveMode?: boolean
 }): Promise<{ messageId: string; testMode: boolean }> {
   const testEmail  = process.env.TEST_RECIPIENT_EMAIL?.trim()
-  const actualTo   = testEmail ?? params.to
+  const redirect   = testEmail && !params.liveMode
+  const actualTo   = redirect ? testEmail : params.to
   const actualSubj = params.subject
 
   // GMAIL_SEND_AS = verified "Send as" alias (e.g. yourpartners@addvantage.site).
@@ -65,5 +67,5 @@ export async function sendEmail(params: {
     requestBody: { raw },
   })
 
-  return { messageId: res.data.id ?? "unknown", testMode: !!testEmail }
+  return { messageId: res.data.id ?? "unknown", testMode: !!redirect }
 }

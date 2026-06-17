@@ -45,7 +45,7 @@ interface PitchRow {
   agent_id:        string
   lead_id:         string | null
   property_ref:    string | null
-  payload_json:    PriceUpdatePayload | AppraisalPayload
+  payload_json:    PriceUpdatePayload | AppraisalPayload | Record<string, unknown>
   status:          string
   view_count:      number
   first_viewed_at: string | null
@@ -534,6 +534,167 @@ authedRouter.get("/vendor-reports/:id", async (req: Request, res: Response) => {
   const report = await queryOne<VendorReportRow>(`SELECT * FROM vendor_reports WHERE id = $1`, [req.params.id])
   if (!report) return res.status(404).json({ error: "Report not found" })
   res.json(report)
+})
+
+// ── POST /api/pitches/buyer-brief  (authed) ───────────────────────────────────
+// Create a BuyerOS brief connecting an open-home contact to a matched listing.
+
+interface BuyerBriefBody {
+  contactId:       number
+  agentId:         string
+  propertyAddress: string
+  suburb:          string
+  beds:            number
+  baths:           number
+  parking?:        number
+  propertyType:    string
+  landSqm?:        number
+  priceGuide?:     { low: number; high: number }
+  inspectionTimes?: string[]
+  keyFeatures?:    string[]
+  comparableSales?: Array<{ address: string; price: number; date: string; beds: number; baths?: number; land?: number }>
+  matchReason?:    string
+  listingUrl?:     string
+}
+
+authedRouter.post("/buyer-brief", async (req: Request, res: Response) => {
+  const body = req.body as BuyerBriefBody
+
+  if (!body.contactId || !body.propertyAddress || !body.suburb) {
+    return res.status(400).json({ error: "contactId, propertyAddress, and suburb are required" })
+  }
+
+  const agentId = (req as Request & { agentId?: string }).agentId ?? body.agentId
+  if (!agentId) return res.status(401).json({ error: "Missing agent" })
+
+  // Look up agent card from agents table (or fall back to a minimal card)
+  let agentCard: PitchAgentInfo = { name: "Your Agent", agency: "", suburb: "" }
+  if (isDbConnected()) {
+    const agentRow = await queryOne<{ name: string; agency: string; suburb: string; phone: string; email: string }>(
+      `SELECT name, agency, suburb, phone, email FROM agents WHERE id = $1`,
+      [agentId],
+    ).catch(() => null)
+    if (agentRow) agentCard = { name: agentRow.name, agency: agentRow.agency, suburb: agentRow.suburb, phone: agentRow.phone, email: agentRow.email }
+  }
+
+  // Look up buyer name from contacts
+  let buyerName = "there"
+  if (isDbConnected()) {
+    const contact = await queryOne<{ first_name: string; last_name: string }>(
+      `SELECT first_name, last_name FROM contacts WHERE id = $1`,
+      [body.contactId],
+    ).catch(() => null)
+    if (contact) buyerName = `${contact.first_name} ${contact.last_name}`.trim()
+  }
+
+  const payload = {
+    buyerName,
+    propertyAddress: body.propertyAddress,
+    suburb:          body.suburb,
+    beds:            body.beds,
+    baths:           body.baths,
+    parking:         body.parking,
+    propertyType:    body.propertyType,
+    landSqm:         body.landSqm,
+    priceGuide:      body.priceGuide,
+    inspectionTimes: body.inspectionTimes,
+    keyFeatures:     body.keyFeatures,
+    comparableSales: body.comparableSales,
+    matchReason:     body.matchReason,
+    agentCard,
+    listingUrl:      body.listingUrl,
+  }
+
+  const slug = makeSlug()
+  const pitchId = crypto.randomUUID()
+
+  if (isDbConnected()) {
+    await execute(
+      `INSERT INTO pitches (id, type, slug, agent_id, lead_id, payload_json, status, acceptance_token)
+       VALUES ($1, 'buyer_brief', $2, $3, $4, $5, 'draft', NULL)`,
+      [pitchId, slug, agentId, String(body.contactId), JSON.stringify(payload)],
+    )
+  } else {
+    const now = new Date().toISOString()
+    memPitches.set(slug, {
+      id: pitchId, type: "buyer_brief", slug, agent_id: agentId,
+      lead_id: String(body.contactId), property_ref: null,
+      payload_json: payload,
+      status: "draft", view_count: 0,
+      first_viewed_at: null, last_viewed_at: null,
+      created_at: now, regenerated_at: null,
+      accepted_at: null, accepted_by: null, accepted_ip: null, acceptance_token: null,
+      vendor_email: null, vendor_name: null,
+    })
+  }
+
+  const baseUrl = process.env.FRONTEND_URL ?? "https://propos.addvantage.site"
+  res.json({ ok: true, slug, pitchId, url: `${baseUrl}/p/${slug}` })
+})
+
+// ── GET /api/pitches/buyer-brief/matches  (authed) ────────────────────────────
+// Returns CRM contacts for the agent with engagement data, for the match queue UI.
+// Frontend does the contact×listing scoring using PORTFOLIO_ACTIVE.
+
+interface BuyerCandidateRow {
+  id:            number
+  firstName:     string
+  lastName:      string
+  name:          string
+  phone:         string | null
+  email:         string | null
+  leadType:      string
+  suburb:        string | null
+  address:       string | null
+  beds:          number | null
+  baths:         number | null
+  priceRangeMin: number | null
+  priceRangeMax: number | null
+  openHomeDate:  string | null
+  notes:         string | null
+  questionsAsked: string | null
+  docsSent:      number
+  lastOpened:    string | null
+  totalScore:    number
+}
+
+authedRouter.get("/buyer-brief/matches", async (req: Request, res: Response) => {
+  const agentName = (req.query.agentName as string) || "Cameron Knoll"
+
+  if (!isDbConnected()) return res.json({ candidates: [] })
+
+  const candidates = await query<BuyerCandidateRow>(`
+    SELECT
+      c.id,
+      c.lead_first_name                              AS "firstName",
+      c.lead_last_name                               AS "lastName",
+      (c.lead_first_name || ' ' || c.lead_last_name) AS name,
+      c.lead_phone                                   AS phone,
+      c.lead_email                                   AS email,
+      c.lead_type                                    AS "leadType",
+      c.property_suburb                              AS suburb,
+      c.property_address                             AS address,
+      c.property_beds                                AS beds,
+      c.property_baths                               AS baths,
+      c.price_range_min                              AS "priceRangeMin",
+      c.price_range_max                              AS "priceRangeMax",
+      c.open_home_date                               AS "openHomeDate",
+      c.notes,
+      c.questions_asked                              AS "questionsAsked",
+      COUNT(DISTINCT p.id)::int                      AS "docsSent",
+      MAX(ds.opened_at)                              AS "lastOpened",
+      COALESCE(SUM(ds.lead_score_delta), 0)::int     AS "totalScore"
+    FROM "PropOS_democontacts" c
+    LEFT JOIN pitches p  ON p.lead_id = c.id::text
+    LEFT JOIN document_sessions ds ON ds.pitch_id = p.id
+    WHERE c.rea_agent_name ILIKE $1
+      AND c.lead_type IN ('open_home_attendee', 'previous_buyer', 'prospective_buyer')
+    GROUP BY c.id
+    ORDER BY "totalScore" DESC, c.open_home_date DESC NULLS LAST, c.id ASC
+    LIMIT 100
+  `, [agentName])
+
+  res.json({ candidates })
 })
 
 export { publicRouter, authedRouter }
