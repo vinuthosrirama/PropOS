@@ -19,7 +19,7 @@
 import cron from "node-cron"
 import { isDbConnected, query, execute } from "./db.js"
 import { checkCompliance } from "./compliance.js"
-import { sendSMS, smsConfigured as twilioConfigured } from "./sms.js"
+import { sendSMS, smsConfigured } from "./sms.js"
 import { sendEmail, gmailConfigured } from "./gmail.js"
 import { buildEmailHTML } from "./emailTemplate.js"
 import { addAgentMessageToThread } from "./conversations.js"
@@ -266,7 +266,7 @@ async function processJob(job: NurtureJobRow): Promise<void> {
     let smsSent = false
     let emailSent = false
 
-    if (compliance.smsOk && job.contact_phone && twilioConfigured()) {
+    if (compliance.smsOk && job.contact_phone && smsConfigured()) {
       try {
         await sendSMS(job.contact_phone, message.sms)
         smsSent = true

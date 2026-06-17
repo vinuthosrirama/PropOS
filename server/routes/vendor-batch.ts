@@ -11,7 +11,7 @@
  */
 import { Router } from "express"
 import { checkCompliance } from "../lib/compliance.js"
-import { sendSMS, smsConfigured as twilioConfigured } from "../lib/sms.js"
+import { sendSMS, smsConfigured } from "../lib/sms.js"
 import { sendEmail, gmailConfigured } from "../lib/gmail.js"
 import { buildEmailHTML } from "../lib/emailTemplate.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"
@@ -174,7 +174,7 @@ router.post("/send", async (req, res) => {
     let emailSent = false
 
     // SMS
-    if (recipientPhone && compliance.smsOk && twilioConfigured()) {
+    if (recipientPhone && compliance.smsOk && smsConfigured()) {
       try {
         await sendSMS(recipientPhone, sms)
         smsSent = true

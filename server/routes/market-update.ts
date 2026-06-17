@@ -8,7 +8,7 @@
 import { Router } from "express"
 import { buildMarketUpdateHTML, buildMarketUpdateSMS, type CompSaleRow, type MarketUpdateParams } from "../lib/marketUpdateTemplate.js"
 import { sendEmail, gmailConfigured } from "../lib/gmail.js"
-import { sendSMS, smsConfigured as twilioConfigured } from "../lib/sms.js"
+import { sendSMS, smsConfigured } from "../lib/sms.js"
 import { logOutreach } from "../lib/db.js"
 
 const router = Router()
@@ -172,8 +172,8 @@ router.post("/send", async (req, res) => {
 
     // Send SMS
     if ((channel === "sms" || channel === "both") && body.vendorPhone) {
-      if (!twilioConfigured()) {
-        results.sms = "Twilio not configured"
+      if (!smsConfigured()) {
+        results.sms = "SMS not configured"
       } else {
         try {
           await sendSMS(body.vendorPhone, smsText)

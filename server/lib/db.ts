@@ -68,7 +68,7 @@ export async function initDb(): Promise<void> {
 //
 // Each step runs in its own pool.query() so one failure never blocks the rest.
 // Every step logs [migrate] OK <label> or [migrate] FAIL <label>: <error>
-// — paste Railway logs into the issue tracker to see exactly what broke.
+// — check Fly.io logs (flyctl logs) to see exactly what broke.
 
 async function migrate(): Promise<void> {
   if (!pool) return

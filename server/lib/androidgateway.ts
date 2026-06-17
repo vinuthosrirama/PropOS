@@ -18,7 +18,7 @@
  *      Note the generated URL e.g. https://xxxx.trycloudflare.com
  *   5. Add to server/.env:
  *        SMS_TRANSPORT=android-gateway
- *        SMS_TRANSPORT_FALLBACK=twilio
+ *        SMS_TRANSPORT_FALLBACK=httpsms
  *        ANDROID_GW_URL=https://xxxx.trycloudflare.com
  *        ANDROID_GW_USER=your_username
  *        ANDROID_GW_PASS=your_password
@@ -33,7 +33,7 @@
  *   - Phone must stay on and connected to Wi-Fi/data
  *
  * For iPhone-to-iPhone iMessage: use BlueBubbles or TextingBlue instead.
- * Pair with SMS_TRANSPORT_FALLBACK=twilio for delivery guarantee.
+ * Pair with SMS_TRANSPORT_FALLBACK=httpsms for delivery guarantee.
  *
  * Incoming replies:
  *   The app pushes a webhook to PropOS at POST /api/webhook/android-gateway

@@ -2855,7 +2855,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
 
       const delivered = deliveryRes?.ok === true
       const smsTransport: string = deliveryRes?.sms?.transport ?? "sms"
-      const transportLabel = smsTransport === "bluebubbles" ? "BlueBubbles" : smsTransport === "imsg" ? "iMessage" : smsTransport === "twilio" ? "Twilio" : smsTransport
+      const transportLabel = smsTransport === "bluebubbles" ? "BlueBubbles" : smsTransport === "imsg" ? "iMessage" : smsTransport
       setDeliveryNote(
         delivered
           ? `Sent via ${transportLabel} + Gmail`
@@ -9636,8 +9636,8 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       }).then(r => r.json()).catch(() => null)
       const delivered = deliveryRes?.ok === true
       const vTransport: string = deliveryRes?.sms?.transport ?? "sms"
-      const vTransportLabel = vTransport === "bluebubbles" ? "BlueBubbles" : vTransport === "imsg" ? "iMessage" : vTransport === "twilio" ? "Twilio" : vTransport
-      setDeliveryNote(delivered ? `Sent via ${vTransportLabel} + Gmail` : "Saved to Sheets (configure Twilio/Gmail for direct delivery)")
+      const vTransportLabel = vTransport === "bluebubbles" ? "BlueBubbles" : vTransport === "imsg" ? "iMessage" : vTransport
+      setDeliveryNote(delivered ? `Sent via ${vTransportLabel} + Gmail` : "Saved to Sheets (configure BlueBubbles/Gmail for direct delivery)")
 
       // Write today's date + last message to both Google Sheets AND Supabase
       const lastMsg = sms || bodyText.split("\n\n")[0]?.slice(0, 200)

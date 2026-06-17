@@ -1140,7 +1140,7 @@ interface VoiceStylePanelProps {
 }
 
 // ── Combined Connections panel (Analytics + Integrations + AgentBox CRM) ───────
-type HealthStatus = { openai: boolean; anthropic: boolean; sheet: boolean; twilio: boolean; gmail: boolean }
+type HealthStatus = { openai: boolean; anthropic: boolean; sheet: boolean; sms: boolean; gmail: boolean }
 
 const AGENTBOX_KEY_STORE = "propOS_agentbox_creds"
 
@@ -1210,7 +1210,7 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
     { key: "openai",    label: "OpenAI (GPT-4o)",  description: "Outreach generation engine",    icon: "🤖" },
     { key: "anthropic", label: "Anthropic Claude",  description: "Lead grading + QA review",      icon: "🧠" },
     { key: "sheet",     label: "Google Sheets",     description: "Lead data sync",                icon: "📊" },
-    { key: "twilio",    label: "Twilio SMS",        description: "SMS delivery",                  icon: "💬" },
+    { key: "sms",       label: "BlueBubbles SMS",   description: "iMessage / SMS delivery",       icon: "💬" },
     { key: "gmail",     label: "Gmail",             description: "Email delivery",                icon: "📧" },
   ]
 

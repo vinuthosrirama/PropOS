@@ -1,6 +1,6 @@
 import { Router } from "express"
 import { checkCompliance } from "../lib/compliance.js"
-import { sendSMS, smsConfigured as twilioConfigured } from "../lib/sms.js"
+import { sendSMS, smsConfigured } from "../lib/sms.js"
 import { sendEmail, gmailConfigured } from "../lib/gmail.js"
 import { buildEmailHTML, buildPitchContentHtml } from "../lib/emailTemplate.js"
 import type { PriceUpdatePayload } from "../lib/pitchGenerator.js"
@@ -48,18 +48,17 @@ interface SendRequest {
 
 /**
  * GET /api/send/hello-sms
- * Sends "Hello from PropOS 👋" to TEST_RECIPIENT_PHONE.
- * Only works when TEST_RECIPIENT_PHONE is set and Twilio is configured.
+ * Sends "Hello from PropOS 👋" to TEST_RECIPIENT_PHONE via BlueBubbles.
  */
 router.get("/hello-sms", async (_req, res) => {
   if (!process.env.TEST_RECIPIENT_PHONE) {
     return res.status(400).json({ error: "TEST_RECIPIENT_PHONE not set in .env" })
   }
-  if (!twilioConfigured()) {
-    return res.status(503).json({ error: "Twilio not configured (TWILIO_* env vars missing)" })
+  if (!smsConfigured()) {
+    return res.status(503).json({ error: "SMS not configured — set SMS_TRANSPORT=bluebubbles and BLUEBUBBLES_URL in server/.env" })
   }
   try {
-    const result = await sendSMS(process.env.TEST_RECIPIENT_PHONE, "Hello from PropOS 👋 Twilio is wired up and working.")
+    const result = await sendSMS(process.env.TEST_RECIPIENT_PHONE, "Hello from PropOS 👋 BlueBubbles is wired up and working.")
     res.json({ ok: true, sid: result.sid })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -69,7 +68,7 @@ router.get("/hello-sms", async (_req, res) => {
 
 /**
  * POST /api/send
- * Delivers approved outreach via Twilio (SMS) and Gmail (email).
+ * Delivers approved outreach via BlueBubbles (SMS) and Gmail (email).
  * Runs compliance check before any delivery.
  */
 router.post("/", async (req, res) => {
@@ -108,8 +107,8 @@ router.post("/", async (req, res) => {
   if ((channel === "sms" || channel === "both") && compliance.smsOk) {
     if (!phone) {
       results.errors.push("SMS requested but no phone number on lead")
-    } else if (!twilioConfigured()) {
-      results.errors.push("SMS skipped: TWILIO_* env vars not configured")
+    } else if (!smsConfigured()) {
+      results.errors.push("SMS skipped: no SMS transport configured (set SMS_TRANSPORT=bluebubbles)")
     } else {
       try {
         results.sms = await withRetry(() => sendSMS(phone, sms, [], liveMode))
