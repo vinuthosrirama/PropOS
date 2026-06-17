@@ -2,19 +2,19 @@
  * Cloudflare Pages Function — API proxy
  *
  * Routes all /api/* requests from the static Cloudflare Pages site to the
- * Railway Express backend, preserving method, headers, and body.
+ * Fly.io Express backend, preserving method, headers, and body.
  *
  * File: functions/api/[[path]].ts  (catch-all wildcard)
  */
 
-const RAILWAY_ORIGIN = "https://propos-production-e9bc.up.railway.app"
+const FLY_ORIGIN = "https://addvantageadvisory.fly.dev"
 
 export async function onRequest(context: { request: Request }): Promise<Response> {
   const { request } = context
   const url = new URL(request.url)
 
-  // Rewrite origin to Railway, keep path + query string intact
-  const upstream = new URL(url.pathname + url.search, RAILWAY_ORIGIN)
+  // Rewrite origin to Fly.io, keep path + query string intact
+  const upstream = new URL(url.pathname + url.search, FLY_ORIGIN)
 
   // Forward the request as-is
   const proxied = new Request(upstream.toString(), {

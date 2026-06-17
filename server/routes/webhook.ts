@@ -1,5 +1,4 @@
 import { Router } from "express"
-import twilio from "twilio"
 import { addOptOut } from "../lib/compliance.js"
 import { addReplyToThread } from "../lib/conversations.js"
 import { cancelNurtureJobs } from "../lib/scheduler.js"
@@ -23,41 +22,18 @@ async function updateLeadStatusInSheets(params: {
 
 // ---------------------------------------------------------------------------
 // POST /api/webhook/sms
-// Twilio sends this when a lead replies to an outbound SMS.
-// IMPORTANT: Always return TwiML 200 — non-2xx triggers Twilio retries
-// which causes double-processing of the same message.
+// BlueBubbles sends this when a lead replies to an outbound SMS/iMessage.
 // ---------------------------------------------------------------------------
 router.post("/sms", async (req, res) => {
-  // ── Signature validation — rejects spoofed webhooks ──────────────────────
-  // Only enforced when TWILIO_AUTH_TOKEN and BASE_URL are both set (production).
-  // Skip in dev/demo mode where BASE_URL may not match the actual request URL.
-  if (process.env.TWILIO_AUTH_TOKEN && process.env.BASE_URL) {
-    const signature = String(req.headers["x-twilio-signature"] ?? "")
-    const url       = `${process.env.BASE_URL}/api/webhook/sms`
-    const valid     = twilio.validateRequest(
-      process.env.TWILIO_AUTH_TOKEN,
-      signature,
-      url,
-      req.body as Record<string, string>,
-    )
-    if (!valid) {
-      console.warn("[webhook/sms] Rejected — invalid Twilio signature")
-      // Still return TwiML 200 so legitimate retries from valid requests aren't
-      // accidentally blocked during URL mis-configuration. Log clearly instead.
-      res.set("Content-Type", "text/xml").send("<Response/>")
-      return
-    }
-  }
-
-  const from: string      = String(req.body?.From ?? "")
-  const body: string      = String(req.body?.Body ?? "")
+  // BlueBubbles POSTs the reply as { from, body } or the raw message object
+  const from: string      = String(req.body?.From ?? req.body?.from ?? "")
+  const body: string      = String(req.body?.Body ?? req.body?.body ?? req.body?.text ?? "")
   const lowerBody: string = body.toLowerCase().trim()
 
   try {
-    // Opt-out keywords (AU SPAM Act 2003 + Twilio STOP handling)
+    // Opt-out keywords (AU SPAM Act 2003)
     if (["stop", "unsubscribe", "cancel", "quit", "end", "stopall"].includes(lowerBody)) {
       await addOptOut(from, "sms", "reply")
-      // Twilio automatically honours STOP — we just persist it
     } else {
       // Track in conversation thread store + update Sheets lead status
       await addReplyToThread(from, body)
@@ -66,13 +42,10 @@ router.post("/sms", async (req, res) => {
       await cancelNurtureJobs(from)
     }
   } catch (err) {
-    // Log but do NOT let the error propagate — a non-200 response triggers Twilio
-    // retries which causes the message to be double-processed.
-    console.error("[webhook/sms] handler error (suppressed to prevent Twilio retry):", (err as Error).message)
+    console.error("[webhook/sms] handler error:", (err as Error).message)
   }
 
-  // Must return TwiML — empty response means "no auto-reply"
-  res.set("Content-Type", "text/xml").send("<Response/>")
+  res.sendStatus(200)
 })
 
 // ---------------------------------------------------------------------------

@@ -1,43 +1,25 @@
 /**
- * Unified SMS Transport Layer — v3
+ * Unified SMS Transport Layer — BlueBubbles only
  *
- * Six transports, tried in priority order until one succeeds:
+ * Primary transport: BlueBubbles (Mac + iPhone — sends as your real number via iMessage/SMS)
  *
- *   SMS_TRANSPORT=bluebubbles      Mac + real iPhone (iMessage/SMS), best for Mac users  [Method 1]
- *   SMS_TRANSPORT=shortcut-relay   iPhone only, no Mac — self-hosted polling relay       [Method 2, free]
- *   SMS_TRANSPORT=android-gateway  Android phone app (SMS), best for Android agents      [Method 3]
- *   SMS_TRANSPORT=httpsms          Android phone (SMS), httpSMS app + web dashboard      [Method 4]
- *   SMS_TRANSPORT=imsg             Mac + CLI (iMessage/SMS), lightweight Mac option
- *   SMS_TRANSPORT=telelink         Windows + Phone Link, real iPhone/Android number
+ * Additional transports available if needed:
+ *   SMS_TRANSPORT=shortcut-relay   iPhone only, no Mac — self-hosted polling relay
+ *   SMS_TRANSPORT=android-gateway  Android phone app
+ *   SMS_TRANSPORT=httpsms          Android phone (httpSMS app)
+ *   SMS_TRANSPORT=imsg             Mac CLI (iMessage/SMS), lightweight option
+ *   SMS_TRANSPORT=telelink         Windows + Phone Link
  *   SMS_TRANSPORT=textingblue      iPhone shortcut (iMessage), paid plan required
- *   SMS_TRANSPORT=twilio           Cloud API, generic number — use as fallback
  *
  * Cascade (double handling — each transport picks up when the previous fails):
- *   SMS_TRANSPORT_CHAIN=bluebubbles,shortcut-relay,httpsms,textingblue
- *   Falls back to SMS_TRANSPORT + SMS_TRANSPORT_FALLBACK (legacy pair), then to
- *   every configured transport in priority order when neither is set.
+ *   SMS_TRANSPORT_CHAIN=bluebubbles,shortcut-relay,httpsms
  *
  * Example .env:
- *   # iPhone agent on Mac (best experience — iMessage + reply webhooks)
  *   SMS_TRANSPORT=bluebubbles
- *   SMS_TRANSPORT_FALLBACK=twilio
- *   BLUEBUBBLES_URL=https://xxxx.trycloudflare.com
+ *   BLUEBUBBLES_URL=https://bluebubbles.addvantage.site
  *   BLUEBUBBLES_PASSWORD=secret
- *
- *   # iPhone agent, no Mac (next best — iMessage via iOS Shortcut)
- *   SMS_TRANSPORT=textingblue
- *   SMS_TRANSPORT_FALLBACK=twilio
- *   TEXTINGBLUE_API_KEY=tb_live_xxxx
- *
- *   # Android agent
- *   SMS_TRANSPORT=android-gateway
- *   SMS_TRANSPORT_FALLBACK=twilio
- *   ANDROID_GW_URL=https://xxxx.trycloudflare.com
- *   ANDROID_GW_USER=user
- *   ANDROID_GW_PASS=pass
  */
 
-import { sendSMS as twilioSend, twilioConfigured as isTwilioConfigured }      from "./twilio.js"
 import { sendViaBlueBubbles, blueBubblesConfigured, pingBlueBubbles }          from "./bluebubbles.js"
 import { sendViaImsg, imsgConfigured, pingImsg }                               from "./imsg.js"
 import { sendViaTeleLink, teleLinkConfigured, pingTeleLink }                   from "./telelink.js"
@@ -47,7 +29,6 @@ import { sendViaHttpSms, httpSmsConfigured }                                   f
 import { enqueueShortcutMessage, shortcutRelayConfigured }                     from "./shortcutRelay.js"
 
 export type SmsTransport =
-  | "twilio"
   | "bluebubbles"
   | "imsg"
   | "telelink"
@@ -82,7 +63,6 @@ function resolveTransport(name: string): SmsTransport {
   if (t === "textingblue"     && textingBlueConfigured())    return "textingblue"
   if (t === "imsg"            && imsgConfigured())           return "imsg"
   if (t === "telelink"        && teleLinkConfigured())       return "telelink"
-  if (t === "twilio"          && isTwilioConfigured())       return "twilio"
   return "none"
 }
 
@@ -94,11 +74,10 @@ function fallbackTransport(): SmsTransport {
   return getTransportChain()[1] ?? "none"
 }
 
-// Priority order when auto-building the chain — best relationship-preserving
-// transports first (own number, iMessage), generic cloud numbers last
+// Priority order when auto-building the chain
 const CHAIN_PRIORITY: SmsTransport[] = [
   "bluebubbles", "shortcut-relay", "android-gateway", "httpsms",
-  "textingblue", "imsg", "telelink", "twilio",
+  "textingblue", "imsg", "telelink",
 ]
 
 /**
@@ -134,9 +113,6 @@ export function smsConfigured(): boolean {
   return getTransportChain().length > 0
 }
 
-/** @deprecated use smsConfigured() */
-export { smsConfigured as twilioConfigured }
-
 // ── Core dispatch ─────────────────────────────────────────────────────────────
 
 async function dispatchSMS(
@@ -146,14 +122,13 @@ async function dispatchSMS(
   liveMode = false,
 ): Promise<{ sid: string; testMode: boolean }> {
   switch (transport) {
-    case "bluebubbles":    return sendViaBlueBubbles(to, body, liveMode)
-    case "textingblue":    return sendViaTextingBlue(to, body, liveMode)
-    case "imsg":           return sendViaImsg(to, body, liveMode)
-    case "telelink":       return sendViaTeleLink(to, body, liveMode)
+    case "bluebubbles":     return sendViaBlueBubbles(to, body, liveMode)
+    case "textingblue":     return sendViaTextingBlue(to, body, liveMode)
+    case "imsg":            return sendViaImsg(to, body, liveMode)
+    case "telelink":        return sendViaTeleLink(to, body, liveMode)
     case "android-gateway": return sendViaAndroidGateway(to, body, liveMode)
     case "httpsms":         return sendViaHttpSms(to, body, liveMode)
     case "shortcut-relay":  return enqueueShortcutMessage(to, body, liveMode)
-    case "twilio":          return twilioSend(to, body, liveMode)
     default:                throw new Error(`Transport "${transport}" is not configured`)
   }
 }
@@ -161,9 +136,6 @@ async function dispatchSMS(
 /**
  * Walks the transport chain in order until one send succeeds.
  * Every transport's outcome is recorded in `attempts` for diagnostics.
- *
- * @param skipTransports — transports to exclude (used by async send-error
- *   recovery so a redispatch never re-tries the transport that just failed)
  */
 export async function sendSMS(
   to: string,
@@ -175,7 +147,7 @@ export async function sendSMS(
 
   if (chain.length === 0) {
     throw new Error(
-      "No SMS transport configured. Set SMS_TRANSPORT_CHAIN (or SMS_TRANSPORT) in server/.env"
+      "No SMS transport configured. Set SMS_TRANSPORT=bluebubbles and BLUEBUBBLES_URL in server/.env"
     )
   }
 
@@ -216,11 +188,11 @@ async function checkTransport(transport: SmsTransport): Promise<Omit<TransportSt
     case "bluebubbles": {
       const ok = await pingBlueBubbles()
       return { transport, ok, label: "BlueBubbles (iPhone, iMessage, Mac)",
-        detail: ok ? `Server at ${process.env.BLUEBUBBLES_URL}` : "Server unreachable — is BlueBubbles running?" }
+        detail: ok ? `Server at ${process.env.BLUEBUBBLES_URL}` : "Server unreachable — is BlueBubbles running and Cloudflare tunnel active?" }
     }
     case "textingblue": {
       const { ok, plan, error } = await pingTextingBlue()
-      return { transport, ok, label: "TextingBlue (iPhone shortcut, iMessage, no Mac needed)",
+      return { transport, ok, label: "TextingBlue (iPhone shortcut, iMessage)",
         detail: ok ? `API key valid${plan ? `, plan: ${plan}` : ""}` : error }
     }
     case "imsg": {
@@ -240,24 +212,19 @@ async function checkTransport(transport: SmsTransport): Promise<Omit<TransportSt
     }
     case "httpsms": {
       const ok = httpSmsConfigured()
-      return { transport, ok, label: "httpSMS (Android, real SIM, SMS only — free tier)",
+      return { transport, ok, label: "httpSMS (Android, real SIM, SMS only)",
         detail: ok ? `From: ${process.env.HTTPSMS_FROM}` : "HTTPSMS_API_KEY or HTTPSMS_FROM missing" }
     }
     case "shortcut-relay": {
       const ok = shortcutRelayConfigured()
       const deviceId = process.env.SHORTCUT_RELAY_DEVICE_ID?.trim()
-      return { transport, ok, label: "iOS Shortcut Relay (iPhone, iMessage/SMS, self-hosted — free)",
-        detail: ok ? `Device: ${deviceId} — polling ${process.env.BASE_URL ?? ""}/api/sms-shortcut/poll`
+      return { transport, ok, label: "iOS Shortcut Relay (iPhone, iMessage/SMS, self-hosted)",
+        detail: ok ? `Device: ${deviceId}`
                    : "SHORTCUT_RELAY_SECRET or SHORTCUT_RELAY_DEVICE_ID missing" }
-    }
-    case "twilio": {
-      const ok = isTwilioConfigured()
-      return { transport, ok, label: "Twilio (cloud, generic number)",
-        detail: ok ? `From: ${process.env.TWILIO_FROM_NUMBER}` : "TWILIO_* env vars missing" }
     }
     default:
       return { transport: "none", ok: false, label: "No transport configured",
-        detail: "Set SMS_TRANSPORT in server/.env" }
+        detail: "Set SMS_TRANSPORT=bluebubbles in server/.env" }
   }
 }
 
@@ -272,7 +239,6 @@ export async function checkSmsTransport(): Promise<TransportStatus> {
   return primaryStatus
 }
 
-/** Live health for every transport in the chain, in send order. */
 export async function checkTransportChain(): Promise<Omit<TransportStatus, "fallback">[]> {
   const chain = getTransportChain()
   if (chain.length === 0) return [await checkTransport("none")]

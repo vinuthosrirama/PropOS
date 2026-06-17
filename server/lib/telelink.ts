@@ -37,7 +37,7 @@
  *        SMS_TRANSPORT=telelink
  *        TELELINK_URL=https://xxxx.trycloudflare.com
  *        TELELINK_TOKEN=your_secret_token
- *        SMS_TRANSPORT_FALLBACK=twilio   ← always set a fallback
+ *        SMS_TRANSPORT_FALLBACK=httpsms
  */
 
 const TL_URL   = () => process.env.TELELINK_URL?.replace(/\/$/, "") ?? ""

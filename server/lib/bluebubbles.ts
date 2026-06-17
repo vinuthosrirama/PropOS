@@ -15,7 +15,7 @@
  *      - Click Start Server
  *   4. Add to server/.env:
  *        SMS_TRANSPORT=bluebubbles
- *        SMS_TRANSPORT_FALLBACK=twilio        ← always set a fallback
+ *        SMS_TRANSPORT_FALLBACK=httpsms
  *        BLUEBUBBLES_URL=https://xxxx.trycloudflare.com
  *        BLUEBUBBLES_PASSWORD=your_password
  *   5. Mac must stay awake (screen lock OK, sleep NOT OK).

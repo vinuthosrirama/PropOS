@@ -27,7 +27,7 @@ import boxdiceRouter from "./routes/boxdice.js"
 import authRouter from "./routes/auth.js"
 import { loadOptOuts, addOptOut } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
-import { activeTransport, checkSmsTransport, checkTransportChain, sendSMS } from "./lib/sms.js"
+import { activeTransport, smsConfigured, checkSmsTransport, checkTransportChain, sendSMS } from "./lib/sms.js"
 import { parseBBWebhook, parseBBSendError, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
 import { watchIncomingImsg } from "./lib/imsg.js"
 import { parseTeleLinkWebhook, registerTeleLinkWebhook }            from "./lib/telelink.js"
@@ -124,9 +124,9 @@ app.use("/api/auth/refresh",  authLimiter)
 
 // ── Public routes (no auth required) ─────────────────────────────────────────
 
-// Health check — MUST be before the JWT auth middleware so Railway's unauthenticated
+// Health check — MUST be before the JWT auth middleware so Fly.io's unauthenticated
 // healthcheck probe reaches it. When DB is connected the auth guard blocks all /api/*
-// requests without a Bearer token, including Railway's healthcheck.
+// requests without a Bearer token, including the healthcheck.
 // PT-C3: unauthenticated callers get { ok } only — full service map requires a valid JWT.
 app.get("/api/health", async (req, res) => {
   const authHeader = req.headers["authorization"]
@@ -158,7 +158,7 @@ app.get("/api/health", async (req, res) => {
     openai:    !!process.env.OPENAI_API_KEY,
     anthropic: !!process.env.ANTHROPIC_API_KEY,
     sheet:     !!process.env.SHEET_URL,
-    twilio:    !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+    sms:          smsConfigured(),
     smsTransport: activeTransport(),
     gmail:     gmailConfigured(),
     boxdice:   !!(process.env.BOXDICE_DOMAIN && process.env.BOXDICE_API_KEY),
@@ -379,13 +379,13 @@ app.get("/api/avm", async (req, res) => {
 })
 
 // Serve Vite production build — must come after all API routes
-// On Railway, Nixpacks snapshots server/ only, so frontend is pre-built into server/public/.
+// On Fly.io, Dockerfile copies repo root and npm run build outputs to dist/.
 // In local dev, dist/ lives one level up (repo root).
 import { existsSync } from "fs"
-// When compiled by tsc: __dirname=/app/dist/, so ../public = /app/public/ (server/public pre-built)
+// When compiled by tsc: __dirname=/app/dist/, so ../public = /app/public/ (fallback for pre-built assets)
 // When running tsx locally: __dirname=/repo/server/, so ../public = /repo/public/ (doesn't exist, falls through to dist/)
-const railwayPublic = path.resolve(__dirname, "..", "public")
-const distPath = existsSync(railwayPublic) ? railwayPublic : path.resolve(__dirname, "..", "dist")
+const flyPublic = path.resolve(__dirname, "..", "public")
+const distPath = existsSync(flyPublic) ? flyPublic : path.resolve(__dirname, "..", "dist")
 
 // Hashed JS/CSS/image assets — immutable, cache 1 year
 app.use("/assets", express.static(path.join(distPath, "assets"), {

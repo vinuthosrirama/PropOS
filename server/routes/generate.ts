@@ -4,7 +4,7 @@ import { analyseLead, qaMessage, generateMessageClaude, generateMessageHaiku, MO
 
 const router = Router()
 
-// Hard-cap SMS at 160 chars — Twilio charges per segment above this
+// Hard-cap SMS at 160 chars — keeps messages within a single segment
 function clampSMS(sms: string): string {
   if (sms.length <= 160) return sms
   return sms.slice(0, 157).trimEnd() + "..."

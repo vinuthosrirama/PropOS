@@ -16,7 +16,7 @@
  *   3. iPhone must have iMessage enabled (Settings → Messages → iMessage ON)
  *   4. Add to server/.env:
  *        SMS_TRANSPORT=textingblue
- *        SMS_TRANSPORT_FALLBACK=twilio
+ *        SMS_TRANSPORT_FALLBACK=httpsms
  *        TEXTINGBLUE_API_KEY=tb_live_xxxxxxxxxxxx
  *
  * How it works:
