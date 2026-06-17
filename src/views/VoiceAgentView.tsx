@@ -208,7 +208,7 @@ export default function VoiceAgentView() {
       const tJson = await tRes.json() as { phone?: string | null }
       setDemoPhone(tJson.phone ?? null)
       setDemoPhoneInput(tJson.phone ?? "")
-    } catch (e) { setActionMsg((e as Error).message) }
+    } catch { /* non-fatal: stale data stays; user-triggered errors shown separately */ }
     finally { setLoading(false) }
   }, [])
 
