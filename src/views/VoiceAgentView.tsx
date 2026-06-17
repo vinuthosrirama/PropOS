@@ -171,6 +171,12 @@ export default function VoiceAgentView() {
   // pitch link
   const [pitchLinkGenerating, setPitchLinkGenerating] = useState(false)
 
+  // BlueBubbles transport health
+  const [bbStatus, setBbStatus]         = useState<"checking" | "ok" | "down" | "unknown">("unknown")
+  const [bbDetail, setBbDetail]         = useState("")
+  const [bbDaemonActive, setBbDaemonActive] = useState(false)
+  const [bbRestarting, setBbRestarting] = useState(false)
+
   // new contact form
   const [newContactOpen, setNewContactOpen] = useState(false)
   const [newForm, setNewForm] = useState({ name: "", phone: "", relationship: "agent_prospect", agency: "", note: "" })
@@ -498,6 +504,37 @@ export default function VoiceAgentView() {
     } catch (e) { setActionMsg((e as Error).message) }
     finally { setPitchLinkGenerating(false) }
   }, [selected, load])
+
+  // ── BlueBubbles health ────────────────────────────────────────────────────────
+  const checkBb = useCallback(async () => {
+    setBbStatus("checking")
+    try {
+      const res = await authFetch(apiUrl("/api/bb/status"))
+      if (!res.ok) { setBbStatus("unknown"); return }
+      const json = await res.json() as { ok: boolean; detail?: string; daemon?: { active: boolean } }
+      setBbStatus(json.ok ? "ok" : "down")
+      setBbDetail(json.detail ?? "")
+      setBbDaemonActive(!!json.daemon?.active)
+    } catch { setBbStatus("unknown") }
+  }, [])
+
+  const restartBb = useCallback(async () => {
+    setBbRestarting(true)
+    try {
+      const res = await authFetch(apiUrl("/api/bb/restart"), { method: "POST" })
+      const json = await res.json() as { ok: boolean; message?: string }
+      setActionMsg(json.message ?? "Restart queued — watchdog acts within 30s")
+      setTimeout(() => void checkBb(), 10_000)
+    } catch (e) { setActionMsg((e as Error).message) }
+    finally { setBbRestarting(false) }
+  }, [checkBb])
+
+  // check on mount + every 2 min
+  useEffect(() => { void checkBb() }, [checkBb])
+  useEffect(() => {
+    const t = setInterval(() => { void checkBb() }, 120_000)
+    return () => clearInterval(t)
+  }, [checkBb])
 
   // ── Create new contact ────────────────────────────────────────────────────────
   const createContact = useCallback(async () => {
@@ -961,6 +998,33 @@ export default function VoiceAgentView() {
             {demoOpen ? "Close" : "Demo"}
           </button>
           <button onClick={() => void load()} style={{ ...btn, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, fontSize: isMobile ? 11 : 11.5 }}>↻</button>
+
+          {/* BlueBubbles live status pill */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 9px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.14)", fontSize: 10.5, fontFamily: FONT }}>
+            <span style={{
+              display: "inline-block", width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+              background: bbStatus === "ok" ? C.green : bbStatus === "down" ? C.red : bbStatus === "checking" ? C.orange : "rgba(255,255,255,0.25)",
+            }} />
+            <span style={{ color: bbStatus === "ok" ? C.green : bbStatus === "down" ? C.red : "rgba(255,255,255,0.45)", fontWeight: 600 }}>
+              BB{bbStatus === "ok" ? " online" : bbStatus === "down" ? " DOWN" : bbStatus === "checking" ? "…" : ""}
+            </span>
+            {bbDaemonActive && <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>· watchdog</span>}
+            <button
+              onClick={() => void checkBb()}
+              title={bbDetail || "Refresh BlueBubbles status"}
+              style={{ ...btn, padding: "0 3px", fontSize: 11, color: "rgba(255,255,255,0.35)", background: "none", border: "none", lineHeight: 1 }}
+            >&#8635;</button>
+            {bbStatus === "down" && (
+              <button
+                onClick={() => void restartBb()}
+                disabled={bbRestarting}
+                title="Restart BlueBubbles via Mac watchdog daemon"
+                style={{ ...btn, padding: "2px 7px", fontSize: 9.5, color: "#fff", background: C.red, border: "none", borderRadius: 5, opacity: bbRestarting ? 0.5 : 1, marginLeft: 2 }}
+              >
+                {bbRestarting ? "…" : "Reboot"}
+              </button>
+            )}
+          </div>
         </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", borderTop: "1px solid rgba(255,255,255,0.1)" }}>

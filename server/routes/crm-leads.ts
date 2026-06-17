@@ -137,7 +137,44 @@ router.get("/", async (req: Request, res: Response) => {
   }
 })
 
-// PATCH /api/crm/leads/:id/questions — append voice note transcript to questions_asked
+// PATCH /api/crm-leads/:id — update notes, personalisation_hook, or any text field on a CRM contact
+router.patch("/:id", async (req: Request, res: Response) => {
+  const { id } = req.params
+  if (!isDbConnected()) return res.json({ ok: true, persisted: false })
+
+  const { notes, personalisation_hook, questions_asked, buyer_status } = req.body as {
+    notes?: string; personalisation_hook?: string; questions_asked?: string; buyer_status?: string
+  }
+
+  const sets: string[] = ["updated_at = NOW()"]
+  const params: unknown[] = [id]
+
+  if (notes !== undefined)               { params.push(notes);               sets.push(`notes = $${params.length}`) }
+  if (personalisation_hook !== undefined) { params.push(personalisation_hook); sets.push(`personalisation_hook = $${params.length}`) }
+  if (buyer_status !== undefined)        { params.push(buyer_status);         sets.push(`buyer_status = $${params.length}`) }
+  if (questions_asked !== undefined) {
+    // Append rather than overwrite — same pattern as /questions endpoint
+    params.push(questions_asked)
+    sets.push(`questions_asked = CASE
+      WHEN questions_asked IS NULL OR questions_asked = '' THEN $${params.length}
+      ELSE questions_asked || E'\\n' || $${params.length}
+    END`)
+  }
+
+  if (sets.length === 1) return res.status(400).json({ error: "No updatable fields provided" })
+
+  try {
+    await query(
+      `UPDATE "PropOS_democontacts" SET ${sets.join(", ")} WHERE id = $1`,
+      params,
+    )
+    res.json({ ok: true, persisted: true })
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
+// PATCH /api/crm-leads/:id/questions — append voice note transcript to questions_asked
 router.patch("/:id/questions", async (req: Request, res: Response) => {
   const { id } = req.params
   const { transcript } = req.body as { transcript?: string }
