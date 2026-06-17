@@ -55,6 +55,7 @@ import crmLeadsRouter from "./routes/crm-leads.js"
 import agentboxRouter from "./routes/agentbox.js"
 import demoRouter from "./routes/demo.js"
 import smsShortcutRouter, { registerReplyHandler } from "./routes/sms-shortcut.js"
+import bbRouter from "./routes/bb.js"
 import { parseHttpSmsWebhook } from "./lib/httpsms.js"
 import { loadConversations, addReplyToThread } from "./lib/conversations.js"
 import { initDb, isDbConnected, query } from "./lib/db.js"
@@ -175,6 +176,8 @@ app.use("/api/doc-track",   docTrackRouter)
 app.use("/api/webhook",      webhookRouter)
 // iOS Shortcut relay — public, auth via SHORTCUT_RELAY_SECRET query param
 app.use("/api/sms-shortcut", smsShortcutRouter)
+// BB daemon poll/ack — public (WEBHOOK_SECRET); status/restart use requireAuth per-route
+app.use("/api/bb", bbRouter)
 // SLM answer routes also public (called from buyer-facing demo)
 app.use("/api/slm-answer",        slmAnswerRouter)
 app.use("/api/slm-answer-batch",  slmAnswerBatchRouter)
