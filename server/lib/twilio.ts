@@ -16,10 +16,11 @@ export function twilioConfigured(): boolean {
   return !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER)
 }
 
-export async function sendSMS(to: string, body: string): Promise<{ sid: string; testMode: boolean }> {
+export async function sendSMS(to: string, body: string, liveMode = false): Promise<{ sid: string; testMode: boolean }> {
   const testPhone = process.env.TEST_RECIPIENT_PHONE?.trim()
-  const actualTo   = testPhone ? testPhone : to
-  const actualBody = testPhone ? `[TEST → ${to}]\n${body}` : body
+  const redirect  = testPhone && !liveMode
+  const actualTo   = redirect ? testPhone : to
+  const actualBody = redirect ? `[TEST → ${to}]\n${body}` : body
 
   const webhookUrl = process.env.BASE_URL
     ? `${process.env.BASE_URL}/api/webhook/sms`
@@ -31,5 +32,5 @@ export async function sendSMS(to: string, body: string): Promise<{ sid: string; 
     body: actualBody,
     ...(webhookUrl ? { statusCallback: webhookUrl } : {}),
   })
-  return { sid: msg.sid, testMode: !!testPhone }
+  return { sid: msg.sid, testMode: redirect }
 }

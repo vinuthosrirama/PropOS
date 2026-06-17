@@ -55,10 +55,12 @@ function normalisePhone(raw: string): string {
 export async function sendViaHttpSms(
   to: string,
   body: string,
+  liveMode = false,
 ): Promise<{ sid: string; testMode: boolean }> {
   const testPhone  = process.env.TEST_RECIPIENT_PHONE?.trim()
-  const actualTo   = normalisePhone(testPhone ?? to)
-  const actualBody = testPhone ? `[TEST to ${to}]\n${body}` : body
+  const redirect   = testPhone && !liveMode
+  const actualTo   = normalisePhone(redirect ? testPhone : to)
+  const actualBody = redirect ? `[TEST to ${to}]\n${body}` : body
 
   const MAX_ATTEMPTS = 3
   let lastErr: unknown
@@ -87,7 +89,7 @@ export async function sendViaHttpSms(
       const json = await res.json() as { data?: { id?: string }; message?: string }
       if (!json.data?.id) throw new Error(`httpSMS: no message id in response`)
 
-      return { sid: json.data.id, testMode: !!testPhone }
+      return { sid: json.data.id, testMode: !!redirect }
     } catch (err) {
       lastErr = err
       if (attempt < MAX_ATTEMPTS) {

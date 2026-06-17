@@ -55,12 +55,12 @@ router.get("/vendor", async (req, res) => {
          ORDER BY count DESC`,
         [agentId],
       ),
-      query<{ contact_name: string; contact_phone: string; pipeline: string; sent_at: string; status: string }>(
-        `SELECT contact_name, contact_phone, pipeline, sent_at, status
+      query<{ contact_name: string; contact_phone: string; contact_email: string | null; property_address: string | null; pipeline: string; sent_at: string; status: string; email_subject: string | null }>(
+        `SELECT contact_name, contact_phone, contact_email, property_address, pipeline, sent_at, status, email_subject
          FROM outreach_log
          WHERE agent_id = $1 AND pipeline IS NOT NULL
          ORDER BY sent_at DESC
-         LIMIT 10`,
+         LIMIT 20`,
         [agentId],
       ),
     ])

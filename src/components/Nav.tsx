@@ -11,11 +11,12 @@ function productLabel(mode: DemoMode | null): string {
 }
 
 export const VIEWS: { id: ViewId; label: string; short: string; principalOnly?: boolean }[] = [
-  { id: "demo",      label: "Launchpad", short: "Launchpad" },
-  { id: "campaign",  label: "Email",     short: "Email" },
-  { id: "voiceagent", label: "Campaign", short: "Campaign" },
-  { id: "setup",     label: "Settings",  short: "Settings" },
-  { id: "principal", label: "Office",    short: "Office", principalOnly: true },
+  { id: "demo",       label: "Launchpad", short: "Launchpad" },
+  { id: "campaign",   label: "Email",     short: "Email" },
+  { id: "voiceagent", label: "Campaign",  short: "Campaign" },
+  { id: "insights",   label: "Insights",  short: "Insights" },
+  { id: "setup",      label: "Settings",  short: "Settings" },
+  { id: "principal",  label: "Office",    short: "Office", principalOnly: true },
 ]
 
 export default function Nav({

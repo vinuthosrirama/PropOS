@@ -1,5 +1,6 @@
 import { getAgencyTheme, FONT, DEFAULT_THEME } from "../../data"
 import type { PitchAgentInfo } from "./PriceUpdateTemplate"
+import TrackedSection from "./TrackedSection"
 
 export interface ProposalComparableSale {
   address: string
@@ -121,6 +122,7 @@ export default function ListingProposalTemplate({ payload }: { payload: ListingP
     }}>
 
       {/* Hero */}
+      <TrackedSection id="cover">
       <div style={{
         background: `linear-gradient(160deg, ${theme.primary}28 0%, ${bg} 55%)`,
         borderBottom: `1px solid ${border}`,
@@ -161,12 +163,13 @@ export default function ListingProposalTemplate({ payload }: { payload: ListingP
           </div>
         )}
       </div>
+      </TrackedSection>
 
       <div style={{ padding: "0 24px" }}>
 
         {/* Personal note */}
         {payload.personalNote && (
-          <>
+          <TrackedSection id="market-context">
             <Section label="A NOTE FROM YOUR AGENT" />
             <div style={{
               background: bg2, border: `1px solid ${theme.primary}33`,
@@ -192,10 +195,11 @@ export default function ListingProposalTemplate({ payload }: { payload: ListingP
                 </div>
               </div>
             </div>
-          </>
+          </TrackedSection>
         )}
 
         {/* Method of sale */}
+        <TrackedSection id="market-context">
         <Section label="RECOMMENDED METHOD OF SALE" />
         <div style={{
           background: bg2, border: `1px solid ${theme.primary}33`,
@@ -211,10 +215,11 @@ export default function ListingProposalTemplate({ payload }: { payload: ListingP
           </div>
           <div style={{ fontSize: 14, color: text, lineHeight: 1.7 }}>{method.description}</div>
         </div>
+        </TrackedSection>
 
         {/* Comparable sales */}
         {payload.comparableSales && payload.comparableSales.length > 0 && (
-          <>
+          <TrackedSection id="comparable-sales">
             <Section label="COMPARABLE SALES" />
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {payload.comparableSales.map((s, i) => (
@@ -234,12 +239,12 @@ export default function ListingProposalTemplate({ payload }: { payload: ListingP
                 </div>
               ))}
             </div>
-          </>
+          </TrackedSection>
         )}
 
         {/* Agency stats */}
         {payload.agencyStats && (
-          <>
+          <TrackedSection id="agency-profile">
             <Section label="AGENCY PERFORMANCE" />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {([
@@ -260,10 +265,11 @@ export default function ListingProposalTemplate({ payload }: { payload: ListingP
                 </div>
               ))}
             </div>
-          </>
+          </TrackedSection>
         )}
 
         {/* Marketing plan */}
+        <TrackedSection id="marketing-plan">
         <Section label="MARKETING PLAN" />
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {marketing.map((item, i) => (
@@ -282,8 +288,10 @@ export default function ListingProposalTemplate({ payload }: { payload: ListingP
             </div>
           ))}
         </div>
+        </TrackedSection>
 
         {/* Campaign timeline */}
+        <TrackedSection id="timeline">
         <Section label="CAMPAIGN TIMELINE" />
         <div style={{ position: "relative", paddingLeft: 32 }}>
           <div style={{
@@ -307,10 +315,11 @@ export default function ListingProposalTemplate({ payload }: { payload: ListingP
             ))}
           </div>
         </div>
+        </TrackedSection>
 
         {/* Testimonials */}
         {payload.testimonials && payload.testimonials.length > 0 && (
-          <>
+          <TrackedSection id="testimonials">
             <Section label="CLIENT REVIEWS" />
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {payload.testimonials.map((t, i) => (
@@ -328,10 +337,11 @@ export default function ListingProposalTemplate({ payload }: { payload: ListingP
                 </div>
               ))}
             </div>
-          </>
+          </TrackedSection>
         )}
 
         {/* CTA */}
+        <TrackedSection id="next-steps">
         <div style={{
           margin: "32px 0 0",
           background: `linear-gradient(135deg, ${theme.primary}18, ${theme.primary}08)`,
@@ -367,6 +377,7 @@ export default function ListingProposalTemplate({ payload }: { payload: ListingP
             )}
           </div>
         </div>
+        </TrackedSection>
 
         {/* Footer */}
         <div style={{ textAlign: "center", marginTop: 40, fontSize: 11, color: muted }}>

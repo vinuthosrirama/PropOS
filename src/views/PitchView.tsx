@@ -5,13 +5,23 @@ import PriceUpdateTemplate, { type PriceUpdatePayload } from "../components/pitc
 import DigitalIntroductionTemplate, { type DigitalIntroductionPayload } from "../components/pitch/DigitalIntroductionTemplate"
 import ListingProposalTemplate, { type ListingProposalPayload } from "../components/pitch/ListingProposalTemplate"
 import AppraisalView, { type AppraisalPayload } from "../components/pitch/AppraisalView"
+import BuyerBriefTemplate, { type BuyerBriefPayload } from "../components/pitch/BuyerBriefTemplate"
+import { useDocTracker } from "../lib/useDocTracker"
+import { DocTrackerContext } from "../lib/docTrackerContext"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type AnyPitchPayload =
+  | PriceUpdatePayload
+  | AppraisalPayload
+  | BuyerBriefPayload
+  | DigitalIntroductionPayload
+  | ListingProposalPayload
 
 interface PitchResponse {
   id:               string
   type:             string
-  payload:          PriceUpdatePayload | AppraisalPayload
+  payload:          AnyPitchPayload
   status:           string
   viewCount:        number
   createdAt:        string
@@ -195,6 +205,10 @@ export default function PitchView({ slug }: { slug: string }) {
   const [acceptedBy, setAccBy]  = useState<string | null>(null)
   const [acceptedAt, setAccAt]  = useState<string | null>(null)
 
+  // Tracker is initialised here but only starts sending once pitch.id is known.
+  // It's safe to call even before pitch loads — the hook guards against empty pitchId.
+  const tracker = useDocTracker(pitch?.id ?? "", pitch?.type ?? "")
+
   useEffect(() => {
     let cancelled = false
 
@@ -262,12 +276,16 @@ export default function PitchView({ slug }: { slug: string }) {
       )
     }
 
+    if (pitch.type === "buyer_brief") {
+      return <BuyerBriefTemplate payload={pitch.payload as BuyerBriefPayload} />
+    }
+
     if (pitch.type === "introduction") {
-      return <DigitalIntroductionTemplate payload={pitch.payload as unknown as DigitalIntroductionPayload} />
+      return <DigitalIntroductionTemplate payload={pitch.payload as DigitalIntroductionPayload} />
     }
 
     if (pitch.type === "proposal") {
-      return <ListingProposalTemplate payload={pitch.payload as unknown as ListingProposalPayload} />
+      return <ListingProposalTemplate payload={pitch.payload as ListingProposalPayload} />
     }
 
     if (pitch.type === "price_update" || pitch.type === "listing_proposal" || pitch.type === "digital_intro") {
@@ -285,7 +303,7 @@ export default function PitchView({ slug }: { slug: string }) {
   }
 
   return (
-    <>
+    <DocTrackerContext.Provider value={tracker}>
       {renderContent()}
 
       {/* Acceptance UI — bottom bar or confirmed banner */}
@@ -308,6 +326,6 @@ export default function PitchView({ slug }: { slug: string }) {
           )}
         </>
       )}
-    </>
+    </DocTrackerContext.Provider>
   )
 }

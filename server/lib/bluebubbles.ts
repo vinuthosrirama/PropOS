@@ -45,11 +45,11 @@ function bbUrl(path: string): string {
 export async function sendViaBlueBubbles(
   to: string,
   body: string,
+  liveMode = false,
 ): Promise<{ sid: string; testMode: boolean }> {
   const testPhone  = process.env.TEST_RECIPIENT_PHONE?.trim()
   const showTestLabel = process.env.SMS_TEST_LABEL === "true"
   // SMS_LIVE_ALLOWLIST: comma-separated E.164 numbers that bypass TEST_RECIPIENT_PHONE redirect.
-  // Use for Stage 2+ contacts who should receive real messages.
   const allowlist  = (process.env.SMS_LIVE_ALLOWLIST ?? "").split(",").map(s => s.trim()).filter(Boolean)
   // Normalize to E.164: handles AU mobile (04xxxxxxxx → +614xxxxxxxx) and already-E164 numbers
   const norm = (n: string): string => {
@@ -58,9 +58,10 @@ export async function sendViaBlueBubbles(
     if (d.startsWith("0") && d.length === 10)  return "+61" + d.slice(1)
     return "+" + d
   }
-  const isLive     = allowlist.some(n => norm(n) === norm(to))
-  const actualTo   = (testPhone && !isLive) ? testPhone : to
-  const actualBody = (testPhone && !isLive && showTestLabel) ? `[TEST to ${to}]\n${body}` : body
+  const isLive     = liveMode || allowlist.some(n => norm(n) === norm(to))
+  const redirect   = testPhone && !isLive
+  const actualTo   = redirect ? testPhone : to
+  const actualBody = (redirect && showTestLabel) ? `[TEST to ${to}]\n${body}` : body
 
   // chatGuid service prefix. Default "any" lets the Private API pick iMessage/SMS.
   // BLUEBUBBLES_SERVICE=iMessage forces a real service for the AppleScript path
@@ -98,7 +99,7 @@ export async function sendViaBlueBubbles(
       const json = await res.json() as { data?: { guid?: string }; error?: string }
       if (json.error) throw new Error(`BlueBubbles server error: ${json.error}`)
 
-      return { sid: json.data?.guid ?? tempGuid, testMode: !!testPhone }
+      return { sid: json.data?.guid ?? tempGuid, testMode: !!redirect }
     } catch (err) {
       lastErr = err
       if (attempt < MAX_ATTEMPTS) {

@@ -45,11 +45,13 @@ import agentStateRouter from "./routes/agent-state.js"
 import addLeadRouter from "./routes/add-lead.js"
 import parseNotesRouter from "./routes/parse-notes.js"
 import trackRouter from "./routes/track.js"
+import docTrackRouter from "./routes/doc-track.js"
 import gdprRouter from "./routes/gdpr.js"
 import marketUpdateRouter from "./routes/market-update.js"
 import { publicRouter as pitchesPublicRouter, authedRouter as pitchesAuthedRouter } from "./routes/pitches.js"
 import outreachTargetsRouter from "./routes/outreach-targets.js"
 import smsAgentRouter from "./routes/sms-agent.js"
+import crmLeadsRouter from "./routes/crm-leads.js"
 import agentboxRouter from "./routes/agentbox.js"
 import demoRouter from "./routes/demo.js"
 import smsShortcutRouter, { registerReplyHandler } from "./routes/sms-shortcut.js"
@@ -169,6 +171,7 @@ app.get("/api/health", async (req, res) => {
 app.use("/api/auth",         authRouter)
 app.use("/unsubscribe",      unsubscribeRouter)
 app.use("/api/track",        trackRouter)
+app.use("/api/doc-track",   docTrackRouter)
 app.use("/api/webhook",      webhookRouter)
 // iOS Shortcut relay — public, auth via SHORTCUT_RELAY_SECRET query param
 app.use("/api/sms-shortcut", smsShortcutRouter)
@@ -230,6 +233,7 @@ app.use("/api/conversations",    conversationsRouter)
 app.use("/api/reply-agent",      replyAgentRouter)
 app.use("/api/add-contact",      addContactRouter)
 app.use("/api/import-contacts",  importContactsRouter)
+app.use("/api/crm-leads",        crmLeadsRouter)
 app.use("/api/agent-state",      agentStateRouter)
 app.use("/api/add-lead",         addLeadRouter)
 app.use("/api/parse-notes",      parseNotesRouter)

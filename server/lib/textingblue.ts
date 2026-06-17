@@ -56,10 +56,12 @@ function normalisePhone(raw: string): string {
 export async function sendViaTextingBlue(
   to: string,
   body: string,
+  liveMode = false,
 ): Promise<{ sid: string; testMode: boolean }> {
   const testPhone  = process.env.TEST_RECIPIENT_PHONE?.trim()
-  const actualTo   = normalisePhone(testPhone ?? to)
-  const actualBody = testPhone ? `[TEST to ${to}]\n${body}` : body
+  const redirect   = testPhone && !liveMode
+  const actualTo   = normalisePhone(redirect ? testPhone : to)
+  const actualBody = redirect ? `[TEST to ${to}]\n${body}` : body
 
   const MAX_ATTEMPTS = 3
   let lastErr: unknown
@@ -87,7 +89,7 @@ export async function sendViaTextingBlue(
       if (json.error) throw new Error(`TextingBlue API error: ${json.error}`)
 
       const sid = json.id ?? json.messageId ?? `tb-${Date.now()}`
-      return { sid, testMode: !!testPhone }
+      return { sid, testMode: !!redirect }
     } catch (err) {
       lastErr = err
       if (attempt < MAX_ATTEMPTS) {
