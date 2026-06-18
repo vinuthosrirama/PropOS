@@ -206,8 +206,8 @@ These rules exist because work done in one Claude conversation must be visible t
 If push is rejected (remote moved): `git pull --rebase origin main`, resolve, push again. Never force-push.
 
 ### Frontend deploys (Cloudflare Pages)
-- `propos.addvantage.site` is served by the Pages project **`propos-demo`** — NOT `openhome-engine`. Deploying to the wrong project updates only its `*.pages.dev` URL and leaves the custom domain stale.
-- Deploy command: `npx vite build && npx wrangler pages deploy dist --project-name propos-demo --branch main`
+- `propos.addvantage.site` is served by the Pages project **`openhome-engine`** (CNAME → `openhome-engine.pages.dev`).
+- Deploy command: `npx vite build && npx wrangler pages deploy dist --project-name openhome-engine --commit-dirty=true`
 
 ---
 

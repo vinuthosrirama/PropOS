@@ -101,3 +101,24 @@ Cross-conversation handoff file. Every Claude session appends a dated entry at t
 **Verified (Preview screenshots):** all sections at desktop (1440), tablet (768), mobile (375); zero console errors; no horizontal overflow at any width. Commit `f6c6a6f`, pushed.
 
 **Not deployed:** `property.addvantage.site` Cloudflare Pages project decision still open (plan question #10) — page is ready to deploy as-is when decided.
+
+---
+
+## 2026-06-19 — BuyerOS SMS bubble fix + past_buyers Supabase CRM
+
+**Fixed:**
+- **Empty SMS bubble bug**: `GeneratingScreen` and `VendorProfilePage` both had `if (!sms && !emailSubject) throw` — a partial API response with `sms:""` but a non-empty email would silently pass through and render an empty iMessage bubble. Changed to `if (!sms) throw` so the template fallback always fires when SMS is absent.
+- **Stale subtitle**: "Clicking Send saves both to Google Sheets for delivery" → "Clicking Send delivers via BlueBubbles + Gmail" (both ReviewPanel and VendorReviewPanel).
+- **CLAUDE.md contradiction**: Session persistence rules incorrectly named the CF Pages project `propos-demo`; corrected to `openhome-engine` (consistent with the main Deploy section and confirmed by actual deploy output).
+
+**From prior session (carried over):**
+- `past_buyers` Supabase table created (migration run manually in dashboard) and seeded with 19 Cameron Knoll buyers; all phones = `0415883354` for safe demo sends.
+- `supabase.ts` column names corrected to match actual migration schema (`agent_name`, `name`, `phone` — not the scraper project's schema).
+- Railway → Fly.io references corrected in CLAUDE.md and NEXT_SESSION.md.
+- Full timestamped backup at `backups/PropOS_full_backup_20260618_234001/`.
+
+**Verified (Preview screenshots):** BuyerOS flow → 10 Ashby Drive → James Whitfield → Generate Outreach → review screen shows populated SMS bubble ("Hi James, Cameron here from Peake...") and updated subtitle. tsc clean (frontend + backend).
+
+**Deployed:** pushed to GitHub (`main`), Cloudflare Pages `openhome-engine` (12 files uploaded, 35 cached). Backend unchanged — no Fly.io deploy needed.
+
+**Next:** Supabase leads now load in VendorOS CRM. Confirm the live propos.addvantage.site shows the SMS fix. See open tasks in NEXT_SESSION.md.
