@@ -40,7 +40,7 @@ SMS send path:
 | BB watchdog | `~/Library/LaunchAgents/site.addvantage.bbwatchdog.plist` | `~/.addvantage/bbwatchdog.conf` | `~/Library/Logs/bbwatchdog.log` |
 | BlueBubbles | Mac app (auto-start or watchdog-managed) | BB → Settings → Server → Port 1234 | BB app log |
 | iOS Shortcut Relay | iPhone Shortcuts automation | `device_id=cameron-iphone` in DB | `/api/sms-shortcut/status` |
-| PropOS server | Railway (prod) / `tsx index.ts` (local) | `server/.env` | Railway dashboard |
+| PropOS server | Fly.io (prod) / `tsx index.ts` (local) | `server/.env` | Fly.io dashboard |
 
 ### Key values
 ```
@@ -301,7 +301,7 @@ Empty `messages: []` means nothing queued — shortcut exits cleanly.
 
 ## Environment Variables Cheat Sheet
 
-These live in `server/.env` (never committed). When re-deploying Railway, add each to the Railway dashboard.
+These live in `server/.env` (never committed). When re-deploying Fly.io, add each to the Fly.io dashboard.
 
 | Variable | What it does |
 |---|---|
@@ -320,6 +320,6 @@ These live in `server/.env` (never committed). When re-deploying Railway, add ea
 
 - [ ] **Disable BB built-in quick tunnel** — BlueBubbles → Settings → Proxy Setup → None
 - [ ] **Build iOS Shortcut automation** — see section above; poll every 60s
-- [ ] **Set `ANTHROPIC_API_KEY`** in `server/.env` and Railway to activate Sonnet 4.6
+- [ ] **Set `ANTHROPIC_API_KEY`** in `server/.env` and Fly.io to activate Sonnet 4.6
 - [ ] **Verify watchdog recovery** — `tail ~/Library/Logs/bbwatchdog.log` should show "recovered" now that the named tunnel is live
 - [ ] **Expand `SMS_LIVE_ALLOWLIST`** when ready to message real leads

@@ -18,7 +18,7 @@ The codebase at `/Users/vinuthmacbook/Desktop/Vinuth's FINANCIALS/Property/Claud
 ## Tech Stack
 
 - **Frontend**: React 18 + Vite + TypeScript + Framer Motion — inline styles only, no Tailwind, no CSS files
-- **Backend**: Express + TypeScript in `server/` — runs on Railway, proxied via Cloudflare Pages Functions in `functions/api/`
+- **Backend**: Express + TypeScript in `server/` — runs on **Fly.io** (app: `addvantageadvisory`), proxied via Cloudflare Pages Functions in `functions/api/`
 - **Styling**: All via `style={{}}`. Use `C` tokens from `src/data.ts`. Use `FONT` for font-family.
 - **State**: Local React state + `localStorage`. No Redux/Zustand.
 
@@ -62,15 +62,18 @@ git push origin main
 |---|---|---|
 | Frontend (React SPA) | Cloudflare Pages | `npx wrangler pages deploy dist --project-name openhome-engine` |
 | API proxy stub | Cloudflare Pages Functions | Auto-deployed from `functions/api/` when you run the above |
-| Backend API server | Railway | Auto-deploys from `main` branch via `railway.toml` |
+| Backend API server | Fly.io (`addvantageadvisory`) | `flyctl deploy` from repo root, or push to main and run manually |
 | Source code backup | GitHub | `git push origin main` |
 
-### Backend API (Railway)
-- `railway.toml` defines build + deploy config
+### Backend API (Fly.io)
+- `fly.toml` defines build + deploy config (app: `addvantageadvisory`, region: syd)
 - Start command: `cd server && npx tsx index.ts`
 - Health check: `GET /api/health`
-- Railway auto-deploys from `main` branch — pushing to GitHub triggers Railway deploy automatically
+- Deploy: `flyctl deploy` from repo root — does NOT auto-deploy on git push
+- Secrets: `flyctl secrets set KEY=value --app addvantageadvisory`
+- Logs: `flyctl logs --app addvantageadvisory`
 - The server handles `/api/generate`, `/api/send`, `/api/analytics`, `/api/sheet`
+- **Never use Railway** — Fly.io is the free alternative going forward
 
 ### Important: `vite preview` does NOT work for full-stack testing
 `vite preview` serves static files only — it does NOT proxy `/api/*` requests. All API calls silently 404.
