@@ -30,16 +30,14 @@ export function supabaseConnected(): boolean {
 }
 
 // ── Database row shape ────────────────────────────────────────────────────────
-// Matches the actual past_buyers table schema in Supabase
+// Matches supabase/migrations/20260606_create_past_buyers.sql
 
 interface PastBuyerRow {
   id:                        number
-  rea_agent_name:            string
-  rea_agency:                string | null
-  lead_first_name:           string | null
-  lead_last_name:            string | null
-  lead_phone:                string | null
-  lead_email:                string | null
+  agent_name:                string
+  name:                      string
+  phone:                     string | null
+  email:                     string | null
   purchase_address:          string | null
   suburb:                    string | null
   purchase_date:             string | null
@@ -60,12 +58,11 @@ interface PastBuyerRow {
 // ── Row → PastBuyer mapping ───────────────────────────────────────────────────
 
 function rowToBuyer(row: PastBuyerRow): PastBuyer {
-  const name = [row.lead_first_name, row.lead_last_name].filter(Boolean).join(" ") || "Unknown"
   return {
     id:                      row.id,
-    name,
-    phone:                   row.lead_phone ?? "",
-    email:                   row.lead_email ?? undefined,
+    name:                    row.name,
+    phone:                   row.phone ?? "",
+    email:                   row.email ?? undefined,
     purchaseAddress:         row.purchase_address ?? "",
     suburb:                  row.suburb ?? "",
     purchaseDate:            row.purchase_date ?? "",
@@ -96,7 +93,7 @@ export async function readPastBuyersFromSupabase(agentName?: string): Promise<Pa
       .order('id', { ascending: true })
 
     if (agentName) {
-      query = query.eq('rea_agent_name', agentName)
+      query = query.eq('agent_name', agentName)
     }
 
     const { data, error } = await query
@@ -159,19 +156,14 @@ export async function upsertPastBuyerToSupabase(buyer: PastBuyer, agentName: str
   if (!supabaseConnected()) return false
   try {
     const client = getSupabaseClient()
-    // Split name into first/last for the table schema
-    const nameParts = buyer.name.trim().split(/\s+/)
-    const lead_last_name  = nameParts.length > 1 ? nameParts.pop()! : null
-    const lead_first_name = nameParts.join(" ") || buyer.name
     const { error } = await client
       .from('past_buyers')
       .upsert({
         id:               buyer.id,
-        rea_agent_name:   agentName,
-        lead_first_name,
-        lead_last_name,
-        lead_phone:       buyer.phone,
-        lead_email:       buyer.email ?? null,
+        agent_name:       agentName,
+        name:             buyer.name,
+        phone:            buyer.phone,
+        email:            buyer.email ?? null,
         purchase_address: buyer.purchaseAddress,
         suburb:           buyer.suburb,
         purchase_date:    buyer.purchaseDate,
