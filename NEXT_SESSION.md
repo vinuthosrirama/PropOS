@@ -41,7 +41,7 @@ Stats bar above "Approve and Send" button: "4-6x higher reply rate vs generic" |
 - Resolved 3-way merge conflict in `SettingsView.tsx` (rebase mid-session)
 - Removed duplicate `IntegrationsPanel` export (replaced by `ConnectionsPanel`)
 - Re-applied `PitchView.tsx` DigitalIntroduction + ListingProposal routing after rebase
-- Backend: pushed to Railway via `git push origin main`
+- Backend: pushed to GitHub + deployed via `flyctl deploy`
 - Frontend: `npx wrangler pages deploy dist --project-name propos-demo`
 
 ---
@@ -91,15 +91,17 @@ Product = PropOS. Powered by = AddVantage AI. Never surface GPT-4o, Claude, Anth
 cd "/Users/vinuthmacbook/Desktop/Claude/AddVantageOS/REA Agents/PropOS"
 git ls-files --modified          # check changes (git status may hang)
 git add -A && git commit -m "..."
-git push origin main             # triggers Railway auto-deploy
+git push origin main             # GitHub backup — does NOT deploy backend
 npm run build
-npx wrangler pages deploy dist --project-name openhome-engine --commit-dirty=true
+npx wrangler pages deploy dist --project-name propos-demo --branch main  # frontend → propos.addvantage.site
+flyctl deploy                    # backend → Fly.io (addvantageadvisory, region syd)
 ```
 
 ### Rule #10 — Deploy targets
-- Frontend: Cloudflare Pages (openhome-engine project) → propos.addvantage.site
-- Backend: Railway (auto-deploys from main branch)
-- DB: Supabase PostgreSQL (DATABASE_URL in Railway env vars)
+- Frontend: Cloudflare Pages (`propos-demo` project) → propos.addvantage.site
+- Backend: **Fly.io** app `addvantageadvisory` — deploy via `flyctl deploy` (NOT auto on git push)
+- DB: Supabase PostgreSQL (`DATABASE_URL` in Fly.io secrets, NOT Railway)
+- **Never use Railway** — Fly.io is the free alternative going forward
 
 ---
 
@@ -171,18 +173,18 @@ cd "/Users/vinuthmacbook/Desktop/Claude/AddVantageOS/REA Agents/PropOS"
 git fetch origin
 git checkout main
 git merge claude/prop-os-repo-access-vo46q
-git push origin main           # Railway auto-deploys backend
+git push origin main
 npm run build
-npx wrangler pages deploy dist --project-name openhome-engine --commit-dirty=true
+npx wrangler pages deploy dist --project-name propos-demo --branch main  # frontend
+flyctl deploy                                                              # backend (Fly.io)
 ```
 
-### Step 2: Set server env vars on Railway
-Add these to Railway → your service → Variables:
-```
-ANTHROPIC_API_KEY=sk-ant-...   (required for AI drafts)
-TEST_RECIPIENT_PHONE=+61XXXXXXXXX    (YOUR number — redirect all sends to you for testing)
-OUTREACH_DAILY_CAP=5
-OUTREACH_FOLLOWUP_DAYS=3
+### Step 2: Set server env vars on Fly.io
+```bash
+flyctl secrets set ANTHROPIC_API_KEY=sk-ant-... --app addvantageadvisory
+flyctl secrets set TEST_RECIPIENT_PHONE=+61XXXXXXXXX --app addvantageadvisory
+flyctl secrets set OUTREACH_DAILY_CAP=5 --app addvantageadvisory
+flyctl secrets set OUTREACH_FOLLOWUP_DAYS=3 --app addvantageadvisory
 ```
 Plus whichever SMS transport you're using (see PROPTECH_SCOPE.md).
 
@@ -209,7 +211,7 @@ curl -X POST https://propos.addvantage.site/api/outreach-targets/approve-draft/1
 ```
 
 ### Step 5: Go live
-Once the loop works end-to-end on your own number, REMOVE TEST_RECIPIENT_PHONE from Railway env vars. The scheduler will start sending to real targets at 10am the next business day.
+Once the loop works end-to-end on your own number, REMOVE TEST_RECIPIENT_PHONE from Fly.io secrets: `flyctl secrets unset TEST_RECIPIENT_PHONE --app addvantageadvisory`. The scheduler will start sending to real targets at 10am the next business day.
 
 ---
 
@@ -312,9 +314,10 @@ Also: `supabase/migrations/20260608_create_outreach_targets.sql`
 ### P1 — Merge and Deploy (30 min)
 ```bash
 git merge claude/prop-os-repo-access-vo46q
-git push origin main                          # Railway deploys automatically
+git push origin main
 npm run build
-npx wrangler pages deploy dist --project-name openhome-engine --commit-dirty=true
+npx wrangler pages deploy dist --project-name propos-demo --branch main
+flyctl deploy   # backend → Fly.io (addvantageadvisory)
 ```
 
 ### P2 — Configure SMS Transport (choose one based on your device)
@@ -464,16 +467,11 @@ BASE_URL=https://propos.addvantage.site
 PORT=3001
 ```
 
-### Railway Deploy Config (`railway.toml`)
-```toml
-[build]
-builder = "nixpacks"
-buildCommand = "cd server && npm install && npx tsc"
-
-[deploy]
-startCommand = "cd server && npx tsx index.ts"
-healthcheckPath = "/api/health"
-```
+### Fly.io Deploy Config (`fly.toml`)
+- App: `addvantageadvisory`, region: `syd`
+- Deploy: `flyctl deploy` from repo root
+- Secrets: `flyctl secrets set KEY=value --app addvantageadvisory`
+- Logs: `flyctl logs --app addvantageadvisory`
 
 ---
 
@@ -488,4 +486,4 @@ healthcheckPath = "/api/health"
 ## GitHub
 - Repo: https://github.com/vinuthosrirama/PropOS.git
 - Feature branch: `claude/prop-os-repo-access-vo46q`
-- Main: auto-deploys to Railway
+- Main: push to GitHub, then `flyctl deploy` for backend (Fly.io does NOT auto-deploy on push)
