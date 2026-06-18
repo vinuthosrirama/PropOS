@@ -2828,7 +2828,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
   const handleSend = async () => {
     setSending(true)
     try {
-      // 1. Try direct delivery via server (Twilio + Gmail)
+      // 1. Try direct delivery via server (BlueBubbles + Gmail)
       const priceGuide = property.priceMin && property.priceMax
         ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
         : fmt(property.price)
@@ -2861,7 +2861,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
           ? `Sent via ${transportLabel} + Gmail`
           : deliveryRes?.errors?.length
           ? "Saved to Sheets (delivery: " + deliveryRes.errors[0] + ")"
-          : "Saved to Sheets (configure Twilio/Gmail for direct delivery)"
+          : "Saved to Sheets (configure BlueBubbles/Gmail for direct delivery)"
       )
 
       // 2. Always log to Sheets regardless
@@ -3395,7 +3395,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         {sending ? "Saving to Sheet..." : "Approve and Send"}
       </motion.button>
       <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
-        This saves the approved SMS and email to Google Sheets for delivery via Twilio and Gmail.
+        Sends the SMS via BlueBubbles (your iPhone number) and email via Gmail.
       </div>
 
       <button
@@ -9996,7 +9996,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         {sending ? "Saving to Sheet..." : "Approve and Send"}
       </motion.button>
       <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
-        Saves the approved SMS and email to Google Sheets for delivery via Twilio and Gmail.
+        Sends the SMS via BlueBubbles (your iPhone number) and email via Gmail.
       </div>
 
       {/* Batch send — only shown when multiple entries are available */}
