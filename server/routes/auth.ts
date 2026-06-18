@@ -9,7 +9,7 @@ import { Router } from "express"
 import { queryOne, execute } from "../lib/db.js"
 import {
   hashPassword, verifyPassword,
-  issueTokens, verifyRefreshToken,
+  issueTokens, issueAccessToken, verifyRefreshToken,
   REFRESH_COOKIE, REFRESH_COOKIE_OPTS,
 } from "../lib/auth.js"
 import { requireAuth } from "../middleware/auth.js"
@@ -148,6 +148,15 @@ router.post("/logout", async (req, res) => {
   }
   res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" })
   res.json({ ok: true })
+})
+
+// ── Demo token (Quick Access / guest sessions) ────────────────────────────────
+// Issues a short-lived JWT with agentId=0 so the demo works without credentials.
+// All sends via this token are still redirected to TEST_RECIPIENT_PHONE/EMAIL.
+
+router.post("/demo-token", (_req, res) => {
+  const token = issueAccessToken(0)
+  return res.json({ accessToken: token })
 })
 
 // ── Me ────────────────────────────────────────────────────────────────────────
