@@ -2609,7 +2609,7 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
           const sms = data.sms ?? ""
           const emailSubject = data.emailSubject ?? data.email?.subject ?? `Hey ${fname}, thought of you for ${property.address.split(",")[0]}`
           const emailBody: string[] = data.emailBody ?? data.email?.body ?? []
-          if (!sms && !emailSubject) throw new Error("empty generation result")
+          if (!sms) throw new Error("empty generation result — no sms")
           storeResult(sms, emailSubject, emailBody)
         })
 
@@ -3179,7 +3179,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
           {fname}'s personalised messages
         </div>
         <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
-          Edit either message before approving. Clicking Send saves both to Google Sheets for delivery.
+          Edit either message before approving. Clicking Send delivers via BlueBubbles + Gmail.
         </div>
       </div>
 
@@ -7686,7 +7686,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       const sms = res.sms ?? ""
       const emailSubject = res.email?.subject ?? ""
       const emailBody: string[] = res.email?.body ?? []
-      if (!sms && !emailSubject) throw new Error("empty")
+      if (!sms) throw new Error("empty — no sms")
 
       // Capture NotesBridge data — show the transformation BEFORE navigating to review
       if (res.personalisationHook) {
@@ -9796,7 +9796,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           <div style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>{fmtDollar(fin.equityGain)} equity</div>
         </div>
         <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
-          Edit either message before approving. Clicking Send saves both to Google Sheets for delivery.
+          Edit either message before approving. Clicking Send delivers via BlueBubbles + Gmail.
         </div>
       </div>
 
