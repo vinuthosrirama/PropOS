@@ -616,7 +616,7 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
         </div>
 
         {/* Quick access — instant login */}
-        <button type="button" onClick={() => {
+        <button type="button" onClick={async () => {
           const agent: AgentProfile = {
             name: "Cameron Knoll", agency: "Peake",
             email: "cameronk@peakere.com.au", phone: "0428 762 148",
@@ -624,6 +624,11 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
             voiceProfile: { greeting: "Hi", closing: "Cheers", lengthStyle: "short", formalityScore: 2, aussieIndex: 2, specificity: 3, emojiUsage: "occasional", examplesCount: 0, confidence: 0, detectedTraits: [] },
             trainingCorpus: [],
           }
+          try {
+            const r = await fetch(apiUrl("/api/auth/demo-token"), { method: "POST" })
+            const d = await r.json()
+            if (d.accessToken) setAccessToken(d.accessToken)
+          } catch { /* non-fatal — sends will 401 but the demo UI still loads */ }
           onLogin(agent, getAgencyTheme("Peake"), mode)
         }} style={{
           width: "100%", padding: "14px 18px", borderRadius: 20, border: "none",
