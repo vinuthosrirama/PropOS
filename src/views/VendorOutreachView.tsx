@@ -98,10 +98,12 @@ export default function VendorOutreachView() {
     )
   }
 
-  if (error || !data) {
+  if (error || !data || !data.funnel) {
     return (
       <div style={{ ...containerStyle, color: C.muted, textAlign: "center", paddingTop: 120 }}>
-        <div style={{ fontSize: 13 }}>Could not load outreach data</div>
+        <div style={{ fontSize: 13 }}>
+          {error ? "Could not load outreach data" : "No outreach data yet — send your first campaign from the Launchpad."}
+        </div>
       </div>
     )
   }
