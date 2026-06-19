@@ -74,6 +74,10 @@ import { getDomainEstimate } from "./lib/domainAvm.js"
 const app = express()
 const PORT = process.env.PORT ?? 3001
 
+// Trust Fly.io / Cloudflare proxy — required for express-rate-limit to read the
+// real client IP from X-Forwarded-For without throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+app.set("trust proxy", 1)
+
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet({
   // CSP relaxed for Vite HMR in dev and inline styles (React inline style objects)
