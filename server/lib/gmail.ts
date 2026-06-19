@@ -45,8 +45,12 @@ export async function sendEmail(params: {
   htmlBody:  string
   liveMode?: boolean
 }): Promise<{ messageId: string; testMode: boolean }> {
-  const testEmail  = process.env.TEST_RECIPIENT_EMAIL?.trim()
-  const redirect   = testEmail && !params.liveMode
+  const testEmail = process.env.TEST_RECIPIENT_EMAIL?.trim()
+  // EMAIL_LIVE_ALLOWLIST: comma-separated addresses that bypass TEST_RECIPIENT_EMAIL redirect.
+  // Mirrors SMS_LIVE_ALLOWLIST. Add real recipient addresses here when going live.
+  const allowlist = (process.env.EMAIL_LIVE_ALLOWLIST ?? "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean)
+  const isLive    = params.liveMode && (!testEmail || allowlist.includes(params.to.toLowerCase()))
+  const redirect  = testEmail && !isLive
   const actualTo   = redirect ? testEmail : params.to
   const actualSubj = params.subject
 
