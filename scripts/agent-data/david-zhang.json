@@ -1,0 +1,162 @@
+{
+  "name": "David Zhang",
+  "agency": "McGrath Estate Agents - Clayton",
+  "agency_short": "MG",
+  "email": "david.zhang@mcgrath.com.au",
+  "phone": null,
+  "suburb": "Clayton",
+  "state": "VIC",
+  "tagline": "Clayton specialist. 4 years experience.",
+  "years_exp": 4,
+  "bio": "David Zhang is a Sales Executive at McGrath Estate Agents - Clayton with 4 years of local market experience. Specialising in the Clayton corridor and inner south-east Melbourne, David is known for his clear communication, professional approach, and ability to achieve strong results across apartments, townhouses, and family homes. His suburb knowledge and transparent process give vendors confidence at every step.",
+  "reviews": [
+    "David gave us great professional advice, and we loved his selling process. He achieved an excellent price for us, very professional throughout. — Seller of house in Clarinda",
+    "Catherine and David sold our apartment under trying conditions with efficiency and clarity. They were direct, communicative, and highly knowledgeable. — Seller of apartment in Clayton South",
+    "Very happy with David. He did an excellent job. He was very nice and worked for us to get the best results. Thank you David! — Seller of house in Clayton"
+  ],
+  "brand": {
+    "primary": "#000000",
+    "accent": "#d4d4d4",
+    "logo": "MG",
+    "gradient": ["#1a1a1a", "#000000"]
+  },
+  "sold_listings": [
+    {
+      "address": "G03/4 Clarkson Court",
+      "suburb": "Clayton",
+      "postcode": "3168",
+      "price": 500000,
+      "beds": 2, "baths": 2, "cars": 1,
+      "type": "Apartment",
+      "sold_date": "04 May 2026",
+      "lead_count": 11
+    },
+    {
+      "address": "10 Schneider Crescent",
+      "suburb": "Clarinda",
+      "postcode": "3169",
+      "price": 1466888,
+      "beds": 4, "baths": 2, "cars": 6,
+      "type": "House",
+      "sold_date": "10 Apr 2026",
+      "lead_count": 22
+    },
+    {
+      "address": "1/31 Jaguar Drive",
+      "suburb": "Clayton",
+      "postcode": "3168",
+      "price": 970000,
+      "beds": 4, "baths": 3, "cars": 2,
+      "type": "Townhouse",
+      "sold_date": "31 Mar 2026",
+      "lead_count": 17
+    },
+    {
+      "address": "60 Eva Street",
+      "suburb": "Clayton",
+      "postcode": "3168",
+      "price": 1357000,
+      "beds": 3, "baths": 1, "cars": 2,
+      "type": "House",
+      "sold_date": "14 Mar 2026",
+      "lead_count": 19
+    },
+    {
+      "address": "2/24 Coane Street",
+      "suburb": "Oakleigh East",
+      "postcode": "3166",
+      "price": 925000,
+      "beds": 3, "baths": 3, "cars": 1,
+      "type": "Townhouse",
+      "sold_date": "07 Jan 2026",
+      "lead_count": 15
+    },
+    {
+      "address": "28A Arunta Crescent",
+      "suburb": "Clarinda",
+      "postcode": "3169",
+      "price": 1160000,
+      "beds": 4, "baths": 4, "cars": 2,
+      "type": "House",
+      "sold_date": "20 Nov 2025",
+      "lead_count": 18
+    },
+    {
+      "address": "10 Morrison Street",
+      "suburb": "Clayton",
+      "postcode": "3168",
+      "price": 1600000,
+      "beds": 3, "baths": 1, "cars": 2,
+      "type": "House",
+      "sold_date": "17 Oct 2025",
+      "lead_count": 24
+    },
+    {
+      "address": "3/25 Thompson Street",
+      "suburb": "Clayton",
+      "postcode": "3168",
+      "price": 775000,
+      "beds": 2, "baths": 2, "cars": 1,
+      "type": "Unit",
+      "sold_date": "09 Oct 2025",
+      "lead_count": 13
+    }
+  ],
+  "active_listings": [
+    {
+      "address": "16 Eva Street",
+      "suburb": "Clayton",
+      "postcode": "3168",
+      "price": 1150000,
+      "price_min": 1100000,
+      "price_max": 1200000,
+      "beds": 4, "baths": 1, "cars": 2,
+      "type": "House",
+      "open_date": "Sat 21 Jun 10:00am"
+    },
+    {
+      "address": "2/488 Haughton Road",
+      "suburb": "Clayton South",
+      "postcode": "3169",
+      "price": 725000,
+      "price_min": 700000,
+      "price_max": 750000,
+      "beds": 2, "baths": 1, "cars": 1,
+      "type": "Townhouse",
+      "open_date": "Sat 21 Jun 11:30am"
+    },
+    {
+      "address": "11B Third Street",
+      "suburb": "Clayton South",
+      "postcode": "3169",
+      "price": 1150000,
+      "price_min": 1100000,
+      "price_max": 1200000,
+      "beds": 4, "baths": 2, "cars": 2,
+      "type": "Townhouse",
+      "open_date": "Sun 22 Jun 12:00pm"
+    },
+    {
+      "address": "3/30 Dennis Street",
+      "suburb": "Clayton",
+      "postcode": "3168",
+      "price": 1250000,
+      "price_min": 1200000,
+      "price_max": 1300000,
+      "beds": 4, "baths": 3, "cars": 2,
+      "type": "Townhouse",
+      "open_date": "Sun 22 Jun 1:30pm"
+    },
+    {
+      "address": "5-6 Hilda Court",
+      "suburb": "Mount Waverley",
+      "postcode": "3149",
+      "price": 2700000,
+      "price_min": 2500000,
+      "price_max": 2900000,
+      "beds": 7, "baths": 4, "cars": 3,
+      "type": "House",
+      "open_date": "By appointment"
+    }
+  ]
+}
