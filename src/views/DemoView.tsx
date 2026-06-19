@@ -2763,7 +2763,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
   const [subject, setSubject] = useState(initSubject)
   const [bodyText, setBodyText] = useState(initBody.join("\n\n"))
   const [editMode, setEditMode] = useState<"sms" | "email" | null>(null)
-  const [sending, setSending] = useState(false)
+  const [sendingChannel, setSendingChannel] = useState<"sms" | "email" | null>(null)
   const [sent, setSent] = useState(false)
   const [leadStatus, setLeadStatus] = useState<LeadStatus>("outreach_sent")
   const [deliveryNote, setDeliveryNote] = useState("")
@@ -2847,8 +2847,8 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
     await postLeadStatus({ leadId, leadName: lead.name, propertyAddress, status })
   }
 
-  const handleSend = async () => {
-    setSending(true)
+  const handleSend = async (channel: "sms" | "email") => {
+    setSendingChannel(channel)
     try {
       // 1. Try direct delivery via server (BlueBubbles + Gmail)
       const priceGuide = property.priceMin && property.priceMax
@@ -2871,7 +2871,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
           priceGuide,
           sms, subject,
           emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
-          channel: "both",
+          channel,
         }),
       }).then(r => r.json()).catch(() => null)
 
@@ -2880,7 +2880,9 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
       const transportLabel = smsTransport === "bluebubbles" ? "BlueBubbles" : smsTransport === "imsg" ? "iMessage" : smsTransport
       setDeliveryNote(
         delivered
-          ? `Sent via ${transportLabel} + Gmail`
+          ? channel === "sms"
+            ? `SMS sent via ${transportLabel}`
+            : `Email sent via Gmail`
           : deliveryRes?.errors?.length
           ? "Send failed: " + deliveryRes.errors[0]
           : "Send failed — check BlueBubbles is running and you are signed in"
@@ -2892,7 +2894,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         fromProperty: soldSLM.address, eventType: "outreach_sent",
         transcript, smsText: sms, emailSubject: subject,
         emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
-        deliveryChannel: "both",
+        deliveryChannel: channel,
         deliverySid: deliveryRes?.sms?.sid,
         sendgridId: deliveryRes?.email?.messageId,
         leadStatus: "outreach_sent",
@@ -2923,7 +2925,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
     } catch {
       // never fail the demo
     }
-    setSending(false)
+    setSendingChannel(null)
     setSent(true)
   }
 
@@ -3396,28 +3398,49 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         </div>
       </div>
 
-      {/* Send button */}
-      <motion.button
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.97 }}
-        onClick={handleSend}
-        disabled={sending}
-        style={{
-          width: "100%", padding: "15px",
-          borderRadius: 14, border: "none",
-          background: sending
-            ? C.bg3
-            : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
-          color: sending ? C.muted : "white",
-          fontSize: 16, fontWeight: 700, cursor: sending ? "default" : "pointer",
-          fontFamily: FONT, letterSpacing: -0.3,
-          boxShadow: sending ? "none" : `0 6px 24px ${theme.glow}`,
-        }}
-      >
-        {sending ? "Saving to Sheet..." : "Approve and Send"}
-      </motion.button>
+      {/* Send buttons */}
+      <div style={{ display: "flex", gap: 10 }}>
+        <motion.button
+          whileHover={{ scale: sendingChannel ? 1 : 1.02 }}
+          whileTap={{ scale: sendingChannel ? 1 : 0.97 }}
+          onClick={() => handleSend("sms")}
+          disabled={sendingChannel !== null}
+          style={{
+            flex: 1, padding: "15px",
+            borderRadius: 14, border: "none",
+            background: sendingChannel !== null
+              ? C.bg3
+              : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+            color: sendingChannel !== null ? C.muted : "white",
+            fontSize: 15, fontWeight: 700, cursor: sendingChannel !== null ? "default" : "pointer",
+            fontFamily: FONT, letterSpacing: -0.3,
+            boxShadow: sendingChannel !== null ? "none" : `0 6px 24px ${theme.glow}`,
+          }}
+        >
+          {sendingChannel === "sms" ? "Sending..." : "Send SMS"}
+        </motion.button>
+        <motion.button
+          whileHover={{ scale: sendingChannel ? 1 : 1.02 }}
+          whileTap={{ scale: sendingChannel ? 1 : 0.97 }}
+          onClick={() => handleSend("email")}
+          disabled={sendingChannel !== null}
+          style={{
+            flex: 1, padding: "15px",
+            borderRadius: 14, border: "none",
+            background: sendingChannel !== null
+              ? C.bg3
+              : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+            color: sendingChannel !== null ? C.muted : "white",
+            fontSize: 15, fontWeight: 700, cursor: sendingChannel !== null ? "default" : "pointer",
+            fontFamily: FONT, letterSpacing: -0.3,
+            boxShadow: sendingChannel !== null ? "none" : `0 6px 24px ${theme.glow}`,
+          }}
+        >
+          {sendingChannel === "email" ? "Sending..." : "Send Email"}
+        </motion.button>
+      </div>
       <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
-        Sends the SMS via BlueBubbles (your iPhone number) and email via Gmail.
+        Send SMS via BlueBubbles (your iPhone) or email via Gmail independently.
       </div>
 
       <button
@@ -9451,7 +9474,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const [subject, setSubject] = useState(initSubject)
   const [bodyText, setBodyText] = useState(initBody.join("\n\n"))
   const [editMode, setEditMode] = useState<"sms" | "email" | null>(null)
-  const [sending, setSending] = useState(false)
+  const [sendingChannel, setSendingChannel] = useState<"sms" | "email" | null>(null)
   const [sent, setSent] = useState(false)
   const [sendingToSelf, setSendingToSelf] = useState(false)
   const [sentToSelf, setSentToSelf] = useState(false)
@@ -9624,8 +9647,8 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [smsVariantIdx])
 
-  const handleSend = async () => {
-    setSending(true)
+  const handleSend = async (channel: "sms" | "email") => {
+    setSendingChannel(channel)
     try {
       const deliveryRes = await authFetch(apiUrl("/api/send"), {
         method: "POST",
@@ -9645,7 +9668,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           priceGuide: fmtDollar(fin.currentEstimate),
           sms, subject,
           emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
-          channel: "both",
+          channel,
           pipeline: segment.pipeline,
           nurtureContext: {
             agentName: agent.name,
@@ -9661,7 +9684,15 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       const delivered = deliveryRes?.ok === true
       const vTransport: string = deliveryRes?.sms?.transport ?? "sms"
       const vTransportLabel = vTransport === "bluebubbles" ? "BlueBubbles" : vTransport === "imsg" ? "iMessage" : vTransport
-      setDeliveryNote(delivered ? `Sent via ${vTransportLabel} + Gmail` : deliveryRes?.errors?.length ? "Send failed: " + deliveryRes.errors[0] : "Send failed — check BlueBubbles is running and you are signed in")
+      setDeliveryNote(
+        delivered
+          ? channel === "sms"
+            ? `SMS sent via ${vTransportLabel}`
+            : `Email sent via Gmail`
+          : deliveryRes?.errors?.length
+          ? "Send failed: " + deliveryRes.errors[0]
+          : "Send failed — check BlueBubbles is running and you are signed in"
+      )
 
       // Write today's date + last message to both Google Sheets AND Supabase
       const lastMsg = sms || bodyText.split("\n\n")[0]?.slice(0, 200)
@@ -9699,7 +9730,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         writeAgentVoiceEntry({ text: `[HUMAN_EDIT] ${bodyText.split("\n\n")[0]}`, type: "email_body", channel: "email", ts }).catch(() => {})
       }
     } catch {}
-    setSending(false)
+    setSendingChannel(null)
     setSent(true)
   }
 
@@ -10001,26 +10032,49 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         </div>
       </div>
 
-      {/* Approve and Send */}
-      <motion.button
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.97 }}
-        onClick={handleSend}
-        disabled={sending}
-        style={{
-          width: "100%", padding: "15px",
-          borderRadius: 14, border: "none",
-          background: sending ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
-          color: sending ? C.muted : "white",
-          fontSize: 16, fontWeight: 700, cursor: sending ? "default" : "pointer",
-          fontFamily: FONT, letterSpacing: -0.3,
-          boxShadow: sending ? "none" : `0 6px 24px ${theme.glow}`,
-        }}
-      >
-        {sending ? "Saving to Sheet..." : "Approve and Send"}
-      </motion.button>
+      {/* Send buttons */}
+      <div style={{ display: "flex", gap: 10 }}>
+        <motion.button
+          whileHover={{ scale: sendingChannel ? 1 : 1.02 }}
+          whileTap={{ scale: sendingChannel ? 1 : 0.97 }}
+          onClick={() => handleSend("sms")}
+          disabled={sendingChannel !== null}
+          style={{
+            flex: 1, padding: "15px",
+            borderRadius: 14, border: "none",
+            background: sendingChannel !== null
+              ? C.bg3
+              : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+            color: sendingChannel !== null ? C.muted : "white",
+            fontSize: 15, fontWeight: 700, cursor: sendingChannel !== null ? "default" : "pointer",
+            fontFamily: FONT, letterSpacing: -0.3,
+            boxShadow: sendingChannel !== null ? "none" : `0 6px 24px ${theme.glow}`,
+          }}
+        >
+          {sendingChannel === "sms" ? "Sending..." : "Send SMS"}
+        </motion.button>
+        <motion.button
+          whileHover={{ scale: sendingChannel ? 1 : 1.02 }}
+          whileTap={{ scale: sendingChannel ? 1 : 0.97 }}
+          onClick={() => handleSend("email")}
+          disabled={sendingChannel !== null}
+          style={{
+            flex: 1, padding: "15px",
+            borderRadius: 14, border: "none",
+            background: sendingChannel !== null
+              ? C.bg3
+              : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+            color: sendingChannel !== null ? C.muted : "white",
+            fontSize: 15, fontWeight: 700, cursor: sendingChannel !== null ? "default" : "pointer",
+            fontFamily: FONT, letterSpacing: -0.3,
+            boxShadow: sendingChannel !== null ? "none" : `0 6px 24px ${theme.glow}`,
+          }}
+        >
+          {sendingChannel === "email" ? "Sending..." : "Send Email"}
+        </motion.button>
+      </div>
       <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
-        Sends the SMS via BlueBubbles (your iPhone number) and email via Gmail.
+        Send SMS via BlueBubbles (your iPhone) or email via Gmail independently.
       </div>
 
       {/* Batch send — only shown when multiple entries are available */}
