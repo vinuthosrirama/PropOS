@@ -8,6 +8,11 @@
 
 const TOKEN_KEY = "propos_access_token"
 
+// Prevent concurrent/rapid demo-token calls — one attempt per 30s max
+let demoTokenPromise: Promise<string | null> | null = null
+let demoTokenLastAttempt = 0
+const DEMO_TOKEN_COOLDOWN_MS = 30_000
+
 export function getAccessToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
 }
@@ -58,16 +63,27 @@ export async function authFetch(
     // Refresh cookie not available (demo/guest session) — try the public demo-token
     // endpoint as a fallback so Quick Access sessions survive server restarts and
     // token expiry without kicking the user back to the login screen.
-    try {
-      const demoRes = await fetch("/api/auth/demo-token", { method: "POST" })
-      if (demoRes.ok) {
-        const demoData = await demoRes.json() as { accessToken?: string }
-        if (demoData.accessToken) {
-          setAccessToken(demoData.accessToken)
-          return authFetch(input, init, true)
-        }
+    // Debounced: at most one call per 30s to avoid flooding when multiple pollers
+    // all hit 401 simultaneously.
+    const now = Date.now()
+    if (now - demoTokenLastAttempt > DEMO_TOKEN_COOLDOWN_MS) {
+      demoTokenLastAttempt = now
+      demoTokenPromise = fetch("/api/auth/demo-token", { method: "POST" })
+        .then(async (demoRes) => {
+          if (!demoRes.ok) return null
+          const data = await demoRes.json() as { accessToken?: string }
+          return data.accessToken ?? null
+        })
+        .catch(() => null)
+        .finally(() => { demoTokenPromise = null })
+    }
+    if (demoTokenPromise) {
+      const newDemoToken = await demoTokenPromise
+      if (newDemoToken) {
+        setAccessToken(newDemoToken)
+        return authFetch(input, init, true)
       }
-    } catch {}
+    }
     // Only a real authenticated session counts as "expired" — guests were never
     // logged in via JWT, so a 401 on a protected endpoint is expected and normal.
     if (token) {
