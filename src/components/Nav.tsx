@@ -20,7 +20,7 @@ export const VIEWS: { id: ViewId; label: string; short: string; principalOnly?: 
 ]
 
 export default function Nav({
-  view, setView, agent, sheetStatus = "idle", theme: _theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0, mode, onSwitchMode, lightMode = false, onToggleLightMode, productMode,
+  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0, mode, onSwitchMode, lightMode = false, onToggleLightMode, productMode,
 }: {
   view: ViewId
   setView: (v: ViewId) => void
@@ -78,19 +78,32 @@ export default function Nav({
     </div>
   ) : null
 
+  // Wordmark text — pick the cleanest from theme.name → agent.agencyShort → "Peake" fallback
+  const rawWordmark = theme.name && theme.name !== "Other" ? theme.name : (agent.agencyShort ?? "Peake")
+  // Strip leading articles + truncate long agency names to keep the bar tidy
+  // e.g. "The 5th Avenue Real Estate" → "5th Avenue"
+  const wordmarkClean = rawWordmark.replace(/^(The|A)\s+/i, "")
+  const wordmarkShort = wordmarkClean.length > 14 ? wordmarkClean.split(/\s+/).slice(0, 2).join(" ") : wordmarkClean
+
   const logoBlock = (
     <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
       <span style={{
         fontSize: 13, fontWeight: 800, color: "#fff", letterSpacing: 0.5,
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         lineHeight: 1,
-      }}>Peake</span>
+      }}>{wordmarkShort}</span>
       <div style={{ width: 1, height: 14, background: "rgba(255,255,255,.2)", flexShrink: 0 }} />
       <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", color: "rgba(255,255,255,.5)", whiteSpace: "nowrap" as const }}>
         {productLabel(productMode ?? mode ?? null)}
       </span>
     </div>
   )
+
+  // Derive nav bg from theme.gradient[1] (the darker stop) with high alpha for translucency
+  const navBgHex = theme.gradient?.[1] ?? theme.primary
+  const navBg     = `${navBgHex}f2`  // ~0.95 alpha when hex
+  const navBgSolid = `${navBgHex}fa` // ~0.98 alpha when scrolled
+  const navBorder = `${theme.accent ?? theme.primary}33`  // 20% alpha accent border
 
   // ── Mobile nav ──────────────────────────────────────────────────────────────
   if (bp === "mobile") {
@@ -107,8 +120,8 @@ export default function Nav({
           position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
           height: 52, padding: "0 16px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          background: "rgba(44,27,89,0.97)", backdropFilter: "blur(20px)",
-          borderBottom: "1px solid rgba(182,194,171,0.14)",
+          background: navBgSolid, backdropFilter: "blur(20px)",
+          borderBottom: `1px solid ${navBorder}`,
         }}>
           {logoBlock}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -245,9 +258,9 @@ export default function Nav({
       position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
       height: 56, padding: "0 20px",
       display: "flex", alignItems: "center", gap: 0,
-      background: scrolled ? "rgba(44,27,89,0.98)" : "rgba(44,27,89,0.95)",
+      background: scrolled ? navBgSolid : navBg,
       backdropFilter: "blur(20px)",
-      borderBottom: "1px solid rgba(182,194,171,0.14)",
+      borderBottom: `1px solid ${navBorder}`,
     }}>
       <div style={{ marginRight: 20, flexShrink: 0 }}>{logoBlock}</div>
 
