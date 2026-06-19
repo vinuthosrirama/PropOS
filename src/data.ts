@@ -117,8 +117,9 @@ export const AGENCY_THEMES: Record<string, AgencyTheme> = {
   "Biggin & Scott":           { name: "Biggin & Scott",           primary: "#4C78CC", accent: "#7ba3e8", dim: "rgba(76,120,204,0.12)",     glow: "rgba(76,120,204,0.07)",     logo: "BS", gradient: ["#6492E0", "#4C78CC"]                       },
   "Area Specialist":          { name: "Area Specialist",          primary: "#111111", accent: "#a0a8b0", dim: "rgba(17,17,17,0.12)",       glow: "rgba(17,17,17,0.07)",       logo: "AS", gradient: ["#484848", "#111111"]                       },
   // ── New agents (June 2026) — hex from live site CSS extraction where possible ──
-  // 5th Avenue Real Estate: #e1b530 confirmed from .bg-primary/.text-primary in site CSS (the5thavenue.com.au)
-  "5th Avenue Real Estate":   { name: "5th Avenue Real Estate",   primary: "#e1b530",             dim: "rgba(225,181,48,0.12)",     glow: "rgba(225,181,48,0.07)",     logo: "5A", gradient: ["#f0cf6a", "#e1b530"]                       },
+  // 5th Avenue Real Estate: brand is BLACK + GOLD (gold #D4AF37 is the accent on dark navs/site)
+  "5th Avenue Real Estate":     { name: "5th Avenue Real Estate",     primary: "#1a1a1a", accent: "#D4AF37", dim: "rgba(212,175,55,0.12)",   glow: "rgba(212,175,55,0.06)",     logo: "5A", gradient: ["#2a2a2a", "#000000"]                       },
+  "The 5th Avenue Real Estate": { name: "The 5th Avenue Real Estate", primary: "#1a1a1a", accent: "#D4AF37", dim: "rgba(212,175,55,0.12)",   glow: "rgba(212,175,55,0.06)",     logo: "5A", gradient: ["#2a2a2a", "#000000"]                       },
   // Uphill Real Estate: #f18017 best available from uphillrealestate.com.au site CSS (orange brand accent)
   "Uphill Real Estate":       { name: "Uphill Real Estate",       primary: "#f18017",             dim: "rgba(241,128,23,0.12)",     glow: "rgba(241,128,23,0.07)",     logo: "UH", gradient: ["#ffa64d", "#f18017"]                       },
   // Gill Estate Agents: site unreachable for CSS extraction — best-available placeholder (navy), verify before brand use
