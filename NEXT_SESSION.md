@@ -1,5 +1,105 @@
 # PropOS — Session Notes & Ideas Bank
-_Last updated: 12 June 2026 — Session 14 (Fable plan completion)_
+_Last updated: 19 June 2026 — Session 16 (prompt loop + multi-agent provisioning plan)_
+
+---
+
+## TOP PRIORITY — Multi-Agent Demo Provisioning (NOT YET IMPLEMENTED)
+
+### Goal
+Duplicate the Cameron Knoll demo for Anthony Abeysena (The 5th Avenue Real Estate, Chadstone). Future agents provisioned in <30 min via a CLI script — zero code changes.
+
+### Why it matters
+PropOS pitch to each new agent shows THEIR sold listings, THEIR active listing, THEIR name in messaging, THEIR brand colours. Currently only Cameron Knoll is fully wired. Anthony has 3 hardcoded sold listings (needs 8).
+
+### Anthony Abeysena data (source: REA profile scraped by Vinuth)
+```
+Agency: The 5th Avenue Real Estate — Chadstone VIC
+Brand: primary #1a1a1a, accent #D4AF37 (gold), logo "5A"
+Email (demo): anthony@5thavenuere.com.au
+Sold listings (8):
+  1. 18 Straun Road, Mickleham        $730k  4bd 2ba  22 May 2026  14 leads
+  2. 5 Glenisla Way, Berwick          $940k  4bd 2ba  18 Mar 2026  19 leads
+  3. 9 Sugarloaf Grove, Werribee      $685k  4bd 2ba  06 Mar 2026  11 leads
+  4. 2 Chow Walk, Officer             $720k  4bd 2ba  05 Mar 2026   9 leads
+  5. 21 Ashton Road, Ferntree Gully   $880k  3bd 1ba  14 Jan 2026   7 leads
+  6. 21 Mountain Way, Doreen          $951k  4bd 3ba  12 Jan 2026  16 leads
+  7. 8 Cubbie Way, Clyde North        $850k  4bd 2ba  25 Dec 2025  12 leads
+  8. 33 Nugget Way, Cranbourne East   $540k  3bd 2ba  06 Oct 2025   8 leads
+Active listing (1):
+  18 Maplewood Circuit, Truganina    $700k–$740k  4bd 2ba  open TBD
+Demo leads: clone Cameron's 10 buyers, keep phones/email=vinuth.srirama@outlook.com
+Voice: clone Cameron's VoiceProfile (confidence 0.35 — placeholder)
+```
+
+### Files to create/modify (in order)
+
+**Step 1 — DB migrations** (`server/lib/db.ts`):
+```sql
+CREATE TABLE IF NOT EXISTS agent_portfolios (
+  id SERIAL PRIMARY KEY, agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  address TEXT NOT NULL, suburb TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'VIC', postcode TEXT,
+  price INTEGER NOT NULL, price_min INTEGER, price_max INTEGER,
+  beds INTEGER NOT NULL, baths INTEGER NOT NULL, cars INTEGER NOT NULL DEFAULT 0, land_sqm INTEGER,
+  property_type TEXT NOT NULL DEFAULT 'House',
+  status TEXT NOT NULL DEFAULT 'sold' CHECK (status IN ('sold','active','under_offer')),
+  sold_date TEXT, open_date TEXT, lead_count INTEGER NOT NULL DEFAULT 8,
+  image_url TEXT, description TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS agent_property_slm (
+  id SERIAL PRIMARY KEY, agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  portfolio_id INTEGER NOT NULL REFERENCES agent_portfolios(id) ON DELETE CASCADE,
+  slm_json JSONB NOT NULL DEFAULT '{}', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS brand_primary TEXT;
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS brand_accent TEXT;
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS brand_logo TEXT;
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS brand_gradient TEXT[];
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS bio TEXT;
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS years_exp INTEGER;
+```
+
+**Step 2** — `server/routes/agent-demo.ts` (NEW): GET /portfolio, /slm/:id, /leads, /theme — all use `req.agentId`; return HTTP 204 if no DB data (frontend falls back to hardcode).
+
+**Step 3** — Register in `server/index.ts`: `app.use("/api/agent-demo", agentDemoRouter)` — must go BEFORE `requireAuth` or use its own auth check.
+
+**Step 4** — `scripts/agent-data/anthony-abeysena.json` (NEW): all 8 sold + 1 active, brand, bio, reviews.
+
+**Step 5** — `scripts/provision-agent.ts` (NEW): reads JSON → upserts agent row → deletes+reinserts agent_portfolios → generates SLM JSON via Claude Haiku per property → clones Cameron's buyers into sms_contacts with `assigned_agent_id=agentId` → seeds voice_profiles with Cameron's profile at confidence=0.35.
+
+**Step 6** — `src/lib/agentDemoFetcher.ts` (NEW): `fetchAgentPortfolio()`, `fetchAgentTheme()`, `fetchAgentLeads()` — call `/api/agent-demo/*`, cache in sessionStorage.
+
+**Step 7** — `src/data.ts`: add `let _dbPortfolioCache = null`, `export function setDBPortfolioCache(data)`, modify `getPortfolioForAgent()` to check `_dbPortfolioCache` first (DB wins over hardcoded Anthony data).
+
+**Step 8** — `src/views/DemoView.tsx`: add `useEffect` on mount: fetch portfolio + theme; call `setDBPortfolioCache(p)` + apply CSS vars `--c-brand` / `--c-brand-accent`.
+
+**Step 9** — `.claude/skills/provision-agent-demo/SKILL.md`: Claude skill that parses pasted REA profile → creates JSON → runs provisioner → prints demo URL.
+
+### Key decisions already made
+- Anthony's existing 3 hardcoded listings in `src/data.ts` (lines 828–874) stay as fallback; DB wins
+- Demo leads: randomly assign Cameron's 10 buyers to Anthony's sold listings (same phones, email=vinuth.srirama@outlook.com)
+- Voice: clone Cameron's profile, confidence=0.35
+- SLM per property: Haiku-generated from listing data (cheap, ~$0.001 each)
+- Provisioning is idempotent (re-run safe)
+
+---
+
+## Session 15 Summary — What Was Built (19 June 2026)
+
+### 1. Analytics SQL Fix (`ceee03a`)
+- `server/routes/analytics.ts`: demo JWT sends `agentId=0`; `0 ? ... : "default"` returned `"default"` which failed SQL integer cast. Fixed with `??` (nullish coalescing).
+
+### 2. Prompt Evolution Loop — Fully Wired (`cceb55d`)
+Previously `promptOptimiser.ts` existed but was completely unwired. Now:
+- **Generation**: `evolvedRules` fetched from DB and injected into every LLM generation call
+- **Threading**: `versionId` flows from `/api/generate` → DemoView stages → `/api/send` payload
+- **Signal recording**: every successful delivery calls `recordSignal(versionId, "approved")`
+- **Optimisation cycle**: reads both VendorOS (outreach_drafts) and BuyerOS (metadata.smsBody) signals
+- **Triggers**: weekly cron Sun 2am AEST + immediate trigger at 15 signals
+
+### Git state
+- Pushed 2 commits to `origin/main`: `ceee03a` + `cceb55d`
+- Deployed to Fly.io — health check confirmed `{"ok":true,"database":true}`
+- Frontend NOT re-deployed (DemoView changes are minor threading, no visible UI change)
 
 ---
 

@@ -4,6 +4,43 @@ Cross-conversation handoff file. Every Claude session appends a dated entry at t
 
 ---
 
+## 2026-06-19 (latest) — prompt evolution loop wired + multi-agent demo provisioning plan
+
+**Commits pushed to origin/main and deployed to Fly.io (`addvantageadvisory`):**
+
+- `ceee03a` — `fix: analytics/vendor SQL error when demo token (agentId=0) is used`
+  - Root cause: `req.agentId = 0` (falsy) caused `agentId ? String(agentId) : "default"` to return `"default"`, which broke the SQL `WHERE agent_id = $1` cast to INTEGER.
+  - Fix: `req.agentId ?? 0` (nullish coalescing, not truthiness check).
+
+- `cceb55d` — `feat: wire prompt evolution loop (generate → send → optimise)`
+  - `server/lib/openai.ts`: Added `evolvedRules?: string` to `GenerateParams`; injected into system prompt as `=== LEARNED STYLE REFINEMENTS ===` block.
+  - `server/routes/generate.ts`: Fetch `[versionId, evolvedRules]` from `promptOptimiser` before generation; preserve `evolvedRules` when enriching params with CTA (was losing it via `...params` spread — fixed to `...enrichedParams`); return `versionId` in response `meta`.
+  - `server/routes/send.ts`: Accept `versionId?: number` in `SendRequest`; call `recordSignal(versionId, "approved", ...)` after every successful SMS or email delivery.
+  - `server/lib/promptOptimiser.ts`: Updated `runOptimisationCycle` to collect BuyerOS approval signals from `prompt_evaluations.metadata->>'smsBody'` (not only `outreach_drafts` which is VendorOS-only); meta-prompt changed to output concise style bullet points (not a full system prompt rewrite).
+  - `server/index.ts`: Weekly cron `0 2 * * 0` (Sun 2am AEST) + 15-signal threshold trigger for both `sms_rules` and `outreach_system` contexts.
+  - `src/views/DemoView.tsx`: Thread `versionId` through all stage transitions (GeneratingView → ReviewPanel) and include in POST body to `/api/send`.
+
+**Verified:** `/api/health` returns `{"ok":true,"database":true}` post-deploy. App is live.
+
+**Half-done — multi-agent demo provisioning (NOT YET STARTED, plan approved):**
+
+Goal: duplicate Cameron Knoll's demo for Anthony Abeysena (The 5th Avenue Real Estate, Chadstone) — black/gold brand, 8 sold listings, 1 active at 18 Maplewood Circuit Truganina $720k. Future new agents provisioned via script + Supabase, no code changes needed.
+
+See `NEXT_SESSION.md` for the full plan. Key discovery: Anthony ALREADY has hardcoded portfolio data in `src/data.ts` (lines 828–874, `ABEYSENA_PORTFOLIO_SOLD` + `ABEYSENA_PORTFOLIO_ACTIVE`, `isAnthonyAbeysena()` at line 453, `getPortfolioForAgent()` branch at line 465). The hardcoded data has only 3 sold listings — NOT the full 8. The provisioning system needs to replace (not supplement) the hardcoded data with DB-driven data for Anthony.
+
+**Exact next steps:**
+1. Add DB migrations to `server/lib/db.ts`: `agent_portfolios`, `agent_property_slm` tables + `ALTER TABLE agents ADD COLUMN IF NOT EXISTS brand_primary/accent/logo/gradient/bio/years_exp`
+2. Create `server/routes/agent-demo.ts` (GET /portfolio, /slm/:id, /leads, /theme)
+3. Register `/api/agent-demo` in `server/index.ts`
+4. Create `scripts/provision-agent.ts` CLI
+5. Create `scripts/agent-data/anthony-abeysena.json` with all 8 sold + 1 active
+6. Create `src/lib/agentDemoFetcher.ts`
+7. Modify `src/data.ts` → add `setDBPortfolioCache()`, make `getPortfolioForAgent()` check DB first
+8. Modify `src/views/DemoView.tsx` → `useEffect` on mount to fetch DB portfolio + apply brand CSS vars
+9. Create `.claude/skills/provision-agent-demo/SKILL.md`
+
+---
+
 ## 2026-06-11 (latest) — pitch URLs always production domain + per-agent persistent settings
 
 **Built (commit `1ff9da1`, plus earlier `f9ae631` BASE_URL fix on the same push):**

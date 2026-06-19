@@ -1,0 +1,136 @@
+{
+  "name": "Anthony Abeysena",
+  "agency": "The 5th Avenue Real Estate",
+  "agency_short": "5A",
+  "email": "anthony@5thavenuere.com.au",
+  "phone": null,
+  "suburb": "Chadstone",
+  "state": "VIC",
+  "tagline": "Casey specialist. 25 years local.",
+  "years_exp": 3,
+  "bio": "The City of Casey is known to offer the combination of home life and work life. That's why Anthony has made it his home for close to 25 years. As a Sales Representative, he assists clients with patience, persistence and professionalism.",
+  "reviews": [
+    "Mr Anthony was very welcoming and professional from the very beginning. I very much appreciate the simplicity of the whole process.",
+    "Anthony's knowledge of the market was great, he provided smart suggestions to the marketing strategy and communicated everything clearly.",
+    "Anthony was very professional and made the whole process smooth and stress free. His calm, positive personality makes him a great communicator."
+  ],
+  "brand": {
+    "primary": "#1a1a1a",
+    "accent": "#D4AF37",
+    "logo": "5A",
+    "gradient": ["#2a2a2a", "#1a1a1a"]
+  },
+  "sold_listings": [
+    {
+      "address": "18 Straun Road",
+      "suburb": "Mickleham",
+      "postcode": "3064",
+      "price": 730000,
+      "beds": 4,
+      "baths": 2,
+      "cars": 2,
+      "type": "House",
+      "sold_date": "22 May 2026",
+      "lead_count": 14
+    },
+    {
+      "address": "5 Glenisla Way",
+      "suburb": "Berwick",
+      "postcode": "3806",
+      "price": 940000,
+      "beds": 4,
+      "baths": 2,
+      "cars": 2,
+      "type": "House",
+      "sold_date": "18 Mar 2026",
+      "lead_count": 19
+    },
+    {
+      "address": "9 Sugarloaf Grove",
+      "suburb": "Werribee",
+      "postcode": "3030",
+      "price": 685000,
+      "beds": 4,
+      "baths": 2,
+      "cars": 2,
+      "type": "House",
+      "sold_date": "06 Mar 2026",
+      "lead_count": 11
+    },
+    {
+      "address": "2 Chow Walk",
+      "suburb": "Officer",
+      "postcode": "3809",
+      "price": 720000,
+      "beds": 4,
+      "baths": 2,
+      "cars": 2,
+      "type": "House",
+      "sold_date": "05 Mar 2026",
+      "lead_count": 9
+    },
+    {
+      "address": "21 Ashton Road",
+      "suburb": "Ferntree Gully",
+      "postcode": "3156",
+      "price": 880000,
+      "beds": 3,
+      "baths": 1,
+      "cars": 2,
+      "type": "House",
+      "sold_date": "14 Jan 2026",
+      "lead_count": 7
+    },
+    {
+      "address": "21 Mountain Way",
+      "suburb": "Doreen",
+      "postcode": "3754",
+      "price": 951000,
+      "beds": 4,
+      "baths": 3,
+      "cars": 2,
+      "type": "House",
+      "sold_date": "12 Jan 2026",
+      "lead_count": 16
+    },
+    {
+      "address": "8 Cubbie Way",
+      "suburb": "Clyde North",
+      "postcode": "3978",
+      "price": 850000,
+      "beds": 4,
+      "baths": 2,
+      "cars": 2,
+      "type": "House",
+      "sold_date": "25 Dec 2025",
+      "lead_count": 12
+    },
+    {
+      "address": "33 Nugget Way",
+      "suburb": "Cranbourne East",
+      "postcode": "3977",
+      "price": 540000,
+      "beds": 3,
+      "baths": 2,
+      "cars": 1,
+      "type": "Townhouse",
+      "sold_date": "06 Oct 2025",
+      "lead_count": 8
+    }
+  ],
+  "active_listings": [
+    {
+      "address": "18 Maplewood Circuit",
+      "suburb": "Truganina",
+      "postcode": "3029",
+      "price": 720000,
+      "price_min": 700000,
+      "price_max": 740000,
+      "beds": 4,
+      "baths": 2,
+      "cars": 2,
+      "type": "House",
+      "open_date": "TBD"
+    }
+  ]
+}
