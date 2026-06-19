@@ -31,6 +31,7 @@ export interface GenerateParams {
     notes: string             // open home notes
     transcript: string        // voice memo transcript (open home field notes)
     questions: string         // questions raised at open home
+    suburb?: string           // optional — used in template fallback copy
   }
   strategy: string            // e.g. "Market Pulse", "SMS Drip Sequence"
   channel: "sms" | "email" | "both"
