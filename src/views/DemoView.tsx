@@ -75,7 +75,7 @@ type Stage =
   | { kind: "leads"; property: PortfolioProperty; allLeads: ScoredLead[] }
   | { kind: "profile"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; allLeads: ScoredLead[] }
   | { kind: "generating"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; transcript: string; allLeads: ScoredLead[] }
-  | { kind: "review"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; transcript: string; sms: string; emailSubject: string; emailBody: string[]; allLeads: ScoredLead[] }
+  | { kind: "review"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; transcript: string; sms: string; emailSubject: string; emailBody: string[]; allLeads: ScoredLead[]; versionId?: number }
   | { kind: "missedOut"; auctionProperty: PortfolioProperty; leads: SheetLead[] }
   | { kind: "matchQueue" }
   // ── Vendor prospecting stages ──────────────────────────────────────────
@@ -2477,19 +2477,19 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
   transcript: string
   agent: AgentProfile
   theme: AgencyTheme
-  onComplete: (sms: string, emailSubject: string, emailBody: string[]) => void
+  onComplete: (sms: string, emailSubject: string, emailBody: string[], versionId?: number) => void
 }) {
   const onCompleteRef = useRef(onComplete)
   onCompleteRef.current = onComplete
   const fname = lead.name.split(" ")[0]
 
   // Store API result — onComplete fires only when BOTH the QA steps AND the API are done
-  const apiResultRef  = useRef<{ sms: string; emailSubject: string; emailBody: string[] } | null>(null)
+  const apiResultRef  = useRef<{ sms: string; emailSubject: string; emailBody: string[]; versionId?: number } | null>(null)
   const stepsReadyRef = useRef(false)
   const fireIfReadyRef = useRef(() => {
     if (apiResultRef.current && stepsReadyRef.current) {
       const r = apiResultRef.current
-      onCompleteRef.current(r.sms, r.emailSubject, r.emailBody)
+      onCompleteRef.current(r.sms, r.emailSubject, r.emailBody, r.versionId)
     }
   })
 
@@ -2579,11 +2579,12 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
 
     const stripDashes = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
 
-    const storeResult = (sms: string, emailSubject: string, emailBody: string[]) => {
+    const storeResult = (sms: string, emailSubject: string, emailBody: string[], versionId?: number) => {
       apiResultRef.current = {
         sms: stripDashes(sms),
         emailSubject: stripDashes(emailSubject),
         emailBody: emailBody.map(stripDashes),
+        versionId,
       }
       fireIfReadyRef.current()
     }
@@ -2628,8 +2629,9 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
           const sms = data.sms ?? ""
           const emailSubject = data.emailSubject ?? data.email?.subject ?? `Hey ${fname}, thought of you for ${property.address.split(",")[0]}`
           const emailBody: string[] = data.emailBody ?? data.email?.body ?? []
+          const versionId: number | undefined = typeof data.meta?.versionId === "number" ? data.meta.versionId : undefined
           if (!sms) throw new Error("empty generation result — no sms")
-          storeResult(sms, emailSubject, emailBody)
+          storeResult(sms, emailSubject, emailBody, versionId)
         })
 
     // Attempt 1: LLM generate → Attempt 2: retry LLM → Attempt 3: cached outreach
@@ -2744,7 +2746,7 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
 
 // ── Stage 5 — Review & Send ───────────────────────────────────────────────────
 
-function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: initSMS, emailSubject: initSubject, emailBody: initBody, onBack }: {
+function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: initSMS, emailSubject: initSubject, emailBody: initBody, onBack, versionId }: {
   property: PortfolioProperty
   lead: ScoredLead
   soldSLM: PropertySLM
@@ -2755,6 +2757,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
   emailSubject: string
   emailBody: string[]
   onBack: () => void
+  versionId?: number
 }) {
   const [sms, setSMS] = useState(initSMS)
   const [subject, setSubject] = useState(initSubject)
@@ -2869,6 +2872,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
           sms, subject,
           emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
           channel,
+          versionId,
         }),
       }).then(r => r.json()).catch(() => null)
 
@@ -10957,7 +10961,7 @@ export default function DemoView({
             transcript={stage.transcript}
             agent={agent}
             theme={theme}
-            onComplete={(sms, emailSubject, emailBody) =>
+            onComplete={(sms, emailSubject, emailBody, versionId) =>
               setStage({
                 kind: "review",
                 property: stage.property,
@@ -10968,6 +10972,7 @@ export default function DemoView({
                 emailSubject,
                 emailBody,
                 allLeads: stage.allLeads,
+                versionId,
               })
             }
           />
@@ -10986,6 +10991,7 @@ export default function DemoView({
             sms={stage.sms}
             emailSubject={stage.emailSubject}
             emailBody={stage.emailBody}
+            versionId={stage.versionId}
             onBack={() => setStage({ kind: "leads", property: stage.property, allLeads: stage.allLeads })}
           />
         </motion.div>

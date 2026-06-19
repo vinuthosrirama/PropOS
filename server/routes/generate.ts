@@ -1,6 +1,7 @@
 import { Router } from "express"
 import { generateMessage, type GenerateParams } from "../lib/openai.js"
 import { analyseLead, qaMessage, generateMessageClaude, generateMessageHaiku, MODEL_COSTS } from "../lib/claude.js"
+import { getActiveVersionId, getActivePrompt } from "../lib/promptOptimiser.js"
 
 const router = Router()
 
@@ -67,9 +68,16 @@ router.post("/", async (req, res) => {
   }
 
   try {
+    // ── Prompt evolution: fetch active version ID + any learned style rules ───
+    // Non-blocking — both fall back to safe defaults if DB unavailable
+    const [versionId, evolvedRules] = await Promise.all([
+      getActiveVersionId("sms_rules").catch(() => null),
+      getActivePrompt("sms_rules", "").catch(() => ""),
+    ])
+
     // ── Step 1: Claude Haiku analysis (optional, skip if no Anthropic key) ───
     let analysis = null
-    let enrichedParams = { ...params }
+    let enrichedParams: GenerateParams = { ...params, evolvedRules: evolvedRules || undefined }
 
     if (process.env.ANTHROPIC_API_KEY) {
       try {
@@ -84,10 +92,10 @@ router.post("/", async (req, res) => {
         })
         // Inject Claude's recommended CTA into the lead notes for AddVantage AI
         enrichedParams = {
-          ...params,
+          ...enrichedParams,
           lead: {
-            ...params.lead,
-            notes: `${params.lead.notes}\n[Recommended hook: ${analysis.callToAction}]`,
+            ...enrichedParams.lead,
+            notes: `${enrichedParams.lead.notes}\n[Recommended hook: ${analysis.callToAction}]`,
           },
         }
       } catch (e) {
@@ -189,7 +197,7 @@ router.post("/", async (req, res) => {
     }
 
     const estimatedCostUsd = MODEL_COSTS[modelUsed] ?? 0
-    res.json({ ...result, meta: { pipeline: "full", model_used: modelUsed, estimated_cost_usd: estimatedCostUsd, analysis, qa } })
+    res.json({ ...result, meta: { pipeline: "full", model_used: modelUsed, estimated_cost_usd: estimatedCostUsd, analysis, qa, versionId } })
   } catch (err) {
     console.error("Generate error:", err)
     res.status(500).json({ error: "Generation failed" })

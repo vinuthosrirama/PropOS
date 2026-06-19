@@ -153,44 +153,74 @@ export async function runOptimisationCycle(context: string): Promise<void> {
 
     const { id: activeId, prompt_text: activePrompt } = activeRows[0]
 
-    // Gather approved and rejected examples
-    const approved = await query<{ draft_body: string; edited_body: string | null }>(
-      `SELECT d.draft_body, d.edited_body
-       FROM outreach_drafts d
-       JOIN prompt_evaluations pe ON pe.version_id = d.version_id
-       WHERE pe.signal IN ('approved','edited') AND d.status IN ('approved','sent')
-       ORDER BY d.created_at DESC LIMIT 15`,
-    )
-    const rejected = await query<{ draft_body: string }>(
-      `SELECT d.draft_body
-       FROM outreach_drafts d
-       JOIN prompt_evaluations pe ON pe.version_id = d.version_id
-       WHERE pe.signal = 'rejected' AND d.status = 'rejected'
-       ORDER BY d.created_at DESC LIMIT 15`,
-    )
+    // Gather approved and rejected examples — two sources:
+    // 1. outreach_drafts (VendorOS bulk outreach flow)
+    // 2. prompt_evaluations.metadata->>'smsBody' (BuyerOS generate/send flow)
+    const [draftApproved, metaApproved, draftRejected, metaRejected] = await Promise.all([
+      query<{ draft_body: string; edited_body: string | null }>(
+        `SELECT d.draft_body, d.edited_body
+         FROM outreach_drafts d
+         JOIN prompt_evaluations pe ON pe.version_id = d.version_id
+         WHERE d.version_id = $1 AND pe.signal IN ('approved','edited') AND d.status IN ('approved','sent')
+         ORDER BY d.created_at DESC LIMIT 10`,
+        [activeId],
+      ),
+      query<{ sms_body: string }>(
+        `SELECT metadata->>'smsBody' AS sms_body
+         FROM prompt_evaluations
+         WHERE version_id = $1 AND signal = 'approved' AND metadata->>'smsBody' IS NOT NULL
+         ORDER BY created_at DESC LIMIT 10`,
+        [activeId],
+      ),
+      query<{ draft_body: string }>(
+        `SELECT d.draft_body
+         FROM outreach_drafts d
+         JOIN prompt_evaluations pe ON pe.version_id = d.version_id
+         WHERE d.version_id = $1 AND pe.signal = 'rejected' AND d.status = 'rejected'
+         ORDER BY d.created_at DESC LIMIT 10`,
+        [activeId],
+      ),
+      query<{ sms_body: string }>(
+        `SELECT metadata->>'smsBody' AS sms_body
+         FROM prompt_evaluations
+         WHERE version_id = $1 AND signal = 'rejected' AND metadata->>'smsBody' IS NOT NULL
+         ORDER BY created_at DESC LIMIT 10`,
+        [activeId],
+      ),
+    ])
 
-    if (approved.length + rejected.length < 5) {
-      console.log(`[promptOptimiser] not enough example data yet (${approved.length} approved, ${rejected.length} rejected)`)
+    const approvedExamples = [
+      ...draftApproved.map(r => r.edited_body ?? r.draft_body),
+      ...metaApproved.map(r => r.sms_body),
+    ].slice(0, 15)
+    const rejectedExamples = [
+      ...draftRejected.map(r => r.draft_body),
+      ...metaRejected.map(r => r.sms_body),
+    ].slice(0, 15)
+
+    if (approvedExamples.length + rejectedExamples.length < 5) {
+      console.log(`[promptOptimiser] not enough example data yet (${approvedExamples.length} approved, ${rejectedExamples.length} rejected)`)
       return
     }
 
-    const approvedBlock = approved.map((r, i) => `${i + 1}. ${r.edited_body ?? r.draft_body}`).join("\n")
-    const rejectedBlock = rejected.map((r, i) => `${i + 1}. ${r.draft_body}`).join("\n")
+    const approvedBlock = approvedExamples.map((t, i) => `${i + 1}. ${t}`).join("\n")
+    const rejectedBlock = rejectedExamples.map((t, i) => `${i + 1}. ${t}`).join("\n")
 
-    const metaPrompt = `You are improving an AI SMS outreach agent's system prompt for PropOS (Australian real estate tech startup).
+    const metaPrompt = `You are improving the SMS style rules for PropOS, an Australian real estate outreach tool.
 
-CURRENT SYSTEM PROMPT:
-${activePrompt}
+CURRENT STYLE RULES (what the agent is currently told about writing SMS):
+${activePrompt || "(no rules stored yet — infer from examples)"}
 
-APPROVED replies (the human agent sent these — they were good):
+APPROVED SMS messages (the agent sent these — they were good):
 ${approvedBlock || "(none yet)"}
 
-REJECTED replies (the human agent discarded these — they were not good):
+REJECTED/NOT SENT SMS messages (the agent discarded these):
 ${rejectedBlock || "(none yet)"}
 
-Rewrite the system prompt to produce more replies like the approved examples and fewer like the rejected ones.
-Keep it under 600 tokens. Preserve the core identity (Vinuth, PropOS, Australian tone, 1-2 sentences).
-Return ONLY the new system prompt text, no preamble, no explanation.`
+Write CONCISE style refinements (bullet points only, max 8 bullets, under 400 tokens) that capture what makes the approved examples better.
+Focus on: tone, structure, sign-off style, how they reference the property, phrasing patterns.
+Do NOT repeat the hard rules (no em-dashes, under 160 chars) — those are enforced elsewhere.
+Return ONLY the bullet-point style refinements, no preamble, no explanation.`
 
     const completion = await getClient().chat.completions.create({
       model: "gpt-4o-mini",
@@ -212,14 +242,14 @@ Return ONLY the new system prompt text, no preamble, no explanation.`
     const newRows = await query<{ id: number }>(
       `INSERT INTO prompt_versions (context, prompt_text, is_active, perf_snapshot)
        VALUES ($1, $2, FALSE, $3) RETURNING id`,
-      [context, newPromptText, JSON.stringify({ generated_from_version: activeId, approved_count: approved.length, rejected_count: rejected.length })],
+      [context, newPromptText, JSON.stringify({ generated_from_version: activeId, approved_count: approvedExamples.length, rejected_count: rejectedExamples.length })],
     )
     const newId = newRows[0]?.id
     if (!newId) return
 
     // Activate new version only if its projected score would be better
     // Heuristic: if approval ratio > old version's, activate
-    const approvalRatio = approved.length / Math.max(approved.length + rejected.length, 1)
+    const approvalRatio = approvedExamples.length / Math.max(approvedExamples.length + rejectedExamples.length, 1)
     const shouldActivate = approvalRatio >= 0.6 || oldScore < 0
 
     if (shouldActivate) {
@@ -233,7 +263,7 @@ Return ONLY the new system prompt text, no preamble, no explanation.`
       )
       // Invalidate cache
       _cache.delete(context)
-      console.log(`[promptOptimiser] context "${context}" — version ${newId} activated (replaced ${activeId}). Approval ratio: ${Math.round(approvalRatio * 100)}%, old score: ${oldScore}`)
+      console.log(`[promptOptimiser] context "${context}" — version ${newId} activated (replaced ${activeId}). Approval ratio: ${Math.round(approvalRatio * 100)}% (${approvedExamples.length}/${approvedExamples.length + rejectedExamples.length}), old score: ${oldScore}`)
     } else {
       console.log(`[promptOptimiser] context "${context}" — new version ${newId} generated but not activated (approval ratio ${Math.round(approvalRatio * 100)}% < threshold). Keeping version ${activeId}.`)
     }

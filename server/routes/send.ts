@@ -7,6 +7,7 @@ import type { PriceUpdatePayload } from "../lib/pitchGenerator.js"
 import { addAgentMessageToThread } from "../lib/conversations.js"
 import { logOutreach, updateOutreachStatus } from "../lib/db.js"
 import { queueNurtureSequence, type NurtureContext } from "../lib/scheduler.js"
+import { recordSignal } from "../lib/promptOptimiser.js"
 
 const router = Router()
 
@@ -44,6 +45,7 @@ interface SendRequest {
   pitchPayload?:    PriceUpdatePayload           // when set, comps/stats are embedded in the email body
   pipeline?:        string                      // vendor pipeline id — triggers nurture scheduling
   nurtureContext?:  NurtureContext                // extra context passed to nurture LLM
+  versionId?:       number                      // prompt version that produced this message (for evolution loop)
 }
 
 /**
@@ -218,6 +220,12 @@ router.post("/", async (req, res) => {
         agencyTagline: agencyTagline,
       },
     }).catch(() => { /* non-fatal — no DB in demo mode */ })
+  }
+
+  // Prompt evolution: record "approved" signal so the loop can learn from sends
+  if (delivered && body.versionId) {
+    if (results.sms) void recordSignal(body.versionId, "approved", { smsBody: sms, leadId, channel: "sms" })
+    if (results.email) void recordSignal(body.versionId, "approved", { leadId, channel: "email" })
   }
 
   const testMode = !!(process.env.TEST_RECIPIENT_PHONE || process.env.TEST_RECIPIENT_EMAIL)

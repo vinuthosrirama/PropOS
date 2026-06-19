@@ -22,6 +22,7 @@ export interface GenerateParams {
   slmContext?: string         // property knowledge from Property SLM (injected before voice)
   soldShortAddr?: string      // e.g. "Thirlmere Ct" — for SMS old-property reference
   activeShortAddr?: string    // e.g. "Grand Arch Way" — for SMS new-property reference
+  evolvedRules?: string       // DB-evolved style rules injected by promptOptimiser loop
   lead: {
     name: string
     budget: string
@@ -61,10 +62,14 @@ export async function generateMessage(params: GenerateParams): Promise<GenerateR
     ? `Use these exact short forms in the SMS: old property = "${soldShortAddr}", new property = "${activeShortAddr}".`
     : ""
 
+  const evolvedBlock = params.evolvedRules?.trim()
+    ? `\n=== LEARNED STYLE REFINEMENTS ===\n${params.evolvedRules}\n`
+    : ""
+
   const system = `You are ${agentName}, a real estate agent at ${agentAgency} in ${agentSuburb}.
 
 ${voiceBlock}
-${slmBlock}
+${slmBlock}${evolvedBlock}
 Hard rules — never break these:
 - Write in first person as ${agentName} — use "I" throughout. This is a personal message from the agent to someone they already know.
 - HARD CONSTRAINT: never use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma, period, or "and" instead.
