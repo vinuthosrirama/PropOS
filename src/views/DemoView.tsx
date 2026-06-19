@@ -622,7 +622,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
           padding: "32px", textAlign: "center", background: C.bg2,
           borderRadius: 16, border: `1px solid ${C.border}`,
         }}>
-          <div style={{ fontSize: 14, color: C.muted, marginBottom: 8 }}>No leads found in Google Sheets</div>
+          <div style={{ fontSize: 14, color: C.muted, marginBottom: 8 }}>No leads found for this property</div>
           <div style={{ fontSize: 12, color: C.faint }}>
             Make sure the Leads tab has <code style={{ color: C.muted }}>inspectedProperty</code> matching this address exactly
           </div>
@@ -819,7 +819,7 @@ function SoldLeadsPage({ soldProperty, leads, onBack, onSelectLead, theme }: {
           Matched via SLM
         </span>
         <span style={{ fontSize: 10, color: C.faint, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 20, padding: "2px 10px" }}>
-          From Sheets
+          From CRM
         </span>
       </div>
     </div>
@@ -1693,7 +1693,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
           }}
         >
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 4 }}>Capture Open-Home Lead</div>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Saved to the Lead tab in your Google Sheet.</div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>Saved to your CRM.</div>
 
           {/* Name + Phone */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
@@ -1789,7 +1789,7 @@ function MatchingScreen({ property, soldLeads, onComplete, theme }: {
   const steps = [
     `Reading property SLM: ${slmInfo.filled} attributes loaded`,
     `Scanning ${soldIds.length} comparable sold properties`,
-    `Scoring ${totalLeadCount} leads from Google Sheets`,
+    `Scoring ${totalLeadCount} leads from CRM`,
     `Ranking by attribute overlap: configuration, land, school zone, legal profile`,
     `Weighting by question alignment: matching what each lead asked to this property`,
     `Match list ready, sorted by compatibility score`,
@@ -2860,8 +2860,8 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         delivered
           ? `Sent via ${transportLabel} + Gmail`
           : deliveryRes?.errors?.length
-          ? "Saved to Sheets (delivery: " + deliveryRes.errors[0] + ")"
-          : "Saved to Sheets (configure BlueBubbles/Gmail for direct delivery)"
+          ? "Send failed: " + deliveryRes.errors[0]
+          : "Send failed — check BlueBubbles is running and you are signed in"
       )
 
       // 2. Always log to Sheets regardless
@@ -4383,7 +4383,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
           <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>
             {supabaseConnected()
               ? "Supabase is connected. Run the migration script to load your contacts: node scripts/supabase-migrate.mjs"
-              : "Connect Supabase or Google Sheets in Settings → Integrations to load your real past buyers."}
+              : "Connect Supabase in Settings → Integrations to load your real past buyers."}
           </div>
         </div>
       )}
@@ -4408,7 +4408,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, flexShrink: 0 }} />
               <span style={{ fontSize: 10, color: C.green, fontWeight: 600 }}>Live.</span>
-              <button onClick={loadFromSheet} title="Refresh from Google Sheets" style={{
+              <button onClick={loadFromSheet} title="Refresh from CRM" style={{
                 background: "none", border: "none", cursor: "pointer", padding: "0 2px",
                 color: C.faint, fontSize: 11, lineHeight: 1, display: "flex", alignItems: "center",
               }}>↺</button>
@@ -4582,7 +4582,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
                 <div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 3 }}>Add or Import Contacts</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>Contacts are upserted to your Google Sheet CRM automatically.</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Contacts are upserted to your Supabase CRM automatically.</div>
                 </div>
                 <button onClick={closeAddModal} style={{
                   background: "none", border: "none", color: C.faint, fontSize: 18,
@@ -4809,7 +4809,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
                         <div style={{ width: 32, height: 32, borderRadius: 8, background: `${C.green}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>✓</div>
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{csvContacts.length} contacts found</div>
-                          <div style={{ fontSize: 11, color: C.muted }}>Review below, then import all to your CRM and Google Sheet.</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>Review below, then import all to your CRM.</div>
                         </div>
                         <button onClick={() => { setCsvContacts([]); if (csvRef.current) csvRef.current.value = "" }} style={{ marginLeft: "auto", background: "none", border: "none", color: C.faint, fontSize: 12, cursor: "pointer", fontFamily: FONT }}>Change file</button>
                       </div>
@@ -4839,7 +4839,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
               {/* ── From CRM ── */}
               {importSource === "crm" && (
                 <div>
-                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Connect your CRM to sync contacts automatically. PropOS maps your fields and upserts new records to your Google Sheet.</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Connect your CRM to sync contacts automatically. PropOS maps your fields and upserts new records to Supabase.</div>
                   <div style={{ display: "grid", gridTemplateColumns: isMobileVPP ? "1fr" : "1fr 1fr", gap: 10 }}>
                     {([
                       ["RealBase",       "rb", "🏠", true],
@@ -9637,7 +9637,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       const delivered = deliveryRes?.ok === true
       const vTransport: string = deliveryRes?.sms?.transport ?? "sms"
       const vTransportLabel = vTransport === "bluebubbles" ? "BlueBubbles" : vTransport === "imsg" ? "iMessage" : vTransport
-      setDeliveryNote(delivered ? `Sent via ${vTransportLabel} + Gmail` : "Saved to Sheets (configure BlueBubbles/Gmail for direct delivery)")
+      setDeliveryNote(delivered ? `Sent via ${vTransportLabel} + Gmail` : deliveryRes?.errors?.length ? "Send failed: " + deliveryRes.errors[0] : "Send failed — check BlueBubbles is running and you are signed in")
 
       // Write today's date + last message to both Google Sheets AND Supabase
       const lastMsg = sms || bodyText.split("\n\n")[0]?.slice(0, 200)
