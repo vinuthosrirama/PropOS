@@ -153,7 +153,7 @@ router.post("/", async (req, res) => {
               enrichedParams.strategy === "Equity Play"
                 ? `Your property has built up strong equity and I wanted to make sure you have the full picture of where things stand.`
                 : `I have some updates relevant to your search in ${suburb} that I think you'd find useful.`,
-              `Happy to connect for a quick chat whenever suits — no pressure at all.\n\nCheers,\n${an}`,
+              `Happy to connect for a quick chat whenever suits. No pressure at all.\n\nCheers,\n${an}`,
             ],
           },
         }
