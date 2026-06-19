@@ -54,6 +54,7 @@ import smsAgentRouter from "./routes/sms-agent.js"
 import crmLeadsRouter from "./routes/crm-leads.js"
 import agentboxRouter from "./routes/agentbox.js"
 import demoRouter from "./routes/demo.js"
+import agentDemoRouter from "./routes/agent-demo.js"
 import smsShortcutRouter, { registerReplyHandler } from "./routes/sms-shortcut.js"
 import bbRouter from "./routes/bb.js"
 import { parseHttpSmsWebhook } from "./lib/httpsms.js"
@@ -252,6 +253,7 @@ app.use("/api/outreach-targets", outreachTargetsRouter)
 app.use("/api/sms-agent",        smsAgentRouter)
 app.use("/api/agentbox",         agentboxRouter)
 app.use("/api/demo",             demoRouter)
+app.use("/api/agent-demo",      agentDemoRouter)
 
 // ── Shared reply handler (all transports feed here) ──────────────────────────
 async function handleIncomingReply(from: string, body: string, guid?: string): Promise<void> {

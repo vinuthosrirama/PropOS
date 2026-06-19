@@ -4,10 +4,12 @@ import { useBreakpoint } from "../hooks/useBreakpoint"
 import {
   C, FONT, PORTFOLIO_SOLD, PORTFOLIO_ACTIVE,
   DEFAULT_THEME, getPortfolioForAgent, isPasSunilchandra, isManpreetSingh,
+  setDBPortfolioCache,
   type AgentProfile, type AgencyTheme, type PortfolioProperty,
   type LeadStatus, LEAD_STATUS_LABELS, LEAD_STATUS_ORDER,
   type DemoMode,
 } from "../data"
+import { fetchAgentPortfolio, fetchAgentTheme } from "../lib/agentDemoFetcher"
 import { getPastBuyersForAgent, CURRENT_VALUE_ESTIMATES } from "../data/pastBuyers"
 import { calculateFinancials, fmtDollar, fmtPct, type FinancialSnapshot } from "../lib/vendorFinancials"
 import {
@@ -10380,6 +10382,22 @@ export default function DemoView({
     poll()
     const id = setInterval(poll, 30_000)
     return () => clearInterval(id)
+  }, [])
+
+  // Fetch DB-provisioned portfolio + brand theme on mount.
+  // When the logged-in agent was provisioned via provision-agent.ts, their data
+  // lives in Supabase and takes priority over hardcoded arrays (DB wins).
+  // Returns null (204) for Cameron and other hardcoded agents — falls back silently.
+  useEffect(() => {
+    fetchAgentPortfolio().then(portfolio => {
+      setDBPortfolioCache(portfolio)
+    }).catch(() => setDBPortfolioCache(null))
+
+    fetchAgentTheme().then(dbTheme => {
+      if (!dbTheme) return
+      document.documentElement.style.setProperty("--c-brand", dbTheme.primary)
+      document.documentElement.style.setProperty("--c-brand-accent", dbTheme.accent ?? dbTheme.primary)
+    }).catch(() => {})
   }, [])
 
   // Ctrl+Z or Cmd+Shift+R — instant reset to portfolio during live demo
