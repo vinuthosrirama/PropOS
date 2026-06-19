@@ -66,6 +66,7 @@ import { handleSmsAgentInbound } from "./lib/smsAgentInbound.js"
 import { claimMessageGuid } from "./lib/messageDedup.js"
 import { startSmsAgentScheduler } from "./lib/smsOrchestrator.js"
 import { startReadyOutreachScheduler } from "./lib/smsReadyOutreach.js"
+import { runOptimisationCycle } from "./lib/promptOptimiser.js"
 import { startTransportHealthMonitor } from "./lib/transportHealthMonitor.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
@@ -456,6 +457,13 @@ app.listen(PORT, async () => {
   startSmsAgentScheduler()
   startReadyOutreachScheduler()
   startTransportHealthMonitor()
+
+  // Prompt evolution: Sunday 2am Melbourne — rewrite SMS style rules from accumulated signals
+  const cron = await import("node-cron")
+  cron.default.schedule("0 2 * * 0", () => {
+    void runOptimisationCycle("sms_rules")
+    void runOptimisationCycle("outreach_system")
+  }, { timezone: "Australia/Melbourne" })
 
   // 4. Wire up transport-specific init
   // Webhook callback URLs carry ?secret= so the verifyWebhookSecret gate passes.
