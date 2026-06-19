@@ -150,15 +150,30 @@ router.post("/logout", async (req, res) => {
   res.json({ ok: true })
 })
 
-// ── Demo token (Quick Access / guest sessions) ────────────────────────────────
-// Issues a short-lived JWT with agentId=0 so the demo works without credentials.
-// All sends via this token are still redirected to TEST_RECIPIENT_PHONE/EMAIL.
-
+// ── Demo token (Cameron / Vinuth quick-access — agentId=0) ───────────────────
+// Issues a short-lived JWT with agentId=0. Sends are still redirected to TEST_*.
 router.post("/demo-token", (_req, res) => {
-  // 8-hour TTL so the token survives a full demo session without expiring.
-  // No refresh cookie — liveMode=false in send.ts keeps all sends redirected to TEST_RECIPIENT_*.
   const token = issueAccessToken(0, 8 * 60 * 60)
   return res.json({ accessToken: token })
+})
+
+// ── Agent demo token (provisioned agents without a password) ──────────────────
+// Called by quick-access buttons for provisioned demo agents (e.g. Anthony, David).
+// Only works for agents that have NO password_hash — prevents abuse on real accounts.
+router.post("/agent-demo-token", async (req, res) => {
+  try {
+    const { email } = req.body as { email?: string }
+    if (!email) return res.status(400).json({ error: "email required" })
+    const agent = await queryOne<AgentRow>("SELECT * FROM agents WHERE LOWER(email) = $1", [email.toLowerCase()])
+    if (!agent) return res.status(404).json({ error: "Agent not found" })
+    if (agent.password_hash) return res.status(401).json({ error: "Use password login" })
+    const { accessToken, refreshToken } = issueTokens(agent.id, agent.token_version ?? 0)
+    res.cookie("refresh_token", refreshToken, { httpOnly: true, secure: true, sameSite: "none", maxAge: 7 * 24 * 60 * 60 * 1000 })
+    return res.json({ agent: safeAgent(agent), accessToken })
+  } catch (err) {
+    console.error("[auth] agent-demo-token error:", (err as Error).message)
+    return res.status(500).json({ error: "Login failed" })
+  }
 })
 
 // ── Me ────────────────────────────────────────────────────────────────────────
