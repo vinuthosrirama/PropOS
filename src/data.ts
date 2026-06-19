@@ -40,9 +40,9 @@ export const DARK_CSS_VARS = `
   --c-bg:           #14072e;
   --c-bg2:          #2c1b59;
   --c-bg3:          #351c6b;
-  --c-text:         rgba(255, 255, 255, 0.92);
-  --c-muted:        rgba(255, 255, 255, 0.52);
-  --c-faint:        rgba(255, 255, 255, 0.25);
+  --c-text:         rgba(255, 255, 255, 0.94);
+  --c-muted:        rgba(255, 255, 255, 0.68);
+  --c-faint:        rgba(255, 255, 255, 0.45);
   --c-border:       rgba(182, 194, 171, 0.14);
   --c-border-hover: rgba(182, 194, 171, 0.28);
   --c-green:        rgb(100, 208, 144);
@@ -62,8 +62,8 @@ export const LIGHT_CSS_VARS = `
   --c-bg2:          #ffffff;
   --c-bg3:          #f1f1f2;
   --c-text:         #2c2d30;
-  --c-muted:        rgba(59, 31, 119, 0.58);
-  --c-faint:        rgba(59, 31, 119, 0.32);
+  --c-muted:        rgba(59, 31, 119, 0.78);
+  --c-faint:        rgba(59, 31, 119, 0.55);
   --c-border:       rgba(59, 31, 119, 0.12);
   --c-border-hover: rgba(59, 31, 119, 0.24);
   --c-green:        #15803d;

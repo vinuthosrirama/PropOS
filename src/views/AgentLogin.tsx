@@ -618,6 +618,30 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
         {/* Quick access — instant login */}
         <button type="button" onClick={async () => {
           const agent: AgentProfile = {
+            name: "Vinuth Srirama", agency: "Peake",
+            email: "vinuth.o.srirama@gmail.com", phone: "0415 883 354",
+            suburb: "Berwick", tagline: "Berwick specialist.",
+            voiceProfile: { greeting: "Hi", closing: "Cheers", lengthStyle: "short", formalityScore: 2, aussieIndex: 2, specificity: 3, emojiUsage: "occasional", examplesCount: 0, confidence: 0, detectedTraits: [] },
+            trainingCorpus: [],
+          }
+          try {
+            const r = await fetch(apiUrl("/api/auth/demo-token"), { method: "POST" })
+            const d = await r.json()
+            if (d.accessToken) setAccessToken(d.accessToken)
+          } catch { /* non-fatal — sends will 401 but the demo UI still loads */ }
+          onLogin(agent, getAgencyTheme("Peake"), mode)
+        }} style={{
+          width: "100%", padding: "14px 18px", borderRadius: 20, border: "none",
+          background: "#3b1f77", color: "#fff",
+          fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          letterSpacing: "-.1px", marginBottom: 10,
+        }}>
+          <span>Vinuth Srirama · Peake · Berwick</span>
+          <span style={{ opacity: 0.55, fontSize: 12 }}>Master account →</span>
+        </button>
+        <button type="button" onClick={async () => {
+          const agent: AgentProfile = {
             name: "Cameron Knoll", agency: "Peake",
             email: "cameronk@peakere.com.au", phone: "0428 762 148",
             suburb: "Berwick", tagline: "Berwick specialist.",
@@ -632,7 +656,7 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
           onLogin(agent, getAgencyTheme("Peake"), mode)
         }} style={{
           width: "100%", padding: "14px 18px", borderRadius: 20, border: "none",
-          background: "#3b1f77", color: "#fff",
+          background: "#2c1b59", color: "#fff",
           fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
           display: "flex", alignItems: "center", justifyContent: "space-between",
           letterSpacing: "-.1px", marginBottom: 20,

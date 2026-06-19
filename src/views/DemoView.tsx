@@ -1557,9 +1557,6 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
           <h1 style={{ fontSize: bpPP === "mobile" ? 22 : 30, fontWeight: 800, color: C.text, letterSpacing: -1, lineHeight: 1.1, margin: 0 }}>
             Re-engage your open home database
           </h1>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.text, background: "rgba(255,255,255,0.08)", border: `1px solid ${C.borderHover}`, borderRadius: 20, padding: "4px 12px", letterSpacing: 0.3, whiteSpace: "nowrap" as const }}>
-            {agentActive.length} {agentActive.length === 1 ? "listing" : "listings"}
-          </span>
         </div>
         <div style={{ fontSize: 13, color: C.muted, maxWidth: 540, lineHeight: 1.6 }}>
           Match every open-home attendee to your active listings by price, beds, and suburb. Generate hyper-personalised SMS and email in your voice — in seconds.

@@ -1140,7 +1140,6 @@ interface VoiceStylePanelProps {
 }
 
 // ── Combined Connections panel (Analytics + Integrations + AgentBox CRM) ───────
-type HealthStatus = { openai: boolean; anthropic: boolean; sheet: boolean; sms: boolean; gmail: boolean }
 
 const AGENTBOX_KEY_STORE = "propOS_agentbox_creds"
 
@@ -1154,9 +1153,6 @@ function formatTimeAgo(ts: number): string {
 
 function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
   const theme = getAgencyTheme(agent.agency)
-  const [health, setHealth] = useState<HealthStatus | null>(null)
-  const [healthLoading, setHealthLoading] = useState(true)
-  const [healthError, setHealthError] = useState<string | null>(null)
 
   // AgentBox credentials — kept in localStorage, but all API calls go through
   // the PropOS server proxy (/api/agentbox/test). Browser→AgentBox direct is
@@ -1166,15 +1162,7 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
   })
   const [abTesting, setAbTesting] = useState(false)
   const [abResult, setAbResult] = useState<"ok" | "error" | null>(null)
-  const [abError, setAbError] = useState<string | null>(null)
   const [abContactCount, setAbContactCount] = useState<number | null>(null)
-
-  useEffect(() => {
-    authFetch("/api/health")
-      .then(r => r.json())
-      .then(d => { setHealth(d as HealthStatus); setHealthLoading(false) })
-      .catch(() => { setHealthError("Could not reach server — service status is only live in the deployed app."); setHealthLoading(false) })
-  }, [])
 
   const saveAgentBoxCreds = (creds: typeof agentBoxCreds) => {
     setAgentBoxCreds(creds)
@@ -1183,7 +1171,7 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
 
   const testAgentBoxConnection = async () => {
     if (!agentBoxCreds.apiKey || !agentBoxCreds.clientId) return
-    setAbTesting(true); setAbResult(null); setAbError(null)
+    setAbTesting(true); setAbResult(null)
     try {
       const res = await authFetch("/api/agentbox/test", {
         method:  "POST",
@@ -1196,23 +1184,13 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
         setAbResult("ok")
         saveAgentBoxCreds({ ...agentBoxCreds, lastTestedOk: Date.now() })
       } else {
-        setAbError(data.error ?? "Connection failed")
         setAbResult("error")
       }
     } catch {
-      setAbError("Could not reach the PropOS server")
       setAbResult("error")
     }
     setAbTesting(false)
   }
-
-  const services: { key: keyof HealthStatus; label: string; description: string; icon: string }[] = [
-    { key: "openai",    label: "OpenAI (GPT-4o)",  description: "Outreach generation engine",    icon: "🤖" },
-    { key: "anthropic", label: "Anthropic Claude",  description: "Lead grading + QA review",      icon: "🧠" },
-    { key: "sheet",     label: "Google Sheets",     description: "Lead data sync",                icon: "📊" },
-    { key: "sms",       label: "BlueBubbles SMS",   description: "iMessage / SMS delivery",       icon: "💬" },
-    { key: "gmail",     label: "Gmail",             description: "Email delivery",                icon: "📧" },
-  ]
 
   return (
     <div style={{ maxWidth: 720 }}>
@@ -1221,40 +1199,7 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
         Live status of all connected services + CRM integrations.
       </div>
 
-      {/* ── Service health ───────────────────────────────────────────────────── */}
-      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
-        Proptech Services
-      </div>
-      {healthLoading && <div style={{ color: C.muted, fontSize: 13, marginBottom: 24 }}>Checking connections…</div>}
-      {healthError  && <div style={{ color: C.red,  fontSize: 13, marginBottom: 24 }}>{healthError}</div>}
-      {health && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 32 }}>
-          {services.map(({ key, label, description, icon }) => {
-            const ok = health[key]
-            return (
-              <div key={key} style={{
-                display: "flex", alignItems: "center", gap: 14,
-                background: C.bg2, border: `1px solid ${ok ? C.green + "33" : C.red + "33"}`,
-                borderRadius: 12, padding: "12px 16px",
-              }}>
-                <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{label}</div>
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{description}</div>
-                </div>
-                <div style={{
-                  fontSize: 11, fontWeight: 700,
-                  color: ok ? C.green : C.red,
-                  background: ok ? C.green + "18" : C.red + "18",
-                  borderRadius: 6, padding: "3px 8px",
-                }}>
-                  {ok ? "Connected" : "Offline"}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+      {/* Proptech Services section intentionally hidden from UI */}
 
       {/* ── AgentBox CRM ────────────────────────────────────────────────────── */}
       <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
@@ -1367,7 +1312,7 @@ function ConnectionsPanel({ agent }: { agent: AgentProfile }) {
           )}
           {abResult === "error" && (
             <div style={{ fontSize: 12, color: C.red, fontWeight: 600 }}>
-              ❌ {abError ?? "Connection failed — check your API key and Client ID"}
+              ❌ Check your API key and Client ID
             </div>
           )}
         </div>
