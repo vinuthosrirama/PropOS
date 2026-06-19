@@ -35,7 +35,8 @@ router.get("/vendor", async (req, res) => {
 
   try {
     // Use JWT-authenticated agent ID — prevents IDOR (any agent reading any other agent's analytics)
-    const agentId = req.agentId ? String(req.agentId) : "default"
+    // Use ?? not ? to avoid treating agentId=0 (demo token) as falsy → "default" which fails SQL integer cast
+    const agentId = req.agentId ?? 0
 
     // Core funnel from outreach_log
     const [funnelRows, pipelineRows, recentRows] = await Promise.all([
