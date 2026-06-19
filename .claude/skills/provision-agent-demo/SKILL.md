@@ -79,8 +79,8 @@ Use this structure:
 ### Step 2 — Run the provisioner
 
 ```bash
-cd "/Users/vinuthmacbook/Desktop/Claude/AddVantageOS/REA Agents/PropOS"
-npx tsx scripts/provision-agent.ts <slug>
+cd "/Users/vinuthmacbook/Desktop/Claude/AddVantageOS/REA Agents/PropOS/server"
+npx tsx provision-agent.ts <slug>
 ```
 
 Expected output:

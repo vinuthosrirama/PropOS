@@ -1,7 +1,7 @@
 /**
  * provision-agent.ts
  *
- * CLI: npx tsx scripts/provision-agent.ts <slug>
+ * CLI: cd server && npx tsx provision-agent.ts <slug>
  * Reads scripts/agent-data/<slug>.json and provisions a full demo in Supabase:
  *   1. Upsert agent row (email is unique key) + brand columns
  *   2. Delete + re-insert agent_portfolios (idempotent)
@@ -12,20 +12,13 @@
 
 import path from "path"
 import { fileURLToPath } from "url"
-import { readFileSync, existsSync } from "fs"
+import { readFileSync } from "fs"
+import dotenv from "dotenv"
 import pg from "pg"
 import Anthropic from "@anthropic-ai/sdk"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-// Load server/.env without the dotenv package (not in root node_modules)
-const envPath = path.resolve(__dirname, "../server/.env")
-if (existsSync(envPath)) {
-  for (const line of readFileSync(envPath, "utf-8").split("\n")) {
-    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)=(.*)$/)
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, "")
-  }
-}
+dotenv.config({ path: path.resolve(__dirname, ".env") })
 
 const { Pool } = pg
 const pool = new Pool({
@@ -84,39 +77,29 @@ async function q<T = Record<string, unknown>>(sql: string, params?: unknown[]): 
 async function generateSlm(listing: SoldListing | ActiveListing, agentName: string, agency: string): Promise<Record<string, unknown>> {
   if (!process.env.ANTHROPIC_API_KEY) {
     return {
-      beds: (listing as SoldListing).beds,
-      baths: (listing as SoldListing).baths,
-      address: listing.address,
-      suburb: listing.suburb,
+      address: listing.address, suburb: listing.suburb,
+      beds: listing.beds, baths: listing.baths,
       note: "SLM auto-generation skipped — no ANTHROPIC_API_KEY",
     }
   }
 
+  const isSold = (listing as SoldListing).sold_date !== undefined
   const prompt = `You are helping build a demo for ${agentName} at ${agency}.
 Generate a concise property SLM (Smart Listing Memory) JSON for this listing:
 
 Address: ${listing.address}, ${listing.suburb}
 Beds: ${listing.beds}, Baths: ${listing.baths}, Cars: ${listing.cars}
 Type: ${listing.type}
-${(listing as SoldListing).sold_date ? `Sold: ${(listing as SoldListing).sold_date} at $${(listing as SoldListing).price.toLocaleString()}` : `Listed at $${listing.price.toLocaleString()}`}
+${isSold ? `Sold: ${(listing as SoldListing).sold_date} at $${listing.price.toLocaleString()}` : `Listed at $${listing.price.toLocaleString()}`}
 
-Return ONLY a JSON object with these fields (use "TBD" for unknown values):
+Return ONLY a JSON object (no markdown):
 {
-  "address": "...",
-  "suburb": "...",
-  "beds": N,
-  "baths": N,
-  "cars": N,
-  "land_sqm": N_or_null,
-  "price_achieved": "$Xk" or null,
-  "price_guide": "$X–$Y" or null,
-  "nearby_schools": ["School A (0.8km)", "School B (1.2km)"],
-  "nearby_stations": ["Station (2km)"],
-  "selling_points": ["Open plan living", "Double garage", "..."],
-  "target_buyer": "Young families seeking 4bd in ${listing.suburb}",
-  "days_on_market": N_or_null,
-  "auction_clearance": "TBD",
-  "comparable_note": "TBD"
+  "address": "...", "suburb": "...", "beds": N, "baths": N, "cars": N,
+  "land_sqm": N_or_null, "price_achieved": "$Xk or null", "price_guide": "$X-$Y or null",
+  "nearby_schools": ["School A (0.8km)"], "nearby_stations": ["Station (2km)"],
+  "selling_points": ["Open plan living", "Double garage"],
+  "target_buyer": "Brief buyer profile for ${listing.suburb}",
+  "days_on_market": N_or_null, "auction_clearance": "TBD", "comparable_note": "TBD"
 }`
 
   try {
@@ -140,12 +123,13 @@ Return ONLY a JSON object with these fields (use "TBD" for unknown values):
 async function main() {
   const slug = process.argv[2]
   if (!slug) {
-    console.error("Usage: npx tsx scripts/provision-agent.ts <slug>")
-    console.error("Example: npx tsx scripts/provision-agent.ts anthony-abeysena")
+    console.error("Usage: cd server && npx tsx provision-agent.ts <slug>")
+    console.error("Example: cd server && npx tsx provision-agent.ts anthony-abeysena")
     process.exit(1)
   }
 
-  const dataPath = path.resolve(__dirname, "agent-data", `${slug}.json`)
+  // Data file lives at repo-root/scripts/agent-data/<slug>.json
+  const dataPath = path.resolve(__dirname, "../scripts/agent-data", `${slug}.json`)
   let data: AgentData
   try {
     data = JSON.parse(readFileSync(dataPath, "utf-8"))
@@ -170,15 +154,10 @@ async function main() {
   const agentId = agentRows[0]?.id
   if (!agentId) { console.error("Failed to upsert agent"); process.exit(1) }
 
-  // Apply brand columns via ALTER-safe UPDATE (columns added by migration)
   await pool.query(
     `UPDATE agents SET
-       brand_primary  = $1,
-       brand_accent   = $2,
-       brand_logo     = $3,
-       brand_gradient = $4,
-       bio            = $5,
-       years_exp      = $6
+       brand_primary  = $1, brand_accent   = $2, brand_logo     = $3,
+       brand_gradient = $4, bio            = $5, years_exp      = $6
      WHERE id = $7`,
     [
       data.brand.primary,
@@ -197,7 +176,7 @@ async function main() {
 
   const allListings = [
     ...data.sold_listings.map(l => ({ ...l, status: "sold" as const })),
-    ...data.active_listings.map(l => ({ ...l, status: "active" as const, sold_date: undefined, lead_count: 0 })),
+    ...data.active_listings.map(l => ({ ...l, status: "active" as const, sold_date: undefined as string | undefined, lead_count: 0 })),
   ]
 
   const portfolioIds: number[] = []
@@ -214,9 +193,9 @@ async function main() {
         (listing as ActiveListing).price_min ?? null,
         (listing as ActiveListing).price_max ?? null,
         listing.beds, listing.baths, listing.cars, listing.type, listing.status,
-        (listing as SoldListing).sold_date ?? null,
+        listing.sold_date ?? null,
         (listing as ActiveListing).open_date ?? null,
-        (listing as SoldListing).lead_count ?? 0,
+        listing.lead_count ?? 0,
         `${listing.beds}bd ${listing.baths}ba ${listing.type} in ${listing.suburb}.`,
       ],
     )
@@ -227,28 +206,21 @@ async function main() {
   // ── 3. Generate SLM JSON per listing ──────────────────────────────────────
   console.log(`  Generating SLM for ${allListings.length} listings via Haiku...`)
   for (let i = 0; i < allListings.length; i++) {
-    const listing = allListings[i]
-    const portfolioId = portfolioIds[i]
-    const slm = await generateSlm(listing, data.name, data.agency)
-
+    const slm = await generateSlm(allListings[i], data.name, data.agency)
     await pool.query(
       `INSERT INTO agent_property_slm (agent_id, portfolio_id, slm_json)
-       VALUES ($1, $2, $3)
-       ON CONFLICT DO NOTHING`,
-      [agentId, portfolioId, JSON.stringify(slm)],
+       VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+      [agentId, portfolioIds[i], JSON.stringify(slm)],
     )
-    process.stdout.write(`    SLM ${i + 1}/${allListings.length}: ${listing.address}\n`)
+    console.log(`    SLM ${i + 1}/${allListings.length}: ${allListings[i].address}`)
   }
   console.log(`  ✓ SLM generated`)
 
-  // ── 4. Clone Cameron's buyers into sms_contacts for this agent ────────────
+  // ── 4. Clone Cameron's buyers into sms_contacts ───────────────────────────
   const soldAddresses = data.sold_listings.map(l => `${l.address}, ${l.suburb}`)
   let cloned = 0
   for (let i = 0; i < CAMERON_BUYERS.length; i++) {
     const buyer = CAMERON_BUYERS[i]
-    const attendedAddress = soldAddresses[i % soldAddresses.length]
-
-    // Skip if already cloned for this agent
     const existing = await q<{ id: number }>(
       `SELECT id FROM sms_contacts WHERE phone = $1 AND assigned_agent_id = $2 LIMIT 1`,
       [buyer.phone, agentId],
@@ -258,13 +230,10 @@ async function main() {
     await pool.query(
       `INSERT INTO sms_contacts
          (name, phone, email, assigned_agent_id, stage, status, rea_data, buyer_profile)
-       VALUES ($1, $2, $3, $4, 'new', 'active', $5, $6)`,
+       VALUES ($1, $2, $3, $4, 1, 'active', $5, $6)`,
       [
-        buyer.name,
-        buyer.phone,
-        "vinuth.srirama@outlook.com",
-        agentId,
-        JSON.stringify({ attended_address: attendedAddress, source: "open_home" }),
+        buyer.name, buyer.phone, "vinuth.srirama@outlook.com", agentId,
+        JSON.stringify({ attended_address: soldAddresses[i % soldAddresses.length], source: "open_home" }),
         JSON.stringify({ notes: buyer.notes }),
       ],
     )
@@ -272,28 +241,23 @@ async function main() {
   }
   console.log(`  ✓ ${cloned} demo buyers cloned (${CAMERON_BUYERS.length - cloned} already existed)`)
 
-  // ── 5. Seed voice profile (clone Cameron's at confidence=0.35) ───────────
+  // ── 5. Seed voice profile ─────────────────────────────────────────────────
   const voiceId = `agent_${agentId}`
   await pool.query(
     `INSERT INTO voice_profiles
-       (voice_id, agent_id, greeting, closing, formality_score, aussie_index, confidence, detected_traits, length_style, emoji_usage)
+       (voice_id, agent_id, greeting, closing, formality_score, aussie_index,
+        confidence, detected_traits, length_style, emoji_usage)
      VALUES ($1, $2, 'Hi', 'Kind regards', 2, 2, 0.35, $3, 'short', 'none')
      ON CONFLICT (voice_id) DO NOTHING`,
     [voiceId, agentId, JSON.stringify(["professional", "warm", "concise"])],
-  ).catch(() => {
-    // voice_profiles may not have all these columns — best-effort
-    console.warn("  [voice] voice_profiles insert skipped (schema mismatch — OK)")
-  })
-  console.log(`  ✓ Voice profile seeded (voice_id=${voiceId}, confidence=0.35)`)
+  ).catch(() => console.warn("  [voice] insert skipped (schema mismatch — OK)"))
+  console.log(`  ✓ Voice profile seeded (${voiceId}, confidence=0.35)`)
 
   const baseUrl = process.env.BASE_URL ?? "https://propos.addvantage.site"
-  console.log(`\n  Demo ready: ${baseUrl}?agent=${data.email}`)
+  console.log(`\n  Demo ready: ${baseUrl}`)
   console.log(`  Login with: ${data.email}\n`)
 
   await pool.end()
 }
 
-main().catch(err => {
-  console.error("Provision failed:", err)
-  process.exit(1)
-})
+main().catch(err => { console.error("Provision failed:", err); process.exit(1) })
