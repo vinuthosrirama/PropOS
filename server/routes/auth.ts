@@ -155,7 +155,9 @@ router.post("/logout", async (req, res) => {
 // All sends via this token are still redirected to TEST_RECIPIENT_PHONE/EMAIL.
 
 router.post("/demo-token", (_req, res) => {
-  const token = issueAccessToken(0)
+  // 8-hour TTL so the token survives a full demo session without expiring.
+  // No refresh cookie — liveMode=false in send.ts keeps all sends redirected to TEST_RECIPIENT_*.
+  const token = issueAccessToken(0, 8 * 60 * 60)
   return res.json({ accessToken: token })
 })
 

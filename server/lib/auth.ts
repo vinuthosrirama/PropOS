@@ -28,8 +28,8 @@ export async function verifyPassword(plain: string, hash: string): Promise<boole
 }
 
 /** Issue a short-lived access token. */
-export function issueAccessToken(agentId: number): string {
-  return jwt.sign({ agentId } satisfies TokenPayload, ACCESS_SECRET, { expiresIn: ACCESS_TTL })
+export function issueAccessToken(agentId: number, expiresIn = ACCESS_TTL): string {
+  return jwt.sign({ agentId } satisfies TokenPayload, ACCESS_SECRET, { expiresIn })
 }
 
 /** Issue a long-lived refresh token. Embeds tokenVersion so logout can invalidate it. */
