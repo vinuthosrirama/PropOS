@@ -14,7 +14,7 @@ export async function fetchAgentPortfolio(): Promise<{ sold: PortfolioProperty[]
   }
 
   try {
-    const res = await authFetch(apiUrl("/agent-demo/portfolio"))
+    const res = await authFetch(apiUrl("/api/agent-demo/portfolio"))
     if (res.status === 204) return null
     if (!res.ok) return null
     const data = await res.json() as { sold: PortfolioProperty[]; active: PortfolioProperty[] }
@@ -38,7 +38,7 @@ export async function fetchAgentTheme(): Promise<AgencyTheme | null> {
   }
 
   try {
-    const res = await authFetch(apiUrl("/agent-demo/theme"))
+    const res = await authFetch(apiUrl("/api/agent-demo/theme"))
     if (res.status === 204) return null
     if (!res.ok) return null
     const raw = await res.json() as RawTheme

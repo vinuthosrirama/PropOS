@@ -43,7 +43,7 @@ router.get("/portfolio", async (req, res) => {
     cars:        r.cars,
     land:        r.land_sqm ?? undefined,
     type:        r.property_type as "House" | "Unit" | "Townhouse",
-    status:      r.status as "sold" | "active" | "under_order",
+    status:      r.status as "sold" | "active" | "under_offer",
     soldDate:    r.sold_date ?? undefined,
     openDate:    r.open_date ?? undefined,
     image:       r.image_url ?? `/property-${r.id}.jpg`,
