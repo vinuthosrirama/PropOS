@@ -129,12 +129,34 @@ router.post("/", async (req, res) => {
         return generateMessage(enrichedParams)
       }))
     } else {
-      // Grade B (or fallback) — GPT-4o-mini primary
+      // Grade B (or fallback) — GPT-4o-mini primary, Claude fallback, then template
       result = sanitise(await generateMessage(enrichedParams).catch(async (openAiErr) => {
-        console.warn("OpenAI failed, falling back to Claude:", openAiErr)
-        if (!process.env.ANTHROPIC_API_KEY) throw openAiErr
-        modelUsed = "claude-sonnet-4-5"
-        return generateMessageClaude(enrichedParams)
+        console.warn("OpenAI failed:", openAiErr.message ?? openAiErr)
+        if (process.env.ANTHROPIC_API_KEY) {
+          modelUsed = "claude-sonnet-4-5"
+          return generateMessageClaude(enrichedParams).catch(() => null)
+        }
+        return null
+      }).then(r => {
+        if (r) return r
+        // Both AI services unavailable — use personalised template
+        modelUsed = "template"
+        const fn = enrichedParams.lead.name.split(" ")[0]
+        const an = enrichedParams.agentName.split(" ")[0]
+        const suburb = enrichedParams.agentSuburb ?? enrichedParams.lead.suburb ?? "your area"
+        return {
+          sms: clampSMS(`Hi ${fn}, ${an} here. ${enrichedParams.strategy === "Equity Play" ? `Your home has grown significantly since you bought. Worth a quick chat?` : `Thought of you given your search in ${suburb}. Worth a look?`} Cheers, ${an}`),
+          email: {
+            subject: `Checking in, ${fn}`,
+            body: [
+              `Hi ${fn}, hope you're well.`,
+              enrichedParams.strategy === "Equity Play"
+                ? `Your property has built up strong equity and I wanted to make sure you have the full picture of where things stand.`
+                : `I have some updates relevant to your search in ${suburb} that I think you'd find useful.`,
+              `Happy to connect for a quick chat whenever suits — no pressure at all.\n\nCheers,\n${an}`,
+            ],
+          },
+        }
       }))
     }
 
