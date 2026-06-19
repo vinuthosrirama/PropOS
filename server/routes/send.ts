@@ -86,9 +86,11 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "leadId and leadName are required" })
   }
 
-  // liveMode: send to actual CRM contact phone/email, bypassing TEST_RECIPIENT_* redirect.
-  // Self-demo sends ("self_demo" leadId) still go to the test recipient.
-  const liveMode = leadId !== "self_demo"
+  // liveMode = false: TEST_RECIPIENT_PHONE/EMAIL always redirect unless the
+  // recipient is in SMS_LIVE_ALLOWLIST / EMAIL_LIVE_ALLOWLIST (e.g. Aneesha).
+  // Setting this true would bypass the redirect for ALL leads, including
+  // hardcoded DEMO_LEADS with fictional phone numbers — do not set true here.
+  const liveMode = false
 
   let compliance: { smsOk: boolean; emailOk: boolean; reason?: string }
   try {
@@ -121,7 +123,7 @@ router.post("/", async (req, res) => {
 
   // ── Pre-log to get outreach ID (for email tracking pixel) ───────────────────
   // Logged as "sent" optimistically; updated to "failed" below if the send throws.
-  const agentIdStr = req.agentId ? String(req.agentId) : undefined
+  const agentIdStr = req.agentId !== undefined ? String(req.agentId) : undefined
 
   let outreachLogId = 0
   if ((channel === "email" || channel === "both") && compliance.emailOk && email) {
