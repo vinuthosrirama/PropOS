@@ -719,6 +719,52 @@ async function migrate(): Promise<void> {
 
     // Add engagement_score to contacts if missing
     ["ALTER contacts: engagement_score", `ALTER TABLE contacts ADD COLUMN IF NOT EXISTS engagement_score INTEGER DEFAULT 0`],
+
+    // ── Phase 10: Multi-agent demo provisioning ────────────────────────────────
+    ["TABLE agent_portfolios", `
+      CREATE TABLE IF NOT EXISTS agent_portfolios (
+        id            SERIAL PRIMARY KEY,
+        agent_id      INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        address       TEXT NOT NULL,
+        suburb        TEXT NOT NULL,
+        state         TEXT NOT NULL DEFAULT 'VIC',
+        postcode      TEXT,
+        price         INTEGER NOT NULL,
+        price_min     INTEGER,
+        price_max     INTEGER,
+        beds          INTEGER NOT NULL,
+        baths         INTEGER NOT NULL,
+        cars          INTEGER NOT NULL DEFAULT 0,
+        land_sqm      INTEGER,
+        property_type TEXT NOT NULL DEFAULT 'House',
+        status        TEXT NOT NULL DEFAULT 'sold'
+                      CHECK (status IN ('sold','active','under_offer')),
+        sold_date     TEXT,
+        open_date     TEXT,
+        lead_count    INTEGER NOT NULL DEFAULT 8,
+        image_url     TEXT,
+        description   TEXT,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["TABLE agent_property_slm", `
+      CREATE TABLE IF NOT EXISTS agent_property_slm (
+        id           SERIAL PRIMARY KEY,
+        agent_id     INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        portfolio_id INTEGER NOT NULL REFERENCES agent_portfolios(id) ON DELETE CASCADE,
+        slm_json     JSONB NOT NULL DEFAULT '{}',
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
+    ["INDEX agent_portfolios_agent",  `CREATE INDEX IF NOT EXISTS agent_portfolios_agent_idx  ON agent_portfolios(agent_id, status)`],
+    ["INDEX agent_property_slm_portfolio", `CREATE INDEX IF NOT EXISTS agent_property_slm_portfolio_idx ON agent_property_slm(portfolio_id)`],
+
+    ["ALTER agents brand_primary",  `ALTER TABLE agents ADD COLUMN IF NOT EXISTS brand_primary  TEXT`],
+    ["ALTER agents brand_accent",   `ALTER TABLE agents ADD COLUMN IF NOT EXISTS brand_accent   TEXT`],
+    ["ALTER agents brand_logo",     `ALTER TABLE agents ADD COLUMN IF NOT EXISTS brand_logo     TEXT`],
+    ["ALTER agents brand_gradient", `ALTER TABLE agents ADD COLUMN IF NOT EXISTS brand_gradient TEXT[]`],
+    ["ALTER agents bio",            `ALTER TABLE agents ADD COLUMN IF NOT EXISTS bio            TEXT`],
+    ["ALTER agents years_exp",      `ALTER TABLE agents ADD COLUMN IF NOT EXISTS years_exp      INTEGER`],
   ]
 
   let failed = 0

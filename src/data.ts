@@ -456,7 +456,16 @@ export function isAnthonyAbeysena(agent: AgentProfile): boolean {
   return name.includes("anthony") && name.includes("abeysena") && agency.includes("5th avenue")
 }
 
+// DB-fetched portfolio cache — set by agentDemoFetcher on mount, takes priority
+// over hardcoded arrays so new agents can be provisioned without code changes.
+let _dbPortfolioCache: { sold: PortfolioProperty[]; active: PortfolioProperty[] } | null = null
+
+export function setDBPortfolioCache(data: { sold: PortfolioProperty[]; active: PortfolioProperty[] } | null) {
+  _dbPortfolioCache = data
+}
+
 export function getPortfolioForAgent(agent: AgentProfile): { sold: PortfolioProperty[]; active: PortfolioProperty[] } {
+  if (_dbPortfolioCache) return _dbPortfolioCache   // DB wins — provisioned agent
   if (isCamKnoll(agent)) return { sold: PORTFOLIO_SOLD, active: PORTFOLIO_ACTIVE }
   if (isPasSunilchandra(agent)) return { sold: PAS_PORTFOLIO_SOLD, active: PAS_PORTFOLIO_ACTIVE }
   if (isManpreetSingh(agent)) return { sold: MANPREET_PORTFOLIO_SOLD, active: MANPREET_PORTFOLIO_ACTIVE }
