@@ -1486,6 +1486,28 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
     } // end loadFromSheets
   }, [])
 
+  // Poll /api/crm-leads every 30s so PropOS_democontacts changes appear quickly
+  useEffect(() => {
+    const poll = () => {
+      authFetch(apiUrl("/api/crm-leads"))
+        .then(r => r.json())
+        .then((data: { leads?: SheetLead[] }) => {
+          const leads = (data.leads ?? []).filter(isRealLead)
+          if (leads.length === 0) return
+          const grouped = addPasLeadAliases(groupLeadsByProperty(leads, agentSold), leads, agent)
+          const total = Object.values(grouped).reduce((a, l) => a + l.length, 0)
+          if (total > 0) {
+            setSoldLeads(grouped)
+            try { localStorage.setItem("propOS_leads_cache_v3", JSON.stringify(leads)) } catch {}
+          }
+        })
+        .catch(() => {})
+    }
+    const interval = setInterval(poll, 30_000)
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Preload SLMs from Google Sheets (runs once at startup, populates runtime cache)
   useEffect(() => {
     const allIds = [...agentSold, ...agentActive].map(p => p.id)
@@ -4031,9 +4053,11 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
     }).catch(() => setSheetLoading(false))
   }
 
-  // Auto-load on mount
+  // Auto-load on mount; re-poll every 30s so past_buyers changes appear quickly
   useEffect(() => {
     loadFromSheet()
+    const interval = setInterval(loadFromSheet, 30_000)
+    return () => clearInterval(interval)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
