@@ -765,6 +765,14 @@ async function migrate(): Promise<void> {
     ["ALTER agents brand_gradient", `ALTER TABLE agents ADD COLUMN IF NOT EXISTS brand_gradient TEXT[]`],
     ["ALTER agents bio",            `ALTER TABLE agents ADD COLUMN IF NOT EXISTS bio            TEXT`],
     ["ALTER agents years_exp",      `ALTER TABLE agents ADD COLUMN IF NOT EXISTS years_exp      INTEGER`],
+
+    // ── Phase 11: Per-agent phone uniqueness for multi-agent demos ─────────────
+    // Drop global phone unique so the same buyer persona can be cloned per agent.
+    // Replace with two partial indexes: real contacts unique by phone alone,
+    // demo contacts unique by (phone, assigned_agent_id).
+    ["DROP sms_contacts_phone_key", `ALTER TABLE sms_contacts DROP CONSTRAINT IF EXISTS sms_contacts_phone_key`],
+    ["INDEX sms_contacts_phone_real",  `CREATE UNIQUE INDEX IF NOT EXISTS sms_contacts_phone_real_idx  ON sms_contacts(phone) WHERE assigned_agent_id IS NULL`],
+    ["INDEX sms_contacts_phone_agent", `CREATE UNIQUE INDEX IF NOT EXISTS sms_contacts_phone_agent_idx ON sms_contacts(phone, assigned_agent_id) WHERE assigned_agent_id IS NOT NULL`],
   ]
 
   let failed = 0
