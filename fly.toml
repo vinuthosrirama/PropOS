@@ -10,6 +10,7 @@ app = "addvantageadvisory"
 primary_region = "syd"
 
 [build]
+  dockerfile = "Dockerfile"
 
 [env]
   PORT = "3001"
