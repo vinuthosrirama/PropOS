@@ -29,7 +29,17 @@ router.get("/portfolio", async (req, res) => {
 
   if (rows.length === 0) return res.sendStatus(204)
 
-  const toProperty = (r: typeof rows[0]) => ({
+  // Round-robin assign Cameron's existing /public photos so provisioned listings
+  // render real property images instead of broken placeholders.
+  const STOCK_IMAGES = [
+    "/34-hartsmere-drive.jpg", "/3-thirlmere-court.jpg", "/5-ascot-rise.jpg",
+    "/3-yemaya-place.jpg", "/58-broadway-street.png", "/48-chantenay-parade.jpg",
+    "/20-elwick-drive.jpg", "/64-timbertop-boulevard.jpg", "/40-jack-william-way.jpg",
+    "/15-hartsmere-drive.jpg", "/47-marija-crescent.jpg", "/6-monarch-road.jpg",
+    "/12-swallowtail-avenue.jpg", "/51-hedgeville-drive.jpg",
+  ]
+
+  const toProperty = (r: typeof rows[0], idx: number) => ({
     id:          r.id,
     address:     r.address,
     suburb:      r.suburb,
@@ -46,13 +56,13 @@ router.get("/portfolio", async (req, res) => {
     status:      r.status as "sold" | "active" | "under_offer",
     soldDate:    r.sold_date ?? undefined,
     openDate:    r.open_date ?? undefined,
-    image:       r.image_url ?? `/property-${r.id}.jpg`,
+    image:       r.image_url ?? STOCK_IMAGES[idx % STOCK_IMAGES.length],
     description: r.description ?? "",
     leadCount:   r.lead_count,
   })
 
-  const sold   = rows.filter(r => r.status === "sold").map(toProperty)
-  const active = rows.filter(r => r.status !== "sold").map(toProperty)
+  const sold   = rows.filter(r => r.status === "sold").map((r, i) => toProperty(r, i))
+  const active = rows.filter(r => r.status !== "sold").map((r, i) => toProperty(r, i + 100))
 
   res.json({ sold, active })
 })

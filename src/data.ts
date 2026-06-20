@@ -104,7 +104,9 @@ export const AGENCY_THEMES: Record<string, AgencyTheme> = {
   "Jellis Craig":             { name: "Jellis Craig",             primary: "#8EC6B5",             dim: "rgba(142,198,181,0.12)",    glow: "rgba(142,198,181,0.07)",    logo: "JC", gradient: ["#8EC6B5", "#4A9B88"]                       },
   // ── Well-documented ───────────────────────────────────────────────────────
   "Harcourts":                { name: "Harcourts",                primary: "#C8102E", accent: "#f87171", dim: "rgba(200,16,46,0.12)",      glow: "rgba(200,16,46,0.07)",      logo: "HC", gradient: ["#E8384F", "#C8102E"]                       },
-  "McGrath Estate Agents":    { name: "McGrath Estate Agents",    primary: "#E67200",             dim: "rgba(230,114,0,0.12)",      glow: "rgba(230,114,0,0.07)",      logo: "MC", gradient: ["#FF8C00", "#E67200"]                       },
+  // McGrath: official brand is BLACK + WHITE (mcgrath.com.au header is black; logo is white-on-black)
+  "McGrath Estate Agents":           { name: "McGrath Estate Agents",           primary: "#000000", accent: "#9ca3af", dim: "rgba(0,0,0,0.10)",        glow: "rgba(0,0,0,0.05)",         logo: "MC", gradient: ["#1a1a1a", "#000000"]                       },
+  "McGrath Estate Agents - Clayton": { name: "McGrath Estate Agents - Clayton", primary: "#000000", accent: "#9ca3af", dim: "rgba(0,0,0,0.10)",        glow: "rgba(0,0,0,0.05)",         logo: "MC", gradient: ["#1a1a1a", "#000000"]                       },
   "LJ Hooker":                { name: "LJ Hooker",                primary: "#E8001D", accent: "#ff6b7a", dim: "rgba(232,0,29,0.12)",       glow: "rgba(232,0,29,0.07)",       logo: "LJ", gradient: ["#FF3040", "#E8001D"]                       },
   // ── Best available ────────────────────────────────────────────────────────
   "Nelson Alexander":         { name: "Nelson Alexander",         primary: "#C8705A",             dim: "rgba(200,112,90,0.12)",     glow: "rgba(200,112,90,0.07)",     logo: "NA", gradient: ["#D4845E", "#8B3A2C"]                       },
@@ -134,6 +136,36 @@ export function getAgencyTheme(agency: string): AgencyTheme {
     ...DEFAULT_THEME,
     name: agency,
     logo: agency.slice(0, 2).toUpperCase(),
+  }
+}
+
+// For dark-primary brands (black bg), the visible accent is theme.accent (gold, gray).
+// For light-primary brands (Peake purple), primary itself is the visible accent.
+export function themeTextAccent(t: AgencyTheme): string {
+  const hex = t.primary.replace("#", "")
+  if (hex.length !== 6) return t.accent ?? t.primary
+  const r = parseInt(hex.slice(0, 2), 16)
+  const g = parseInt(hex.slice(2, 4), 16)
+  const b = parseInt(hex.slice(4, 6), 16)
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return lum < 0.15 ? (t.accent ?? t.primary) : t.primary
+}
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const h = hex.replace("#", "")
+  if (h.length !== 6) return null
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+}
+
+export function themeLightVarOverrides(t: AgencyTheme): Record<string, string> {
+  const rgb = hexToRgb(themeTextAccent(t))
+  if (!rgb) return {}
+  const [r, g, b] = rgb
+  return {
+    "--c-muted":        `rgba(${r},${g},${b},0.78)`,
+    "--c-faint":        `rgba(${r},${g},${b},0.55)`,
+    "--c-border":       `rgba(${r},${g},${b},0.12)`,
+    "--c-border-hover": `rgba(${r},${g},${b},0.24)`,
   }
 }
 
