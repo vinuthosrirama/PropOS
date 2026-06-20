@@ -1,9 +1,10 @@
 /**
- * POST /api/auth/register  — create account
- * POST /api/auth/login     — email + password
- * POST /api/auth/refresh   — refresh access token via httpOnly cookie
- * POST /api/auth/logout    — clear refresh cookie
- * GET  /api/auth/me        — current agent (requires Bearer token)
+ * POST /api/auth/register      — create account
+ * POST /api/auth/login         — email + password
+ * POST /api/auth/refresh       — refresh access token via httpOnly cookie
+ * POST /api/auth/logout        — clear refresh cookie
+ * POST /api/auth/agent-lookup  — name + agency → demo token (portal gating)
+ * GET  /api/auth/me            — current agent (requires Bearer token)
  */
 import { Router } from "express"
 import { queryOne, execute } from "../lib/db.js"
@@ -173,6 +174,61 @@ router.post("/agent-demo-token", async (req, res) => {
   } catch (err) {
     console.error("[auth] agent-demo-token error:", (err as Error).message)
     return res.status(500).json({ error: "Login failed" })
+  }
+})
+
+// ── Agent lookup (portal gating — name + agency → token) ─────────────────────
+// Validates first name + last name + agency against known agents.
+// Built-in agents (Cameron, Vinuth) get agentId=0 demo-token.
+// Provisioned agents (Anthony, David, etc.) get their real agentId token.
+router.post("/agent-lookup", async (req, res) => {
+  try {
+    const { firstName, lastName, agency } = req.body as { firstName?: string; lastName?: string; agency?: string }
+    if (!firstName?.trim() || !lastName?.trim() || !agency?.trim()) {
+      return res.status(400).json({ error: "First name, last name and agency are required" })
+    }
+
+    const name = `${firstName.trim()} ${lastName.trim()}`
+    const agencyLower = agency.trim().toLowerCase()
+
+    const BUILTIN = [
+      { name: "Vinuth Srirama", agency: "Peake", email: "vinuth.o.srirama@gmail.com", phone: "0415 883 354", suburb: "Berwick", tagline: "Berwick specialist." },
+      { name: "Cameron Knoll",  agency: "Peake", email: "cameronk@peakere.com.au",     phone: "0428 762 148", suburb: "Berwick", tagline: "Berwick specialist." },
+    ]
+
+    const builtin = BUILTIN.find(a =>
+      a.name.toLowerCase() === name.toLowerCase() &&
+      (agencyLower.includes(a.agency.toLowerCase()) || a.agency.toLowerCase().includes(agencyLower))
+    )
+
+    if (builtin) {
+      const token = issueAccessToken(0, 8 * 60 * 60)
+      return res.json({
+        accessToken: token,
+        agent: { name: builtin.name, agency: builtin.agency, email: builtin.email, phone: builtin.phone, suburb: builtin.suburb, tagline: builtin.tagline },
+        builtIn: true,
+      })
+    }
+
+    const agent = await queryOne<AgentRow>(
+      "SELECT * FROM agents WHERE LOWER(name) = $1",
+      [name.toLowerCase()],
+    )
+    if (!agent) return res.status(404).json({ error: "Agent not found. Check your name and agency." })
+
+    const dbAgency = agent.agency.toLowerCase()
+    if (!dbAgency.includes(agencyLower) && !agencyLower.includes(dbAgency)) {
+      return res.status(404).json({ error: "Agency doesn't match. Check your agency name." })
+    }
+
+    if (agent.password_hash) return res.status(401).json({ error: "This account requires password login." })
+
+    const { accessToken, refreshToken } = issueTokens(agent.id, agent.token_version ?? 0)
+    res.cookie(REFRESH_COOKIE, refreshToken, REFRESH_COOKIE_OPTS)
+    return res.json({ agent: safeAgent(agent), accessToken, builtIn: false })
+  } catch (err) {
+    console.error("[auth] agent-lookup error:", (err as Error).message)
+    return res.status(500).json({ error: "Lookup failed" })
   }
 })
 

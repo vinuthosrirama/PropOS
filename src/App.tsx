@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense, Component, type CSSProperties, typ
 import { motion, AnimatePresence } from "framer-motion"
 import {
   C, FONT, DEFAULT_AGENT, DEFAULT_THEME, DEFAULT_VENDOR_SETTINGS,
-  DARK_CSS_VARS, LIGHT_CSS_VARS,
+  DARK_CSS_VARS, LIGHT_CSS_VARS, themeTextAccent, themeLightVarOverrides,
   type AgentProfile, type AgencyTheme, type ViewId, type DemoMode, type VendorDisplaySettings,
 } from "./data"
 import Nav from "./components/Nav"
@@ -198,17 +198,18 @@ export default function App() {
   return (
     <div style={{
       minHeight: "100vh", background: C.bg, fontFamily: FONT, color: C.text,
-      "--accent":     theme.primary,
+      "--accent":     themeTextAccent(theme),
       "--accent-dim": theme.dim,
       "--accent-glow":theme.glow,
+      ...(lightMode ? themeLightVarOverrides(theme) : {}),
     } as CSSProperties & Record<`--${string}`, string>}>
       <style>{`
-        @keyframes pk-pulse{0%,100%{transform:scale(.95);box-shadow:0 0 0 0 rgba(182,194,171,.7)}70%{transform:scale(1);box-shadow:0 0 0 9px rgba(182,194,171,0)}}
+        @keyframes pk-pulse{0%,100%{transform:scale(.95);box-shadow:0 0 0 0 rgba(0,230,118,.7)}70%{transform:scale(1);box-shadow:0 0 0 9px rgba(0,230,118,0)}}
         .pk-pulse{animation:pk-pulse 2.1s infinite}
-        .pk-input{width:100%;border:none;border-bottom:1px solid rgba(59,31,119,.22);background:none;padding:9px 4px;font-size:15px;color:#3b1f77;outline:none;box-sizing:border-box;transition:border-color .2s;font-family:inherit;letter-spacing:-.1px}
-        .pk-input::placeholder{color:rgba(59,31,119,.28)}
-        .pk-input:focus{border-bottom-color:#3b1f77}
-        .pk-label{display:block;font-size:10px;font-weight:600;color:rgba(59,31,119,.5);letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px}
+        .pk-input{width:100%;border:none;border-bottom:1px solid ${themeTextAccent(theme)}33;background:none;padding:9px 4px;font-size:15px;color:${themeTextAccent(theme)};outline:none;box-sizing:border-box;transition:border-color .2s;font-family:inherit;letter-spacing:-.1px}
+        .pk-input::placeholder{color:${themeTextAccent(theme)}44}
+        .pk-input:focus{border-bottom-color:${themeTextAccent(theme)}}
+        .pk-label{display:block;font-size:10px;font-weight:600;color:${themeTextAccent(theme)}80;letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px}
       `}</style>
       <Nav view={view} setView={navigate} agent={agent} sheetStatus={sheetStatus} theme={theme} onLogout={handleLogout} onBack={demoBack?.fn}
            onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge}
