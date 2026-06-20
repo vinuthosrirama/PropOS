@@ -806,10 +806,11 @@ function buildComparisons(
       investorRelevant: true,
     })
   } else {
+    const truncate10 = (s: string) => { const w = s.replace(/\s*\([^)]*\)/g, "").split(/\s+/); return w.length > 10 ? w.slice(0, 10).join(" ") + "…" : w.join(" ") }
     out.push({
       label: "School zone",
-      soldValue: sold.schoolZoneCatchment !== "TBD" ? sold.schoolZoneCatchment : "TBD",
-      activeValue: active.schoolZoneCatchment !== "TBD" ? active.schoolZoneCatchment : "TBD",
+      soldValue: sold.schoolZoneCatchment !== "TBD" ? truncate10(sold.schoolZoneCatchment) : "TBD",
+      activeValue: active.schoolZoneCatchment !== "TBD" ? truncate10(active.schoolZoneCatchment) : "TBD",
       match:
         active.schoolZoneCatchment !== "TBD" && sold.schoolZoneCatchment !== "TBD"
           ? active.schoolZoneCatchment === sold.schoolZoneCatchment ? "exact" : "close"

@@ -2149,6 +2149,8 @@ const VENDOR_PANEL_META: Array<{
   { key: "showMatchScores",     label: "Match Score Rings",            description: "Visual score rings on buyer lead cards",                                                group: "Interface Controls" },
   { key: "showDNAAnalysis",     label: "Property DNA Analysis",        description: "AI-generated property DNA tags on vendor profile",                                      group: "Interface Controls" },
   { key: "forceDemoData",       label: "Force demo data",              description: "Always use built-in demo leads for buyer view (ignores Google Sheets). Useful during presentations.", group: "Demo Mode" },
+  // ── BuyerOS controls ─────────────────────────────────────────────────────
+  { key: "showMatchQueue",     label: "BuyerOS Match Queue",          description: "Show the Match Queue button on the BuyerOS portfolio page",                                    group: "BuyerOS" },
 ]
 
 function TogglePill({ on }: { on: boolean }) {
@@ -2191,7 +2193,7 @@ function VendorPanelToggles({
     return acc
   }, {})
 
-  const groupOrder = ["Vendor Profile", "Interface Controls", "Demo Mode"]
+  const groupOrder = ["BuyerOS", "Vendor Profile", "Interface Controls", "Demo Mode"]
 
   const groupLabel: React.CSSProperties = {
     fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",

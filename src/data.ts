@@ -183,6 +183,8 @@ export interface VendorDisplaySettings {
   showDNAAnalysis:     boolean   // Property DNA section
   // Added in v3 — live AI / demo mode
   forceDemoData:       boolean   // Always use hardcoded DEMO_FALLBACK_LEADS; ignore sheet
+  // Added in v4 — BuyerOS controls
+  showMatchQueue:      boolean   // BuyerOS Match Queue button on portfolio page
 }
 
 export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
@@ -196,6 +198,7 @@ export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
   showMatchScores:     false,
   showDNAAnalysis:     false,
   forceDemoData:       false,
+  showMatchQueue:      true,
 }
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { FONT, getAgencyTheme, themeTextAccent, type AgentProfile, type AgencyTheme, type DemoMode } from "../data"
 import { apiUrl } from "../lib/api"
@@ -157,6 +157,20 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
   const [agency, setAgency] = useState("")
   const [lookupError, setLookupError] = useState("")
   const [lookupLoading, setLookupLoading] = useState(false)
+
+  // Backend health canary
+  const [backendUp, setBackendUp] = useState(true)
+  useEffect(() => {
+    let mounted = true
+    const check = () => {
+      fetch(apiUrl("/api/health"), { signal: AbortSignal.timeout(5000) })
+        .then(r => { if (mounted) setBackendUp(r.ok) })
+        .catch(() => { if (mounted) setBackendUp(false) })
+    }
+    check()
+    const id = setInterval(check, 30_000)
+    return () => { mounted = false; clearInterval(id) }
+  }, [])
 
   // Master quick-access (Vinuth only)
   const masterQuickLogin = async () => {
@@ -478,7 +492,7 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
 
         {/* Footer */}
         <div style={{ marginTop: 32, display: "flex", alignItems: "center", gap: 7 }}>
-          <div className="pk-pulse-green" style={{ width: 6, height: 6, borderRadius: "50%", background: "#00e676", flexShrink: 0 }} />
+          <div className={backendUp ? "pk-pulse-green" : ""} style={{ width: 6, height: 6, borderRadius: "50%", background: backendUp ? "#00e676" : "#e53935", flexShrink: 0 }} />
           <span style={{ fontSize: 10, color: "rgba(44,45,48,.3)", letterSpacing: ".04em" }}>
             Powered by AddVantageAI
           </span>
