@@ -150,6 +150,24 @@ export async function updatePastBuyerInSupabase(
   }
 }
 
+// ── Read a single buyer's notes from Supabase ────────────────────────────────
+
+export async function readBuyerNotesFromSupabase(id: number): Promise<string | null> {
+  if (!supabaseConnected()) return null
+  try {
+    const client = getSupabaseClient()
+    const { data, error } = await client
+      .from('past_buyers')
+      .select('notes')
+      .eq('id', id)
+      .single()
+    if (error || !data) return null
+    return (data as { notes: string | null }).notes
+  } catch {
+    return null
+  }
+}
+
 // ── Upsert a new contact to Supabase (from Add Contact form) ──────────────────
 
 export async function upsertPastBuyerToSupabase(buyer: PastBuyer, agentName: string): Promise<boolean> {

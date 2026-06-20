@@ -69,6 +69,7 @@ import { startSmsAgentScheduler } from "./lib/smsOrchestrator.js"
 import { startReadyOutreachScheduler } from "./lib/smsReadyOutreach.js"
 import { runOptimisationCycle } from "./lib/promptOptimiser.js"
 import { startTransportHealthMonitor } from "./lib/transportHealthMonitor.js"
+import { startBackendHealthMonitor } from "./lib/backendHealthMonitor.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
@@ -459,6 +460,7 @@ app.listen(PORT, async () => {
   startSmsAgentScheduler()
   startReadyOutreachScheduler()
   startTransportHealthMonitor()
+  startBackendHealthMonitor()
 
   // Prompt evolution: Sunday 2am Melbourne — rewrite SMS style rules from accumulated signals
   const cron = await import("node-cron")

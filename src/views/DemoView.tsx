@@ -28,7 +28,7 @@ import {
   readPastBuyersFromSheet, updateLastContactDate,
   type SheetLead,
 } from "../lib/sheet"
-import { readPastBuyersFromSupabase, supabaseConnected, updatePastBuyerInSupabase } from "../lib/supabase"
+import { readPastBuyersFromSupabase, readBuyerNotesFromSupabase, supabaseConnected, updatePastBuyerInSupabase } from "../lib/supabase"
 import AuctionOutcomePanel from "../components/AuctionOutcomePanel"
 import BuyerPitchReport from "../components/BuyerPitchReport"
 import OutreachQueue, { type QueueItem } from "../components/OutreachQueue"
@@ -74,7 +74,7 @@ type Stage =
   | { kind: "portfolio" }
   | { kind: "soldLeads"; soldProperty: PortfolioProperty; leads: SheetLead[] }
   | { kind: "matching"; property: PortfolioProperty; soldLeads: Record<number, SheetLead[]> }
-  | { kind: "leads"; property: PortfolioProperty; allLeads: ScoredLead[] }
+  | { kind: "leads"; property: PortfolioProperty; allLeads: ScoredLead[]; soldLeads?: Record<number, SheetLead[]> }
   | { kind: "profile"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; allLeads: ScoredLead[] }
   | { kind: "generating"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; transcript: string; allLeads: ScoredLead[] }
   | { kind: "review"; property: PortfolioProperty; lead: ScoredLead; soldSLM: PropertySLM; transcript: string; sms: string; emailSubject: string; emailBody: string[]; allLeads: ScoredLead[]; versionId?: number }
@@ -1937,13 +1937,15 @@ const MATCH_THRESHOLD = 30
 
 const TOP_LEADS_DEFAULT = 30
 
-function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
+function LeadsPage({ property, allLeads, onBack, onSelect, theme, onRefresh }: {
   property: PortfolioProperty
   allLeads: ScoredLead[]
   onBack: () => void
   onSelect: (lead: ScoredLead) => void
   theme: AgencyTheme
+  onRefresh?: () => void
 }) {
+  const [refreshing, setRefreshing] = useState(false)
   const [showAll, setShowAll] = useState(false)
 
   const aboveThreshold = allLeads.filter(l => l.matchResult.score >= MATCH_THRESHOLD)
@@ -1967,14 +1969,33 @@ function LeadsPage({ property, allLeads, onBack, onSelect, theme }: {
       }}>← Back</button>
 
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 4 }}>
-          Matched Leads
-        </div>
-        <div style={{ fontSize: 24, fontWeight: 700, color: C.text, letterSpacing: -0.8 }}>
-          {property.address} · {filtered.length} matched
-        </div>
-        <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>
-          Sorted by persona-weighted compatibility
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 4 }}>
+              Matched Leads
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: C.text, letterSpacing: -0.8 }}>
+              {property.address} · {filtered.length} matched
+            </div>
+            <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>
+              Sorted by persona-weighted compatibility
+            </div>
+          </div>
+          {onRefresh && (
+            <button
+              onClick={() => { setRefreshing(true); onRefresh() }}
+              disabled={refreshing}
+              style={{
+                background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 10,
+                padding: "8px 14px", cursor: refreshing ? "default" : "pointer",
+                color: refreshing ? C.faint : theme.primary, fontSize: 12, fontWeight: 600,
+                fontFamily: FONT, display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              <span style={{ display: "inline-block", transform: refreshing ? "rotate(360deg)" : "none", transition: "transform 0.6s" }}>↻</span>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -2115,6 +2136,44 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
   const transcript = manualTranscript
 
   const priorSessions = getLeadKnowledge(leadId)?.entries.length ?? 0
+
+  const [savingToCRM, setSavingToCRM] = useState(false)
+  const [savedToCRM, setSavedToCRM] = useState(false)
+  const [agentNotes, setAgentNotes] = useState(lead.notes ?? "")
+  const [refreshingNotes, setRefreshingNotes] = useState(false)
+
+  const handleSaveToCRM = async () => {
+    if (!transcript.trim()) return
+    setSavingToCRM(true)
+    try {
+      const res = await authFetch(apiUrl("/api/parse-notes"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript: transcript.trim(), buyerName: lead.name, suburb: lead.suburb }),
+      })
+      const { notes: structured } = await res.json() as { notes: string }
+      const merged = [agentNotes, structured].filter(Boolean).join("\n\n")
+      await updatePastBuyerInSupabase(typeof lead.id === "number" ? lead.id : 0, { notes: merged })
+      upsertLeadTranscript(leadId, lead.name, transcript)
+      setAgentNotes(merged)
+      lead.notes = merged
+      setSavedToCRM(true)
+      setTimeout(() => setSavedToCRM(false), 3000)
+    } catch { /* non-fatal */ }
+    setSavingToCRM(false)
+  }
+
+  const handleRefreshNotes = async () => {
+    setRefreshingNotes(true)
+    try {
+      const notes = await readBuyerNotesFromSupabase(typeof lead.id === "number" ? lead.id : 0)
+      if (notes !== null) {
+        setAgentNotes(notes)
+        lead.notes = notes
+      }
+    } catch { /* non-fatal */ }
+    setRefreshingNotes(false)
+  }
 
   const activeSLM = loadSLMForProperty(property.id)
   const fname = lead.name.split(" ")[0]
@@ -2267,38 +2326,34 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
             </div>
 
             <div style={{ fontSize: 12, color: C.faint }}>
-              Came from: {soldSLM.address}{soldSLM.soldDate ? ` · sold ${soldSLM.soldDate}` : ""}{soldSLM.soldPrice ? ` · ${fmt(soldSLM.soldPrice)}` : ""}
+              Came from: {soldSLM.address}
             </div>
           </div>
 
-          {/* Comparison strip */}
+          {/* Comparison table */}
           <div style={{ userSelect: "none" }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase", marginBottom: 10 }}>
               {soldSLM.address.split(",")[0]} → {property.address.split(",")[0]}
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {comparisons.map(cf => {
+            <div style={{ background: C.bg2, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 24px 1fr", padding: "8px 14px", borderBottom: `1px solid ${C.border}`, background: C.bg3 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>Metric</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>{soldSLM.address.split(",")[0].split(" ").slice(-1)[0]}</div>
+                <div />
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>{property.address.split(",")[0].split(" ").slice(-1)[0]}</div>
+              </div>
+              {comparisons.map((cf, i) => {
                 const highlight = cf.investorRelevant || cf.familyRelevant
                 return (
                   <div key={cf.label} style={{
-                    flex: "1 1 120px", background: highlight ? theme.dim : C.bg2, borderRadius: 12,
-                    border: `1px solid ${highlight ? theme.primary + "44" : C.border}`,
-                    padding: "10px 12px",
+                    display: "grid", gridTemplateColumns: "1fr 1fr 24px 1fr", padding: "8px 14px",
+                    borderBottom: i < comparisons.length - 1 ? `1px solid ${C.border}` : "none",
+                    background: highlight ? theme.dim : "transparent",
                   }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
-                      {cf.label}
-                    </div>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>
-                      <span style={{ color: C.text, fontWeight: 600 }}>{cf.soldValue}</span>
-                    </div>
-                    <div style={{ fontSize: 11, color: C.muted }}>
-                      <span style={{
-                        color: dirColor(cf.direction, lead.persona),
-                        fontWeight: 600,
-                      }}>
-                        {cf.activeValue}{dirIcon(cf.direction)}
-                      </span>
-                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>{cf.label}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.text }}>{cf.soldValue}</div>
+                    <div style={{ fontSize: 11, color: dirColor(cf.direction, lead.persona), textAlign: "center" }}>{dirIcon(cf.direction)}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: dirColor(cf.direction, lead.persona) }}>{cf.activeValue}</div>
                   </div>
                 )
               })}
@@ -2343,15 +2398,28 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
           )}
 
           {/* Notes */}
-          {lead.notes && (
+          {agentNotes && (
             <div style={{
               background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`,
               padding: "14px 18px",
             }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>
-                Agent Notes
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase" }}>
+                  Agent Notes
+                </div>
+                <button
+                  onClick={handleRefreshNotes}
+                  disabled={refreshingNotes}
+                  style={{
+                    background: "none", border: "none", cursor: refreshingNotes ? "default" : "pointer",
+                    color: refreshingNotes ? C.faint : theme.primary, fontSize: 10, fontWeight: 600,
+                    fontFamily: FONT, padding: "2px 6px",
+                  }}
+                >
+                  {refreshingNotes ? "↻ …" : "↻ Refresh"}
+                </button>
               </div>
-              <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.55 }}>{lead.notes}</div>
+              <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.55, whiteSpace: "pre-line" }}>{agentNotes}</div>
             </div>
           )}
         </div>
@@ -2431,14 +2499,29 @@ function ProfilePage({ property, lead, soldSLM, onBack, onGenerate, theme }: {
               }}
             />
             {transcript.trim() && (
-              <div style={{
-                marginTop: 8, fontSize: 11, color: C.green, userSelect: "none",
-                display: "flex", alignItems: "center", gap: 6,
-              }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green }} />
-                {priorSessions > 0
-                  ? `Saved across ${priorSessions} session${priorSessions > 1 ? "s" : ""}. Will personalise outreach and future matching`
-                  : "Voice context captured. Will personalise outreach"}
+              <div style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{
+                  fontSize: 11, color: C.green, userSelect: "none",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green }} />
+                  {priorSessions > 0
+                    ? `Saved across ${priorSessions} session${priorSessions > 1 ? "s" : ""}`
+                    : "Voice context captured"}
+                </div>
+                <button
+                  onClick={handleSaveToCRM}
+                  disabled={savingToCRM || savedToCRM}
+                  style={{
+                    background: savedToCRM ? C.green + "18" : theme.primary + "18",
+                    border: `1px solid ${savedToCRM ? C.green + "40" : theme.primary + "40"}`,
+                    borderRadius: 8, padding: "4px 10px", cursor: savingToCRM || savedToCRM ? "default" : "pointer",
+                    color: savedToCRM ? C.green : theme.primary, fontSize: 10, fontWeight: 700,
+                    fontFamily: FONT,
+                  }}
+                >
+                  {savedToCRM ? "✓ Saved to CRM" : savingToCRM ? "Structuring…" : "Save to CRM"}
+                </button>
               </div>
             )}
           </div>
@@ -2647,7 +2730,6 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
 
   const grade     = lead.persona?.toLowerCase().includes("investor") ? "B" : "A"
   const timeline  = lead.timeline ?? "60 day"
-  const fakeDraft = `Hi ${fname}, ${agent.name.split(" ")[0]} here. New 4-bed just listed in ${property.suburb}. Open this Saturday. Worth a look?`
 
   const QA_STEPS: Array<{ icon: string; col: string; text: string }> = [
     { icon: "✓",  col: C.green,  text: `Reading ${lead.name}'s profile: graded ${grade}, ${timeline} timeline` },
@@ -2655,7 +2737,7 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
     { icon: "▸",  col: C.muted,  text: "Generating first draft..." },
     { icon: "→",  col: C.blue, text: "No open home reference detected. Rewriting..." },
     { icon: "→",  col: C.blue, text: "SMS 183 characters (limit 160). Trimming..." },
-    { icon: "✅", col: C.green,  text: "All checks passed: 157 chars · Voice match 94% · Personalisation: high" },
+    { icon: "✓",  col: C.green,  text: "All checks passed: 157 chars · Voice match 94% · Personalisation: high" },
     { icon: "▸",  col: C.muted,  text: "Handing to agent for review..." },
   ]
   const STEP_MS = [900, 1800, 2800, 3900, 5100, 6200, 7100]
@@ -2722,24 +2804,6 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
             ))}
           </AnimatePresence>
 
-          {/* Fake first-draft SMS — visible at steps 3–4 before the rewrites complete */}
-          {stepIndex >= 3 && stepIndex <= 4 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              style={{ padding: "6px 18px 14px 48px" }}
-            >
-              <div style={{
-                background: C.bg3, borderRadius: 10, border: `1px solid ${C.border}`,
-                padding: "9px 13px", fontSize: 12, color: C.faint, fontStyle: "italic", lineHeight: 1.5,
-              }}>
-                {fakeDraft}
-              </div>
-              <div style={{ fontSize: 10, color: C.muted, marginTop: 3, paddingLeft: 2 }}>
-                {fakeDraft.length} chars · draft
-              </div>
-            </motion.div>
-          )}
         </div>
       </div>
     </div>
@@ -2761,6 +2825,12 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
   onBack: () => void
   versionId?: number
 }) {
+  // Variant carousel
+  type Variant = { sms: string; subject: string; body: string }
+  const [variants, setVariants] = useState<Variant[]>([{ sms: initSMS, subject: initSubject, body: initBody.join("\n\n") }])
+  const [variantIdx, setVariantIdx] = useState(0)
+  const [generatingVariant, setGeneratingVariant] = useState(false)
+
   const [sms, setSMS] = useState(initSMS)
   const [subject, setSubject] = useState(initSubject)
   const [bodyText, setBodyText] = useState(initBody.join("\n\n"))
@@ -2769,22 +2839,63 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
   const [sent, setSent] = useState(false)
   const [leadStatus, setLeadStatus] = useState<LeadStatus>("outreach_sent")
   const [deliveryNote, setDeliveryNote] = useState("")
-  const [testMode, setTestMode] = useState<{ phone: string | null; email: string | null } | null>(null)
   const [showNurture, setShowNurture] = useState(false)
+
+  const handleGenerateVariant = async () => {
+    setGeneratingVariant(true)
+    try {
+      const activeSLM = loadSLMForProperty(property.id)
+      const soldShortAddr = soldSLM.address?.split(",")[0] ?? ""
+      const activeShortAddr = property.address.split(",")[0]
+      const comparisons = lead.matchResult.comparisons.map(c => `${c.label}: ${c.soldValue} → ${c.activeValue}`).join(", ")
+      const payload = {
+        agentName: agent.name, agentAgency: agent.agency, agentSuburb: property.suburb,
+        voiceContext: transcript,
+        slmContext: [
+          `Sold: ${soldShortAddr} (${soldSLM.beds}bd/${soldSLM.baths}ba, ${soldSLM.landSqm}sqm)`,
+          `Active: ${activeShortAddr} (${activeSLM.beds}bd/${activeSLM.baths}ba, ${activeSLM.landSqm}sqm)`,
+          `Comparisons: ${comparisons}`,
+        ].join(". "),
+        soldShortAddr, activeShortAddr,
+        strategy: "New Listing Match", channel: "both" as const,
+        lead: {
+          name: lead.name, budget: fmt(lead.budget), timeline: lead.timeline ?? "flexible",
+          persona: lead.persona, notes: (lead.notes ?? "") + `\n[Generate a DIFFERENT variant from: "${sms.slice(0, 80)}…"]`,
+          questions: (lead.questions ?? []).join("; "), transcript,
+        },
+      }
+      const res = await authFetch(apiUrl("/api/generate"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      const stripDashes = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
+      const newVariant: Variant = {
+        sms: stripDashes(data.sms ?? ""),
+        subject: stripDashes(data.emailSubject ?? data.email?.subject ?? subject),
+        body: (data.emailBody ?? data.email?.body ?? []).map(stripDashes).join("\n\n"),
+      }
+      const newVariants = [...variants, newVariant]
+      setVariants(newVariants)
+      const newIdx = newVariants.length - 1
+      setVariantIdx(newIdx)
+      setSMS(newVariant.sms)
+      setSubject(newVariant.subject)
+      setBodyText(newVariant.body)
+    } catch { /* non-fatal */ }
+    setGeneratingVariant(false)
+  }
+
+  const switchVariant = (idx: number) => {
+    setVariantIdx(idx)
+    const v = variants[idx]
+    if (v) { setSMS(v.sms); setSubject(v.subject); setBodyText(v.body) }
+  }
   const [loadingNurture, setLoadingNurture] = useState(false)
   const [nurtureSeq, setNurtureSeq] = useState<Array<{ day: number; strategy: string; sms: string; email: { subject: string; body: string[] } }>>([])
   const [sendingToSelf, setSendingToSelf] = useState(false)
   const [sentToSelf, setSentToSelf] = useState(false)
-
-  // Fetch server test mode config once on mount
-  useEffect(() => {
-    authFetch(apiUrl("/api/health"))
-      .then(r => r.json())
-      .then((h: { testMode?: boolean; testPhone?: string | null; testEmail?: string | null }) => {
-        if (h.testMode) setTestMode({ phone: h.testPhone ?? null, email: h.testEmail ?? null })
-      })
-      .catch(() => {})
-  }, [])
 
   const handleNurturePreview = async () => {
     if (nurtureSeq.length > 0) { setShowNurture(true); return }
@@ -3157,47 +3268,6 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         display: "flex", alignItems: "center", gap: 6, marginBottom: 24, padding: "8px 0", lineHeight: 1, minHeight: 44,
       }}>← Back</button>
 
-      {/* Box+Dice vs PropOS comparison */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 28 }}>
-        <div style={{ background: C.bg3, borderRadius: 14, padding: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 12 }}>
-            {"📧"} Box+Dice sent this
-          </div>
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, fontWeight: 600 }}>
-            Subject: Quality Homes, Expertly Presented
-          </div>
-          <div style={{ fontSize: 12, color: C.faint, lineHeight: 1.5, marginBottom: 14 }}>
-            Dear {fname}, Warm greetings from the {agent.agency} team. The {property.suburb} market continues to move with strong momentum across all price points...
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 10, color: "rgb(255, 110, 110)" }}>{"❌"} Generic subject</span>
-            <span style={{ fontSize: 10, color: "rgb(255, 110, 110)" }}>{"❌"} No open home ref</span>
-            <span style={{ fontSize: 10, color: "rgb(255, 110, 110)" }}>{"❌"} Same for all 500 recipients</span>
-          </div>
-        </div>
-
-        <div style={{ background: theme.dim, borderRadius: 14, padding: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: theme.primary, marginBottom: 12 }}>
-            {"✦"} PropOS wrote this
-          </div>
-          <div style={{ fontSize: 11, color: theme.primary, marginBottom: 4, fontWeight: 600 }}>
-            Subject: {subject}
-          </div>
-          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, marginBottom: 14 }}>
-            {bodyText.split("\n\n")[0]}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 10, color: C.green }}>{"✅"} References their open home</span>
-            <span style={{ fontSize: 10, color: C.green }}>{"✅"} Answers their questions</span>
-            <span style={{ fontSize: 10, color: C.green }}>{"✅"} Written in {agent.name.split(" ")[0]}'s voice</span>
-            <span style={{ fontSize: 10, color: C.green }}>{"✅"} One specific CTA</span>
-          </div>
-        </div>
-      </div>
-      <div style={{ textAlign: "center", fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 20 }}>
-        Which one gets a reply?
-      </div>
-
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: theme.primary, textTransform: "uppercase", marginBottom: 4 }}>
           Review outreach
@@ -3206,7 +3276,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
           {fname}'s personalised messages
         </div>
         <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
-          Edit either message before approving. Clicking Send delivers via BlueBubbles + Gmail.
+          Edit either message before approving.
         </div>
       </div>
 
@@ -3360,23 +3430,89 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         </div>
       </div>
 
-      {/* Test mode banner */}
-      {testMode && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
-          padding: "10px 16px", borderRadius: 10,
-          background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)",
-        }}>
-          <div style={{ fontSize: 14 }}>⚠️</div>
-          <div style={{ fontSize: 12, color: "#f59e0b", lineHeight: 1.4 }}>
-            <span style={{ fontWeight: 700 }}>Test mode active.</span> Messages will go to{" "}
-            {testMode.phone && <span style={{ fontFamily: "monospace" }}>{testMode.phone}</span>}
-            {testMode.phone && testMode.email && " / "}
-            {testMode.email && <span style={{ fontFamily: "monospace" }}>{testMode.email}</span>}
-            {" "}instead of {lead.name}
+      {/* Variant carousel */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
+        marginBottom: 24, padding: "10px 0",
+      }}>
+        <button
+          onClick={() => switchVariant(variantIdx - 1)}
+          disabled={variantIdx <= 0}
+          style={{
+            background: "none", border: `1px solid ${variantIdx <= 0 ? C.border : theme.primary + "55"}`,
+            borderRadius: 8, padding: "6px 12px", cursor: variantIdx <= 0 ? "default" : "pointer",
+            color: variantIdx <= 0 ? C.faint : theme.primary, fontSize: 12, fontWeight: 600, fontFamily: FONT,
+          }}
+        >
+          ← Prev
+        </button>
+        <div style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>
+          Variant {variantIdx + 1} of {variants.length}
+        </div>
+        {variantIdx < variants.length - 1 ? (
+          <button
+            onClick={() => switchVariant(variantIdx + 1)}
+            style={{
+              background: "none", border: `1px solid ${theme.primary}55`,
+              borderRadius: 8, padding: "6px 12px", cursor: "pointer",
+              color: theme.primary, fontSize: 12, fontWeight: 600, fontFamily: FONT,
+            }}
+          >
+            Next →
+          </button>
+        ) : (
+          <button
+            onClick={handleGenerateVariant}
+            disabled={generatingVariant}
+            style={{
+              background: generatingVariant ? C.bg3 : theme.primary + "18",
+              border: `1px solid ${theme.primary}55`,
+              borderRadius: 8, padding: "6px 12px", cursor: generatingVariant ? "default" : "pointer",
+              color: generatingVariant ? C.faint : theme.primary, fontSize: 12, fontWeight: 600, fontFamily: FONT,
+            }}
+          >
+            {generatingVariant ? "Generating…" : "New variant →"}
+          </button>
+        )}
+      </div>
+
+      {/* Box+Dice vs PropOS comparison */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 28 }}>
+        <div style={{ background: C.bg3, borderRadius: 14, padding: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 12 }}>
+            {"📧"} Box+Dice sent this
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, fontWeight: 600 }}>
+            Subject: Quality Homes, Expertly Presented
+          </div>
+          <div style={{ fontSize: 12, color: C.faint, lineHeight: 1.5, marginBottom: 14 }}>
+            Dear {fname}, Warm greetings from the {agent.agency} team. The {property.suburb} market continues to move with strong momentum across all price points...
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 10, color: "rgb(255, 110, 110)" }}>{"❌"} Generic subject</span>
+            <span style={{ fontSize: 10, color: "rgb(255, 110, 110)" }}>{"❌"} No open home ref</span>
+            <span style={{ fontSize: 10, color: "rgb(255, 110, 110)" }}>{"❌"} Same for all 500 recipients</span>
           </div>
         </div>
-      )}
+
+        <div style={{ background: theme.dim, borderRadius: 14, padding: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: theme.primary, marginBottom: 12 }}>
+            {"✦"} PropOS wrote this
+          </div>
+          <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, marginBottom: 14 }}>
+            {sms}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 10, color: C.green }}>{"✅"} References their open home</span>
+            <span style={{ fontSize: 10, color: C.green }}>{"✅"} Answers their questions</span>
+            <span style={{ fontSize: 10, color: C.green }}>{"✅"} Written in {agent.name.split(" ")[0]}'s voice</span>
+            <span style={{ fontSize: 10, color: C.green }}>{"✅"} One specific CTA</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ textAlign: "center", fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 20 }}>
+        Which one gets a reply?
+      </div>
 
       {/* Response rate claim */}
       <div style={{
@@ -3443,7 +3579,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
         </motion.button>
       </div>
       <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
-        Send SMS via BlueBubbles (your iPhone) or email via Gmail independently.
+        Preview what your leads receive.
       </div>
 
       <button
@@ -9854,7 +9990,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           <div style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>{fmtDollar(fin.equityGain)} equity</div>
         </div>
         <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
-          Edit either message before approving. Clicking Send delivers via BlueBubbles + Gmail.
+          Edit either message before approving.
         </div>
       </div>
 
@@ -10077,7 +10213,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
         </motion.button>
       </div>
       <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
-        Send SMS via BlueBubbles (your iPhone) or email via Gmail independently.
+        Preview what your leads receive.
       </div>
 
       {/* Batch send — only shown when multiple entries are available */}
@@ -10757,7 +10893,7 @@ export default function DemoView({
               setStage({ kind: "missedOut", auctionProperty: property, leads })
             }
             onSettings={onSettings}
-            onMatchQueue={() => setStage({ kind: "matchQueue" })}
+            onMatchQueue={vendorSettings?.showMatchQueue !== false ? () => setStage({ kind: "matchQueue" }) : undefined}
             agent={agent}
             theme={theme}
           />
@@ -10906,7 +11042,7 @@ export default function DemoView({
             soldLeads={stage.soldLeads}
             theme={theme}
             onComplete={allLeads =>
-              setStage({ kind: "leads", property: stage.property, allLeads })
+              setStage({ kind: "leads", property: stage.property, allLeads, soldLeads: stage.soldLeads })
             }
           />
         </motion.div>
@@ -10928,6 +11064,7 @@ export default function DemoView({
               })
             }
             theme={theme}
+            onRefresh={stage.soldLeads ? () => setStage({ kind: "matching", property: stage.property, soldLeads: stage.soldLeads! }) : undefined}
           />
         </motion.div>
       )}
