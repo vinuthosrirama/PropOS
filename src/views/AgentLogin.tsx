@@ -217,7 +217,26 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
         trainingCorpus: [],
       }
       setTimeout(() => onLogin(agent, t, mode), 2800)
-    } catch { setLookupError("Network error — please try again"); setLookupLoading(false) }
+    } catch {
+      // Offline fallback for built-in demo agents
+      const full = `${firstName.trim()} ${lastName.trim()}`.toLowerCase()
+      const ag = agency.trim().toLowerCase()
+      if (full.includes("cameron") && full.includes("knoll") && ag.includes("peake")) {
+        const a = { name: "Cameron Knoll", agency: "Peake Real Estate", email: "cameron@peake.com.au", phone: "0415 883 354", suburb: "Berwick" }
+        setWelcomeName("Cameron")
+        setWelcomeSub("Peake Real Estate · Berwick")
+        setPhase("welcoming")
+        const t = getAgencyTheme(a.agency)
+        const agent: AgentProfile = {
+          ...a, tagline: "Berwick specialist.",
+          voiceProfile: { greeting: "Hi", closing: "Cheers", lengthStyle: "short", formalityScore: 2, aussieIndex: 2, specificity: 3, emojiUsage: "occasional", examplesCount: 0, confidence: 0, detectedTraits: [] },
+          trainingCorpus: [],
+        }
+        setTimeout(() => onLogin(agent, t, mode), 2800)
+        return
+      }
+      setLookupError("Network error — please try again"); setLookupLoading(false)
+    }
   }
 
   // Left panel background — buyer = Peake purple, vendor = charcoal

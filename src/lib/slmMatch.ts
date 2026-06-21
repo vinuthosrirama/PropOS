@@ -806,7 +806,7 @@ function buildComparisons(
       investorRelevant: true,
     })
   } else {
-    const truncate10 = (s: string) => { const w = s.replace(/\s*\([^)]*\)/g, "").split(/\s+/); return w.length > 10 ? w.slice(0, 10).join(" ") + "…" : w.join(" ") }
+    const truncate10 = (s: string) => { const w = s.replace(/\s*\([^)]*\)/g, "").replace(/\s*[—–].*$/, "").split(/\s+/); return w.length > 8 ? w.slice(0, 8).join(" ") + "…" : w.join(" ") }
     out.push({
       label: "School zone",
       soldValue: sold.schoolZoneCatchment !== "TBD" ? truncate10(sold.schoolZoneCatchment) : "TBD",
