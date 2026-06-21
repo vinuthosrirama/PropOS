@@ -38,7 +38,7 @@ router.post("/", async (req, res) => {
 
   try {
     const completion = await getClient().chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       temperature: 0.1,
       max_tokens: 300,
       messages: [

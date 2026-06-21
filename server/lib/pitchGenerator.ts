@@ -169,7 +169,7 @@ Respond with the cover note text only, no JSON, no markdown, no quotes.`
   try {
     const message = await withLLMTimeout(signal =>
       getClient().messages.create({
-        model: "claude-sonnet-4-5",
+        model: "claude-haiku-4-5",
         max_tokens: 400,
         messages: [{ role: "user", content: prompt }],
       }, { signal }),
