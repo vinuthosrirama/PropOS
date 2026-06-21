@@ -374,13 +374,15 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
 
 // ── SoldCard ──────────────────────────────────────────────────────────────────
 
-function SoldCard({ property, leads, loading, theme, onClick }: {
+function SoldCard({ property, leads, loading, theme, onClick, liveCount }: {
   property: PortfolioProperty
   leads: SheetLead[]
   loading: boolean
   theme: AgencyTheme
   onClick: () => void
+  liveCount?: number
 }) {
+  const displayCount = liveCount ?? property.leadCount ?? leads.length
   return (
     <div
       role="button"
@@ -474,11 +476,14 @@ function SoldCard({ property, leads, loading, theme, onClick }: {
           ) : (
             <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
               <span style={{ fontSize: 16, fontWeight: 800, color: "#fff", lineHeight: 1 }}>
-                {property.leadCount || leads.length}
+                {displayCount}
               </span>
               <span style={{ fontSize: 10, color: "rgba(255,255,255,0.70)" }}>
-                {(property.leadCount || leads.length) === 1 ? "attendee" : "attendees"}
+                {displayCount === 1 ? "attendee" : "attendees"}
               </span>
+              {liveCount !== undefined && (
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#00e676", marginLeft: 2, flexShrink: 0 }} title="Live from Supabase" />
+              )}
             </div>
           )}
         </div>
@@ -1362,6 +1367,31 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
   const [leadSaving, setLeadSaving] = useState(false)
   const [leadSaved, setLeadSaved] = useState(false)
 
+  // Live lead counts from Supabase (SUMIF by property_address)
+  const [liveCounts, setLiveCounts] = useState<Record<string, number>>({})
+  const [countsRefreshing, setCountsRefreshing] = useState(false)
+  const fetchLiveCounts = async () => {
+    setCountsRefreshing(true)
+    try {
+      const r = await authFetch(apiUrl("/api/crm-leads/counts"))
+      const d = await r.json() as { counts?: Record<string, number> }
+      if (d.counts) setLiveCounts(d.counts)
+    } catch { /* fallback to hardcoded */ }
+    setCountsRefreshing(false)
+  }
+  useEffect(() => { fetchLiveCounts() }, [])
+
+  const getLiveCount = (p: PortfolioProperty): number | undefined => {
+    const key1 = `${p.address}, ${p.suburb}`
+    if (liveCounts[key1] !== undefined) return liveCounts[key1]
+    const key2 = `${p.address}, ${p.suburb} ${p.state}`
+    if (liveCounts[key2] !== undefined) return liveCounts[key2]
+    for (const [k, v] of Object.entries(liveCounts)) {
+      if (k.toLowerCase().includes(p.address.toLowerCase())) return v
+    }
+    return undefined
+  }
+
   // Listen for nav-level "Capture Lead" button
   useEffect(() => {
     const handler = () => setShowLeadModal(true)
@@ -1644,10 +1674,23 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
 
       {/* ── Sold listings ───────────────────────────────────────────────────── */}
       <div>
-        <div style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 18, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: C.muted, textTransform: "uppercase" as const, paddingBottom: 7, borderBottom: `1px solid ${C.border}` }}>
             Comparable Sales
           </div>
+          <button
+            onClick={e => { e.stopPropagation(); fetchLiveCounts() }}
+            disabled={countsRefreshing}
+            title="Refresh lead counts from Supabase"
+            style={{
+              width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.border}`,
+              background: C.bg2, cursor: countsRefreshing ? "default" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 13, color: C.muted, transition: "all 0.2s", flexShrink: 0,
+            }}
+          >
+            <span style={{ display: "inline-block", animation: countsRefreshing ? "spin 0.8s linear infinite" : "none" }}>↻</span>
+          </button>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: bpPP === "mobile" ? "1fr" : bpPP === "tablet" ? "1fr 1fr" : "repeat(3, 1fr)", gap: 16 }}>
@@ -1664,6 +1707,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
                 loading={sheetsLoading}
                 theme={theme}
                 onClick={() => onSelectSold(p, soldLeads[p.id] ?? [])}
+                liveCount={getLiveCount(p)}
               />
             </motion.div>
           ))}

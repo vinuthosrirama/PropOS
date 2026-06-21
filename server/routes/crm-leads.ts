@@ -198,4 +198,27 @@ router.patch("/:id/questions", async (req: Request, res: Response) => {
   }
 })
 
+// GET /api/crm-leads/counts — lead counts grouped by property address
+router.get("/counts", async (_req: Request, res: Response) => {
+  if (!isDbConnected()) return res.json({ counts: {}, source: "no-db" })
+  try {
+    const rows = await query<{ property_address: string; property_suburb: string; cnt: string }>(
+      `SELECT property_address, property_suburb, COUNT(*)::text AS cnt
+       FROM "PropOS_democontacts"
+       WHERE property_address IS NOT NULL AND property_address != ''
+       GROUP BY property_address, property_suburb
+       ORDER BY cnt DESC`,
+      [],
+    )
+    const counts: Record<string, number> = {}
+    for (const r of rows) {
+      const key = [r.property_address, r.property_suburb].filter(Boolean).join(", ")
+      counts[key] = parseInt(r.cnt, 10)
+    }
+    res.json({ counts, source: "supabase" })
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
+})
+
 export default router
