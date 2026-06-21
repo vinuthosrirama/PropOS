@@ -31,7 +31,7 @@ export async function generateChatJSON(prompt: string, maxTokens = 400): Promise
   if (process.env.ANTHROPIC_API_KEY) {
     const message = await withLLMTimeout(signal =>
       getClient().messages.create({
-        model: "claude-sonnet-4-6", max_tokens: maxTokens,
+        model: "claude-haiku-4-5", max_tokens: maxTokens,
         messages: [{ role: "user", content: prompt }],
       }, { signal }),
     )
@@ -43,7 +43,7 @@ export async function generateChatJSON(prompt: string, maxTokens = 400): Promise
     const { getOpenAIClient } = await import("./openai.js")
     const completion = await withLLMTimeout(signal =>
       getOpenAIClient().chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [{ role: "user", content: prompt }],
         max_tokens: maxTokens,
         response_format: { type: "json_object" },
@@ -144,14 +144,13 @@ Respond ONLY with valid JSON, no markdown:
 
   const message = await withLLMTimeout(signal =>
     getClient().messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-haiku-4-5",
       max_tokens: 600,
       messages: [{ role: "user", content: prompt }],
     }, { signal }),
   )
 
   const raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
-  // Strip potential markdown fences
   const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
   try {
     return sanitiseResult(JSON.parse(cleaned) as GenerateResult)
@@ -220,7 +219,7 @@ Grading: A=hot/motivated/pre-approved, B=interested/clear timeline, C=browsing/v
 
 /**
  * QA-review a drafted message against brand rules AND personalisation adequacy.
- * Uses claude-sonnet-4-5. Auto-rewrites if personalisation or rules fail.
+ * Uses claude-haiku-4-5 for cost efficiency. Auto-rewrites if rules fail.
  */
 export async function qaMessage(params: {
   agentName: string
@@ -288,7 +287,7 @@ Return ONLY valid JSON (no markdown):
 
   const message = await withLLMTimeout(signal =>
     getClient().messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-haiku-4-5",
       max_tokens: 800,
       messages: [{ role: "user", content: prompt }],
     }, { signal }),
@@ -354,9 +353,8 @@ Respond ONLY with valid JSON:
 
 // Model cost reference (USD per 1K tokens, approximate)
 export const MODEL_COSTS: Record<string, number> = {
-  "claude-sonnet-4-5": 0.003,
-  "gpt-4o-mini":       0.0006,
   "claude-haiku-4-5":  0.00025,
+  "gpt-4o-mini":       0.0006,
   "template":          0,
 }
 

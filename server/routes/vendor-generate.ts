@@ -283,7 +283,7 @@ Respond ONLY with valid JSON, no markdown:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]},"personalisationLine":"the single sentence from the email body that best references the personal detail from the CRM notes (copy verbatim from the body, or empty string if no personal detail was used)"}`
 
     const message = await getClient().messages.create({
-      model: "claude-sonnet-4-5",
+      model: "claude-haiku-4-5",
       max_tokens: 700,
       messages: [{ role: "user", content: sonnetPrompt }],
     })

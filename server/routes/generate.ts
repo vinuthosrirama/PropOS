@@ -1,22 +1,19 @@
 import { Router } from "express"
 import { generateMessage, type GenerateParams } from "../lib/openai.js"
-import { analyseLead, qaMessage, generateMessageClaude, generateMessageHaiku, MODEL_COSTS } from "../lib/claude.js"
-import { getActiveVersionId, getActivePrompt } from "../lib/promptOptimiser.js"
+import { generateMessageHaiku, MODEL_COSTS } from "../lib/claude.js"
+import { generateFromTemplate } from "../lib/outreachTemplates.js"
 
 const router = Router()
 
-// Hard-cap SMS at 160 chars — keeps messages within a single segment
 function clampSMS(sms: string): string {
   if (sms.length <= 160) return sms
   return sms.slice(0, 157).trimEnd() + "..."
 }
 
-// Strip em-dashes and double-hyphens from a single string
 function cleanStr(s: string): string {
   return s.replace(/—|–/g, ",").replace(/--/g, ",")
 }
 
-// Strip em-dashes from all model output — enforced after every generation path
 function sanitise<T extends { sms: string; email: { subject: string; body: string[] } }>(r: T): T {
   return {
     ...r,
@@ -32,175 +29,112 @@ function sanitise<T extends { sms: string; email: { subject: string; body: strin
 /**
  * POST /api/generate
  *
- * Pipeline (when both API keys present):
- *   1. Claude Haiku   → analyse lead, pick best strategy + CTA
- *   2. AddVantage AI    → write SMS + email using CTA as anchor
- *   3. Claude Sonnet  → QA review, auto-fix if issues found
+ * Cost-optimised pipeline:
+ *   1. Template engine (zero cost) — pre-written templates with slot-filling
+ *   2. LLM fallback (gpt-4o-mini only) — when forceAI=true or template insufficient
  *
- * Graceful fallback:
- *   - No OPENAI_API_KEY  → template strings
- *   - No ANTHROPIC_KEY   → skip analysis + QA, AddVantage AI only
+ * No analysis step. No QA step. Templates are pre-vetted.
+ * LLM is only used when explicitly requested via forceAI flag.
  */
 router.post("/", async (req, res) => {
-  const params = req.body as GenerateParams & { skipQA?: boolean }
+  const params = req.body as GenerateParams & { forceAI?: boolean }
 
   if (!params.lead?.name || !params.strategy) {
     return res.status(400).json({ error: "lead.name and strategy are required" })
   }
 
-  // ── No OpenAI key: return template ──────────────────────────────────────────
-  if (!process.env.OPENAI_API_KEY) {
-    const firstName = params.lead.name.split(" ")[0]
+  // ── Primary path: template engine (zero LLM cost) ──────────────────────────
+  if (!params.forceAI) {
+    const result = generateFromTemplate({
+      agentName: params.agentName,
+      agentAgency: params.agentAgency,
+      soldShortAddr: params.soldShortAddr,
+      activeShortAddr: params.activeShortAddr,
+      lead: {
+        name: params.lead.name,
+        notes: params.lead.notes,
+        transcript: params.lead.transcript,
+        questions: params.lead.questions,
+        persona: params.lead.persona,
+        budget: params.lead.budget,
+        suburb: params.lead.suburb,
+      },
+      strategy: params.strategy,
+      channel: params.channel,
+    })
     return res.json({
-      ...sanitise({
-        sms: `Hi ${firstName}, ${params.agentName.split(" ")[0]} here. Thought of you for a new listing in ${params.agentSuburb ?? "your area"}. Worth a look? When suits a chat?`,
-        email: {
-          subject: `New listing for you, ${firstName}`,
-          body: [
-            `Hi ${firstName}, hope you are well.`,
-            `I had a chance to review your situation and wanted to share a relevant update using our ${params.strategy} approach.`,
-            `Would love to connect. Does a quick call this week work for you?`,
-          ],
-        },
-      }),
-      meta: { pipeline: "template", analysis: null, qa: null },
+      ...result,
+      meta: { pipeline: "template", model_used: "template", estimated_cost_usd: 0, analysis: null, qa: null },
+    })
+  }
+
+  // ── Fallback: LLM generation (only when forceAI=true) ─────────────────────
+  if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    const result = generateFromTemplate({
+      agentName: params.agentName,
+      agentAgency: params.agentAgency,
+      soldShortAddr: params.soldShortAddr,
+      activeShortAddr: params.activeShortAddr,
+      lead: {
+        name: params.lead.name,
+        notes: params.lead.notes,
+        transcript: params.lead.transcript,
+        questions: params.lead.questions,
+        persona: params.lead.persona,
+        budget: params.lead.budget,
+        suburb: params.lead.suburb,
+      },
+      strategy: params.strategy,
+      channel: params.channel,
+    })
+    return res.json({
+      ...result,
+      meta: { pipeline: "template-fallback", model_used: "template", estimated_cost_usd: 0, analysis: null, qa: null },
     })
   }
 
   try {
-    // ── Prompt evolution: fetch active version ID + any learned style rules ───
-    // Non-blocking — both fall back to safe defaults if DB unavailable
-    const [versionId, evolvedRules] = await Promise.all([
-      getActiveVersionId("sms_rules").catch(() => null),
-      getActivePrompt("sms_rules", "").catch(() => ""),
-    ])
-
-    // ── Step 1: Claude Haiku analysis (optional, skip if no Anthropic key) ───
-    let analysis = null
-    let enrichedParams: GenerateParams = { ...params, evolvedRules: evolvedRules || undefined }
-
-    if (process.env.ANTHROPIC_API_KEY) {
-      try {
-        analysis = await analyseLead({
-          name: params.lead.name,
-          budget: params.lead.budget,
-          timeline: params.lead.timeline,
-          persona: params.lead.persona,
-          notes: params.lead.notes,
-          transcript: params.lead.transcript,
-          questions: params.lead.questions,
-        })
-        // Inject Claude's recommended CTA into the lead notes for AddVantage AI
-        enrichedParams = {
-          ...enrichedParams,
-          lead: {
-            ...enrichedParams.lead,
-            notes: `${enrichedParams.lead.notes}\n[Recommended hook: ${analysis.callToAction}]`,
-          },
-        }
-      } catch (e) {
-        console.warn("Claude analysis skipped:", e)
-      }
-    }
-
-    // ── Step 2: Route to model by lead grade ──────────────────────────────────
-    // A → Claude Sonnet (best quality), B → GPT-4o-mini, C → Haiku, D → template
-    const grade = analysis?.grade ?? "B"
     let modelUsed = "gpt-4o-mini"
     let result
 
-    if (grade === "D") {
-      modelUsed = "template"
-      const fn = params.lead.name.split(" ")[0]
-      const an = params.agentName.split(" ")[0]
-      result = {
-        sms: clampSMS(`Hi ${fn}, ${an} here. Worth a chat about your property search? When suits?`),
-        email: {
-          subject: `Checking in, ${fn}`,
-          body: [
-            `Hi ${fn}, hope you're well.`,
-            `Wanted to touch base on your property search. Happy to help when the timing's right.`,
-            `Cheers,\n${an}`,
-          ],
-        },
-      }
-    } else if (grade === "C" && process.env.ANTHROPIC_API_KEY) {
+    if (process.env.ANTHROPIC_API_KEY) {
       modelUsed = "claude-haiku-4-5"
-      result = sanitise(await generateMessageHaiku(enrichedParams).catch(async () => {
-        modelUsed = "gpt-4o-mini"
-        return generateMessage(enrichedParams)
-      }))
-    } else if (grade === "A" && process.env.ANTHROPIC_API_KEY) {
-      modelUsed = "claude-sonnet-4-5"
-      result = sanitise(await generateMessageClaude(enrichedParams).catch(async () => {
-        modelUsed = "gpt-4o-mini"
-        return generateMessage(enrichedParams)
+      result = sanitise(await generateMessageHaiku(params).catch(async () => {
+        if (process.env.OPENAI_API_KEY) {
+          modelUsed = "gpt-4o-mini"
+          return generateMessage(params)
+        }
+        throw new Error("no-llm")
       }))
     } else {
-      // Grade B (or fallback) — GPT-4o-mini primary, Claude fallback, then template
-      result = sanitise(await generateMessage(enrichedParams).catch(async (openAiErr) => {
-        console.warn("OpenAI failed:", openAiErr.message ?? openAiErr)
-        if (process.env.ANTHROPIC_API_KEY) {
-          modelUsed = "claude-sonnet-4-5"
-          return generateMessageClaude(enrichedParams).catch(() => null)
-        }
-        return null
-      }).then(r => {
-        if (r) return r
-        // Both AI services unavailable — use personalised template
-        modelUsed = "template"
-        const fn = enrichedParams.lead.name.split(" ")[0]
-        const an = enrichedParams.agentName.split(" ")[0]
-        const suburb = enrichedParams.agentSuburb ?? enrichedParams.lead.suburb ?? "your area"
-        return {
-          sms: clampSMS(`Hi ${fn}, ${an} here. ${enrichedParams.strategy === "Equity Play" ? `Your home has grown significantly since you bought. Worth a quick chat?` : `Thought of you given your search in ${suburb}. Worth a look?`} Cheers, ${an}`),
-          email: {
-            subject: `Checking in, ${fn}`,
-            body: [
-              `Hi ${fn}, hope you're well.`,
-              enrichedParams.strategy === "Equity Play"
-                ? `Your property has built up strong equity and I wanted to make sure you have the full picture of where things stand.`
-                : `I have some updates relevant to your search in ${suburb} that I think you'd find useful.`,
-              `Happy to connect for a quick chat whenever suits. No pressure at all.\n\nCheers,\n${an}`,
-            ],
-          },
-        }
-      }))
-    }
-
-    // ── Step 3: Claude Sonnet QA — only for Grade A/B leads (skip C/D) ────────
-    let qa = null
-    if (process.env.ANTHROPIC_API_KEY && !params.skipQA && (grade === "A" || grade === "B")) {
-      try {
-        qa = await qaMessage({
-          agentName: params.agentName,
-          leadName: params.lead.name,
-          sms: result.sms,
-          emailSubject: result.email.subject,
-          emailBody: result.email.body,
-          leadNotes: params.lead.notes,
-          leadTranscript: params.lead.transcript,
-          leadQuestions: params.lead.questions,
-          slmContext: params.slmContext,
-        })
-        // Auto-apply QA fixes — use cleanStr() so —, –, and -- are all stripped
-        if (!qa.passed) {
-          if (qa.revisedSMS)       result.sms = clampSMS(cleanStr(qa.revisedSMS))
-          if (qa.revisedSubject)   result.email.subject = cleanStr(qa.revisedSubject)
-          if (qa.revisedEmailBody) result.email.body = qa.revisedEmailBody.map(cleanStr)
-        }
-        // Always hard-clamp SMS even if QA passed
-        result.sms = clampSMS(result.sms)
-      } catch (e) {
-        console.warn("Claude QA skipped:", e)
-      }
+      result = sanitise(await generateMessage(params))
     }
 
     const estimatedCostUsd = MODEL_COSTS[modelUsed] ?? 0
-    res.json({ ...result, meta: { pipeline: "full", model_used: modelUsed, estimated_cost_usd: estimatedCostUsd, analysis, qa, versionId } })
+    res.json({ ...result, meta: { pipeline: "llm", model_used: modelUsed, estimated_cost_usd: estimatedCostUsd, analysis: null, qa: null } })
   } catch (err) {
     console.error("Generate error:", err)
-    res.status(500).json({ error: "Generation failed" })
+    const result = generateFromTemplate({
+      agentName: params.agentName,
+      agentAgency: params.agentAgency,
+      soldShortAddr: params.soldShortAddr,
+      activeShortAddr: params.activeShortAddr,
+      lead: {
+        name: params.lead.name,
+        notes: params.lead.notes,
+        transcript: params.lead.transcript,
+        questions: params.lead.questions,
+        persona: params.lead.persona,
+        budget: params.lead.budget,
+        suburb: params.lead.suburb,
+      },
+      strategy: params.strategy,
+      channel: params.channel,
+    })
+    res.json({
+      ...result,
+      meta: { pipeline: "template-error-fallback", model_used: "template", estimated_cost_usd: 0, analysis: null, qa: null },
+    })
   }
 })
 

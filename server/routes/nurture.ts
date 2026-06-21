@@ -1,6 +1,6 @@
 import { Router } from "express"
-import { generateMessage, type GenerateParams } from "../lib/openai.js"
-import { generateMessageClaude, generateMessageHaiku } from "../lib/claude.js"
+import { type GenerateParams } from "../lib/openai.js"
+import { generateFromTemplate } from "../lib/outreachTemplates.js"
 import { queueNurtureSequence, type QueueNurtureParams } from "../lib/scheduler.js"
 
 const router = Router()
@@ -44,49 +44,26 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "lead.name and agentName are required" })
   }
 
-  const grade = base.grade ?? "B"
   const sequence: Array<{ day: number; strategy: string; sms: string; email: { subject: string; body: string[] } }> = []
 
   for (const step of NURTURE_STRATEGIES) {
-    const params: GenerateParams = {
-      ...base,
-      strategy: step.strategy,
+    const result = generateFromTemplate({
+      agentName: base.agentName,
+      agentAgency: base.agentAgency,
+      soldShortAddr: base.soldShortAddr,
+      activeShortAddr: base.activeShortAddr,
       lead: {
-        ...base.lead,
+        name: base.lead.name,
         notes: `${base.lead.notes ?? ""}\n[Nurture anchor — Day ${step.day}: ${step.anchor}]`.trim(),
+        questions: base.lead.questions ?? "",
+        persona: base.lead.persona,
+        budget: base.lead.budget,
+        suburb: base.lead.suburb,
       },
-    }
-
-    try {
-      let result
-      if (grade === "A" && process.env.ANTHROPIC_API_KEY) {
-        result = await generateMessageClaude(params)
-      } else if (grade === "C" && process.env.ANTHROPIC_API_KEY) {
-        result = await generateMessageHaiku(params)
-      } else if (process.env.OPENAI_API_KEY) {
-        result = await generateMessage(params)
-      } else {
-        result = {
-          sms: `Hi ${base.lead.name.split(" ")[0]}, ${base.agentName.split(" ")[0]} here. ${step.anchor}`,
-          email: {
-            subject: `${step.strategy}: ${base.lead.name.split(" ")[0]}`,
-            body: [`Hi ${base.lead.name.split(" ")[0]}, ${step.anchor}`, `Cheers,\n${base.agentName.split(" ")[0]}`],
-          },
-        }
-      }
-      sequence.push({ day: step.day, strategy: step.strategy, ...result })
-    } catch (err) {
-      console.warn(`Nurture Day ${step.day} failed:`, err)
-      sequence.push({
-        day: step.day,
-        strategy: step.strategy,
-        sms: `Hi ${base.lead.name.split(" ")[0]}, ${base.agentName.split(" ")[0]} here. Checking in on your search.`,
-        email: {
-          subject: `Checking in, ${base.lead.name.split(" ")[0]}`,
-          body: [`Hi ${base.lead.name.split(" ")[0]}, hope all is well.`, `Cheers,\n${base.agentName.split(" ")[0]}`],
-        },
-      })
-    }
+      strategy: step.strategy,
+      channel: base.channel,
+    })
+    sequence.push({ day: step.day, strategy: step.strategy, ...result })
   }
 
   res.json({ ok: true, leadId: base.lead.name, sequence })
