@@ -132,7 +132,12 @@ export const AGENCY_THEMES: Record<string, AgencyTheme> = {
 export const DEFAULT_THEME: AgencyTheme = AGENCY_THEMES["Other"]
 
 export function getAgencyTheme(agency: string): AgencyTheme {
-  return AGENCY_THEMES[agency] ?? {
+  if (AGENCY_THEMES[agency]) return AGENCY_THEMES[agency]
+  const lc = agency.toLowerCase()
+  for (const [key, theme] of Object.entries(AGENCY_THEMES)) {
+    if (lc.includes(key.toLowerCase()) || key.toLowerCase().includes(lc)) return theme
+  }
+  return {
     ...DEFAULT_THEME,
     name: agency,
     logo: agency.slice(0, 2).toUpperCase(),
@@ -500,9 +505,14 @@ export function setDBPortfolioCache(data: { sold: PortfolioProperty[]; active: P
   _dbPortfolioCache = data
 }
 
+function isMasterAccount(agent: AgentProfile): boolean {
+  const name = agent.name.toLowerCase().trim()
+  return name.includes("vinuth") && agent.agency.toLowerCase().includes("peake")
+}
+
 export function getPortfolioForAgent(agent: AgentProfile): { sold: PortfolioProperty[]; active: PortfolioProperty[] } {
   if (_dbPortfolioCache) return _dbPortfolioCache   // DB wins — provisioned agent
-  if (isCamKnoll(agent)) return { sold: PORTFOLIO_SOLD, active: PORTFOLIO_ACTIVE }
+  if (isCamKnoll(agent) || isMasterAccount(agent)) return { sold: PORTFOLIO_SOLD, active: PORTFOLIO_ACTIVE }
   if (isPasSunilchandra(agent)) return { sold: PAS_PORTFOLIO_SOLD, active: PAS_PORTFOLIO_ACTIVE }
   if (isManpreetSingh(agent)) return { sold: MANPREET_PORTFOLIO_SOLD, active: MANPREET_PORTFOLIO_ACTIVE }
   if (isHarkiratGill(agent)) return { sold: GILL_PORTFOLIO_SOLD, active: GILL_PORTFOLIO_ACTIVE }
