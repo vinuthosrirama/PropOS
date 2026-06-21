@@ -165,7 +165,26 @@ Key agents:
 ## Visual Verification Rule
 
 **Never declare a feature done without a screenshot proving it renders correctly.**
-After deploying, use `open "https://propos.addvantage.site"` then take a computer-use screenshot to confirm the live site loads correctly.
+
+### Post-deploy verification via Chrome CLI (MANDATORY after every deploy)
+
+After deploying to Cloudflare Pages + Fly.io, use the **Chrome CLI MCP tools** (`mcp__Claude_in_Chrome__*`) to verify the live site. Do NOT use `open` or desktop `computer-use` for this.
+
+```
+1. mcp__Claude_in_Chrome__navigate → https://propos.addvantage.site/
+2. Screenshot the login page — confirm it loads, green health dot visible (backend connected)
+3. Click the Vinuth master login button (use find or browser_batch), wait 4s
+4. Screenshot the portfolio page — confirm:
+   - Nav bar renders (Peake | BuyerOS | Launchpad | Email | Campaign | Insights | Settings)
+   - No "Capture Lead" in nav (hidden by default behind Settings toggle)
+   - Active listings show with price ranges in agency colour
+   - Comparable Sales section loads with attendee counts + green live dots (Supabase)
+   - Refresh button (↻) visible next to "COMPARABLE SALES" header
+5. Scroll down and screenshot sold cards — verify lead counts are dynamic from Supabase
+6. curl https://addvantageadvisory.fly.dev/api/health → must return {"ok":true,"database":true}
+```
+
+Chrome CLI tools are faster, DOM-aware, and don't require desktop access grants. Only after Chrome CLI verification passes should you report the deploy as complete.
 
 ---
 
