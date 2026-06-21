@@ -2151,6 +2151,7 @@ const VENDOR_PANEL_META: Array<{
   { key: "forceDemoData",       label: "Force demo data",              description: "Always use built-in demo leads for buyer view (ignores Google Sheets). Useful during presentations.", group: "Demo Mode" },
   // ── BuyerOS controls ─────────────────────────────────────────────────────
   { key: "showMatchQueue",     label: "BuyerOS Match Queue",          description: "Show the Match Queue button on the BuyerOS portfolio page",                                    group: "BuyerOS" },
+  { key: "showCaptureLead",   label: "Capture Lead Button",          description: "Show the Capture Lead button in the nav bar for manual lead entry",                                group: "BuyerOS" },
 ]
 
 function TogglePill({ on }: { on: boolean }) {
