@@ -319,7 +319,7 @@ function ActiveCard({ property, onClick, onBuyerBrief, theme }: {
       </div>
       <div style={{ padding: "14px 16px 16px" }}>
         {/* Price */}
-        <div style={{ fontSize: 15, fontWeight: 800, color: C.text, letterSpacing: -0.3, marginBottom: 6, lineHeight: 1 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: theme.primary, letterSpacing: -0.3, marginBottom: 6, lineHeight: 1 }}>
           {property.priceMin && property.priceMax
             ? `${fmt(property.priceMin)} – ${fmt(property.priceMax)}`
             : fmt(property.price)}
@@ -474,10 +474,10 @@ function SoldCard({ property, leads, loading, theme, onClick }: {
           ) : (
             <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
               <span style={{ fontSize: 16, fontWeight: 800, color: "#fff", lineHeight: 1 }}>
-                {leads.length}
+                {property.leadCount || leads.length}
               </span>
               <span style={{ fontSize: 10, color: "rgba(255,255,255,0.70)" }}>
-                {leads.length === 1 ? "attendee" : "attendees"}
+                {(property.leadCount || leads.length) === 1 ? "attendee" : "attendees"}
               </span>
             </div>
           )}

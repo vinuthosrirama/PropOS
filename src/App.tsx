@@ -215,7 +215,7 @@ export default function App() {
            onInbox={() => setInboxOpen(v => !v)} inboxBadge={inboxBadge}
            mode={mode} onSwitchMode={setMode}
            lightMode={lightMode} onToggleLightMode={() => setLightMode(m => !m)}
-           productMode={productMode} />
+           productMode={productMode} showCaptureLead={vendorSettings.showCaptureLead} />
       <BillingBanner />
 
       <ErrorBoundary>

@@ -20,7 +20,7 @@ export const VIEWS: { id: ViewId; label: string; short: string; principalOnly?: 
 ]
 
 export default function Nav({
-  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0, mode, onSwitchMode, lightMode = false, onToggleLightMode, productMode,
+  view, setView, agent, sheetStatus = "idle", theme = DEFAULT_THEME, onLogout, onBack, onInbox, inboxBadge = 0, mode, onSwitchMode, lightMode = false, onToggleLightMode, productMode, showCaptureLead = false,
 }: {
   view: ViewId
   setView: (v: ViewId) => void
@@ -36,6 +36,7 @@ export default function Nav({
   lightMode?: boolean
   onToggleLightMode?: () => void
   productMode?: DemoMode | null
+  showCaptureLead?: boolean
 }) {
   const bp = useBreakpoint()
   const [scrolled, setScrolled] = useState(false)
@@ -185,7 +186,7 @@ export default function Nav({
                   {i < currentIdx && <span style={{ marginLeft: "auto", color: "#b6c2ab", fontSize: 12 }}>✓</span>}
                 </button>
               ))}
-              {view === "demo" && mode === "buyer" && (
+              {view === "demo" && mode === "buyer" && showCaptureLead && (
                 <button onClick={() => { window.dispatchEvent(new CustomEvent("propos:captureLead")); setMenuOpen(false) }} style={{
                   width: "100%", padding: "14px 20px",
                   display: "flex", alignItems: "center",
@@ -302,8 +303,8 @@ export default function Nav({
           )
         })}
 
-        {/* Capture Lead — only visible on Launchpad in buyer mode */}
-        {view === "demo" && mode === "buyer" && (
+        {/* Capture Lead — only visible on Launchpad in buyer mode when enabled in Settings */}
+        {view === "demo" && mode === "buyer" && showCaptureLead && (
           <button
             onClick={() => window.dispatchEvent(new CustomEvent("propos:captureLead"))}
             style={{

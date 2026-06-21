@@ -184,12 +184,12 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
       voiceProfile: { greeting: "Hi", closing: "Cheers", lengthStyle: "short", formalityScore: 2, aussieIndex: 2, specificity: 3, emojiUsage: "occasional", examplesCount: 0, confidence: 0, detectedTraits: [] },
       trainingCorpus: [],
     }
+    setTimeout(() => onLogin(agent, t, mode), 2800)
     try {
       const r = await fetch(apiUrl("/api/auth/demo-token"), { method: "POST" })
       const d = await r.json() as { accessToken?: string }
       if (d.accessToken) setAccessToken(d.accessToken)
     } catch { /* non-fatal */ }
-    setTimeout(() => onLogin(agent, t, mode), 2800)
   }
 
   // Form-based agent lookup — validates name + agency against known agents
