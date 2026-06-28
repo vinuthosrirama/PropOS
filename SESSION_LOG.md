@@ -4,6 +4,60 @@ Cross-conversation handoff file. Every Claude session appends a dated entry at t
 
 ---
 
+## 2026-06-28 — Instant CMA tab + 3 Tier-1 Realtair features complete
+
+### 3 Tier-1 Competitive Features (commit `f31618e`)
+These were completed in the previous session and are now pushed to origin/main:
+
+**Feature 1: Proposal E-Acceptance**
+- DB: `pitches.accepted_at`, `accepted_by`, `accepted_ip`, `acceptance_token` columns added via migration
+- Backend: Public `POST /api/pitches/:token/accept` (before requireAuth) — idempotent, captures name + IP, sends agent Gmail notification
+- `GET /api/pitches/by-slug/:slug` now returns `acceptanceToken`, `acceptedAt`, `acceptedBy`
+- Frontend `PitchView.tsx`: `AcceptModal` (name + T&C checkbox), `AcceptedBanner` (green fixed bar), `AcceptCTA` (white bar with "Accept proposal" button). Applies to `price_update`, `listing_proposal`, `appraisal` types.
+
+**Feature 2: Automated Vendor Campaign Reports**
+- DB: `vendor_reports` table with `UNIQUE(pitch_id, week_number)`; `pitches.vendor_email`, `vendor_name` columns
+- `server/lib/vendorReportGenerator.ts`: `sendVendorReport(ctx)` + `runWeeklyVendorReports()`. Claude Haiku prose (3 paragraphs: market, campaign, next steps), template fallback, HTML email with stats bar + comps table + agent card.
+- Cron: Sunday 7am Melbourne AEDT in `outreachScheduler.ts`
+- API: `GET/POST /api/pitches/vendor-reports` (CRUD), manual trigger, resend
+
+**Feature 3: Instant CMA / Appraisal**
+- `server/lib/appraisalGenerator.ts`: `generateAppraisalPayload()` — Domain AVM (60%) + suburb compound-growth (40%) blend, Claude Haiku executive summary, template fallback, < 30s target
+- Backend: `POST /api/pitches/appraisal` (authed), `POST /api/pitches/:id/send-email`
+- DB: `pitches.type` CHECK extended to include `'appraisal'`, status CHECK extended to include `'accepted'`
+- `src/components/pitch/AppraisalView.tsx` (NEW): cover strip, price guide bar with low/mid/high + confidence badge, suburb snapshot 4-stat grid, comparable sales table, agent card, print/copy/email buttons. Print styles injected on mount.
+- `PitchView.tsx`: routes `type === 'appraisal'` to `AppraisalView`
+
+### Instant CMA tab in DemoView (commit `a2e23fe`, this session)
+- Added `"appraisal"` to `profileTab` type union in `VendorProfilePage`
+- New state: `appraisalUrl`, `appraisalPayload`, `appraisalGenerating`, `appraisalSent`, `appraisalSending`, `appraisalVendorEmail`
+- Imported `AppraisalView` + `AppraisalPayload` from `../components/pitch/AppraisalView`
+- Tab "Instant CMA" added between Proposal and Prop. Pitch
+- Tab content: optional vendor email input, generate button (calls `POST /api/pitches/appraisal`), send button (calls `/api/send`), copy link, inline preview (AppraisalView, scrollable 700px max height)
+- Merge conflict resolved: remote had shortened tab labels (Price Pitch, Campaign, GCI Calc) — kept remote labels, inserted Instant CMA tab
+
+**tsc:** zero errors (root + server) after both commits.
+
+### Deployment state
+- Backend: pushed to origin/main (Railway auto-deploys from main)
+- Feature branch: `claude/prop-os-repo-access-vo46q` matches `a2e23fe`
+- Frontend deploy (Cloudflare Pages): must be run from user's local Mac: `npx vite build && npx wrangler pages deploy dist --project-name propos-demo --branch main`
+
+### Platform clarification (investigated this session)
+- No `fly.toml` in repo; only `railway.toml` exists — backend remains on Railway
+- `BASE_URL` is `https://propos.addvantage.site` throughout codebase
+- Cannot confirm live deployment from remote execution env (HTTP to live site blocked by network policy)
+
+### Not yet done / next steps
+1. **Frontend deploy** — user must run from local Mac: `npx vite build && npx wrangler pages deploy dist --project-name propos-demo --branch main`
+2. **Seed outreach targets** — `POST /api/outreach-targets/seed` (requires auth + DB connected)
+3. **E2E SMS test** — trigger-now → SMS to `+61415883354` → reply → draft → approve
+4. **Onboarding <10 min claim** — last remaining NEXT_SESSION item from the Ociate competitor analysis list
+5. **Bulk pitch generation** — "Generate All" for entire portfolio
+6. **Settings View audit** — consolidate all settings into SettingsView
+
+---
+
 ## 2026-06-19 (latest) — prompt evolution loop wired + multi-agent demo provisioning plan
 
 **Commits pushed to origin/main and deployed to Fly.io (`addvantageadvisory`):**
