@@ -59,6 +59,7 @@ import PropertyPitchTemplate from "../components/pitch/PropertyPitchTemplate"
 import DigitalIntroductionTemplate from "../components/pitch/DigitalIntroductionTemplate"
 import ListingProposalTemplate from "../components/pitch/ListingProposalTemplate"
 import type { ListingProposalPayload } from "../components/pitch/ListingProposalTemplate"
+import AppraisalView, { type AppraisalPayload } from "../components/pitch/AppraisalView"
 import NurtureSequence from "../components/NurtureSequence"
 import TriggerFeed from "../components/TriggerFeed"
 
@@ -7727,7 +7728,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [showAllMetrics, setShowAllMetrics] = useState(false)
   const [showInsights, setShowInsights] = useState(true)    // triggers open by default
   const [showPitchAngles, setShowPitchAngles] = useState(false)  // pitch angles collapsed by default
-  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture" | "market-update" | "gci" | "pitch" | "property-pitch" | "introduction" | "proposal">("analysis")
+  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture" | "market-update" | "gci" | "pitch" | "property-pitch" | "introduction" | "proposal" | "appraisal">("analysis")
   const [marketUpdatePreview, setMarketUpdatePreview] = useState<{ html: string; sms: string; subject: string } | null>(null)
   const [marketUpdateSending, setMarketUpdateSending] = useState(false)
   const [marketUpdateSent, setMarketUpdateSent] = useState(false)
@@ -7745,6 +7746,12 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [proposalGenerating, setProposalGenerating] = useState(false)
   const [proposalSent, setProposalSent] = useState(false)
   const [proposalSending, setProposalSending] = useState(false)
+  const [appraisalUrl, setAppraisalUrl] = useState<string | null>(null)
+  const [appraisalPayload, setAppraisalPayload] = useState<AppraisalPayload | null>(null)
+  const [appraisalGenerating, setAppraisalGenerating] = useState(false)
+  const [appraisalSent, setAppraisalSent] = useState(false)
+  const [appraisalSending, setAppraisalSending] = useState(false)
+  const [appraisalVendorEmail, setAppraisalVendorEmail] = useState("")
   const [showCallScript, setShowCallScript] = useState(false)
   const [selectedAngleIdx, setSelectedAngleIdx] = useState(0)
   // NotesBridge: populated from API response after generation
@@ -8080,6 +8087,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
           { id: "pitch",          label: "Price Pitch" },
           { id: "introduction",   label: "Agent Intro" },
           { id: "proposal",       label: "Proposal" },
+          { id: "appraisal",      label: "Instant CMA" },
           { id: "property-pitch", label: "Prop. Pitch" },
           { id: "gci",            label: "GCI Calc" },
         ] as { id: typeof profileTab; label: string }[]).map(tab => (
@@ -9390,6 +9398,193 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 <ListingProposalTemplate payload={proposalPayload} />
               </div>
             </div>
+          </div>
+        )
+      })()}
+
+      {/* === INSTANT CMA / APPRAISAL TAB === */}
+      {profileTab === "appraisal" && (() => {
+        const apprComps = comps.slice(0, 5).map(c => ({
+          address: `${c.address}, ${buyer.suburb}`,
+          price:   c.soldPrice,
+          date:    c.soldDate,
+          beds:    c.beds,
+        }))
+
+        const handleGenerateAppraisal = async () => {
+          setAppraisalGenerating(true)
+          try {
+            const res = await authFetch(apiUrl("/api/pitches/appraisal"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                address:      buyer.purchaseAddress,
+                suburb:       buyer.suburb,
+                beds:         buyer.beds,
+                baths:        buyer.baths ?? 2,
+                parking:      2,
+                propertyType: buyer.propertyType ?? "House",
+                landSqm:      buyer.land,
+                vendorEmail:  appraisalVendorEmail.trim() || undefined,
+                vendorName:   buyer.name,
+                agent: {
+                  name:    agent.name,
+                  agency:  agent.agency,
+                  email:   agent.email,
+                  phone:   agent.phone,
+                  suburb:  agent.suburb,
+                  tagline: agent.tagline,
+                },
+                comparableSales: apprComps,
+              }),
+            })
+            const data = await res.json() as { slug?: string; url?: string; payload?: AppraisalPayload }
+            if (data.url) {
+              setAppraisalUrl(/^https?:\/\//.test(data.url) ? data.url : `${window.location.origin}${data.url}`)
+              if (data.payload) setAppraisalPayload(data.payload)
+              setAppraisalSent(false)
+            }
+          } catch { /* silent */ }
+          setAppraisalGenerating(false)
+        }
+
+        const handleSendAppraisal = async () => {
+          if (!appraisalUrl) return
+          setAppraisalSending(true)
+          try {
+            const isLocalLink = /localhost|127\.0\.0\.1/.test(appraisalUrl)
+            const sms = isLocalLink
+              ? `Hi ${fname}, ${agentFirst} here. I've put together a quick property appraisal for ${shortAddr(buyer.purchaseAddress)} and will email it through now.`
+              : `Hi ${fname}, ${agentFirst} here. Your property appraisal for ${shortAddr(buyer.purchaseAddress)} is ready: ${appraisalUrl}`
+            const emailBody =
+              `Hi ${fname},\n\nI've prepared an instant CMA for your property at ${buyer.purchaseAddress}.${isLocalLink ? "" : `\n\nView your appraisal here: ${appraisalUrl}`}\n\nIt includes recent comparable sales, suburb market data, and my recommended price range. Happy to talk you through it.\n\nCheers,\n${agentFirst}`
+            await authFetch(apiUrl("/api/send"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                leadId: String(buyer.id), leadName: buyer.name,
+                phone: buyer.phone, email: buyer.email || appraisalVendorEmail.trim() || undefined,
+                agentEmail: agent.email, agentName: agent.name, agentAgency: agent.agency,
+                agentPhone: agent.phone, agencyColor: theme.primary, agencyTagline: agent.tagline,
+                propertyAddress: buyer.purchaseAddress,
+                sms, subject: `Your property appraisal — ${buyer.purchaseAddress}`, emailBody,
+                channel: (buyer.email || appraisalVendorEmail.trim()) ? "both" : "sms",
+              }),
+            })
+            setAppraisalSent(true)
+          } catch { /* silent */ }
+          setAppraisalSending(false)
+        }
+
+        return (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: theme.primary, textTransform: "uppercase", marginBottom: 6 }}>
+                INSTANT CMA
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
+                {buyer.purchaseAddress ?? buyer.suburb}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                Generate a pre-listing appraisal in under 30 seconds. Blends Domain AVM data with comparable sales analysis into a shareable, print-ready CMA page.
+              </div>
+            </div>
+
+            {/* Optional vendor email */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
+                Vendor email (optional — for weekly campaign reports)
+              </label>
+              <input
+                type="email"
+                value={appraisalVendorEmail}
+                onChange={e => setAppraisalVendorEmail(e.target.value)}
+                placeholder="e.g. john.smith@email.com"
+                style={{
+                  width: "100%", padding: "10px 14px", borderRadius: 8, border: `1.5px solid ${C.border}`,
+                  background: C.bg2, color: C.text, fontSize: 14, fontFamily: FONT,
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                onClick={handleGenerateAppraisal}
+                disabled={appraisalGenerating}
+                style={{
+                  padding: "12px 24px", borderRadius: 12, border: "none", cursor: appraisalGenerating ? "default" : "pointer",
+                  background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                  color: "#fff", fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                  boxShadow: `0 4px 16px ${theme.glow}`,
+                  opacity: appraisalGenerating ? 0.7 : 1,
+                }}
+              >
+                {appraisalGenerating ? "Generating CMA..." : appraisalUrl ? "Regenerate CMA" : "Generate Instant CMA"}
+              </motion.button>
+
+              {appraisalUrl && !appraisalSent && (
+                <motion.button
+                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                  onClick={handleSendAppraisal}
+                  disabled={appraisalSending}
+                  style={{
+                    padding: "12px 24px", borderRadius: 12, border: `1px solid ${C.green}55`,
+                    cursor: appraisalSending ? "default" : "pointer",
+                    background: C.green + "15", color: C.green,
+                    fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                  }}
+                >
+                  {appraisalSending ? "Sending..." : `Send to ${fname} →`}
+                </motion.button>
+              )}
+
+              {appraisalSent && (
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 12, background: C.green + "15", border: `1px solid ${C.green}40` }}>
+                  <span style={{ fontSize: 16 }}>✓</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>CMA sent to {fname}</span>
+                </motion.div>
+              )}
+            </div>
+
+            {appraisalUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <a href={appraisalUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: theme.primary, wordBreak: "break-all", flex: 1 }}>
+                  {appraisalUrl}
+                </a>
+                <button
+                  onClick={() => navigator.clipboard.writeText(appraisalUrl)}
+                  style={{ fontSize: 11, color: C.muted, background: "none", border: "none", cursor: "pointer", fontWeight: 700, flexShrink: 0, padding: "4px 8px" }}
+                >
+                  Copy
+                </button>
+              </div>
+            )}
+
+            {appraisalPayload && (
+              <div style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>PREVIEW</div>
+                </div>
+                <div style={{ maxHeight: 700, overflow: "auto" }}>
+                  <AppraisalView payload={appraisalPayload} vendorEmail={appraisalVendorEmail.trim() || null} slug={appraisalUrl?.split("/p/")[1]} />
+                </div>
+              </div>
+            )}
+
+            {!appraisalPayload && (
+              <div style={{ padding: "32px 20px", borderRadius: 14, border: `1px solid ${C.border}`, background: C.bg2, textAlign: "center" }}>
+                <div style={{ fontSize: 13, color: C.faint, marginBottom: 4 }}>
+                  Instant CMA uses Domain AVM + comparable sales analysis
+                </div>
+                <div style={{ fontSize: 11, color: C.faint }}>
+                  Generates in under 30 seconds. Print-ready PDF output.
+                </div>
+              </div>
+            )}
           </div>
         )
       })()}
