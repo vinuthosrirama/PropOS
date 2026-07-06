@@ -41,7 +41,7 @@ Same-day continuations suffix the header with `(cont.)`, `(later)`, or `(latest)
 ### 1.3 docs/*.md subsystem guide skeleton (pattern of the better existing guides like docs/SMS_AGENT.md)
 
 ```markdown
-# <Subsystem> — What it is, how it works, how to operate it
+# <Subsystem>: What it is, how it works, how to operate it
 ## Purpose (2 lines)
 ## Architecture (files, data flow)
 ## Configuration (vars: name + purpose only, values never)

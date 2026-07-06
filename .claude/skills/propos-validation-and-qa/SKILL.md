@@ -155,7 +155,7 @@ Compare against the expected delta from the operation you ran. The seeding-speci
 
 ### 5f. [CANDIDATE] Blind A/B voice-fidelity protocol
 
-One of the three frontier goals (brief E.2) is voice fidelity: a recipient should not be able to tell AI-generated outreach from Cameron Knoll's own texting. There is currently no formal test for this. A candidate protocol: collect N real historic messages from Cameron alongside N AI-generated messages for comparable scenarios, present them blind (labels stripped) to a panel who knows Cameron's texting style, and measure correct-identification rate; a rate near 50% (chance) indicates fidelity, a rate near 100% indicates the AI voice is detectable. This is unbuilt and unvalidated: treat as [CANDIDATE] only. Full research methodology and milestone design belongs to **propos-research-frontier** (sibling, not yet authored); this skill only owns the QA-side measurement recipe once that program exists.
+One of the three frontier goals (brief E.2) is voice fidelity: a recipient should not be able to tell AI-generated outreach from Cameron Knoll's own texting. There is currently no formal test for this. A candidate protocol: collect N real historic messages from Cameron alongside N AI-generated messages for comparable scenarios, present them blind (labels stripped) to a panel who knows Cameron's texting style, and measure correct-identification rate; a rate near 50% (chance) indicates fidelity, a rate near 100% indicates the AI voice is detectable. This is unbuilt and unvalidated: treat as [CANDIDATE] only. Full research methodology and milestone design belongs to **propos-research-frontier** (authored 2026-07-06, see Direction 2) with the experiment discipline in **propos-research-methodology**; this skill only owns the QA-side measurement recipe once that program runs.
 
 ---
 
@@ -180,8 +180,8 @@ Report findings with file:line evidence. Do not fix what you find here, see Sect
 
 ## 7. When NOT to use this skill
 
-- If an audit or check in this skill finds something broken and you are asked to **fix it**, hand off to **propos-change-control** (sibling, not yet authored) for the approval matrix on what can be changed autonomously versus what needs sign-off, and for the house rules that govern the fix itself.
-- If you are debugging a specific reported symptom (a feature not working, an error a user hit) rather than running a general QA pass, use **propos-debugging-playbook** (sibling, not yet authored), which has the symptom-to-root-cause triage table, including the `database:false` open incident's triage path.
+- If an audit or check in this skill finds something broken and you are asked to **fix it**, hand off to **propos-change-control** for the approval matrix on what can be changed autonomously versus what needs sign-off, and for the house rules that govern the fix itself.
+- If you are debugging a specific reported symptom (a feature not working, an error a user hit) rather than running a general QA pass, use **propos-debugging-playbook**, which has the symptom-to-root-cause triage table, including the `database:false` open incident's triage path.
 - If the question is about deploy mechanics themselves (which project name, which command, CI green-but-useless status) rather than verifying a specific change, see **propos-run-and-operate**.
 - If the question is about environment variables and their defaults, see **propos-config-and-flags**.
 
