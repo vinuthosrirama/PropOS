@@ -5,6 +5,17 @@
 
 ---
 
+## MANDATORY: the skill library is the standard (added 2026-07-06)
+
+This repo carries a complete institutional-knowledge library in `.claude/skills/` (14 `propos-*` skills), authored to a distinguished-fellow standard so that ANY future session, any model size, can work at that level. Non-negotiable protocol for every session:
+
+1. **Load `propos-change-control` BEFORE any work** that touches code, config, secrets, or a send path. It owns the approval matrix (push/deploy/send/LLM-spend are ask-first; ALL prospect outreach is founder-sent; no real client data in demos).
+2. **Route by skill, do not rediscover:** broken → `propos-debugging-playbook`; deja vu → `propos-failure-archaeology`; deploy → `propos-run-and-operate`; env/flags → `propos-config-and-flags`; setup/build → `propos-build-and-env`; measure → `propos-diagnostics-and-tooling` (runnable scripts); proof of done → `propos-validation-and-qa`; why-is-it-built-this-way → `propos-architecture-contract`; domain terms/GCI/voice → `propos-rea-domain-reference`; sales work → `propos-first-customer-campaign`; experiments → `propos-research-methodology`; roadmap → `propos-research-frontier`; docs/claims → `propos-docs-and-positioning`.
+3. **Hold the evidence bar:** hypothesis predicts numbers before running; one mechanism must explain ALL observations; screenshot/DOM/curl proof, never "it compiles". Ground truth only: verify commands and paths against the repo before stating them.
+4. **Skills are living docs of record:** when you discover drift, update the OWNING skill in the same session (each ends with re-verification one-liners). A correction left only in a session log will be lost.
+
+---
+
 ## Codebase Location
 
 ```
