@@ -230,8 +230,8 @@ These rules exist because work done in one Claude conversation must be visible t
 1. `npx tsc --noEmit` (root AND `server/`) — must show no new errors before committing.
 2. `git add` the work (never `backups/`, `dist_backup_*`, `src_snapshot_*` — these are gitignored).
 3. Commit with a message describing WHAT changed and WHY.
-4. `git push origin main`.
-5. Append a dated entry to `SESSION_LOG.md`: what was built, what was verified, what is half-done, and the exact next step. Commit and push that too — this file is how the next conversation resumes.
+4. Push to `origin main` only with founder approval: pushing is ask-first per the 2026-07-05 approval matrix in `propos-change-control` (also note: a push triggers the Pages CI deploy). Default report: "committed locally, ready to push on approval".
+5. Append a dated entry to `SESSION_LOG.md`: what was built, what was verified, what is half-done, and the exact next step. Commit that too — this file is how the next conversation resumes.
 
 If push is rejected (remote moved): `git pull --rebase origin main`, resolve, push again. Never force-push.
 
