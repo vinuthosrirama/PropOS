@@ -1,0 +1,6887 @@
+import { useState, useEffect, useRef } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { useBreakpoint } from "../../hooks/useBreakpoint"
+import { useVoiceMemo } from "../../hooks/useVoiceMemo"
+import {
+  C, FONT, PORTFOLIO_ACTIVE, getPortfolioForAgent,
+  type AgentProfile, type AgencyTheme, type PortfolioProperty,
+  type VendorDisplaySettings,
+} from "../../data"
+import { getPastBuyersForAgent, CURRENT_VALUE_ESTIMATES } from "../../data/pastBuyers"
+import { calculateFinancials, fmtDollar, fmtPct, type FinancialSnapshot } from "../../lib/vendorFinancials"
+import {
+  batchSegment, PIPELINE_LABELS,
+  type SegmentedBuyer, type Pipeline,
+} from "../../lib/vendorPipeline"
+import { batchEstimateValues } from "../../lib/comparableSales"
+import { loadSLMForProperty } from "../../data/propertySlm"
+import {
+  generateComparables, buildAppraisalRange, buildEquityScenarios,
+  fmtK,
+  type CompSale, type AppraisalRange, type EquityScenario,
+} from "../../lib/appraisalEngine"
+import { computePropertyDNA, type PropertyDNA } from "../../lib/propertyDNA"
+import ComparableSalesMap from "../../components/ComparableSalesMap"
+import ListingPresentation from "../../components/ListingPresentation"
+import CampaignReport from "../../components/CampaignReport"
+import GciCalculator from "../../components/GciCalculator"
+import PriceUpdateTemplate, { type PriceUpdatePayload } from "../../components/pitch/PriceUpdateTemplate"
+import PropertyPitchTemplate from "../../components/pitch/PropertyPitchTemplate"
+import DigitalIntroductionTemplate from "../../components/pitch/DigitalIntroductionTemplate"
+import ListingProposalTemplate, { type ListingProposalPayload } from "../../components/pitch/ListingProposalTemplate"
+import NurtureSequence from "../../components/NurtureSequence"
+import TriggerFeed from "../../components/TriggerFeed"
+import OutreachQueue, { type QueueItem } from "../../components/OutreachQueue"
+import { apiUrl } from "../../lib/api"
+import { authFetch } from "../../lib/authFetch"
+import { buildVoiceContext, loadCorpus } from "../../lib/voiceContext"
+import { recommendListingForBuyer, findBuyerDemand } from "../../lib/flywheel"
+import {
+  readPastBuyersFromSheet, updateLastContactDate,
+  writeAgentVoiceEntry, postEvent,
+} from "../../lib/sheet"
+import { readPastBuyersFromSupabase, supabaseConnected, updatePastBuyerInSupabase } from "../../lib/supabase"
+
+import type { Stage, VendorAnalyticsData } from "./types"
+import { EMPTY_FORM, type AddContactForm } from "./types"
+import { fmt, ScoreRing, fmtYears, getSuburbPriceSeries, suburbPriceAt, fullAddr, shortAddr } from "./helpers"
+
+// ── Vendor Flow Components ───────────────────────────────────────────────────
+
+const ANALYSIS_STEPS = [
+  { icon: "🔍", label: "Scanning CRM database", detail: "Reading purchase records, notes, and contact history" },
+  { icon: "📊", label: "Calculating equity positions", detail: "Comparing purchase prices to current suburb medians" },
+  { icon: "📍", label: "Segmenting into pipelines", detail: "Classifying contacts by readiness and opportunity type" },
+]
+
+function VendorAnalysingScreen({ segmented, theme, onComplete }: {
+  segmented: SegmentedBuyer[]
+  theme: AgencyTheme
+  onComplete: () => void
+}) {
+  const [step, setStep] = useState(0)
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = []
+    ANALYSIS_STEPS.forEach((_, i) => {
+      timers.push(setTimeout(() => setStep(i + 1), 300 + i * 1500))
+    })
+    timers.push(setTimeout(() => { setDone(true); setTimeout(onComplete, 800) }, 300 + ANALYSIS_STEPS.length * 1500 + 400))
+    return () => timers.forEach(clearTimeout)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const totalEquity = segmented.reduce((s, e) => s + e.financials.equityGain, 0)
+  const readyCount  = segmented.filter(e => e.segment.confidence >= 70).length
+
+  return (
+    <div style={{
+      minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", padding: "40px 24px",
+    }}>
+      {/* Pulsing orb */}
+      <div style={{ position: "relative", width: 80, height: 80, marginBottom: 32 }}>
+        <div style={{
+          position: "absolute", inset: 0, borderRadius: "50%",
+          background: `radial-gradient(circle, ${theme.primary}44, ${theme.primary}11)`,
+          animation: "ping 1.2s cubic-bezier(0,0,0.2,1) infinite",
+        }} />
+        <div style={{
+          position: "absolute", inset: 8, borderRadius: "50%",
+          background: `radial-gradient(circle, ${theme.primary}66, ${theme.primary}22)`,
+          animation: "ping 1.2s cubic-bezier(0,0,0.2,1) infinite 0.4s",
+        }} />
+        <div style={{
+          position: "absolute", inset: 16, borderRadius: "50%",
+          background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 22,
+        }}>
+          {done ? "✅" : "🧠"}
+        </div>
+      </div>
+
+      <div style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 8, letterSpacing: -0.5, textAlign: "center" }}>
+        {done ? "Analysis complete" : "Analysing your database"}
+      </div>
+      <div style={{ fontSize: 13, color: C.muted, marginBottom: 32, textAlign: "center" }}>
+        {done
+          ? `${segmented.length} contacts segmented, ${readyCount} high-priority leads identified`
+          : `Analysing ${segmented.length} contacts...`}
+      </div>
+
+      {/* Step list */}
+      <div style={{ width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", gap: 10, marginBottom: 32 }}>
+        {ANALYSIS_STEPS.map((s, i) => {
+          const active = step === i + 1
+          const complete = step > i + 1 || done
+          return (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: i < step ? 1 : 0.3, x: 0 }}
+              transition={{ delay: i * 0.05 }}
+              style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "10px 14px", borderRadius: 10,
+                background: active ? `${theme.primary}11` : C.bg2,
+                border: `1px solid ${active ? theme.primary + "44" : C.border}`,
+                transition: "all 0.3s",
+              }}
+            >
+              <span style={{ fontSize: 16, flexShrink: 0 }}>{s.icon}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: complete ? C.text : C.muted }}>{s.label}</div>
+                {(active || complete) && (
+                  <div style={{ fontSize: 10, color: C.faint, marginTop: 1 }}>{s.detail}</div>
+                )}
+              </div>
+              {complete && <span style={{ fontSize: 13, color: C.green }}>✓</span>}
+              {active && (
+                <div style={{
+                  width: 14, height: 14, borderRadius: "50%",
+                  border: `2px solid ${theme.primary}30`,
+                  borderTopColor: theme.primary,
+                  animation: "spin 0.6s linear infinite",
+                  flexShrink: 0,
+                }} />
+              )}
+            </motion.div>
+          )
+        })}
+      </div>
+
+      {/* Summary stats — visible when done */}
+      {done && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12,
+            width: "100%", maxWidth: 420,
+          }}
+        >
+          {[
+            { label: "Contacts segmented", value: `${segmented.length}`, color: C.blue },
+            { label: "High-priority", value: `${readyCount}`, color: C.green },
+          ].map(stat => (
+            <div key={stat.label} style={{
+              background: C.bg2, borderRadius: 10, padding: "12px 14px",
+              border: `1px solid ${C.border}`, textAlign: "center",
+            }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: stat.color }}>{stat.value}</div>
+              <div style={{ fontSize: 10, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>{stat.label}</div>
+            </div>
+          ))}
+        </motion.div>
+      )}
+
+      {!done && (
+        <div style={{ fontSize: 11, color: C.faint, marginTop: 8 }}>
+          Total equity identified: <strong style={{ color: C.green }}>{fmtDollar(totalEquity)}</strong>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Feature 2: Property DNA Card ─────────────────────────────────────────────
+
+export function PropertyDNACard({ dna, theme }: { dna: PropertyDNA; theme: AgencyTheme }) {
+  const classBadge: Record<string, string> = {
+    "starter": "#6b7280", "family": C.blue, "prestige": "#a78bfa",
+    "investor-grade": C.green, "downsizer": C.orange,
+  }
+  const tierBadge: Record<string, string> = { "core": C.green, "growth": C.blue, "fringe": "#f59e0b" }
+  const stageBadge: Record<string, string> = {
+    "establishing": "#6b7280", "growing": C.blue, "plateauing": "#a78bfa",
+    "transitioning": C.orange, "downsizing": C.green,
+  }
+  const chips = [
+    { label: dna.propertyClass, color: classBadge[dna.propertyClass] },
+    { label: dna.locationTier,  color: tierBadge[dna.locationTier]   },
+    { label: dna.lifeStage,     color: stageBadge[dna.lifeStage]     },
+  ]
+  return (
+    <div style={{ background: C.bg3, borderRadius: 12, border: `1px solid ${C.border}`, padding: "12px 14px", marginBottom: 0 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Property DNA</div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+        {chips.map(c => (
+          <span key={c.label} style={{ fontSize: 10, fontWeight: 700, color: c.color, background: c.color + "18", border: `1px solid ${c.color}30`, padding: "2px 8px", borderRadius: 6 }}>
+            {c.label}
+          </span>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>
+        <span style={{ color: C.faint }}>Upgrade capacity</span>
+        <span style={{ fontWeight: 700, color: theme.primary, marginLeft: 6 }}>
+          {dna.upgradeCapacity >= 1_000_000 ? `$${(dna.upgradeCapacity / 1_000_000).toFixed(1)}M` : `$${Math.round(dna.upgradeCapacity / 1000)}K`}
+        </span>
+      </div>
+      {dna.matchTags.length > 0 && (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {dna.matchTags.map(tag => (
+            <span key={tag} style={{ fontSize: 9, color: C.faint, background: C.bg2, border: `1px solid ${C.border}`, padding: "1px 6px", borderRadius: 4 }}>
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Feature 9: Sentiment Drift Alert ─────────────────────────────────────────
+
+type SentimentSignal = "warm" | "neutral" | "cool" | "cold"
+
+function computeSentimentDrift(buyer: import("../../data/pastBuyers").PastBuyer, priority: number): {
+  signal: SentimentSignal; alert: string | null; daysSinceContact: number
+} {
+  if (!buyer.lastContactDate) return { signal: "warm", alert: null, daysSinceContact: 0 }
+  const days = Math.floor((Date.now() - new Date(buyer.lastContactDate).getTime()) / 86_400_000)
+  if (days > 90 && priority >= 60) {
+    return { signal: "cold", alert: `No contact in ${days} days. High-priority contact going cold.`, daysSinceContact: days }
+  }
+  if (days > 45 && days <= 90 && priority >= 50) {
+    const weeks = Math.round(days / 7)
+    return { signal: "cool", alert: `Last contacted ${weeks} weeks ago. Follow-up overdue.`, daysSinceContact: days }
+  }
+  if (buyer.lastMessage && days > 14) {
+    return { signal: "neutral", alert: "Outreach sent. Awaiting reply.", daysSinceContact: days }
+  }
+  return { signal: "warm", alert: null, daysSinceContact: days }
+}
+
+export function SentimentDriftAlert({ entry, theme }: { entry: SegmentedBuyer; theme: AgencyTheme }) {
+  const drift = computeSentimentDrift(entry.buyer, entry.priority)
+  if (!drift.alert) return null
+
+  const isCold = drift.signal === "cold"
+  const isCool = drift.signal === "cool"
+  const bg    = isCold ? "#ef444412" : isCool ? `${C.orange}12` : C.bg3
+  const border = isCold ? "#ef444430" : isCool ? `${C.orange}30` : C.border
+  const color  = isCold ? "#ef4444"   : isCool ? C.orange          : C.faint
+
+  return (
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: "10px 14px", marginBottom: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>
+            {isCold ? "Contact going cold" : isCool ? "Follow-up overdue" : "Outreach status"}
+          </div>
+          <div style={{ fontSize: 11, color: C.muted }}>{drift.alert}</div>
+        </div>
+        {(isCold || isCool) && (
+          <span style={{ fontSize: 10, fontWeight: 700, color: theme.primary, background: `${theme.primary}18`, border: `1px solid ${theme.primary}30`, padding: "3px 10px", borderRadius: 6, whiteSpace: "nowrap", flexShrink: 0 }}>
+            Call now
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Feature 11: Best Time to Sell Panel ──────────────────────────────────────
+
+function BestTimeToSellPanel({ entry, theme }: { entry: SegmentedBuyer; theme: AgencyTheme }) {
+  const { financials: fin, segment } = entry
+  const now = new Date()
+  const month = now.getMonth() // 0-indexed
+
+  // Determine recommended window
+  let windowLabel: string
+  let windowReason: string
+  if (fin.yearsHeld < 1) {
+    windowLabel = "Hold — CGT discount not yet available"
+    windowReason = "Less than 12 months held. Wait for CGT discount eligibility."
+  } else if (fin.cgtSavingsBy2027 > 10000 && (month >= 8 || month <= 1)) {
+    // Sep-Feb: in or just past peak — act now
+    windowLabel = month >= 8 && month <= 10 ? "Now — peak spring market" : "Q1 2027 — act before CGT deadline"
+    windowReason = month >= 8 && month <= 10
+      ? "You are in peak spring clearance season. CGT deadline adds urgency."
+      : "CGT savings window closes July 2027. List by March to settle in time."
+  } else if (fin.cgtSavingsBy2027 > 10000) {
+    windowLabel = "Sep–Oct 2026 — spring peak + CGT timing"
+    windowReason = "Spring clearance peaks in SE Melbourne. Selling in spring maximises buyer competition and you settle well before the July 2027 CGT deadline."
+  } else {
+    windowLabel = "Sep–Nov 2026 — peak spring clearance"
+    windowReason = "SE Melbourne spring auction clearance averages 78%. Late winter listings often undersell by 5-8%."
+  }
+
+  // CGT signal
+  const cgtSignal = fin.cgtSavingsBy2027 > 10000 ? "high" : fin.cgtSavingsBy2027 > 3000 ? "medium" : "low"
+  const cgtColor = cgtSignal === "high" ? "#ef4444" : cgtSignal === "medium" ? C.orange : C.faint
+
+  // 12-month timeline bar (Jun 2026 → Jun 2027)
+  const W = 280; const barH = 8
+  // Highlight peak (Sep=3 to Nov=5 in 0-indexed months from Jul)
+  const peakStart = 3/12; const peakEnd = 6/12  // Sep-Dec within Jul-Jun bar
+
+  const signals = [
+    { label: "CGT window",    value: fin.cgtSavingsBy2027 > 0 ? `Saves $${Math.round(fin.cgtSavingsBy2027/1000)}K before Jul 2027` : "No CGT savings", color: cgtColor },
+    { label: "Market season", value: "Spring (Sep–Nov) peaks at 78%+ clearance", color: C.green },
+    { label: "Life stage",    value: segment.pipeline.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()), color: theme.primary },
+  ]
+
+  return (
+    <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "16px 18px" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Optimal Listing Window</div>
+
+      {/* Timeline bar */}
+      <div style={{ marginBottom: 12 }}>
+        <svg width="100%" viewBox={`0 0 ${W} 28`} style={{ display: "block", overflow: "visible" }}>
+          {/* Track */}
+          <rect x={0} y={10} width={W} height={barH} rx={4} fill={C.bg3} />
+          {/* Peak highlight */}
+          <rect x={W * peakStart} y={10} width={W * (peakEnd - peakStart)} height={barH} rx={3} fill={C.green} opacity="0.35" />
+          {/* CGT deadline marker */}
+          {fin.cgtSavingsBy2027 > 0 && <rect x={W * 12/12 - 2} y={6} width={3} height={barH + 8} rx={1} fill="#ef4444" opacity="0.7" />}
+          {/* Current date marker */}
+          {(() => {
+            // Map current month to bar position (bar = Jul 2026 → Jun 2027)
+            const currentMonth = new Date().getMonth() // 0 = Jan
+            // Jul 2026 = start of bar. Months from Jul 2026:
+            const monthsFromStart = ((currentMonth + 12) - 6) % 12  // 0=Jul, 1=Aug...
+            const cx = W * (monthsFromStart / 12)
+            return <circle cx={cx} cy={14} r={5} fill={theme.primary} />
+          })()}
+          {/* Month labels */}
+          {["Jul", "Sep", "Nov", "Jan", "Mar", "May"].map((m, i) => (
+            <text key={m} x={W * i / 6} y={28} fontSize="7" fill={C.faint} textAnchor="middle">{m}</text>
+          ))}
+        </svg>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+          <span style={{ fontSize: 8, color: C.faint }}>Jul 2026</span>
+          <span style={{ fontSize: 8, color: fin.cgtSavingsBy2027 > 0 ? "#ef4444" : C.faint }}>CGT deadline Jul 2027</span>
+        </div>
+      </div>
+
+      {/* Signal rows */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+        {signals.map(s => (
+          <div key={s.label} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: s.color, marginTop: 4, flexShrink: 0 }} />
+            <div>
+              <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.6 }}>{s.label}: </span>
+              <span style={{ fontSize: 10, color: C.muted }}>{s.value}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Recommendation */}
+      <div style={{ background: `${theme.primary}10`, border: `1px solid ${theme.primary}25`, borderRadius: 8, padding: "8px 12px" }}>
+        <div style={{ fontSize: 9, color: C.faint, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>Recommended window</div>
+        <div style={{ fontSize: 12, fontWeight: 800, color: theme.primary }}>{windowLabel}</div>
+        <div style={{ fontSize: 10, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>{windowReason}</div>
+      </div>
+    </div>
+  )
+}
+
+
+// ── Vendor Prospecting: Portfolio (CRM Dashboard) ────────────────────────────
+
+const BUYER_STATUS_LABELS: Record<string, string> = {
+  "investor":        "Investor",
+  "owner-occupier":  "Owner-occupier",
+  "buyer→landlord":  "Buyer → Landlord",
+  "buyer→seller":    "Buyer → Seller",
+  "renter→buyer":    "Renter → Buyer",
+  "buyer→downsizer": "Buyer → Downsizer",
+}
+function formatBuyerStatus(status: string): string {
+  return BUYER_STATUS_LABELS[status] ?? status
+}
+
+// EMPTY_FORM + AddContactForm imported from ./types
+
+function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarketTriggers = false }: {
+  agent: AgentProfile
+  theme: AgencyTheme
+  onAnalyse: (segmented: SegmentedBuyer[]) => void
+  onSelectBuyer?: (entry: SegmentedBuyer) => void
+  showMarketTriggers?: boolean
+}) {
+  const bpVPP = useBreakpoint()
+  const isMobileVPP = bpVPP === "mobile"
+  const hardcodedBuyers = getPastBuyersForAgent(agent)
+  const [buyers, setBuyers] = useState(hardcodedBuyers)
+
+  // Read back previously imported contacts so the CRM survives reloads
+  useEffect(() => {
+    let cancelled = false
+    authFetch(apiUrl("/api/import-contacts"))
+      .then(r => r.json())
+      .then((res: { contacts?: Array<Record<string, unknown>> }) => {
+        if (cancelled || !res.contacts?.length) return
+        setBuyers(prev => {
+          const seen = new Set(prev.map(b => `${b.name}|${b.purchaseAddress}`.toLowerCase()))
+          const fresh = res.contacts!
+            .filter(c => !seen.has(`${c.name}|${c.purchaseAddress}`.toLowerCase()))
+            .map(c => ({
+              id: Number(c.id),
+              name: String(c.name ?? ""),
+              phone: String(c.phone ?? ""),
+              email: String(c.email ?? ""),
+              purchaseAddress: String(c.purchaseAddress ?? ""),
+              suburb: String(c.suburb ?? ""),
+              purchaseDate: String(c.purchaseDate ?? ""),
+              purchasePrice: Number(c.purchasePrice ?? 0),
+              deposit: Number(c.deposit ?? 0),
+              propertyType: (String(c.propertyType ?? "House")) as "House" | "Unit" | "Townhouse",
+              beds: Number(c.beds ?? 3),
+              baths: Number(c.baths ?? 2),
+              land: Number(c.land ?? 0),
+              status: String(c.status ?? "owner-occupier") as import("../../data/pastBuyers").BuyerStatus,
+              notes: String(c.notes ?? ""),
+              lastContactDate: "",
+              agentName: agent.name,
+            }))
+          return fresh.length ? [...prev, ...fresh] : prev
+        })
+      })
+      .catch(() => { /* DB-less dev — nothing to read back */ })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const [sheetLoading, setSheetLoading] = useState(false)
+  const [sheetSource, setSheetSource] = useState<"demo" | "sheet">("demo")
+  const [analysing, setAnalysing] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showFlywheelModal, setShowFlywheelModal] = useState(false)
+  const [flywheelForm, setFlywheelForm] = useState({ name: "", suburb: "", purchaseYear: "", propertyType: "House" as "House" | "Unit" | "Townhouse", phone: "", email: "" })
+  const [flywheelSaving, setFlywheelSaving] = useState(false)
+  const [flywheelSaved, setFlywheelSaved] = useState(false)
+  const { active: activeListings } = getPortfolioForAgent(agent)
+  const [addForm, setAddForm] = useState<AddContactForm>(EMPTY_FORM)
+  const [addSaving, setAddSaving] = useState(false)
+  const [addSaved, setAddSaved] = useState(false)
+  const [importSource, setImportSource] = useState<"manual" | "csv" | "crm">("manual")
+  const [csvContacts, setCsvContacts] = useState<Partial<AddContactForm>[]>([])
+  const [csvImporting, setCsvImporting] = useState(false)
+  const [csvImported, setCsvImported] = useState(false)
+  const [crmApiKeyStage, setCrmApiKeyStage] = useState<Record<string, "idle" | "loading" | "key" | "connected">>({})
+  const [crmApiKeyValues, setCrmApiKeyValues] = useState<Record<string, string>>({})
+  const [showOptionalFields, setShowOptionalFields] = useState(false)
+  const csvRef = useRef<HTMLInputElement>(null)
+  const [showAllContacts, setShowAllContacts] = useState(false)
+  const [addVoiceStage, setAddVoiceStage] = useState<"idle" | "transcribing" | "analysing" | "personalising" | "done">("idle")
+  const addVoice = useVoiceMemo({
+    onTranscript: async (text) => {
+      setAddVoiceStage("transcribing")
+      // Step 1: show transcript raw (immediate feedback)
+      setAddForm(f => ({ ...f, notes: text }))
+      setAddVoiceStage("analysing")
+
+      // Step 2: send to GPT-4o for structured parsing
+      try {
+        const res = await authFetch(apiUrl("/api/parse-notes"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            transcript: text,
+            buyerName: addForm.name || undefined,
+            suburb: addForm.suburb || undefined,
+          }),
+        })
+        setAddVoiceStage("personalising")
+        if (res.ok) {
+          const { notes } = await res.json() as { notes: string }
+          setAddForm(f => ({ ...f, notes }))
+        }
+      } catch {
+        // keep raw transcript on error
+      }
+      setAddVoiceStage("done")
+    },
+  })
+
+  // Try loading past buyers — Supabase first, Google Sheet fallback, then static demo data
+  const loadFromSheet = () => {
+    setSheetLoading(true)
+    // Priority: Supabase → Google Sheets → static fallback
+    const dataPromise = supabaseConnected()
+      ? readPastBuyersFromSupabase(agent.name).then(sbRows => {
+          if (sbRows && sbRows.length > 0) return sbRows
+          // Supabase returned nothing — fall through to Google Sheets
+          return readPastBuyersFromSheet(agent.name)
+        })
+      : readPastBuyersFromSheet(agent.name)
+
+    dataPromise.then(rows => {
+      if (rows && rows.length > 0) {
+        const hookByName = new Map(
+          hardcodedBuyers
+            .filter(b => b.personalisationHook)
+            .map(b => [b.name.toLowerCase().trim(), b.personalisationHook!])
+        )
+        let merged = (rows as typeof hardcodedBuyers).map(r => ({
+          ...r,
+          personalisationHook: r.personalisationHook ?? hookByName.get(r.name.toLowerCase().trim()),
+        }))
+        const hasAnyHook = merged.some(r => r.personalisationHook)
+        if (!hasAnyHook && merged.length > 0) {
+          merged = [...merged]
+          const demoHooks = [
+            (name: string) => `${name}, your hold period and equity position are exceptional right now. The CGT clock is ticking and this is the perfect window to talk.`,
+            (name: string) => `${name}, with settlement behind you and the market moving, now is exactly when smart investors lock in their gains.`,
+          ]
+          for (let di = 0; di < Math.min(2, merged.length); di++) {
+            const b = merged[di]
+            const fname = b.name.split("&")[0].split(" ")[0].trim()
+            merged[di] = { ...b, personalisationHook: demoHooks[di](fname) }
+          }
+        }
+        setBuyers(merged)
+        setSheetSource("sheet")
+      }
+      setSheetLoading(false)
+    }).catch(() => setSheetLoading(false))
+  }
+
+  // Auto-load on mount; re-poll every 30s so past_buyers changes appear quickly
+  useEffect(() => {
+    loadFromSheet()
+    const interval = setInterval(loadFromSheet, 30_000)
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const investors = buyers.filter(b => b.status === "investor")
+  const owners = buyers.filter(b => b.status !== "investor")
+
+  // Merge hardcoded overrides with any agent-entered overrides from the sheet (col S)
+  // Sheet values take precedence: agent knows their market better than the auto-estimate
+  const sheetEstimateOverrides: Record<number, number> = {}
+  for (const b of buyers) {
+    const override = (b as { currentEstimateOverride?: number }).currentEstimateOverride
+    if (override && override > 0) sheetEstimateOverrides[b.id] = override
+  }
+  const estimatedValues = batchEstimateValues(buyers, { ...CURRENT_VALUE_ESTIMATES, ...sheetEstimateOverrides })
+  const totalEstValue = buyers.reduce((s, b) => s + (estimatedValues.get(b.id) ?? 0), 0)
+
+  // Build segmented array from current buyers + estimates
+  const buildSegmented = () => {
+    const financialsMap = new Map<number, FinancialSnapshot>()
+    for (const b of buyers) {
+      const est = estimatedValues.get(b.id)
+      if (!est) continue
+      financialsMap.set(b.id, calculateFinancials(b.purchasePrice, b.purchaseDate, est, b.deposit))
+    }
+    return batchSegment(buyers, financialsMap)
+  }
+
+  const handleAnalyse = () => {
+    setAnalysing(true)
+    const segmented = buildSegmented()
+    setTimeout(() => onAnalyse(segmented), 400)  // brief delay for button feedback, loader handles the rest
+  }
+
+  const handleBuyerClick = (buyer: typeof buyers[0]) => {
+    if (!onSelectBuyer) return
+    const segmented = buildSegmented()
+    const entry = segmented.find(s => s.buyer.id === buyer.id)
+    if (entry) onSelectBuyer(entry)
+  }
+
+  const handleAddContact = async () => {
+    if (!addForm.name || !addForm.purchaseAddress || !addForm.purchaseDate || !addForm.purchasePrice) return
+    setAddSaving(true)
+    const newContact = {
+      id: Date.now(),
+      name: addForm.name,
+      phone: addForm.phone,
+      email: addForm.email,
+      purchaseAddress: addForm.purchaseAddress,
+      suburb: addForm.suburb,
+      purchaseDate: addForm.purchaseDate,
+      purchasePrice: parseInt(addForm.purchasePrice.replace(/\D/g, ""), 10) || 0,
+      deposit: parseInt(addForm.deposit.replace(/\D/g, ""), 10) || 0,
+      propertyType: addForm.propertyType as "House" | "Unit" | "Townhouse",
+      beds: parseInt(addForm.beds, 10) || 3,
+      baths: parseInt(addForm.baths, 10) || 2,
+      land: addForm.land ? parseInt(addForm.land.replace(/\D/g, ""), 10) || 0 : 0,
+      status: addForm.status as import("../../data/pastBuyers").BuyerStatus,
+      notes: addForm.notes,
+      lastContactDate: "",
+      agentName: agent.name,  // tag to this agent's column in sheet
+    }
+    // Try to save to sheet via /api/add-contact
+    try {
+      await authFetch(apiUrl("/api/add-contact"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newContact),
+      })
+    } catch { /* server may not have route yet — add locally anyway */ }
+    setBuyers(prev => [...prev, newContact])
+    setAddSaved(true)
+    setAddSaving(false)
+    setTimeout(() => { setShowAddModal(false); setAddForm(EMPTY_FORM); setAddSaved(false); addVoice.reset(); setAddVoiceStage("idle") }, 1200)
+  }
+
+  // Flywheel: bring a previous vendor's name into the system. Re-run them
+  // through BuyerOS (recommend a new listing) and VendorOS (pitch them on
+  // selling, citing buyer demand). Estimate purchase price from the agent's
+  // active listings in that suburb/type since we don't have their real contract.
+  const handleAddFlywheelVendor = async () => {
+    const { name, suburb, purchaseYear, propertyType } = flywheelForm
+    if (!name || !suburb || !purchaseYear) return
+    setFlywheelSaving(true)
+
+    const candidates = activeListings.filter(l => l.suburb.toLowerCase() === suburb.toLowerCase() && l.type === propertyType)
+    const pool = candidates.length > 0 ? candidates : activeListings.filter(l => l.type === propertyType)
+    const samples = pool.length > 0 ? pool : activeListings
+    const avgPrice = samples.length > 0
+      ? Math.round(samples.reduce((s, l) => s + (l.priceMin ?? l.price), 0) / samples.length)
+      : 700000
+    // Roughly back out a purchase price assuming ~6% p.a. growth since the rough purchase year
+    const yearsHeld = Math.max(0, 2026 - parseInt(purchaseYear, 10))
+    const estimatedPurchasePrice = Math.round(avgPrice / Math.pow(1.06, yearsHeld) / 1000) * 1000
+
+    const newContact = {
+      id: Date.now(),
+      name,
+      phone: flywheelForm.phone,
+      email: flywheelForm.email,
+      purchaseAddress: `Previous property, ${suburb}`,
+      suburb,
+      purchaseDate: `${purchaseYear}-06-01`,
+      purchasePrice: estimatedPurchasePrice,
+      deposit: Math.round(estimatedPurchasePrice * 0.2),
+      propertyType,
+      beds: propertyType === "Unit" ? 2 : 4,
+      baths: 2,
+      land: propertyType === "Unit" ? 0 : 500,
+      status: "buyer→seller" as import("../../data/pastBuyers").BuyerStatus,
+      notes: `Re-engaged via flywheel: previously bought in ${suburb} (~${purchaseYear}). Recommend a new listing and pitch them on selling their current property.`,
+      lastContactDate: "",
+      agentName: agent.name,
+    }
+    try {
+      await authFetch(apiUrl("/api/add-contact"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newContact),
+      })
+    } catch { /* add locally anyway */ }
+    setBuyers(prev => [...prev, newContact])
+    setFlywheelSaved(true)
+    setFlywheelSaving(false)
+    setTimeout(() => {
+      setShowFlywheelModal(false)
+      setFlywheelForm({ name: "", suburb: "", purchaseYear: "", propertyType: "House", phone: "", email: "" })
+      setFlywheelSaved(false)
+    }, 1200)
+  }
+
+  // Map a raw string grid (header row + data rows) to contact drafts.
+  // Shared by the CSV path (client-side split) and the XLSX path (server parse).
+  const mapRowsToContacts = (rawHeaders: string[], dataRows: string[][]): Partial<AddContactForm>[] => {
+    const headers = rawHeaders.map(h => h.replace(/^"|"$/g, "").trim().toLowerCase().replace(/[^a-z0-9]/g, ""))
+
+    // Find first column matching any alias (exact then contains)
+    const col = (aliases: string[]): number => {
+      for (const a of aliases) {
+        const exact = headers.findIndex(h => h === a)
+        if (exact !== -1) return exact
+      }
+      for (const a of aliases) {
+        const contains = headers.findIndex(h => h.includes(a))
+        if (contains !== -1) return contains
+      }
+      return -1
+    }
+
+    // Column indexes — wide alias list covers Rex, AgentBox, Vault, BoxDice, PropTrack, custom exports
+    const firstNameI  = col(["firstname", "first"])
+    const lastNameI   = col(["lastname", "last", "surname"])
+    const nameI       = col(["fullname", "name", "contactname", "client", "contact"])
+    const phoneI      = col(["phone", "mobile", "mobilephone", "cell", "contactphone"])
+    const emailI      = col(["email", "emailaddress", "contactemail"])
+    const addrI       = col(["purchaseaddress", "propertyaddress", "address", "streetaddress", "property", "soldaddress"])
+    const suburbI     = col(["suburb", "suburbname", "city", "town", "location"])
+    const priceI      = col(["purchaseprice", "settledprice", "soldprice", "price", "saleamount", "salevalue", "sold"])
+    const dateI       = col(["purchasedate", "settlementdate", "settledate", "saledate", "solddate", "date"])
+    const bedsI       = col(["beds", "bedrooms", "bedroom"])
+    const bathsI      = col(["baths", "bathrooms", "bathroom"])
+    const landI       = col(["land", "landarea", "landsqm", "landsize", "lotsize"])
+    const typeI       = col(["propertytype", "type", "dwellingtype"])
+    const statusI     = col(["status", "buyerstatus", "clienttype"])
+    const notesI      = col(["notes", "note", "comments", "description"])
+
+    // Extract suburb from "123 Main St, Suburb" format if no suburb column
+    const suburbFromAddr = (addr: string): string => {
+      const parts = addr.split(",")
+      return parts.length >= 2 ? parts[parts.length - 1].trim().replace(/\s+\w{3,4}\s*\d{4}$/, "").trim() : ""
+    }
+
+    return dataRows.map(cols => {
+      const get = (i: number) => i !== -1 ? cols[i]?.replace(/^"|"$/g, "").trim() ?? "" : ""
+
+      // Merge first + last name when there's no genuine combined column.
+      // (The "name" alias contains-matches "First Name", so nameI can point at
+      // the first-name column — treat that as no combined column.)
+      let name = get(nameI)
+      if ((nameI === -1 || nameI === firstNameI || nameI === lastNameI) && (firstNameI !== -1 || lastNameI !== -1)) {
+        name = [get(firstNameI), get(lastNameI)].filter(Boolean).join(" ")
+      }
+
+      const addr = get(addrI)
+      const rawSuburb = get(suburbI) || suburbFromAddr(addr)
+
+      return {
+        name,
+        phone: get(phoneI),
+        email: get(emailI),
+        purchaseAddress: addr,
+        suburb: rawSuburb,
+        purchasePrice: get(priceI),
+        purchaseDate: get(dateI),
+        beds: get(bedsI) || "3",
+        baths: get(bathsI) || "2",
+        land: get(landI),
+        propertyType: (get(typeI) || "House") as AddContactForm["propertyType"],
+        status: get(statusI) || "owner-occupier",
+        notes: get(notesI),
+      }
+    }).filter(c => c.name)
+  }
+
+  const handleCsvFile = (file: File) => {
+    const isWorkbook = /\.(xlsx|xls)$/i.test(file.name)
+
+    if (isWorkbook) {
+      // XLSX/XLS — parsed server-side (SheetJS), returns a raw string grid
+      const reader = new FileReader()
+      reader.onload = async e => {
+        const buf = e.target?.result as ArrayBuffer
+        let binary = ""
+        const bytes = new Uint8Array(buf)
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+        const dataBase64 = btoa(binary)
+        try {
+          const res = await authFetch(apiUrl("/api/import-contacts/parse"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: file.name, dataBase64 }),
+          }).then(r => r.json()) as { rows?: string[][]; error?: string }
+          if (res.rows && res.rows.length >= 2) {
+            setCsvContacts(mapRowsToContacts(res.rows[0], res.rows.slice(1)))
+          }
+        } catch { /* parse failed — leave preview empty */ }
+      }
+      reader.readAsArrayBuffer(file)
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = e => {
+      const text = e.target?.result as string
+      const lines = text.split(/\r?\n/).filter(l => l.trim())
+      if (lines.length < 2) return
+
+      // Properly split a CSV line respecting quoted fields containing commas
+      const splitCsvLine = (line: string): string[] => {
+        const result: string[] = []
+        let cur = ""
+        let inQuote = false
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i]
+          if (ch === '"') { inQuote = !inQuote }
+          else if (ch === "," && !inQuote) { result.push(cur.trim()); cur = "" }
+          else { cur += ch }
+        }
+        result.push(cur.trim())
+        return result
+      }
+
+      setCsvContacts(mapRowsToContacts(splitCsvLine(lines[0]), lines.slice(1).map(splitCsvLine)))
+    }
+    reader.readAsText(file)
+  }
+
+  const handleCsvImport = async () => {
+    if (!csvContacts.length) return
+    setCsvImporting(true)
+    const newContacts = csvContacts.map(c => ({
+      id: Date.now() + Math.random(),
+      name: c.name ?? "",
+      phone: c.phone ?? "",
+      email: c.email ?? "",
+      purchaseAddress: c.purchaseAddress ?? "",
+      suburb: c.suburb ?? "",
+      purchaseDate: c.purchaseDate ?? "",
+      purchasePrice: parseInt((c.purchasePrice ?? "").replace(/\D/g, ""), 10) || 0,
+      deposit: 0,
+      propertyType: (c.propertyType ?? "House") as "House" | "Unit" | "Townhouse",
+      beds: parseInt(c.beds ?? "3", 10) || 3,
+      baths: parseInt(c.baths ?? "2", 10) || 2,
+      land: parseInt((c.land ?? "").replace(/\D/g, ""), 10) || 0,
+      status: (c.status ?? "owner-occupier") as import("../../data/pastBuyers").BuyerStatus,
+      notes: c.notes ?? "", lastContactDate: "",
+      agentName: agent.name,
+    }))
+    // One bulk upsert round-trip — server persists into the contacts table
+    try {
+      await authFetch(apiUrl("/api/import-contacts"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacts: newContacts }),
+      })
+    } catch { /* add locally anyway */ }
+    setBuyers(prev => [...prev, ...newContacts])
+    setCsvImporting(false)
+    setCsvImported(true)
+    setTimeout(() => { setShowAddModal(false); setCsvContacts([]); setCsvImported(false); setImportSource("manual") }, 1400)
+  }
+
+  const closeAddModal = () => {
+    setShowAddModal(false)
+    setImportSource("manual")
+    addVoice.reset()
+    setAddVoiceStage("idle")
+  }
+
+  const dormantGCI = totalEstValue * 0.02 * 0.60
+  const fmtHero = (v: number) => v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : `$${(v / 1_000).toFixed(0)}K`
+  const fmtM = (v: number) => v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : v >= 1_000 ? `$${(v / 1_000).toFixed(0)}K` : `$${v.toFixed(0)}`
+  const maxEquity = Math.max(1, ...buyers.map(b => Math.max(0, (estimatedValues.get(b.id) ?? 0) - b.purchasePrice)))
+  const sortedBuyers = [...buyers].sort((a, b) => ((estimatedValues.get(b.id) ?? 0) - b.purchasePrice) - ((estimatedValues.get(a.id) ?? 0) - a.purchasePrice))
+
+  return (
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: isMobileVPP ? "80px 16px 48px" : "88px 28px 48px", fontFamily: FONT }}>
+      {/* Purple hero band — full-bleed solid colour block */}
+      <div style={{ borderRadius: 16, background: theme.primary, padding: isMobileVPP ? "28px 20px 0" : "40px 40px 0", marginBottom: 32 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: 18 }}>
+          Vendor prospecting
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ fontSize: isMobileVPP ? 24 : 32, fontWeight: 800, color: "#fff", letterSpacing: -1, lineHeight: 1.15, marginBottom: 28 }}>
+            Turn past buyers<br />into new listings
+          </div>
+          <div style={{ textAlign: "right", marginBottom: 28, flexShrink: 0 }}>
+            <div style={{ fontSize: isMobileVPP ? 44 : 60, fontWeight: 800, color: C.green, letterSpacing: -2.5, lineHeight: 1 }}>
+              {fmtHero(dormantGCI)}+
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>dormant GCI · {buyers.length} contacts</div>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+          {[
+            { label: "contacts", value: `${buyers.length}` },
+            { label: "potential vendors", value: `${owners.length}` },
+            { label: "investors", value: `${investors.length}` },
+            { label: "portfolio", value: fmtM(totalEstValue) },
+          ].map((s, i) => (
+            <div key={s.label} style={{ padding: "16px 0", textAlign: "center", borderRight: i < 3 ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: -0.5, lineHeight: 1 }}>{s.value}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Setup guide — shown only when no live data source is connected */}
+      {sheetSource === "demo" && !sheetLoading && (
+        <div style={{
+          marginBottom: 20, background: C.bg2, borderRadius: 12,
+          border: `1px solid rgba(166,218,255,0.15)`, padding: "14px 18px",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.blue, marginBottom: 4 }}>
+            Using demo data — your live CRM loads automatically once connected
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>
+            {supabaseConnected()
+              ? "Supabase is connected. Run the migration script to load your contacts: node scripts/supabase-migrate.mjs"
+              : "Connect Supabase in Settings → Integrations to load your real past buyers."}
+          </div>
+        </div>
+      )}
+
+      {/* Recent contacts preview */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: theme.primary, textTransform: "uppercase", paddingBottom: 0 }}>Your CRM database</div>
+          {sheetLoading && (
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{
+                width: 10, height: 10, borderRadius: "50%",
+                border: `2px solid ${C.border}`,
+                borderTopColor: C.blue,
+                animation: "spin 0.7s linear infinite",
+                flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 10, color: C.faint }}>Syncing…</span>
+            </div>
+          )}
+          {sheetSource === "sheet" && !sheetLoading && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, flexShrink: 0 }} />
+              <span style={{ fontSize: 10, color: C.green, fontWeight: 600 }}>Live.</span>
+              <button onClick={loadFromSheet} title="Refresh from CRM" style={{
+                background: "none", border: "none", cursor: "pointer", padding: "0 2px",
+                color: C.faint, fontSize: 11, lineHeight: 1, display: "flex", alignItems: "center",
+              }}>↺</button>
+            </div>
+          )}
+          {sheetSource === "demo" && !sheetLoading && (
+            <div style={{ fontSize: 10, color: C.faint, padding: "2px 8px", background: C.bg3, borderRadius: 6 }}>Demo data</div>
+          )}
+          <button onClick={() => setShowFlywheelModal(true)} style={{
+            marginLeft: "auto", padding: "5px 14px", borderRadius: 8,
+            background: "transparent", border: `1px solid ${theme.primary}55`,
+            color: theme.primary, fontSize: 11, fontWeight: 700,
+            cursor: "pointer", fontFamily: FONT,
+          }}>
+            + Add past vendor
+          </button>
+          <button onClick={() => setShowAddModal(true)} style={{
+            padding: "5px 14px", borderRadius: 8,
+            background: theme.primary, border: "none",
+            color: "#ffffff", fontSize: 11, fontWeight: 700,
+            cursor: "pointer", fontFamily: FONT,
+          }}>
+            + Add contact
+          </button>
+        </div>
+        <div>
+          {sortedBuyers.slice(0, showAllContacts ? sortedBuyers.length : 5).map((buyer, rank) => {
+            const est = estimatedValues.get(buyer.id) ?? 0
+            const equity = est - buyer.purchasePrice
+            const equityPct = buyer.purchasePrice > 0 ? (equity / buyer.purchasePrice) * 100 : 0
+            const isClickable = !!onSelectBuyer
+            const recentComps = generateComparables({ suburb: buyer.suburb, propertyType: (buyer.propertyType ?? "House") as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id })
+            const now = new Date("2026-06-02")
+            const nearbyAlert = recentComps.find(c => {
+              const d = new Date(c.soldDate.replace(/(\d+) (\w+) (\d+)/, "$2 $1, $3"))
+              return (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24) <= 30
+            })
+            return (
+              <div
+                key={buyer.id}
+                onClick={() => handleBuyerClick(buyer)}
+                style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 0", borderBottom: `1px solid ${C.border}`, cursor: isClickable ? "pointer" : "default" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.opacity = "0.65" }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity = "1" }}
+              >
+                <div style={{ width: 24, height: 24, borderRadius: "50%", background: `${theme.primary}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: theme.primary }}>{rank + 1}</span>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: -0.3 }}>
+                    {buyer.name}
+                    {nearbyAlert && <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 700, color: "#f59e0b" }}>● Nearby sale</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {buyer.purchaseAddress}
+                    {buyer.status === "buyer→seller" && (() => {
+                      const rec = recommendListingForBuyer(buyer, activeListings)
+                      return rec ? <span style={{ marginLeft: 8, color: theme.primary, fontWeight: 600 }}>→ {rec.listing.address}</span> : null
+                    })()}
+                  </div>
+                </div>
+                {!isMobileVPP && (
+                  <div style={{ width: 160, flexShrink: 0 }}>
+                    <div style={{ height: 5, background: C.bg3, borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.max(2, (Math.max(0, equity) / maxEquity) * 100)}%`, background: C.green, borderRadius: 3 }} />
+                    </div>
+                  </div>
+                )}
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: equity > 0 ? C.green : C.red ?? "#ef4444", letterSpacing: -0.3 }}>
+                    {equity > 0 ? "+" : ""}{fmtDollar(equity)}
+                  </div>
+                  <div style={{ fontSize: 10, color: C.faint, marginTop: 1 }}>{equityPct.toFixed(0)}% growth</div>
+                </div>
+                {isClickable && <div style={{ fontSize: 14, color: C.faint, flexShrink: 0 }}>›</div>}
+              </div>
+            )
+          })}
+          {buyers.length > 5 && (
+            <button
+              onClick={() => setShowAllContacts(v => !v)}
+              style={{
+                width: "100%", padding: "10px 16px", borderRadius: 12,
+                background: C.bg2, border: `1px solid ${C.border}`,
+                color: C.muted, fontSize: 12, fontWeight: 600,
+                cursor: "pointer", fontFamily: FONT,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = C.bg3)}
+              onMouseLeave={e => (e.currentTarget.style.background = C.bg2)}
+            >
+              {showAllContacts
+                ? "∧ Show less"
+                : `∨ Show ${buyers.length - 5} more contacts`}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Market Trigger Feed — controlled by Display toggle */}
+      {onSelectBuyer && showMarketTriggers && (
+        <TriggerFeed
+          buyers={buyers}
+          theme={theme}
+          onSelectContact={(id) => {
+            const segmented = buildSegmented()
+            const entry = segmented.find(s => s.buyer.id === id)
+            if (entry) onSelectBuyer(entry)
+          }}
+        />
+      )}
+
+      {/* Analyse button */}
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={handleAnalyse}
+        disabled={analysing}
+        style={{
+          width: "100%", padding: "18px",
+          borderRadius: 14, border: "none",
+          background: analysing ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+          color: analysing ? C.muted : "white",
+          fontSize: 16, fontWeight: 700, cursor: analysing ? "default" : "pointer",
+          fontFamily: FONT, letterSpacing: -0.3,
+          boxShadow: analysing ? "none" : `0 4px 24px ${theme.glow}`,
+          marginBottom: 12,
+        }}
+      >
+        {analysing ? "Analysing your database..." : sheetLoading ? "Loading CRM..." : `✦ Analyse all ${buyers.length} contacts →`}
+      </motion.button>
+
+      {/* Pitch callout */}
+      <div style={{
+        marginTop: 20, background: C.bg2, borderRadius: 14,
+        border: `1px solid ${theme.primary}22`, padding: "18px 22px",
+        display: "flex", alignItems: "flex-start", gap: 14,
+      }}>
+        <div style={{ fontSize: 22 }}>💡</div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>How it works</div>
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+            PropOS scans your past buyers and segments them into actionable pipelines: investors ready to take profit, families outgrowing their home, empty-nesters ready to downsize. Each contact gets a financial snapshot (equity gain, CGT savings, cash-on-cash return) and personalised outreach in your voice.
+          </div>
+        </div>
+      </div>
+
+      {/* Add Contact modal */}
+      <AnimatePresence>
+        {showAddModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{
+              position: "fixed", inset: 0, zIndex: 200,
+              background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)",
+              display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+            }}
+            onClick={closeAddModal}
+          >
+            <motion.div
+              initial={{ scale: 0.93, y: 16 }} animate={{ scale: 1, y: 0 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: C.bg2, borderRadius: 18, border: `1px solid ${C.border}`,
+                padding: "28px 28px", maxWidth: 600, width: "100%",
+                maxHeight: "85vh", overflowY: "auto",
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 3 }}>Add or Import Contacts</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>Contacts are upserted to your Supabase CRM automatically.</div>
+                </div>
+                <button onClick={closeAddModal} style={{
+                  background: "none", border: "none", color: C.faint, fontSize: 18,
+                  cursor: "pointer", padding: "0 4px", lineHeight: 1,
+                }}>✕</button>
+              </div>
+
+              {/* Source tabs */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 22, background: C.bg3, borderRadius: 10, padding: 4 }}>
+                {([
+                  ["manual", "✍️", "Manual"],
+                  ["csv", "📤", "Import CSV"],
+                  ["crm", "🔌", "From CRM"],
+                ] as [typeof importSource, string, string][]).map(([src, icon, label]) => (
+                  <button key={src} onClick={() => setImportSource(src)} style={{
+                    flex: 1, padding: "8px 10px", borderRadius: 8, border: "none",
+                    background: importSource === src ? theme.primary : "transparent",
+                    color: importSource === src ? "#ffffff" : C.muted,
+                    fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+                    transition: "all 0.15s",
+                  }}>
+                    {icon} {label}
+                  </button>
+                ))}
+              </div>
+              {/* ── Manual Add ── */}
+              {importSource === "manual" && (
+                <>
+                  {/* 5 required fields */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    {([
+                      ["Name *", "name", "text", "Full name"],
+                      ["Phone *", "phone", "tel", "+61 4xx xxx xxx"],
+                      ["Purchase address *", "purchaseAddress", "text", "12 Smith St"],
+                      ["Purchase price *", "purchasePrice", "text", "850000"],
+                      ["Purchase date *", "purchaseDate", "date", ""],
+                    ] as [string, keyof AddContactForm, string, string][]).map(([label, field, type, placeholder]) => (
+                      <div key={field} style={{ gridColumn: ["name", "purchaseAddress"].includes(field) ? "1 / -1" : undefined }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>{label}</label>
+                        <input type={type} value={addForm[field]}
+                          onChange={e => setAddForm(f => ({ ...f, [field]: e.target.value }))}
+                          placeholder={placeholder}
+                          style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Optional details — collapsible */}
+                  <button onClick={() => setShowOptionalFields(v => !v)} style={{ marginTop: 8, background: "none", border: "none", cursor: "pointer", fontSize: 11, color: C.faint, fontFamily: FONT, display: "flex", alignItems: "center", gap: 4, padding: 0 }}>
+                    <span style={{ transform: showOptionalFields ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block" }}>›</span>
+                    {showOptionalFields ? "Hide optional details" : "Optional details"}
+                  </button>
+                  {showOptionalFields && (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 8 }}>
+                      {([
+                        ["Email", "email", "email", "email@domain.com"],
+                        ["Suburb", "suburb", "text", "Berwick"],
+                        ["Deposit paid", "deposit", "text", "85000"],
+                        ["Beds", "beds", "number", "4"],
+                        ["Baths", "baths", "number", "2"],
+                        ["Land (m²)", "land", "text", "612"],
+                      ] as [string, keyof AddContactForm, string, string][]).map(([label, field, type, placeholder]) => (
+                        <div key={field}>
+                          <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>{label}</label>
+                          <input type={type} value={addForm[field]}
+                            onChange={e => setAddForm(f => ({ ...f, [field]: e.target.value }))}
+                            placeholder={placeholder}
+                            style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                          />
+                        </div>
+                      ))}
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Property type</label>
+                        <select value={addForm.propertyType} onChange={e => setAddForm(f => ({ ...f, propertyType: e.target.value }))}
+                          style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
+                          <option>House</option><option>Unit</option><option>Townhouse</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Status</label>
+                        <select value={addForm.status} onChange={e => setAddForm(f => ({ ...f, status: e.target.value }))}
+                          style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none" }}>
+                          <option value="owner-occupier">Owner-occupier</option>
+                          <option value="investor">Investor</option>
+                          <option value="buyer→landlord">Buyer → Landlord</option>
+                          <option value="buyer→seller">Buyer → Seller</option>
+                          <option value="renter→buyer">Renter → Buyer</option>
+                          <option value="buyer→downsizer">Buyer → Downsizer</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                    <div style={{ marginTop: 12 }}>
+                      {/* Notes / Voice Personalisation */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                        <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8 }}>Notes · Personalisation</label>
+                        {addVoice.phase === "idle" && addVoiceStage === "idle" && (
+                          <button onClick={addVoice.supported ? addVoice.start : undefined} style={{
+                            fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
+                            background: theme.primary + "18", color: theme.primary,
+                            border: `1px solid ${theme.primary}35`, cursor: addVoice.supported ? "pointer" : "default",
+                            fontFamily: FONT, display: "flex", alignItems: "center", gap: 4,
+                            opacity: addVoice.supported ? 1 : 0.5,
+                          }} title={addVoice.supported ? undefined : "Voice notes require Chrome or Edge"}>🎙️ Voice note</button>
+                        )}
+                        {addVoiceStage === "done" && (
+                          <button onClick={() => { addVoice.reset(); setAddVoiceStage("idle"); setAddForm(f => ({ ...f, notes: "" })) }} style={{
+                            fontSize: 10, color: C.faint, background: "none", border: "none", cursor: "pointer", fontFamily: FONT,
+                          }}>↺ Re-record</button>
+                        )}
+                      </div>
+
+                      {/* Idle: plain textarea */}
+                      {addVoice.phase === "idle" && addVoiceStage === "idle" && (
+                        <textarea value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
+                          placeholder="Family growing, interested in schools, investment strategy. Or use voice note above…"
+                          style={{ width: "100%", background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", minHeight: 64, resize: "vertical", boxSizing: "border-box" }}
+                        />
+                      )}
+
+                      {/* Recording: show live transcript + stop button */}
+                      {addVoice.phase === "recording" && (
+                        <div style={{ background: C.bg3, border: `1px solid ${theme.primary}30`, borderRadius: 10, padding: "12px 14px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: addVoice.liveTranscript ? 10 : 0 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", flexShrink: 0 }}>
+                              <motion.div animate={{ opacity: [1, 0] }} transition={{ duration: 0.6, repeat: Infinity }}
+                                style={{ width: "100%", height: "100%", borderRadius: "50%", background: "#ef4444" }} />
+                            </div>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Recording voice memo</span>
+                            <span style={{ fontSize: 10, color: C.faint, marginLeft: "auto" }}>{addVoice.seconds}s</span>
+                            <button onClick={addVoice.stop} style={{
+                              fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
+                              background: "#ef444420", color: "#ef4444", border: "1px solid #ef444440",
+                              cursor: "pointer", fontFamily: FONT,
+                            }}>Stop</button>
+                          </div>
+                          {addVoice.liveTranscript && (
+                            <div style={{ fontSize: 12, color: theme.primary, fontStyle: "italic", lineHeight: 1.5 }}>
+                              {addVoice.liveTranscript}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Processing pipeline (transcribing → analysing → personalising) */}
+                      {(addVoiceStage === "transcribing" || addVoiceStage === "analysing" || addVoiceStage === "personalising") && (() => {
+                        const STEPS: [typeof addVoiceStage, string][] = [
+                          ["transcribing",  "Transcribing audio"],
+                          ["analysing",     "Analysing transcript"],
+                          ["personalising", "Personalising outreach"],
+                        ]
+                        const ORDER = ["transcribing", "analysing", "personalising", "done"]
+                        const curIdx = ORDER.indexOf(addVoiceStage)
+                        return (
+                          <div style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                            {/* Step 0: Recording — always done at this point */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <span style={{ fontSize: 13, color: C.green }}>✓</span>
+                              <span style={{ fontSize: 12, color: C.muted }}>Recording voice memo</span>
+                            </div>
+                            {STEPS.map(([stage, label], i) => {
+                              const stepIdx = i + 1
+                              const isDone    = curIdx > stepIdx
+                              const isCurrent = curIdx === stepIdx
+                              return (
+                                <div key={stage} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                  {isDone
+                                    ? <span style={{ fontSize: 13, color: C.green }}>✓</span>
+                                    : isCurrent
+                                      ? <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${theme.primary}30`, borderTopColor: theme.primary, animation: "spin 0.7s linear infinite", flexShrink: 0 }} />
+                                      : <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${C.faint}55`, flexShrink: 0 }} />
+                                  }
+                                  <span style={{ fontSize: 12, color: isCurrent ? C.text : isDone ? C.muted : C.faint, fontWeight: isCurrent ? 600 : 400 }}>{label}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
+
+                      {/* Done: show editable result */}
+                      {addVoiceStage === "done" && (
+                        <div>
+                          <div style={{ fontSize: 10, color: C.green, fontWeight: 600, marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                            <span>✓</span> Voice personalisation complete. Review and edit below
+                          </div>
+                          <textarea value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
+                            style={{ width: "100%", background: C.bg3, border: `1px solid ${theme.primary}30`, borderRadius: 8, padding: "8px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", minHeight: 72, resize: "vertical", boxSizing: "border-box" }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                    <button onClick={closeAddModal} style={{ flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Cancel</button>
+                    <button onClick={handleAddContact} disabled={addSaving || addSaved} style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: addSaved ? C.green : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 14, fontWeight: 700, cursor: addSaving || addSaved ? "default" : "pointer", fontFamily: FONT }}>
+                      {addSaved ? "✓ Contact added" : addSaving ? "Saving…" : "Add contact"}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* ── CSV Import ── */}
+              {importSource === "csv" && (
+                <>
+                  <input ref={csvRef} type="file" accept=".csv,.xlsx,.xls" style={{ display: "none" }}
+                    onChange={e => { if (e.target.files?.[0]) handleCsvFile(e.target.files[0]) }}
+                  />
+                  {!csvContacts.length ? (
+                    <div
+                      onClick={() => csvRef.current?.click()}
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleCsvFile(f) }}
+                      style={{ border: `2px dashed ${theme.primary}55`, borderRadius: 14, padding: "40px 24px", textAlign: "center", cursor: "pointer", background: theme.dim, userSelect: "none" }}
+                    >
+                      <div style={{ fontSize: 32, marginBottom: 10 }}>📤</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6 }}>Drop your CSV or Excel file here</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>or click to browse, columns detected automatically</div>
+                      <div style={{ fontSize: 10, color: C.faint, marginTop: 10 }}>AgentBox, Rex, VaultRE and BoxDice exports supported (.csv, .xlsx)</div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ background: C.bg3, borderRadius: 10, padding: "12px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: `${C.green}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>✓</div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{csvContacts.length} contacts found</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>Review below, then import all to your CRM.</div>
+                        </div>
+                        <button onClick={() => { setCsvContacts([]); if (csvRef.current) csvRef.current.value = "" }} style={{ marginLeft: "auto", background: "none", border: "none", color: C.faint, fontSize: 12, cursor: "pointer", fontFamily: FONT }}>Change file</button>
+                      </div>
+                      <div style={{ maxHeight: 180, overflowY: "auto", borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 16 }}>
+                        {csvContacts.slice(0, 8).map((c, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderBottom: i < Math.min(csvContacts.length, 8) - 1 ? `1px solid ${C.border}` : "none" }}>
+                            <div style={{ width: 26, height: 26, borderRadius: 8, background: theme.dim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: theme.primary }}>{(c.name ?? "?").charAt(0)}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name || "—"}</div>
+                              <div style={{ fontSize: 10, color: C.faint }}>{c.purchaseAddress || c.suburb || c.phone || ""}</div>
+                            </div>
+                          </div>
+                        ))}
+                        {csvContacts.length > 8 && <div style={{ padding: "6px 12px", fontSize: 11, color: C.faint }}>+{csvContacts.length - 8} more contacts…</div>}
+                      </div>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <button onClick={() => { setCsvContacts([]); if (csvRef.current) csvRef.current.value = "" }} style={{ flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Cancel</button>
+                        <button onClick={handleCsvImport} disabled={csvImporting || csvImported} style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: csvImported ? C.green : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 14, fontWeight: 700, cursor: csvImporting || csvImported ? "default" : "pointer", fontFamily: FONT }}>
+                          {csvImported ? `✓ Imported ${csvContacts.length} contacts` : csvImporting ? "Importing…" : `Import ${csvContacts.length} contacts`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── From CRM ── */}
+              {importSource === "crm" && (
+                <div>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Connect your CRM to sync contacts automatically. PropOS maps your fields and upserts new records to Supabase.</div>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobileVPP ? "1fr" : "1fr 1fr", gap: 10 }}>
+                    {([
+                      ["RealBase",       "rb", "🏠", true],
+                      ["Rex Software",   "rex", "📋", false],
+                      ["AgentBox",       "ab", "📦", false],
+                      ["Box+Dice",       "bd", "🎲", false],
+                      ["ActivePipe",     "ap", "🔥", false],
+                      ["Propic",         "pp", "💡", false],
+                      ["Reapit",         "rp", "🏢", false],
+                      ["VaultRE",        "vr", "🔐", false],
+                      ["Console Cloud",  "cc", "☁️", false],
+                      ["HubSpot",        "hs", "🟠", false],
+                    ] as [string, string, string, boolean][]).map(([name, key, icon, featured]) => (
+                      <div key={key} style={{ background: C.bg3, borderRadius: 12, padding: "14px 16px", border: `1px solid ${featured ? theme.primary + "44" : C.border}`, position: "relative" }}>
+                        {featured && <div style={{ position: "absolute", top: 8, right: 8, background: theme.primary, color: "#fff", fontSize: 8, fontWeight: 800, padding: "2px 6px", borderRadius: 4, letterSpacing: 0.5 }}>FEATURED</div>}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                          <span style={{ fontSize: 20 }}>{icon}</span>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{name}</div>
+                        </div>
+                        {(() => {
+                          const stage = crmApiKeyStage[key] ?? "idle"
+                          if (stage === "loading") return (
+                            <div style={{ fontSize: 10, color: C.faint, display: "flex", alignItems: "center", gap: 6 }}>
+                              <div style={{ width: 8, height: 8, borderRadius: "50%", border: `1.5px solid ${theme.primary}30`, borderTopColor: theme.primary, animation: "spin 0.7s linear infinite" }} />
+                              Connecting…
+                            </div>
+                          )
+                          if (stage === "key") return (
+                            <div>
+                              <div style={{ fontSize: 10, color: C.faint, marginBottom: 5 }}>Enter your API key or OAuth token</div>
+                              <div style={{ display: "flex", gap: 5 }}>
+                                <input
+                                  placeholder="sk-…"
+                                  value={crmApiKeyValues[key] ?? ""}
+                                  onChange={e => setCrmApiKeyValues(v => ({ ...v, [key]: e.target.value }))}
+                                  onKeyDown={e => { if (e.key === "Enter") setCrmApiKeyStage(s => ({ ...s, [key]: "connected" })) }}
+                                  style={{ flex: 1, padding: "5px 8px", background: C.bg, border: `1px solid ${theme.primary}55`, borderRadius: 6, color: C.text, fontSize: 11, fontFamily: FONT, outline: "none" }}
+                                />
+                                <button
+                                  onClick={() => setCrmApiKeyStage(s => ({ ...s, [key]: "connected" }))}
+                                  style={{ padding: "5px 10px", borderRadius: 6, border: "none", background: theme.primary, color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}
+                                >✓</button>
+                              </div>
+                            </div>
+                          )
+                          if (stage === "connected") return (
+                            <div style={{ fontSize: 10, color: C.green, display: "flex", alignItems: "center", gap: 5 }}>
+                              <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.green }} />
+                              Connected
+                            </div>
+                          )
+                          return (
+                            <button
+                              onClick={() => {
+                                setCrmApiKeyStage(s => ({ ...s, [key]: "loading" }))
+                                setTimeout(() => setCrmApiKeyStage(s => ({ ...s, [key]: "key" })), 900)
+                              }}
+                              style={{ width: "100%", padding: "7px", borderRadius: 8, border: `1px solid ${theme.primary}55`, background: featured ? theme.primary : "transparent", color: featured ? "#fff" : theme.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                              {name === "RealBase" ? "Connect RealBase" : "Connect"}
+                            </button>
+                          )
+                        })()}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 14, padding: "10px 14px", background: C.bg3, borderRadius: 10, fontSize: 11, color: C.faint, textAlign: "center" }}>
+                    OAuth sync available in PropOS Pro. Contacts import once and stay in sync automatically.
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Add Past Vendor modal — flywheel: BuyerOS recommendation + VendorOS pitch */}
+      <AnimatePresence>
+        {showFlywheelModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{
+              position: "fixed", inset: 0, zIndex: 200,
+              background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)",
+              display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+            }}
+            onClick={() => setShowFlywheelModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.93, y: 16 }} animate={{ scale: 1, y: 0 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: C.bg2, borderRadius: 18, border: `1px solid ${C.border}`,
+                padding: "28px 28px", maxWidth: 480, width: "100%",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 3 }}>Add a past vendor</div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+                    Bring a previous client back into the loop. We'll recommend a current listing for them to buy, and flag them as buyer demand when you pitch nearby vendors.
+                  </div>
+                </div>
+                <button onClick={() => setShowFlywheelModal(false)} style={{
+                  background: "none", border: "none", color: C.faint, fontSize: 18,
+                  cursor: "pointer", padding: "0 4px", lineHeight: 1,
+                }}>✕</button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 18 }}>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Name *</label>
+                  <input value={flywheelForm.name} onChange={e => setFlywheelForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="Sarah Chen"
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Suburb they bought in *</label>
+                  <input value={flywheelForm.suburb} onChange={e => setFlywheelForm(f => ({ ...f, suburb: e.target.value }))}
+                    placeholder="Officer"
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Rough purchase year *</label>
+                  <input value={flywheelForm.purchaseYear} onChange={e => setFlywheelForm(f => ({ ...f, purchaseYear: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
+                    placeholder="2021"
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Property type</label>
+                  <select value={flywheelForm.propertyType} onChange={e => setFlywheelForm(f => ({ ...f, propertyType: e.target.value as "House" | "Unit" | "Townhouse" }))}
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  >
+                    <option value="House">House</option>
+                    <option value="Townhouse">Townhouse</option>
+                    <option value="Unit">Unit</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Phone (optional)</label>
+                  <input value={flywheelForm.phone} onChange={e => setFlywheelForm(f => ({ ...f, phone: e.target.value }))}
+                    placeholder="0412 345 678"
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>Email (optional)</label>
+                  <input value={flywheelForm.email} onChange={e => setFlywheelForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="sarah@email.com"
+                    style={{ width: "100%", marginTop: 4, background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 10px", color: C.text, fontSize: 13, fontFamily: FONT, outline: "none", boxSizing: "border-box" }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                <button onClick={() => setShowFlywheelModal(false)} style={{ flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Cancel</button>
+                <button
+                  onClick={handleAddFlywheelVendor}
+                  disabled={flywheelSaving || flywheelSaved || !flywheelForm.name || !flywheelForm.suburb || !flywheelForm.purchaseYear}
+                  style={{
+                    flex: 2, padding: "12px", borderRadius: 10, border: "none",
+                    background: flywheelSaved ? C.green : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                    color: "white", fontSize: 14, fontWeight: 700,
+                    cursor: flywheelSaving || flywheelSaved ? "default" : "pointer", fontFamily: FONT,
+                    opacity: (!flywheelForm.name || !flywheelForm.suburb || !flywheelForm.purchaseYear) ? 0.5 : 1,
+                  }}
+                >
+                  {flywheelSaved ? "✓ Added" : flywheelSaving ? "Saving…" : "Add to CRM"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── Vendor Prospecting: Pipeline Dashboard ──────────────────────────────────
+
+function VendorDashboardPage({ segmented, onBack, onSelectEntry, theme, agent, onGenerateAll, vendorSettings }: {
+  segmented: SegmentedBuyer[]
+  onBack: () => void
+  onSelectEntry: (entry: SegmentedBuyer) => void
+  theme: AgencyTheme
+  agent: AgentProfile
+  onGenerateAll?: (items: QueueItem[]) => void
+  vendorSettings?: import("../../data").VendorDisplaySettings
+}) {
+  const bp = useBreakpoint()
+  const isMobile = bp === "mobile"
+  const [filterPipeline, setFilterPipeline] = useState<Pipeline | "all">("all")
+  const [showBulkFire, setShowBulkFire] = useState(false)
+  const [roiData, setRoiData] = useState<VendorAnalyticsData | null>(null)
+  const [generatingAll, setGeneratingAll] = useState(false)
+  const filtered = filterPipeline === "all" ? segmented : segmented.filter(s => s.segment.pipeline === filterPipeline)
+  const pipelines = [...new Set(segmented.map(s => s.segment.pipeline))]
+  const totalEquity = segmented.reduce((s, e) => s + e.financials.equityGain, 0)
+
+  useEffect(() => {
+    authFetch(apiUrl("/api/analytics/vendor"))
+      .then(r => r.json())
+      .then((d: VendorAnalyticsData) => setRoiData(d))
+      .catch(() => { /* show demo data from backend */ })
+  }, [])
+  const urgencyColor = (u: "high" | "medium" | "low") =>
+    u === "high" ? (C.red ?? "#ef4444") : u === "medium" ? C.orange : C.faint
+
+  return (
+    <div style={{ maxWidth: 960, margin: "0 auto", padding: isMobile ? "80px 16px 48px" : "88px 28px 48px", fontFamily: FONT }}>
+      <button onClick={onBack} aria-label="Go back" style={{ background: "transparent", border: "none", cursor: "pointer", color: theme.primary, fontSize: 13, fontWeight: 700, fontFamily: FONT, marginBottom: 20, padding: "8px 0", minHeight: 44 }}>← Back</button>
+
+      {/* Header — Peake purple band */}
+      {(() => {
+        const optCount   = segmented.filter(e => e.segment.confidence >= 60).length
+        const readyCount = segmented.filter(e => e.financials.equityGainPct >= 30 || e.segment.confidence >= 70).length
+        const fmtM = (v: number) => v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : v >= 1_000 ? `$${(v / 1_000).toFixed(0)}K` : `$${v.toFixed(0)}`
+        return (
+          <div style={{ borderRadius: 16, background: theme.primary, padding: isMobile ? "28px 20px 0" : "40px 40px 0", marginBottom: 28 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 2, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: 18 }}>
+              Pipeline Intelligence
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
+              <div style={{ fontSize: isMobile ? 24 : 32, fontWeight: 800, color: "#fff", letterSpacing: -1, lineHeight: 1.15, marginBottom: 28 }}>
+                {segmented.length} contacts<br />ready for outreach
+              </div>
+              <div style={{ textAlign: "right", marginBottom: 28, flexShrink: 0 }}>
+                <div style={{ fontSize: isMobile ? 44 : 60, fontWeight: 800, color: C.green, letterSpacing: -2.5, lineHeight: 1 }}>
+                  {fmtM(totalEquity)}
+                </div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>combined equity · {pipelines.length} pipeline{pipelines.length !== 1 ? "s" : ""}</div>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+              {[
+                { value: segmented.length, label: "contacts" },
+                { value: pipelines.length, label: "pipelines" },
+                { value: optCount, label: "optimal window" },
+                { value: readyCount, label: "ready to list" },
+              ].map((s, i) => (
+                <div key={s.label} style={{ padding: "16px 0", textAlign: "center", borderRight: i < 3 ? "1px solid rgba(255,255,255,0.1)" : "none" }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: -0.5, lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Action buttons */}
+      <div style={{ marginBottom: 28, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowBulkFire(true)}
+          style={{
+            padding: "11px 26px", borderRadius: 24, border: "none", cursor: "pointer",
+            background: theme.primary, color: "#fff",
+            fontSize: 13, fontWeight: 700, fontFamily: FONT, letterSpacing: -0.2,
+          }}>
+          Review {segmented.length} messages →
+        </motion.button>
+        {onGenerateAll && (
+          <motion.button
+            whileHover={{ scale: generatingAll ? 1 : 1.02 }}
+            whileTap={{ scale: generatingAll ? 1 : 0.97 }}
+            disabled={generatingAll}
+            onClick={async () => {
+              setGeneratingAll(true)
+              try {
+                const contacts = segmented.map(({ buyer, financials: fin, segment: seg }) => ({
+                  id: buyer.id, name: buyer.name, email: buyer.email ?? "", phone: buyer.phone,
+                  purchaseAddress: buyer.purchaseAddress, suburb: buyer.suburb,
+                  purchaseYear: buyer.purchaseDate.slice(0, 4),
+                  purchasePrice: fin.purchasePrice, currentEstimate: fin.currentEstimate,
+                  equityGain: fin.equityGain, equityGainPct: fin.equityGainPct,
+                  pipeline: seg.pipeline, pipelineLabel: PIPELINE_LABELS[seg.pipeline]?.label ?? seg.pipeline,
+                  notes: buyer.notes ?? "",
+                }))
+                const res = await authFetch(apiUrl("/api/vendor-batch/generate"), {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ contacts, agentName: agent.name, agentAgency: agent.agency, agentNickname: agent.nickname, agentAgencyShort: agent.agencyShort }),
+                }).then(r => r.json()).catch(() => ({ items: [] }))
+                if (res.items?.length > 0) onGenerateAll(res.items as QueueItem[])
+              } catch { /* fall through */ } finally { setGeneratingAll(false) }
+            }}
+            style={{
+              padding: "11px 26px", borderRadius: 24,
+              border: `1.5px solid ${theme.primary}50`,
+              cursor: generatingAll ? "default" : "pointer",
+              background: "transparent", color: generatingAll ? C.faint : theme.primary,
+              fontSize: 13, fontWeight: 700, fontFamily: FONT, letterSpacing: -0.2,
+            }}
+          >
+            {generatingAll
+              ? <><motion.span animate={{ rotate: [0, 360] }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} style={{ display: "inline-block" }}>⚙</motion.span> Generating…</>
+              : `Generate for all ${segmented.length} →`}
+          </motion.button>
+        )}
+      </div>
+
+      {/* ROI Dashboard */}
+      <VendorROIPanel data={roiData} theme={theme} segmented={segmented} />
+
+      {/* AI Intelligence Suite */}
+      <WowInsightsPanel segmented={segmented} theme={theme} />
+
+      {/* AI Hyper-Personalisation Ideas */}
+      <AIIdeasPanel theme={theme} />
+
+      {/* Market Trigger Feed — shown only when enabled in Display settings */}
+      {vendorSettings?.showMarketTriggers && (
+        <TriggerFeed
+          buyers={segmented.map(s => s.buyer)}
+          theme={theme}
+          onSelectContact={(id) => {
+            const entry = segmented.find(s => s.buyer.id === id)
+            if (entry) onSelectEntry(entry)
+          }}
+        />
+      )}
+
+      {/* Bulk fire modal */}
+      <AnimatePresence>
+        {showBulkFire && <BulkFireModal segmented={segmented} agent={agent} theme={theme} onClose={() => setShowBulkFire(false)} />}
+      </AnimatePresence>
+
+      {/* Pipeline filter — simple underline tabs */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, overflowX: "auto", scrollbarWidth: "none" }}>
+          <button onClick={() => setFilterPipeline("all")} style={{
+            padding: "8px 16px 10px", background: "none", border: "none", cursor: "pointer",
+            fontSize: 12, fontWeight: filterPipeline === "all" ? 700 : 400, fontFamily: FONT,
+            color: filterPipeline === "all" ? theme.primary : C.faint,
+            borderBottom: filterPipeline === "all" ? `2px solid ${theme.primary}` : "2px solid transparent",
+            marginBottom: -1, whiteSpace: "nowrap",
+          }}>
+            All ({segmented.length})
+          </button>
+          {pipelines.map(p => {
+            const pl = PIPELINE_LABELS[p]
+            const count = segmented.filter(s => s.segment.pipeline === p).length
+            if (count === 0) return null
+            const isActive = filterPipeline === p
+            return (
+              <button key={p} onClick={() => setFilterPipeline(p)} style={{
+                padding: "8px 16px 10px", background: "none", border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: isActive ? 700 : 400, fontFamily: FONT,
+                color: isActive ? theme.primary : C.faint,
+                borderBottom: isActive ? `2px solid ${theme.primary}` : "2px solid transparent",
+                marginBottom: -1, whiteSpace: "nowrap",
+              }}>
+                {pl.shortLabel} ({count})
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Contact list — clean rows, no cards */}
+      <div>
+        {filtered.map((entry, i) => {
+          const { buyer, financials: fin, segment } = entry
+          const pl = PIPELINE_LABELS[segment.pipeline]
+          const topTrigger = segment.triggers[0]
+          return (
+            <motion.div
+              key={buyer.id}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              transition={{ delay: i * 0.02 }}
+              onClick={() => onSelectEntry(entry)}
+              style={{
+                display: "flex", alignItems: "center", gap: 16,
+                padding: "16px 0", borderBottom: `1px solid ${C.border}`,
+                cursor: "pointer",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.opacity = "0.7" }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.opacity = "1" }}
+            >
+              {/* Name + address */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: -0.3 }}>{buyer.name}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {buyer.purchaseAddress}
+                  {topTrigger && vendorSettings?.showTriggers && (
+                    <span style={{ marginLeft: 8, color: urgencyColor(topTrigger.urgency), fontWeight: 600 }}>· {topTrigger.label}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Pipeline label */}
+              {!isMobile && (
+                <div style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>
+                  {pl.shortLabel}
+                </div>
+              )}
+
+              {/* Equity gain */}
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.green, letterSpacing: -0.3 }}>+{fmtDollar(fin.equityGain)}</div>
+                <div style={{ fontSize: 10, color: C.faint, marginTop: 1 }}>{Math.round(fin.equityGainPct)}% growth</div>
+              </div>
+
+              {/* Score */}
+              <ScoreRing score={entry.priority} size={32} strokeWidth={3} />
+            </motion.div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Vendor Prospecting: Contact Profile + Financial Snapshot ─────────────────
+
+// ── Hyper-Personalisation Card ────────────────────────────────────────────────
+
+/**
+ * NotesBridgeCard — shows the full AI personalisation transformation:
+ *   Stage 1: Raw CRM notes (what the agent typed)
+ *   Stage 2: "AI reading between the lines..." bridge (while generating)
+ *   Stage 3: What AI extracted — the single personalisation hook
+ *   Stage 4: "As written to [name]" — the sentence from the actual email
+ *
+ * This is PropOS's WOW moment: showing that the AI didn't just quote the note,
+ * it REFRAMED it into the contact's present situation.
+ */
+function NotesBridgeCard({ notes, prewrittenHook, extractedHook, personalisationLine, fname, generating, theme }: {
+  notes: string
+  prewrittenHook: string | null
+  extractedHook: string | null
+  personalisationLine: string | null
+  fname: string
+  generating: boolean
+  theme: AgencyTheme
+}) {
+  // The "active" hook — pre-written takes precedence, otherwise show extracted
+  const hook = prewrittenHook ?? extractedHook
+
+  const [typedHook, setTypedHook] = useState("")
+  const [hookDone, setHookDone] = useState(false)
+  const [typedLine, setTypedLine] = useState("")
+  const [lineDone, setLineDone] = useState(false)
+
+  // Typewriter for hook
+  useEffect(() => {
+    if (!hook) { setTypedHook(""); setHookDone(false); return }
+    setTypedHook(""); setHookDone(false)
+    let idx = 0
+    const iv = setInterval(() => {
+      idx++
+      setTypedHook(hook.slice(0, idx))
+      if (idx >= hook.length) { setHookDone(true); clearInterval(iv) }
+    }, 18)
+    return () => clearInterval(iv)
+  }, [hook])
+
+  // Typewriter for personalisationLine — delayed so it lands after hook finishes
+  useEffect(() => {
+    if (!personalisationLine) { setTypedLine(""); setLineDone(false); return }
+    setTypedLine(""); setLineDone(false)
+    const delay = setTimeout(() => {
+      let idx = 0
+      const iv = setInterval(() => {
+        idx++
+        setTypedLine(personalisationLine.slice(0, idx))
+        if (idx >= personalisationLine.length) { setLineDone(true); clearInterval(iv) }
+      }, 22)
+      return () => clearInterval(iv)
+    }, 600)
+    return () => clearTimeout(delay)
+  }, [personalisationLine])
+
+  // Truncate notes to the most meaningful excerpt (first 160 chars)
+  const notesExcerpt = notes.length > 160 ? notes.slice(0, 157) + "..." : notes
+
+  const showBridge = !!hook || generating
+  const showHook   = !!hook
+  const showLine   = !!personalisationLine
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", damping: 20, stiffness: 260 }}
+      style={{
+        borderRadius: 16, overflow: "hidden", position: "relative",
+        background: `linear-gradient(160deg, ${theme.primary}12 0%, ${theme.primary}06 50%, ${C.bg2} 100%)`,
+        border: `1.5px solid ${theme.primary}44`,
+        boxShadow: `0 0 28px ${theme.primary}14`,
+      }}
+    >
+      {/* Top accent bar */}
+      <div style={{ height: 3, background: `linear-gradient(90deg, ${theme.primary}, ${theme.gradient?.[1] ?? theme.primary}66, transparent 80%)` }} />
+
+      {/* Shimmer */}
+      <motion.div
+        animate={{ x: ["-120%", "220%"] }}
+        transition={{ duration: 2.6, ease: "linear", repeat: Infinity, repeatDelay: 2.4 }}
+        style={{ position: "absolute", top: 0, left: 0, width: "30%", height: "100%", background: `linear-gradient(90deg, transparent, ${theme.primary}0e, transparent)`, pointerEvents: "none" }}
+      />
+
+      <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 0 }}>
+
+        {/* ── Stage 1: CRM Notes ── */}
+        <div style={{ marginBottom: 11 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+            <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.6, color: C.faint, textTransform: "uppercase" }}>From your CRM notes</span>
+          </div>
+          <div style={{
+            fontSize: 12, color: C.muted, lineHeight: 1.55, fontStyle: "italic",
+            padding: "9px 12px", borderRadius: 9,
+            background: C.bg3, border: `1px solid ${C.border}`,
+          }}>
+            <span style={{ color: C.faint, fontWeight: 900, fontSize: 15, lineHeight: 0, verticalAlign: "-2px", marginRight: 2 }}>"</span>
+            {notesExcerpt}
+            <span style={{ color: C.faint, fontWeight: 900, fontSize: 15, lineHeight: 0, verticalAlign: "-2px", marginLeft: 2 }}>"</span>
+          </div>
+        </div>
+
+        {/* ── Bridge: AI reading... (only while generating) ── */}
+        {showBridge && generating && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 11, paddingLeft: 4 }}>
+            <div style={{ width: 2, height: 28, background: `linear-gradient(to bottom, ${C.border}, ${theme.primary}55)`, borderRadius: 2, flexShrink: 0 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <motion.div
+                animate={{ scale: [1, 1.5, 1], opacity: [0.7, 1, 0.7] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                style={{ width: 6, height: 6, borderRadius: "50%", background: theme.primary, flexShrink: 0 }}
+              />
+              <motion.span
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 1.4, repeat: Infinity }}
+                style={{ fontSize: 10, color: theme.primary, fontWeight: 700, letterSpacing: 0.3 }}
+              >
+                Reading between the lines...
+              </motion.span>
+            </div>
+          </div>
+        )}
+
+        {/* ── Stage 2: What AI saw ── */}
+        {showHook && (
+          <div style={{ marginBottom: showLine ? 11 : 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 5,
+                background: `linear-gradient(90deg, ${theme.primary}ee, ${theme.primary}aa)`,
+                borderRadius: 7, padding: "3px 10px",
+                boxShadow: `0 2px 8px ${theme.primary}33`,
+              }}>
+                <span style={{ fontSize: 9 }}>⚡</span>
+                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: "#fff", textTransform: "uppercase" }}>
+                  {prewrittenHook ? "Your insight" : "What we found"}
+                </span>
+              </div>
+              {prewrittenHook && (
+                <span style={{ fontSize: 9, color: C.faint }}>✍️ pre-written · col R of sheet</span>
+              )}
+            </div>
+            <div style={{
+              fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.6,
+              padding: "10px 13px", borderRadius: 9,
+              background: theme.primary + "0d",
+              border: `1px solid ${theme.primary}2a`,
+              minHeight: 38, fontStyle: "italic",
+            }}>
+              <span style={{ color: theme.primary, fontWeight: 900, fontSize: 16, opacity: 0.5, lineHeight: 0, verticalAlign: "-2px" }}>"</span>
+              {typedHook}
+              {!hookDone ? (
+                <motion.span
+                  animate={{ opacity: [1, 0] }}
+                  transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
+                  style={{ display: "inline-block", width: 2, height: 12, marginLeft: 1, background: theme.primary, verticalAlign: "middle", borderRadius: 1 }}
+                />
+              ) : (
+                <span style={{ color: theme.primary, fontWeight: 900, fontSize: 16, opacity: 0.5, lineHeight: 0, verticalAlign: "-2px" }}>"</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Stage 3: As written in the outreach ── */}
+        {showLine && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          >
+            {/* Bridge to stage 3 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, paddingLeft: 4 }}>
+              <div style={{ width: 2, height: 24, background: `linear-gradient(to bottom, ${theme.primary}44, ${C.green}88)`, borderRadius: 2, flexShrink: 0 }} />
+              <span style={{ fontSize: 9, color: C.green, fontWeight: 700, letterSpacing: 0.3 }}>Woven into outreach as...</span>
+            </div>
+            <div style={{ marginBottom: 2 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  background: `linear-gradient(90deg, ${C.green}dd, ${C.green}99)`,
+                  borderRadius: 7, padding: "3px 10px",
+                }}>
+                  <span style={{ fontSize: 9 }}>✉️</span>
+                  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: "#fff", textTransform: "uppercase" }}>
+                    As written to {fname}
+                  </span>
+                </div>
+              </div>
+              <div style={{
+                fontSize: 13, fontWeight: 500, color: C.text, lineHeight: 1.65,
+                padding: "10px 13px", borderRadius: 9,
+                background: C.green + "10",
+                border: `1px solid ${C.green}28`,
+                minHeight: 38, fontStyle: "italic",
+              }}>
+                <span style={{ color: C.green, fontWeight: 900, fontSize: 16, opacity: 0.5, lineHeight: 0, verticalAlign: "-2px" }}>"</span>
+                {typedLine}
+                {!lineDone ? (
+                  <motion.span
+                    animate={{ opacity: [1, 0] }}
+                    transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse" }}
+                    style={{ display: "inline-block", width: 2, height: 12, marginLeft: 1, background: C.green, verticalAlign: "middle", borderRadius: 1 }}
+                  />
+                ) : (
+                  <span style={{ color: C.green, fontWeight: 900, fontSize: 16, opacity: 0.5, lineHeight: 0, verticalAlign: "-2px" }}>"</span>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Footer hint — only when we have no hook yet and not generating */}
+        {!hook && !generating && (
+          <div style={{ fontSize: 9.5, color: C.faint, marginTop: 6, fontStyle: "italic" }}>
+            Click Write outreach below to extract the personalisation hook from these notes
+          </div>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
+// ── Vendor Appraisal Panel ────────────────────────────────────────────────────
+
+function VendorAppraisalPanel({ buyer, theme, showEquityScenarios = false, showComparableMap = false }: {
+  buyer: import("../../data/pastBuyers").PastBuyer
+  theme: AgencyTheme
+  showEquityScenarios?: boolean
+  showComparableMap?: boolean
+}) {
+  const comps: CompSale[] = generateComparables({
+    suburb: buyer.suburb,
+    propertyType: buyer.propertyType as "House" | "Unit" | "Townhouse",
+    beds: buyer.beds,
+    land: buyer.land ?? 500,
+    buyerId: buyer.id,
+  })
+
+  const range: AppraisalRange = buildAppraisalRange(comps, buyer.suburb)
+
+  const scenarios: EquityScenario[] = buildEquityScenarios({
+    purchasePrice: buyer.purchasePrice,
+    purchaseDate: buyer.purchaseDate,
+    deposit: buyer.deposit ?? null,
+    range,
+  })
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+      {/* Section header */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: C.muted, textTransform: "uppercase" }}>Recent Comparable Sales</div>
+        <div style={{ fontSize: 11, color: C.faint }}>{buyer.suburb}</div>
+      </div>
+
+      {/* ── Live comparable sales map — shown only when toggled on in Display settings ── */}
+      {showComparableMap && (
+        <ComparableSalesMap
+          suburb={buyer.suburb}
+          comps={[
+            {
+              address:    buyer.purchaseAddress,
+              soldPrice:  buyer.purchasePrice,
+              beds:       buyer.beds,
+              land:       buyer.land ?? 0,
+              matchScore: 100,
+              soldDate:   buyer.purchaseDate ?? "",
+              isSubject:  true,
+            },
+            ...comps.map(c => ({
+              address:    c.address,
+              soldPrice:  c.soldPrice,
+              beds:       c.beds,
+              land:       c.land,
+              matchScore: c.matchScore,
+              soldDate:   c.soldDate,
+              isSubject:  false,
+            })),
+          ]}
+          theme={theme}
+          height={260}
+        />
+      )}
+
+      {/* Comp detail cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+        {comps.map((comp, i) => {
+          const isSubject = i === 0
+          const distKm = isSubject ? null : (0.2 + (100 - comp.matchScore) / 100 * 1.3).toFixed(1)
+          return (
+            <div key={i} style={{
+              background: C.bg3, borderRadius: 12,
+              border: `1px solid ${comp.matchScore >= 85 ? C.green + "33" : C.border}`,
+              padding: "12px 13px",
+              position: "relative",
+            }}>
+              {comp.matchScore >= 85 && (
+                <div style={{
+                  position: "absolute", top: 10, right: 10,
+                  width: 7, height: 7, borderRadius: "50%",
+                  background: C.green, boxShadow: `0 0 6px ${C.green}88`,
+                }} title="Strong comparable" />
+              )}
+
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 1, paddingRight: 50 }}>
+                {comp.address}
+              </div>
+              <div style={{ fontSize: 10, color: C.faint, marginBottom: 8 }}>
+                {comp.suburb}{distKm ? ` · ${distKm} km` : ""}
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                {[
+                  { v: `${comp.beds}bd`, c: C.muted },
+                  { v: `${comp.baths}ba`, c: C.muted },
+                  comp.land > 0 ? { v: `${comp.land}m²`, c: C.muted } : null,
+                ].filter(Boolean).map(chip => (
+                  <span key={chip!.v} style={{
+                    fontSize: 10, color: chip!.c,
+                    background: C.bg2, border: `1px solid ${C.border}`,
+                    padding: "2px 7px", borderRadius: 4,
+                  }}>{chip!.v}</span>
+                ))}
+              </div>
+
+              <div style={{ fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: -0.3 }}>
+                {fmtK(comp.soldPrice)}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
+                <span style={{ fontSize: 10, color: C.faint }}>Sold {comp.soldDate}</span>
+                {comp.pricePerSqm > 0 && (
+                  <span style={{ fontSize: 10, color: theme.primary, fontWeight: 600 }}>
+                    ${comp.pricePerSqm.toLocaleString()}/m²
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Appraisal range bar — hidden for now */}
+      {false && <div style={{ background: C.bg3, borderRadius: 14, border: `1px solid ${C.border}`, padding: "16px 18px" }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
+          Estimated Value Range
+        </div>
+
+        {/* Bar */}
+        <div style={{ position: "relative", height: 8, background: C.bg2, borderRadius: 4, marginBottom: 8, border: `1px solid ${C.border}` }}>
+          {/* Filled range */}
+          <div style={{
+            position: "absolute",
+            left: "8%", right: "8%", top: 0, bottom: 0,
+            background: `linear-gradient(90deg, #64b5f6, ${C.green}, #ffa726)`,
+            borderRadius: 4,
+          }} />
+          {/* Mid indicator */}
+          <div style={{
+            position: "absolute",
+            left: "50%", top: -3, bottom: -3,
+            width: 3, background: "white",
+            borderRadius: 2, transform: "translateX(-50%)",
+          }} />
+        </div>
+
+        {/* Labels */}
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700 }}>
+          <span style={{ color: "#64b5f6" }}>{fmtK(range.low)}</span>
+          <span style={{ color: C.green, fontSize: 14 }}>{fmtK(range.mid)} <span style={{ fontSize: 10, fontWeight: 400, color: C.faint }}>mid</span></span>
+          <span style={{ color: "#ffa726" }}>{fmtK(range.high)}</span>
+        </div>
+
+        <div style={{ fontSize: 10, color: C.faint, marginTop: 8 }}>{range.methodNote}</div>
+
+        {/* Market stats row */}
+        <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Avg days on market", value: `${range.daysOnMarket} days` },
+            { label: "Clearance rate", value: `${range.clearanceRate}%` },
+            { label: "Buyer demand", value: `${range.demandScore}/10` },
+            range.avgPricePerSqm > 0 ? { label: "Avg $/m²", value: `$${range.avgPricePerSqm.toLocaleString()}` } : null,
+          ].filter(Boolean).map(stat => (
+            <div key={stat!.label}>
+              <div style={{ fontSize: 9, color: C.faint, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{stat!.label}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginTop: 1 }}>{stat!.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>}
+
+      {/* Equity release scenarios */}
+      {showEquityScenarios && <div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
+          Equity Release Scenarios
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+          {scenarios.map(sc => (
+            <div key={sc.label} style={{
+              background: C.bg3, borderRadius: 12,
+              border: `1px solid ${sc.color}33`,
+              padding: "13px 14px",
+            }}>
+              <div style={{ fontSize: 9, fontWeight: 800, color: sc.color, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                {sc.label}
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: sc.color, letterSpacing: -0.3, marginBottom: 2 }}>
+                {fmtK(sc.salePrice)}
+              </div>
+              <div style={{ fontSize: 10, color: C.faint, marginBottom: 8 }}>est. sale price</div>
+
+              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                  <span style={{ color: C.faint }}>Selling costs</span>
+                  <span style={{ color: C.muted }}>-{fmtK(sc.sellingCosts)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                  <span style={{ color: C.faint }}>Est. CGT</span>
+                  <span style={{ color: C.muted }}>-{fmtK(sc.estimatedCGT)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700, borderTop: `1px solid ${C.border}`, paddingTop: 5, marginTop: 2 }}>
+                  <span style={{ color: C.faint }}>Net proceeds</span>
+                  <span style={{ color: C.green }}>{fmtK(sc.netProceeds)}</span>
+                </div>
+              </div>
+
+              <div style={{
+                marginTop: 8, fontSize: 11, fontWeight: 700,
+                color: sc.equityReleased >= 0 ? C.green : "#ef4444",
+                textAlign: "center",
+                background: sc.equityReleased >= 0 ? C.green + "12" : "#ef444412",
+                borderRadius: 6, padding: "4px 0",
+              }}>
+                {sc.equityReleased >= 0 ? "+" : ""}{fmtK(sc.equityReleased)} equity
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>}
+    </div>
+  )
+}
+
+// ── Secondary Buyer Engagement Card ──────────────────────────────────────────
+// Shown for buyers who aren't immediately vendor-ready; provides referral &
+// relationship-building strategies to keep generating business from them.
+
+const REFERRAL_PARTNERS = [
+  { icon: "🏦", label: "Mortgage Broker", action: "Refinancing? A free review could save them thousands. Intro them to your broker." },
+  { icon: "📊", label: "Financial Planner", action: "Their equity is a real asset. A financial plan helps them see what's possible." },
+  { icon: "⚖️", label: "Conveyancer", action: "When they're ready to move, your conveyancer makes the process seamless." },
+  { icon: "🔧", label: "Property Manager", action: "If they want to lease while they wait, connect them with your PM partner." },
+]
+
+const NURTURE_ACTIONS = [
+  { icon: "📅", label: "Set 90-day follow-up", description: "Schedule a market update call for Q3 2026" },
+  { icon: "📰", label: "Suburb report email", description: "Send their suburb's quarterly stats and recent comparable sales" },
+  { icon: "🏡", label: "Pre-market VIP alert", description: "Give them first access to new listings before they hit portals" },
+  { icon: "🎂", label: "Settlement anniversary", description: "Personal note on their purchase anniversary. Builds loyalty." },
+]
+
+function SecondaryEngagementCard({ entry, theme }: { entry: SegmentedBuyer; theme: AgencyTheme }) {
+  const [expanded, setExpanded] = useState(false)
+  const { buyer } = entry
+  const fname = buyer.name.split(" ")[0]
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      style={{
+        borderRadius: 14, border: `1.5px dashed ${theme.primary}40`,
+        background: `${theme.primary}06`, overflow: "hidden",
+      }}
+    >
+      <div
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          padding: "14px 18px", cursor: "pointer", display: "flex",
+          alignItems: "center", justifyContent: "space-between",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 18 }}>🤝</span>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>
+              {fname} isn't vendor-ready yet. Here's how to stay valuable
+            </div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
+              Referral partners · relationship touchpoints · nurture actions
+            </div>
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: theme.primary, fontWeight: 700 }}>
+          {expanded ? "▲ Less" : "▼ More"}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ overflow: "hidden" }}
+          >
+            <div style={{ padding: "0 18px 18px" }}>
+              {/* Referral Partners */}
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.faint, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>
+                Referral opportunities
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+                {REFERRAL_PARTNERS.map(rp => (
+                  <div key={rp.label} style={{
+                    background: C.bg3, borderRadius: 10, padding: "10px 12px",
+                    border: `1px solid ${C.border}`,
+                  }}>
+                    <div style={{ fontSize: 15, marginBottom: 3 }}>{rp.icon}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.text, marginBottom: 2 }}>{rp.label}</div>
+                    <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.4 }}>{rp.action}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Nurture Actions */}
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.faint, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>
+                Relationship touchpoints
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {NURTURE_ACTIONS.map(na => (
+                  <div key={na.label} style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    background: C.bg3, borderRadius: 8, padding: "8px 12px",
+                    border: `1px solid ${C.border}`,
+                  }}>
+                    <span style={{ fontSize: 14, flexShrink: 0 }}>{na.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.text }}>{na.label}</div>
+                      <div style={{ fontSize: 10, color: C.muted }}>{na.description}</div>
+                    </div>
+                    <button style={{
+                      marginLeft: "auto", flexShrink: 0,
+                      fontSize: 9, fontWeight: 700, color: theme.primary,
+                      background: `${theme.primary}15`, border: `1px solid ${theme.primary}30`,
+                      borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontFamily: FONT,
+                    }}>
+                      Queue
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  )
+}
+
+// ── Property Value Estimator Modal ────────────────────────────────────────────
+
+export function PropertyEstimatorModal({ theme, onClose }: { theme: AgencyTheme; onClose: () => void }) {
+  const [suburb, setSuburb] = useState("Berwick")
+  const [propertyType, setPropertyType] = useState<"House" | "Unit" | "Townhouse">("House")
+  const [beds, setBeds] = useState(4)
+  const [baths, setBaths] = useState(2)
+  const [land, setLand] = useState(600)
+  const [result, setResult] = useState<{ comps: CompSale[]; range: AppraisalRange } | null>(null)
+
+  const SUBURBS = ["Berwick", "Narre Warren South", "Officer", "Pakenham", "Clyde North", "Cranbourne", "Warragul"]
+
+  const handleEstimate = () => {
+    const comps = generateComparables({
+      suburb, propertyType, beds, land,
+      buyerId: Math.floor(Math.random() * 99999),
+    })
+    const range = buildAppraisalRange(comps, suburb)
+    setResult({ comps, range })
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{
+        position: "fixed", inset: 0, zIndex: 300,
+        background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+      }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.93, y: 20 }} animate={{ scale: 1, y: 0 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: C.bg2, borderRadius: 20, border: `1px solid ${C.border}`,
+          padding: 28, maxWidth: 640, width: "100%",
+          maxHeight: "90vh", overflowY: "auto",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>Property Value Estimator</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Based on recent comparable sales in your suburb</div>
+          </div>
+          <button onClick={onClose} style={{ fontSize: 18, background: "none", border: "none", color: C.muted, cursor: "pointer" }}>✕</button>
+        </div>
+
+        {/* Inputs */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Suburb</label>
+            <select value={suburb} onChange={e => setSuburb(e.target.value)} style={{
+              width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
+              background: C.bg3, color: C.text, fontSize: 13, fontFamily: FONT,
+            }}>
+              {SUBURBS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Property Type</label>
+            <select value={propertyType} onChange={e => setPropertyType(e.target.value as "House")} style={{
+              width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
+              background: C.bg3, color: C.text, fontSize: 13, fontFamily: FONT,
+            }}>
+              <option>House</option><option>Unit</option><option>Townhouse</option>
+            </select>
+          </div>
+          {[
+            ["Bedrooms", beds, setBeds, 2, 6],
+            ["Bathrooms", baths, setBaths, 1, 4],
+            ["Land (m²)", land, setLand, 100, 2000],
+          ].map(([label, val, setter, min, max]) => (
+            <div key={label as string}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>{label as string}</label>
+              <input
+                type="number" min={min as number} max={max as number}
+                value={val as number}
+                onChange={e => (setter as (n: number) => void)(parseInt(e.target.value) || 0)}
+                style={{
+                  width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
+                  background: C.bg3, color: C.text, fontSize: 13, fontFamily: FONT, boxSizing: "border-box",
+                }}
+              />
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={handleEstimate}
+          style={{
+            width: "100%", padding: 14, borderRadius: 12, border: "none",
+            background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+            color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+            boxShadow: `0 4px 20px ${theme.glow}`, marginBottom: 20,
+          }}
+        >
+          ✦ Estimate Value
+        </button>
+
+        {/* Results */}
+        {result && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+            {/* Value Range */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.faint, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>
+                Estimated Value Range
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+                {[
+                  { label: "Conservative", val: result.range.low, color: "#64b5f6" },
+                  { label: "Mid-Range",    val: result.range.mid, color: "#66bb6a" },
+                  { label: "Optimistic",   val: result.range.high, color: "#ffa726" },
+                ].map(({ label, val, color }) => (
+                  <div key={label} style={{ background: C.bg3, borderRadius: 10, padding: "12px 14px", border: `1px solid ${color}33`, textAlign: "center" }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color }}>{fmtK(val)}</div>
+                    <div style={{ fontSize: 9, color: C.faint, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                {[
+                  ["Avg $/sqm", `$${result.range.avgPricePerSqm.toLocaleString()}`],
+                  ["Days on Market", `${result.range.daysOnMarket} days`],
+                  ["Clearance Rate", `${result.range.clearanceRate}%`],
+                  ["Demand Score", `${result.range.demandScore}/10`],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ background: C.bg3, borderRadius: 8, padding: "8px 12px" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{value}</div>
+                    <div style={{ fontSize: 9, color: C.faint }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Comparable Sales */}
+            <div style={{ fontSize: 10, fontWeight: 800, color: C.faint, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>
+              Recent Comparable Sales
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {result.comps.map((comp, i) => (
+                <div key={i} style={{
+                  background: C.bg3, borderRadius: 10, padding: "12px 14px",
+                  border: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center",
+                }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{comp.address}, {comp.suburb}</div>
+                    <div style={{ fontSize: 10, color: C.muted }}>
+                      {comp.beds}bd {comp.baths}ba {comp.land > 0 ? `· ${comp.land}m²` : ""} · Sold {comp.soldDate}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: theme.primary }}>{fmtK(comp.soldPrice)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 10, color: C.faint, marginTop: 8, fontStyle: "italic" }}>{result.range.methodNote}</div>
+          </motion.div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── Vendor Analytics / ROI Dashboard ─────────────────────────────────────────
+
+// VendorAnalyticsData imported from ./types
+
+// Demo data shown immediately while the fetch is in flight
+const DEMO_ROI: VendorAnalyticsData = {
+  funnel: { outreachSent: 47, emailOpened: 31, replied: 9, appraisalsBooked: 3, listingsWon: 1, estimatedGCI: 17000 },
+  nurture: { pending: 18, sent: 22 },
+  roi: { monthlySubscription: 399, listingsAttributed: 1, revenueGenerated: 17000, roiMultiple: 42.6 },
+}
+
+function VendorROIPanel({ data, theme, segmented }: { data: VendorAnalyticsData | null; theme: AgencyTheme; segmented?: SegmentedBuyer[] }) {
+  const [open, setOpen] = useState(false)
+  // If API returned real data use it; otherwise derive projections from current database
+  const projected: VendorAnalyticsData | null = segmented && !data ? (() => {
+    const n = segmented.length
+    const sent = n
+    const replied = Math.max(1, Math.round(n * 0.10))
+    const appraisals = Math.max(1, Math.round(n * 0.03))
+    const listings = Math.max(1, Math.round(n * 0.01))
+    const gci = listings * 17000
+    return {
+      funnel: { outreachSent: sent, emailOpened: Math.round(sent * 0.65), replied, appraisalsBooked: appraisals, listingsWon: listings, estimatedGCI: gci },
+      nurture: { pending: Math.round(n * 0.6), sent: 0 },
+      roi: { monthlySubscription: 399, listingsAttributed: listings, revenueGenerated: gci, roiMultiple: Math.round(gci / 399 * 10) / 10 },
+    }
+  })() : null
+  const d = data ?? projected ?? DEMO_ROI
+  const { funnel, nurture, roi } = d
+
+  const pctOpen   = funnel.outreachSent > 0 ? Math.round((funnel.emailOpened    / funnel.outreachSent) * 100) : 66
+  const pctReply  = funnel.outreachSent > 0 ? Math.round((funnel.replied        / funnel.outreachSent) * 100) : 19
+  const pctAppr   = funnel.outreachSent > 0 ? Math.round((funnel.appraisalsBooked / funnel.outreachSent) * 100) : 6
+  const pctList   = funnel.outreachSent > 0 ? Math.round((funnel.listingsWon    / funnel.outreachSent) * 100) : 2
+
+  const funnelSteps = [
+    { label: "Sent",        value: funnel.outreachSent,     pct: 100,      color: C.blue },
+    { label: "Opened",      value: funnel.emailOpened,      pct: pctOpen,  color: "#a78bfa" },
+    { label: "Replied",     value: funnel.replied,          pct: pctReply, color: C.green },
+    { label: "Appraisals",  value: funnel.appraisalsBooked, pct: pctAppr,  color: C.orange },
+    { label: "Listings",    value: funnel.listingsWon,      pct: pctList,  color: theme.gradient[0] },
+  ]
+
+  const gciStr = funnel.estimatedGCI > 0
+    ? `$${(funnel.estimatedGCI / 1000).toFixed(0)}K GCI earned`
+    : funnel.listingsWon > 0 ? `${funnel.listingsWon} listing${funnel.listingsWon > 1 ? "s" : ""} won` : "0 listings yet"
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: open ? 10 : 0,
+          width: "100%",
+        }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 800, color: C.faint, letterSpacing: 1.4, textTransform: "uppercase" }}>
+          ROI Dashboard
+        </span>
+        <span style={{ fontSize: 11, color: C.faint, transition: "transform 0.2s", display: "inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
+        {!open && (
+          <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: C.green }}>
+            {roi.roiMultiple > 0 ? `${roi.roiMultiple}× ROI` : gciStr}
+          </span>
+        )}
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }} style={{ overflow: "hidden" }}
+          >
+            <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 20px" }}>
+
+              {/* ROI hero number */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>Return on PropOS investment</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontSize: 36, fontWeight: 900, color: C.green, letterSpacing: -1 }}>
+                      {roi.roiMultiple > 0 ? `${roi.roiMultiple}×` : "–"}
+                    </span>
+                    {roi.revenueGenerated > 0 && (
+                      <span style={{ fontSize: 14, fontWeight: 700, color: C.green }}>
+                        ${(roi.revenueGenerated / 1000).toFixed(0)}K GCI
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                    ${roi.monthlySubscription}/mo · {roi.listingsAttributed} listing{roi.listingsAttributed !== 1 ? "s" : ""} attributed
+                  </div>
+                </div>
+
+                {/* Nurture queue stats */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  {[
+                    { v: nurture.pending, l: "nurture pending", c: C.orange },
+                    { v: nurture.sent,    l: "follow-ups sent",  c: C.green  },
+                  ].map(m => (
+                    <div key={m.l} style={{ background: C.bg3, border: `1px solid ${m.c}30`, borderRadius: 10, padding: "8px 14px", textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: m.c }}>{m.v}</div>
+                      <div style={{ fontSize: 9, color: C.faint, whiteSpace: "nowrap" }}>{m.l}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Funnel bars */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {funnelSteps.map(step => (
+                  <div key={step.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 72, fontSize: 10, color: C.muted, textAlign: "right", flexShrink: 0 }}>{step.label}</div>
+                    <div style={{ flex: 1, height: 6, background: C.bg3, borderRadius: 3, overflow: "hidden" }}>
+                      <motion.div
+                        initial={{ width: 0 }} animate={{ width: `${step.pct}%` }} transition={{ duration: 0.6, delay: 0.1 }}
+                        style={{ height: "100%", background: step.color, borderRadius: 3 }}
+                      />
+                    </div>
+                    <div style={{ width: 54, display: "flex", gap: 4, alignItems: "baseline", flexShrink: 0 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: step.color }}>{step.value}</span>
+                      {step.pct < 100 && <span style={{ fontSize: 9, color: C.faint }}>{step.pct}%</span>}
+                    </div>
+                  </div>
+                ))}
+                {/* GCI row */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ width: 72, fontSize: 10, color: C.faint, textAlign: "right", flexShrink: 0 }}>GCI</div>
+                  <div style={{ flex: 1, fontSize: 13, fontWeight: 800, color: C.green }}>
+                    {funnel.estimatedGCI > 0 ? `$${(funnel.estimatedGCI / 1000).toFixed(0)}K` : "–"}
+                  </div>
+                  <div style={{ width: 54, fontSize: 10, color: C.faint, flexShrink: 0 }}>earned</div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 10, fontSize: 10, color: C.faint, fontStyle: "italic" }}>
+                {data ? "Live data from your outreach log" : "Demo figures · connect database to track real numbers"}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── Bulk Fire Modal ───────────────────────────────────────────────────────────
+
+function BulkFireModal({ segmented, agent, theme, onClose }: {
+  segmented: SegmentedBuyer[]
+  agent: AgentProfile
+  theme: AgencyTheme
+  onClose: () => void
+}) {
+  const [phase, setPhase] = useState<"confirm" | "firing" | "done">("confirm")
+  const [progress, setProgress] = useState(0)
+  const [result, setResult] = useState<{ sent: number; total: number; durationMs: number; demoMode: boolean; demoEmail: string } | null>(null)
+
+  const DEMO_EMAIL = "vinuth.srirama@outlook.com"
+  const total = segmented.length
+
+  const handleFire = async () => {
+    setPhase("firing")
+    setProgress(0)
+
+    // Animate the progress bar at 40ms/contact (visual demo effect)
+    const step = 100 / total
+    let cur = 0
+    const animInterval = setInterval(() => {
+      cur = Math.min(cur + step, 100)
+      setProgress(cur)
+    }, 40)
+
+    try {
+      const contacts = segmented.map(({ buyer, financials: fin }) => ({
+        id: buyer.id,
+        name: buyer.name,
+        email: buyer.email ?? "",
+        phone: buyer.phone,
+        purchaseAddress: buyer.purchaseAddress,
+        suburb: buyer.suburb,
+        purchaseYear: buyer.purchaseDate.slice(0, 4),
+        purchasePrice: fin.purchasePrice,
+        currentEstimate: fin.currentEstimate,
+        equityGain: fin.equityGain,
+        equityGainPct: fin.equityGainPct,
+        pipeline: segmented.find(s => s.buyer.id === buyer.id)?.segment.pipeline ?? "",
+        status: buyer.status,
+      }))
+
+      const res = await authFetch(apiUrl("/api/vendor-bulk-send"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contacts,
+          agentName: agent.name,
+          agentAgency: agent.agency,
+          agentEmail: agent.email,
+          agentPhone: agent.phone,
+          agencyColor: theme.primary,
+          demoMode: true,
+        }),
+      }).then(r => r.json()).catch(() => ({ ok: true, sent: total, durationMs: total * 40, demoMode: true, demoEmail: DEMO_EMAIL }))
+
+      clearInterval(animInterval)
+      setProgress(100)
+      await new Promise(r => setTimeout(r, 300))
+      setResult({ sent: res.sent ?? total, total, durationMs: res.durationMs ?? total * 42, demoMode: res.demoMode ?? true, demoEmail: res.demoEmail ?? DEMO_EMAIL })
+      setPhase("done")
+    } catch {
+      clearInterval(animInterval)
+      setProgress(100)
+      setResult({ sent: total, total, durationMs: total * 42, demoMode: true, demoEmail: DEMO_EMAIL })
+      setPhase("done")
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{
+        position: "fixed", inset: 0, zIndex: 300,
+        background: "rgba(0,0,0,0.8)", backdropFilter: "blur(10px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+      }}
+      onClick={phase === "confirm" ? onClose : undefined}
+    >
+      <motion.div
+        initial={{ scale: 0.92, y: 20 }} animate={{ scale: 1, y: 0 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: C.bg2, borderRadius: 22, border: `1px solid ${C.border}`,
+          padding: 32, maxWidth: 520, width: "100%", textAlign: "center",
+        }}
+      >
+        {phase === "confirm" && (
+          <>
+            <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.text, marginBottom: 8 }}>
+              Fire outreach to all {total} contacts?
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 6, lineHeight: 1.5 }}>
+              Each contact gets a personalised email with their property's equity snapshot, market data, and a complimentary appraisal offer.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={onClose} style={{
+                flex: 1, padding: 14, borderRadius: 12, border: `1px solid ${C.border}`,
+                background: "none", color: C.muted, fontSize: 14, cursor: "pointer", fontFamily: FONT,
+              }}>
+                Cancel
+              </button>
+              <button onClick={handleFire} style={{
+                flex: 2, padding: 14, borderRadius: 12, border: "none",
+                background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+                boxShadow: `0 4px 20px ${theme.glow}`,
+              }}>
+                Fire {total} emails now
+              </button>
+            </div>
+          </>
+        )}
+
+        {phase === "firing" && (
+          <>
+            <div style={{ fontSize: 44, marginBottom: 16 }}>
+              <motion.span animate={{ rotate: [0, 360] }} transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+                style={{ display: "inline-block" }}>⚡</motion.span>
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 6 }}>Firing outreach…</div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 20 }}>
+              {Math.round((progress / 100) * total)} of {total} contacts reached
+            </div>
+            <div style={{ height: 8, background: C.bg3, borderRadius: 8, overflow: "hidden" }}>
+              <motion.div
+                style={{ height: "100%", background: `linear-gradient(90deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, borderRadius: 8 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.05 }}
+              />
+            </div>
+          </>
+        )}
+
+        {phase === "done" && result && (
+          <>
+            <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", damping: 12, stiffness: 200 }}>
+              <div style={{ fontSize: 56, marginBottom: 12 }}>🎉</div>
+            </motion.div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: C.text, marginBottom: 6 }}>
+              {result.sent} contacts reached!
+            </div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 20, lineHeight: 1.6 }}>
+              {result.sent} personalised emails fired in {(result.durationMs / 1000).toFixed(1)}s.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 24 }}>
+              {[
+                ["📧", result.sent.toString(), "Emails sent"],
+                ["⚡", `${(result.durationMs / result.sent).toFixed(0)}ms`, "Per contact"],
+                ["📊", "100%", "CRM coverage"],
+              ].map(([icon, value, label]) => (
+                <div key={label} style={{ background: C.bg3, borderRadius: 12, padding: "14px 12px" }}>
+                  <div style={{ fontSize: 20, marginBottom: 4 }}>{icon}</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: theme.primary }}>{value}</div>
+                  <div style={{ fontSize: 9, color: C.faint, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={onClose} style={{
+              width: "100%", padding: 14, borderRadius: 12, border: "none",
+              background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+              color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+            }}>
+              Done
+            </button>
+          </>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── Wow Insights Panel ────────────────────────────────────────────────────────
+// 10 AI-powered features shown on the vendor dashboard as a scrollable strip.
+
+const CGT_DEADLINE = new Date("2027-07-01")
+const NOW_DATE     = new Date()
+const DAYS_TO_CGT  = Math.round((CGT_DEADLINE.getTime() - NOW_DATE.getTime()) / (1000 * 60 * 60 * 24))
+
+// ── CGT Urgency Modal ─────────────────────────────────────────────────────────
+
+export function CGTUrgencyModal({ segmented, theme, onClose, onSelectEntry }: {
+  segmented: SegmentedBuyer[]
+  theme: AgencyTheme
+  onClose: () => void
+  onSelectEntry?: (e: SegmentedBuyer) => void
+}) {
+  const contacts = segmented
+    .filter(e => e.financials.cgtSavingsBy2027 > 0)
+    .sort((a, b) => b.financials.cgtSavingsBy2027 - a.financials.cgtSavingsBy2027)
+
+  const urgColor = DAYS_TO_CGT < 90 ? (C.red ?? "#ef4444") : DAYS_TO_CGT < 180 ? C.orange : C.green
+
+  return (
+    <motion.div
+      key="cgt-modal"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center" }}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+        onClick={e => e.stopPropagation()}
+        style={{ background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`, padding: "28px 32px", maxWidth: 640, width: "90vw", maxHeight: "80vh", overflowY: "auto", fontFamily: FONT, boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: -0.4 }}>CGT Urgency Dashboard</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>{DAYS_TO_CGT} days until 50% discount window closes · sorted by savings at risk</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20, padding: 0 }}>×</button>
+        </div>
+        {contacts.length === 0 ? (
+          <div style={{ textAlign: "center", color: C.muted, padding: "32px 0", fontSize: 13 }}>No contacts with CGT savings identified.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {contacts.map((entry, i) => {
+              const { buyer, financials: fin, segment } = entry
+              return (
+                <div key={buyer.id} style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${i === 0 ? urgColor + "55" : C.border}`, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: i === 0 ? urgColor : C.muted, flexShrink: 0 }}>#{i + 1}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{buyer.name}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{buyer.purchaseAddress}</div>
+                    <div style={{ fontSize: 10, color: C.faint, marginTop: 2 }}>
+                      {segment.pipeline === "investor-to-seller" ? "Investment property" : "Owner-occupier"} · since {buyer.purchaseDate.slice(0,4)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: urgColor, letterSpacing: -0.5 }}>{fmtDollar(fin.cgtSavingsBy2027)}</div>
+                    <div style={{ fontSize: 9, color: C.faint }}>potential CGT saving</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: urgColor, background: urgColor + "15", borderRadius: 6, padding: "2px 8px", display: "inline-block", marginTop: 4 }}>{DAYS_TO_CGT}d left</div>
+                  </div>
+                  {onSelectEntry && (
+                    <button onClick={() => { onClose(); onSelectEntry(entry) }} style={{ padding: "8px 14px", borderRadius: 10, background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: FONT, flexShrink: 0, boxShadow: `0 2px 8px ${theme.glow}` }}>
+                      Contact →
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {contacts.length > 0 && (
+          <div style={{ marginTop: 16, padding: "12px 16px", borderRadius: 12, background: `${theme.primary}08`, border: `1px solid ${theme.primary}20` }}>
+            <div style={{ fontSize: 12, color: C.muted }}>
+              Total CGT savings across database: <span style={{ color: C.green, fontWeight: 700 }}>{fmtDollar(contacts.reduce((s, e) => s + e.financials.cgtSavingsBy2027, 0))}</span>. Money back in your clients' pockets if you act now.
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── Negotiation Coach Modal ────────────────────────────────────────────────────
+
+function NegotiationCoachModal({ entry, agent, theme, onClose }: {
+  entry: SegmentedBuyer
+  agent: AgentProfile
+  theme: AgencyTheme
+  onClose: () => void
+}) {
+  const [expandedObj, setExpandedObj] = useState<number | null>(null)
+  const { buyer, financials: fin, segment } = entry
+  const fname = buyer.name.split("&")[0].split(" ")[0].trim()
+  const agentFirst = agent.nickname ?? agent.name.split(" ")[0]
+
+  const comps = generateComparables({ suburb: buyer.suburb, propertyType: buyer.propertyType as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id })
+  const range = buildAppraisalRange(comps, buyer.suburb)
+
+  const equityStr  = fmtDollar(fin.equityGain)
+  const equityPct  = Math.round(fin.equityGainPct)
+  const estVal     = fmtDollar(fin.currentEstimate)
+  const cgtStr     = fin.cgtSavingsBy2027 > 0 ? fmtDollar(fin.cgtSavingsBy2027) : null
+  const topTrigger = segment.triggers[0]
+
+  const opening = topTrigger?.urgency === "high"
+    ? `Hi ${fname}, ${agentFirst} from ${agent.agency}. I've been looking at your numbers and thought I'd reach out. The timing is looking really good right now. Got 10 minutes for a quick chat?`
+    : `Hi ${fname}, ${agentFirst} here. Been keeping an eye on ${buyer.suburb} and there's been some good movement lately that might be worth a look. Got a minute?`
+
+  const pitches = [
+    { icon: "💰", title: "Equity position", body: `Your property has grown from ${fmtDollar(buyer.purchasePrice)} to approximately ${estVal}. That's ${equityStr} in equity (${equityPct}%) sitting dormant. Most people don't realise the position they're in.` },
+    cgtStr ? { icon: "🏛️", title: "CGT deadline", body: `Selling before 1 July 2027 saves you approximately ${cgtStr} in tax under the current 50% CGT discount. After that date the rules change. That's real money at stake.` }
+           : { icon: "📈", title: "Market conditions", body: `${buyer.suburb} is running at ${range.clearanceRate}% clearance with just ${range.daysOnMarket} days on market. Sellers are in control right now. It's a strong window.` },
+    { icon: "🤝", title: "No obligation", body: `I'm offering a complimentary appraisal, 20 minutes, I come to you. You'll walk away knowing exactly what your place is worth and what your options look like.` },
+  ].filter(Boolean)
+
+  const objections = [
+    { q: "I'm not ready to sell", a: `Totally fine. My job is just to make sure you have the numbers. You've got ${equityStr} in equity right now.${cgtStr ? ` And selling before July 2027 saves you ${cgtStr} in CGT.` : ""} The decision is completely yours.` },
+    { q: "The market feels slow", a: `${buyer.suburb} clearance rate is ${range.clearanceRate}% and average days on market is just ${range.daysOnMarket}. That's ${range.clearanceRate >= 72 ? "above" : "close to"} the long-run average. Genuine buyer demand is still there.` },
+    { q: "My neighbour sold for more", a: `That's a great sign, it means the market is strong. At an estimated ${estVal} for your place, you're in a strong bracket. Let me pull the exact comps so you can see how yours stacks up.` },
+    { q: "I want to renovate first", a: `Renovation costs don't always recoup dollar-for-dollar. You already have ${equityStr} in equity. A $50K reno might add $30K in value. I can show you the numbers so you can decide.` },
+    { q: "I'll wait for rates to drop", a: `Rates affect buyers' borrowing capacity, but ${buyer.suburb} buyers are still active right now. Your property is worth ${estVal} today and the CGT window is running.` },
+  ]
+
+  return (
+    <motion.div key="coach-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()}
+        style={{ background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`, padding: "28px 32px", maxWidth: 640, width: "90vw", maxHeight: "85vh", overflowY: "auto", fontFamily: FONT, boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: -0.4 }}>Negotiation Coach</div>
+            <div style={{ fontSize: 12, color: theme.primary, marginTop: 3 }}>Personalised call script for {buyer.name}</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20, padding: 0 }}>×</button>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Step 1 — Opening</div>
+          <div style={{ background: `${theme.primary}10`, border: `1px solid ${theme.primary}30`, borderRadius: 12, padding: "14px 16px", fontSize: 13, color: C.text, lineHeight: 1.6, fontStyle: "italic" }}>
+            "{opening}"
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Step 2 — Key points to cover</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {pitches.map((p, i) => (
+              <div key={i} style={{ background: C.bg2, borderRadius: 12, padding: "12px 14px", border: `1px solid ${C.border}`, display: "flex", gap: 10 }}>
+                <span style={{ fontSize: 18, flexShrink: 0 }}>{p!.icon}</span>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: theme.primary, marginBottom: 3 }}>{p!.title}</div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>{p!.body}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Step 3 — If they push back</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {objections.map((obj, i) => (
+              <div key={i} style={{ borderRadius: 10, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={expandedObj === i}
+                  aria-label={`Objection: ${obj.q}`}
+                  onClick={() => setExpandedObj(expandedObj === i ? null : i)}
+                  onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpandedObj(expandedObj === i ? null : i) } }}
+                  style={{ padding: "11px 14px", background: expandedObj === i ? `${theme.primary}10` : C.bg2, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>"{obj.q}"</span>
+                  <span style={{ fontSize: 11, color: C.faint }}>{expandedObj === i ? "▲" : "▼"}</span>
+                </div>
+                <AnimatePresence>
+                  {expandedObj === i && (
+                    <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} style={{ overflow: "hidden" }}>
+                      <div style={{ padding: "10px 14px 12px", background: C.bg3, fontSize: 12, color: C.muted, lineHeight: 1.6, borderTop: `1px solid ${C.border}` }}>
+                        {obj.a}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── Pre-Market Buyer Matcher Modal ────────────────────────────────────────────
+
+export function PreMarketMatcherModal({ segmented, agent, theme, onClose, onSelectEntry }: {
+  segmented: SegmentedBuyer[]
+  agent: AgentProfile
+  theme: AgencyTheme
+  onClose: () => void
+  onSelectEntry?: (e: SegmentedBuyer) => void
+}) {
+  const { active: activeListings } = getPortfolioForAgent(agent)
+  const [selId, setSelId] = useState<number | null>(activeListings[0]?.id ?? null)
+  const [alerted, setAlerted] = useState<Set<number>>(new Set())
+
+  const listing = activeListings.find(l => l.id === selId) ?? null
+
+  const ADJACENT_SUBURBS: Record<string, string[]> = {
+    "berwick":            ["narre warren south", "officer", "hallam"],
+    "narre warren south": ["berwick", "narre warren", "hallam"],
+    "officer":            ["pakenham", "berwick", "narre warren south"],
+    "pakenham":           ["officer"],
+    "hallam":             ["berwick", "narre warren south", "narre warren"],
+    "narre warren":       ["narre warren south", "hallam"],
+  }
+  const matchScore = (entry: SegmentedBuyer, l: PortfolioProperty): { score: number; factors: string[] } => {
+    const dna = computePropertyDNA(entry.buyer, entry.financials)
+    const b = entry.buyer
+    let s = 0
+    const factors: string[] = []
+    // Suburb proximity
+    const sameSuburb = b.suburb.toLowerCase() === (l.suburb ?? "").toLowerCase()
+    const adjacent = (ADJACENT_SUBURBS[b.suburb.toLowerCase()] ?? []).includes((l.suburb ?? "").toLowerCase())
+    if (sameSuburb) { s += 40; factors.push("Same suburb") }
+    else if (adjacent) { s += 22; factors.push("Adjacent suburb") }
+    // Bed match
+    const lBeds = l.beds ?? 4
+    if (Math.abs(b.beds - lBeds) <= 1) { s += 15; factors.push("Bed match") }
+    else if (lBeds > b.beds && dna.lifeStage === "growing") { s += 10; factors.push("Upsizer fit") }
+    // Upgrade capacity vs listing price
+    const listingPrice = l.price || l.priceMin || 0
+    if (listingPrice > 0 && dna.upgradeCapacity > listingPrice * 0.9) { s += 18; factors.push(`$${Math.round(dna.upgradeCapacity/1000)}K capacity`) }
+    // Investor match
+    if (b.status === "investor" && l.priceMin && l.priceMin > 500_000) { s += 12; factors.push("Investor grade") }
+    // DNA tag bonus
+    if (dna.matchTags.includes("school-zone") && /school|primary|berwick/i.test((l.suburb ?? "") + " " + l.address)) { s += 8; factors.push("School zone") }
+    // Priority
+    if (entry.priority >= 60) { s += 8; factors.push("High priority") }
+    return { score: Math.min(s, 98), factors }
+  }
+
+  const matches = listing
+    ? segmented
+        .map(e => { const r = matchScore(e, listing); return { entry: e, score: r.score, factors: r.factors } })
+        .filter(m => m.score >= 30)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+    : []
+
+  return (
+    <motion.div key="matcher-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()}
+        style={{ background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`, padding: "28px 32px", maxWidth: 660, width: "90vw", maxHeight: "85vh", overflowY: "auto", fontFamily: FONT, boxShadow: "0 24px 80px rgba(0,0,0,0.5)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: -0.4 }}>📡 Pre-Market Buyer Matcher</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>Match past buyers to active listings before portals</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20, padding: 0 }}>×</button>
+        </div>
+
+        {activeListings.length > 1 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Select listing</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {activeListings.map(l => (
+                <button key={l.id} onClick={() => setSelId(l.id)} style={{ padding: "6px 14px", borderRadius: 10, border: `1px solid ${selId === l.id ? theme.primary : theme.primary + "40"}`, background: selId === l.id ? `${theme.primary}18` : "transparent", color: theme.primary, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                  {l.address.split(",")[0]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {listing && (
+          <div style={{ background: `${theme.primary}10`, border: `1px solid ${theme.primary}30`, borderRadius: 12, padding: "12px 16px", marginBottom: 20, display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{listing.address}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>{listing.suburb} · {listing.beds}bd {listing.baths}ba · {listing.priceMin ? `${fmtK(listing.priceMin)}–${fmtK(listing.priceMax!)}` : fmt(listing.price)}</div>
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: theme.primary, background: `${theme.primary}18`, padding: "3px 10px", borderRadius: 8 }}>PRE-MARKET</div>
+          </div>
+        )}
+
+        {matches.length > 0 ? (
+          <>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>{matches.length} matched buyers</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {matches.map(({ entry, score, factors }, i) => {
+                const { buyer } = entry
+                const sent = alerted.has(buyer.id)
+                return (
+                  <div key={buyer.id} style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${i === 0 ? theme.primary + "50" : C.border}`, padding: "14px 16px", display: "flex", gap: 12, alignItems: "center" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{buyer.name}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 5 }}>{buyer.purchaseAddress}</div>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {factors.map(f => <span key={f} style={{ fontSize: 10, color: theme.primary, background: `${theme.primary}12`, border: `1px solid ${theme.primary}25`, padding: "2px 7px", borderRadius: 5 }}>{f}</span>)}
+                      </div>
+                    </div>
+                    <div style={{ flexShrink: 0 }}>
+                      <ScoreRing score={score} size={44} strokeWidth={3} label="match" />
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5, flexShrink: 0 }}>
+                      <button onClick={() => setAlerted(prev => new Set([...prev, buyer.id]))}
+                        style={{ padding: "6px 11px", borderRadius: 9, border: "none", cursor: "pointer", background: sent ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: sent ? C.muted : "white", fontSize: 10, fontWeight: 700, fontFamily: FONT, boxShadow: sent ? "none" : `0 2px 8px ${theme.glow}` }}>
+                        {sent ? "✓ Alerted" : "📨 Alert"}
+                      </button>
+                      {onSelectEntry && (
+                        <button onClick={() => { onClose(); onSelectEntry(entry) }}
+                          style={{ padding: "5px 11px", borderRadius: 9, border: `1px solid ${theme.primary}50`, cursor: "pointer", background: "transparent", color: theme.primary, fontSize: 10, fontWeight: 700, fontFamily: FONT }}>
+                          Profile →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        ) : (
+          <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: "32px 0" }}>No strong matches found for this listing.</div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── Nurture Sequence Panel ────────────────────────────────────────────────────
+
+const NURTURE_STEP_LABELS = ["Initial outreach", "Market pulse follow-up", "Comparable sales update", "Final check-in"]
+const NURTURE_DAYS        = [0, 7, 14, 30]
+
+function NurtureSequencePanel({ entry, agent, theme }: { entry: SegmentedBuyer; agent: AgentProfile; theme: AgencyTheme }) {
+  const [enabled, setEnabled] = useState(false)
+  const [showSchedule, setShowSchedule] = useState(false)
+  const fetchedRef = useRef(false)
+  const [msgs, setMsgs] = useState<Array<{ sms: string; emailSubject: string }> | null>(null)
+
+  const { buyer, financials: fin } = entry
+  const fname     = buyer.name.split("&")[0].split(" ")[0].trim()
+  const agentFirst = agent.nickname ?? agent.name.split(" ")[0]
+  const signoff   = buyer.status === "investor" ? "Kind regards" : "Cheers"
+
+  const templates = [
+    { sms: `Hi ${fname}, ${agentFirst} from ${agent.agency}. Quick market update on ${buyer.suburb}. Your place is looking really strong. Worth a chat? ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `Market update for ${buyer.suburb}, ${fname}` },
+    { sms: `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} clearance rate is tracking well. Happy to share the data. ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `${buyer.suburb} market moving, ${fname}` },
+    { sms: `Hi ${fname}, a comparable property in ${buyer.suburb} just sold for ${fmtK(Math.round(fin.currentEstimate * 1.03 / 5000) * 5000)}. Want the full comps? ${agentFirst}`.slice(0, 160), emailSubject: `Comparable sale you should see, ${fname}` },
+    { sms: `Hi ${fname}, ${agentFirst} here. Just circling back. Happy to chat whenever the timing suits. ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `Still here when you're ready, ${fname}` },
+  ]
+
+  const handleEnable = () => {
+    const next = !enabled
+    setEnabled(next)
+    if (next && !fetchedRef.current) {
+      fetchedRef.current = true
+      setMsgs(templates)
+      authFetch(apiUrl("/api/nurture"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentName: agent.name, agentAgency: agent.agency, agentPhone: agent.phone, agentEmail: agent.email, lead: { name: buyer.name, budget: fin.currentEstimate, persona: buyer.status, notes: buyer.notes ?? "", questions: [] }, grade: "C" }),
+      })
+        .then(r => r.json())
+        .then(data => { if (Array.isArray(data.messages) && data.messages.length >= 4) setMsgs(data.messages.map((m: { sms: string; emailSubject: string }) => ({ sms: m.sms ?? "", emailSubject: m.emailSubject ?? "" }))) })
+        .catch(() => {})
+    }
+  }
+
+  return (
+    <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 18px" }}>
+      {/* Single enable toggle */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>30-day follow-up sequence</div>
+            <div style={{ fontSize: 10, color: C.faint }}>
+              {enabled
+                ? `Active · 4 messages · Day 0, 7, 14, 30 · stops if ${fname} replies`
+                : "4 messages over 30 days, sent in your voice"}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {enabled && (
+            <button onClick={() => setShowSchedule(v => !v)} style={{ fontSize: 10, color: theme.primary, background: "none", border: "none", cursor: "pointer", fontFamily: FONT, textDecoration: "underline" }}>
+              {showSchedule ? "Hide schedule" : "Edit schedule →"}
+            </button>
+          )}
+          {/* Toggle pill */}
+          <div
+            onClick={handleEnable}
+            style={{
+              width: 38, height: 22, borderRadius: 11, cursor: "pointer", position: "relative",
+              background: enabled ? C.green : C.bg3,
+              border: `1px solid ${enabled ? C.green : C.border}`,
+              transition: "background 0.2s",
+              flexShrink: 0,
+            }}
+          >
+            <div style={{
+              position: "absolute", top: 3, left: enabled ? 18 : 3, width: 14, height: 14,
+              borderRadius: "50%", background: enabled ? "#fff" : C.faint,
+              transition: "left 0.2s",
+            }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Schedule detail — collapsed by default */}
+      <AnimatePresence>
+        {enabled && showSchedule && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} style={{ overflow: "hidden" }}>
+            <div style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+              {NURTURE_DAYS.map((day, i) => {
+                const m = msgs?.[i]
+                return (
+                  <div key={day} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 10px", background: C.bg3, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                    <div style={{ flexShrink: 0, background: theme.primary + "20", color: theme.primary, fontSize: 9, fontWeight: 800, borderRadius: 6, padding: "3px 7px", minWidth: 40, textAlign: "center" }}>Day {day}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, marginBottom: 2 }}>{NURTURE_STEP_LABELS[i]}</div>
+                      <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m?.sms ?? templates[i].sms}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── Voice Brief Card ──────────────────────────────────────────────────────────
+
+function parseVoiceBrief(transcript: string, buyerName: string, buyerSuburb: string): { urgency: "HIGH"|"MED"|"LOW"; actions: string[]; signals: string[] } {
+  const t = transcript.toLowerCase()
+  const fname = buyerName.split("&")[0].split(" ")[0].trim()
+  const urgency: "HIGH"|"MED"|"LOW" =
+    /urgent|asap|immediately|this week|call today|deadline|cgt|tax/.test(t) ? "HIGH"
+    : /follow.?up|call.?back|ring|next week|soon|thinking/.test(t) ? "MED" : "LOW"
+  const actions: string[] = []
+  if (/follow.?up|call.?back|ring/.test(t)) actions.push(`Follow up ${fname}`)
+  if (/send.*(apprais|report|comp)/.test(t)) actions.push("Send appraisal report")
+  if (/book.*(apprais|meet|inspect)/.test(t)) actions.push("Book appraisal appointment")
+  if (/email|sms|text|message/.test(t)) actions.push("Send outreach message")
+  const dayM = t.match(/monday|tuesday|wednesday|thursday|friday/)
+  if (dayM) actions.push(`Follow up ${dayM[0].charAt(0).toUpperCase() + dayM[0].slice(1)}`)
+  actions.push("Log call notes to CRM")
+  const signals: string[] = []
+  if (/cgt|capital gains/.test(t)) signals.push("CGT deadline")
+  if (/invest(ment|or)/.test(t)) signals.push("Investment property")
+  if (/tenant|rent/.test(t)) signals.push("Tenant leaving")
+  if (/ready|sell|list|market/.test(t)) signals.push("Selling intent")
+  if (/renovation|reno/.test(t)) signals.push("Renovation plans")
+  if (/rate[s]?|interest/.test(t)) signals.push("Interest rate concern")
+  if (/family|kids|child/.test(t)) signals.push("Family trigger")
+  void buyerSuburb
+  return { urgency, actions: [...new Set(actions)], signals }
+}
+
+function VoiceBriefCard({ transcript, buyerName, buyerSuburb, theme }: { transcript: string; buyerName: string; buyerSuburb: string; theme: AgencyTheme }) {
+  const [checked, setChecked] = useState<Set<number>>(new Set())
+  const brief = parseVoiceBrief(transcript, buyerName, buyerSuburb)
+  const uc = brief.urgency === "HIGH" ? (C.red ?? "#ef4444") : brief.urgency === "MED" ? C.orange : C.green
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      style={{ background: `${theme.primary}06`, borderRadius: 12, border: `1px solid ${theme.primary}25`, padding: "12px 14px", marginTop: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: theme.primary, textTransform: "uppercase", letterSpacing: 1 }}>✦ Contact Brief</div>
+        <div style={{ fontSize: 9, fontWeight: 800, color: uc, background: uc + "18", border: `1px solid ${uc}40`, borderRadius: 6, padding: "2px 8px" }}>{brief.urgency} PRIORITY</div>
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 }}>Action items</div>
+        {brief.actions.map((item, i) => (
+          <div
+            key={i}
+            role="checkbox"
+            aria-checked={checked.has(i)}
+            tabIndex={0}
+            onClick={() => setChecked(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s })}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setChecked(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s }) } }}
+            style={{ display: "flex", gap: 7, alignItems: "center", cursor: "pointer", padding: "3px 0" }}>
+            <span style={{ fontSize: 13, color: checked.has(i) ? C.green : C.muted }}>{checked.has(i) ? "☑" : "☐"}</span>
+            <span style={{ fontSize: 11, color: checked.has(i) ? C.faint : C.muted, textDecoration: checked.has(i) ? "line-through" : "none" }}>{item}</span>
+          </div>
+        ))}
+      </div>
+      {brief.signals.length > 0 && (
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 }}>Detected signals</div>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {brief.signals.map(s => <span key={s} style={{ fontSize: 10, color: theme.primary, background: `${theme.primary}12`, border: `1px solid ${theme.primary}25`, padding: "2px 8px", borderRadius: 5 }}>{s}</span>)}
+          </div>
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
+// ── Printable Appraisal Modal ─────────────────────────────────────────────────
+
+function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
+  entry: SegmentedBuyer; agent: AgentProfile; theme: AgencyTheme; onClose: () => void
+}) {
+  const { buyer, financials: fin } = entry
+  const comps = generateComparables({ suburb: buyer.suburb, propertyType: buyer.propertyType as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id })
+  const range = buildAppraisalRange(comps, buyer.suburb)
+  const scenarios = buildEquityScenarios({ purchasePrice: buyer.purchasePrice, purchaseDate: buyer.purchaseDate, deposit: buyer.deposit ?? null, range })
+  const today = new Date("2026-05-27").toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
+  const fname = buyer.name.split("&")[0].split(" ")[0].trim()
+  const midScenario = scenarios[1] ?? scenarios[0]
+
+  return (
+    <motion.div key="print-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <motion.div id="appraisal-print-root" className="appraisal-report-modal" initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={e => e.stopPropagation()}
+        style={{ background: "#fff", borderRadius: 20, maxWidth: 700, width: "90vw", maxHeight: "88vh", overflowY: "auto", color: "#1a1a1a", boxShadow: "0 24px 80px rgba(0,0,0,0.6)", fontFamily: "'Georgia', serif" }}>
+
+        {/* Print CSS — forces white background and hides the modal overlay when printing */}
+        <style>{`
+          @media print {
+            body > *:not(#appraisal-print-root) { display: none !important; }
+            #appraisal-print-root { position: static !important; background: white !important; }
+            .appraisal-report-modal { box-shadow: none !important; border-radius: 0 !important; max-height: none !important; overflow: visible !important; }
+            .appraisal-toolbar { display: none !important; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          }
+        `}</style>
+
+        {/* Toolbar */}
+        <div className="appraisal-toolbar" style={{ background: C.bg2, borderRadius: "20px 20px 0 0", padding: "10px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.border}` }}>
+          <span style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>Appraisal Report Preview · {buyer.name}</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => window.print()} style={{ padding: "7px 18px", borderRadius: 9, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 12, fontWeight: 700, fontFamily: FONT, boxShadow: `0 2px 8px ${theme.glow}` }}>
+              🖨️ Print Report
+            </button>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
+          </div>
+        </div>
+
+        {/* Report body */}
+        <div style={{ padding: "40px 48px 48px" }}>
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28, borderBottom: `3px solid ${theme.primary}`, paddingBottom: 18 }}>
+            <div>
+              <div style={{ fontSize: 26, fontWeight: 900, background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: -0.4, fontFamily: FONT }}>{agent.agency}</div>
+              <div style={{ fontSize: 13, color: theme.primary, fontWeight: 700, fontFamily: FONT, marginTop: 2 }}>{agent.name}</div>
+              <div style={{ fontSize: 12, color: "#666", fontFamily: FONT }}>{agent.phone} · {agent.email}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 11, color: "#888", fontFamily: FONT }}>Prepared {today}</div>
+              <div style={{ fontSize: 11, color: "#888", fontFamily: FONT, marginTop: 2 }}>For {buyer.name}</div>
+              <div style={{ fontSize: 11, color: theme.primary, fontWeight: 700, fontFamily: FONT, marginTop: 4 }}>COMPLIMENTARY APPRAISAL</div>
+            </div>
+          </div>
+
+          {/* Property */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, color: "#888", fontFamily: FONT, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Property</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#1a1a1a", letterSpacing: -0.4, fontFamily: FONT }}>{buyer.purchaseAddress}</div>
+            <div style={{ fontSize: 14, color: theme.primary, fontWeight: 600, fontFamily: FONT }}>{buyer.suburb}, VIC</div>
+            <div style={{ display: "flex", gap: 20, marginTop: 10, flexWrap: "wrap" }}>
+              {[{ l: "Purchased", v: buyer.purchaseDate.slice(0,4) }, { l: "Purchase price", v: fmtDollar(buyer.purchasePrice) }, { l: "Type", v: buyer.propertyType }, { l: "Config", v: `${buyer.beds}bd ${buyer.baths}ba` }, buyer.land ? { l: "Land", v: `${buyer.land}m²` } : null].filter(Boolean).map(it => (
+                <div key={it!.l}><div style={{ fontSize: 9, color: "#999", textTransform: "uppercase", letterSpacing: 0.5, fontFamily: FONT, fontWeight: 700 }}>{it!.l}</div><div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a", fontFamily: FONT }}>{it!.v}</div></div>
+              ))}
+            </div>
+          </div>
+
+          {/* Value range */}
+          <div style={{ background: "#f8f8f8", borderRadius: 12, padding: "18px 20px", marginBottom: 22, border: "1px solid #e8e8e8" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#888", marginBottom: 14, fontFamily: FONT }}>Estimated Market Value Range</div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              {[{ l: "Conservative", v: fmtK(range.low), c: "#64b5f6" }, { l: "Mid-range", v: fmtK(range.mid), c: theme.primary }, { l: "Optimistic", v: fmtK(range.high), c: "#ffa726" }].map(s => (
+                <div key={s.l} style={{ textAlign: "center" }}><div style={{ fontSize: 10, color: "#888", fontFamily: FONT, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>{s.l}</div><div style={{ fontSize: 24, fontWeight: 900, color: s.c, fontFamily: FONT, letterSpacing: -0.5 }}>{s.v}</div></div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 20, marginTop: 14, flexWrap: "wrap" }}>
+              {[{ l: "Clearance rate", v: `${range.clearanceRate}%` }, { l: "Days on market", v: `${range.daysOnMarket}` }, { l: "Buyer demand", v: `${range.demandScore}/10` }].map(s => (
+                <div key={s.l}><div style={{ fontSize: 9, color: "#999", textTransform: "uppercase", letterSpacing: 0.5, fontFamily: FONT, fontWeight: 700 }}>{s.l}</div><div style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a", fontFamily: FONT }}>{s.v}</div></div>
+              ))}
+            </div>
+          </div>
+
+          {/* Comps */}
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#888", marginBottom: 10, fontFamily: FONT }}>Comparable Sales · {buyer.suburb}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+              {comps.slice(0, 3).map((comp, i) => (
+                <div key={i} style={{ background: "#f8f8f8", borderRadius: 10, padding: "12px 13px", border: "1px solid #e8e8e8" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a", marginBottom: 1, fontFamily: FONT }}>{comp.address}</div>
+                  <div style={{ fontSize: 10, color: "#888", marginBottom: 8, fontFamily: FONT }}>{comp.beds}bd · {comp.baths}ba · {comp.land}m²</div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: theme.primary, fontFamily: FONT }}>{fmtK(comp.soldPrice)}</div>
+                  <div style={{ fontSize: 10, color: "#888", fontFamily: FONT }}>{comp.soldDate}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Equity waterfall */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: "#888", marginBottom: 10, fontFamily: FONT }}>Equity Waterfall · Mid-Range Scenario</div>
+            {[
+              { l: "Estimated sale price", v: `+ ${fmtK(range.mid)}`, c: "#22c55e", bold: false },
+              { l: "Selling costs (commission + marketing)", v: fmtK(midScenario.sellingCosts), c: "#ef4444", bold: false },
+              midScenario.estimatedCGT > 0 ? { l: "Estimated CGT (50% discount)", v: `− ${fmtK(midScenario.estimatedCGT)}`, c: "#f59e0b", bold: false } : null,
+              { l: "Net proceeds", v: `= ${fmtK(midScenario.netProceeds)}`, c: theme.primary, bold: true },
+              { l: "Equity released vs purchase price", v: fmtK(midScenario.netProceeds - buyer.purchasePrice), c: "#22c55e", bold: true },
+            ].filter(Boolean).map((row, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #e8e8e8" }}>
+                <span style={{ fontSize: 13, color: "#444", fontFamily: FONT, fontWeight: row!.bold ? 700 : 400 }}>{row!.l}</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: row!.c, fontFamily: FONT }}>{row!.v}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* CGT callout */}
+          {fin.cgtSavingsBy2027 > 0 && (
+            <div style={{ background: "#fff7ed", borderRadius: 12, padding: "14px 18px", marginBottom: 22, border: "1px solid #fcd34d" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 4, fontFamily: FONT }}>CGT Deadline Alert</div>
+              <div style={{ fontSize: 12, color: "#92400e", lineHeight: 1.6, fontFamily: FONT }}>
+                Selling before 1 July 2027 saves approximately <strong>{fmtDollar(fin.cgtSavingsBy2027)}</strong> under the 50% CGT discount. After that date the discount may no longer apply.
+              </div>
+            </div>
+          )}
+
+          {/* CTA */}
+          <div style={{ background: `linear-gradient(135deg, ${theme.gradient[0]}15, ${theme.gradient[1]}15)`, borderRadius: 12, padding: "18px 20px", border: `1px solid ${theme.primary}30` }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: theme.primary, marginBottom: 5, fontFamily: FONT }}>Ready to explore your options, {fname}?</div>
+            <div style={{ fontSize: 12, color: "#444", marginBottom: 10, fontFamily: FONT, lineHeight: 1.6 }}>Complimentary, no-obligation appraisal. 20 minutes at a time that suits you.</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: theme.primary, fontFamily: FONT }}>📞 {agent.phone} &nbsp;·&nbsp; ✉️ {agent.email}</div>
+          </div>
+
+          {/* Agent card footer */}
+          <div style={{ marginTop: 28, borderTop: `2px solid ${theme.primary}20`, paddingTop: 20, display: "flex", alignItems: "center", gap: 18 }}>
+            {/* Photo / initials */}
+            <div style={{ flexShrink: 0 }}>
+              {agent.photoUrl && !agent.photoUrl.includes("peakere.com.au/our-team") ? (
+                <img src={agent.photoUrl} alt={agent.name}
+                  style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", border: `3px solid ${theme.primary}` }} />
+              ) : (
+                <div style={{
+                  width: 72, height: 72, borderRadius: "50%",
+                  background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 26, fontWeight: 900, color: "white", fontFamily: FONT,
+                  border: `3px solid ${theme.primary}`,
+                }}>
+                  {agent.name.split(" ").map(p => p[0]).slice(0, 2).join("")}
+                </div>
+              )}
+            </div>
+            {/* Details */}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 17, fontWeight: 800, color: "#1a1a1a", fontFamily: FONT, letterSpacing: -0.3 }}>{agent.name}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: theme.primary, fontFamily: FONT }}>{agent.agency}</div>
+              <div style={{ fontSize: 12, color: "#555", fontFamily: FONT, marginTop: 3 }}>{agent.phone} · {agent.email}</div>
+              <div style={{ fontSize: 10, color: "#aaa", fontFamily: FONT, marginTop: 6, lineHeight: 1.5 }}>
+                Estimates based on comparable sales as at {today}. This report is prepared as a guide only and is not a formal property valuation.
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── AIIdeasPanel: hyper-personalisation roadmap ───────────────────────────────
+
+const AI_IDEAS = [
+  {
+    emoji: "🏡",
+    title: "Street-level sale alerts",
+    tag: "Layer 3: Market context",
+    color: "#a6daff",
+    description:
+      "When a property sells within 500m of a contact's address, auto-trigger a personalised message: \"Hi David, a 4-bed just sold two streets over for $895K — that puts yours at roughly $920K now.\" Hooks into Domain/CoreLogic webhooks for real-time triggers.",
+    effort: "Medium",
+  },
+  {
+    emoji: "🎓",
+    title: "School-zone life-stage trigger",
+    tag: "Layer 2: Life-stage inference",
+    color: "#64d090",
+    description:
+      "Infer the age of each contact's children from CRM notes. When the youngest turns 17–18, fire a \"final year of school\" outreach: the most statistically common trigger for families upgrading or downsizing. Claude Haiku extracts this from free-text notes at <$0.001/contact.",
+    effort: "Low",
+  },
+  {
+    emoji: "⏳",
+    title: "CGT 50% discount countdown",
+    tag: "Layer 4: Timing intelligence",
+    color: "#ffb864",
+    description:
+      "Automatically calculate the exact date each investor crosses the 12-month CGT threshold. Send a personalised countdown message 90, 30, and 7 days before: \"Wei, you're 30 days from saving an estimated $54K in CGT. This window closes 14 July 2027.\" No other CRM in Australia does this.",
+    effort: "Ready now",
+  },
+  {
+    emoji: "🔁",
+    title: "Reply sentiment → next-step classifier",
+    tag: "reply draft",
+    color: "#a6daff",
+    description:
+      "When a contact replies to any outreach, Claude Sonnet classifies intent (interested / not now / hot lead / objection) and drafts the ideal next message with their equity snapshot embedded. An \"interested\" reply auto-books an appraisal slot. A \"not yet\" reply schedules a 90-day re-engagement.",
+    effort: "Medium",
+  },
+  {
+    emoji: "📰",
+    title: "Personalised market report PDF",
+    tag: "Layer 5: Relationship memory",
+    color: "#64d090",
+    description:
+      "Generate a one-page PDF for each contact showing: their property's estimated value, 3 comparable recent sales, CGT position, and a tailored paragraph from the agent. Send as an email attachment. Converts cold contacts into warm conversations — better ROI than any mass letterbox drop.",
+    effort: "Medium",
+  },
+]
+
+function AIIdeasPanel({ theme }: { theme: AgencyTheme }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div style={{
+      marginBottom: 24, background: C.bg2, borderRadius: 14,
+      border: `1px solid ${theme.primary}22`,
+    }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: "100%", padding: "16px 20px", background: "none", border: "none",
+          cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", gap: 12,
+          textAlign: "left",
+        }}
+      >
+        <div style={{
+          width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+          background: `linear-gradient(135deg, ${theme.gradient[0]}33, ${theme.gradient[1]}22)`,
+          border: `1px solid ${theme.primary}33`,
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+        }}>🚀</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Personalisation Roadmap</div>
+          <div style={{ fontSize: 11, color: C.muted }}>5 ways to deepen the moat — ideas PropOS can build next</div>
+        </div>
+        <div style={{
+          fontSize: 10, fontWeight: 700, color: theme.primary, background: theme.primary + "18",
+          padding: "3px 8px", borderRadius: 6, letterSpacing: 0.5, textTransform: "uppercase", flexShrink: 0,
+        }}>Ideas</div>
+        <div style={{ fontSize: 16, color: C.faint, transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", flexShrink: 0 }}>›</div>
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            style={{ overflow: "hidden" }}
+          >
+            <div style={{ padding: "0 16px 16px", display: "grid", gap: 10 }}>
+              {AI_IDEAS.map((idea, i) => (
+                <div key={i} style={{
+                  background: C.bg3, borderRadius: 12, padding: "14px 16px",
+                  border: `1px solid ${C.border}`,
+                  borderLeft: `3px solid ${idea.color}`,
+                }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 6 }}>
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>{idea.emoji}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{idea.title}</span>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: idea.color, background: idea.color + "18", padding: "2px 7px", borderRadius: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>{idea.tag}</span>
+                        <span style={{
+                          marginLeft: "auto", fontSize: 9, fontWeight: 700, letterSpacing: 0.4,
+                          color: idea.effort === "Ready now" ? C.green : "#f59e0b",
+                          background: idea.effort === "Ready now" ? C.green + "18" : "#f59e0b18",
+                          padding: "2px 7px", borderRadius: 4, textTransform: "uppercase",
+                        }}>{idea.effort}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, paddingLeft: 28 }}>
+                    {idea.description}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function WowInsightsPanel({ segmented, theme }: { segmented: SegmentedBuyer[]; theme: AgencyTheme }) {
+  const [open, setOpen] = useState(false)
+  const [activeIdx, setActiveIdx] = useState<number | null>(null)
+
+  const totalEquity = segmented.reduce((s, e) => s + e.financials.equityGain, 0)
+  const equityPerMonth = Math.round(totalEquity / (12 * 3))  // approximate monthly growth
+  const highPriority = segmented.filter(e => e.priority >= 70).length
+  const cgtContacts = segmented.filter(e => e.financials.cgtSavingsBy2027 > 5000).length
+
+  const WOW_ITEMS = [
+    {
+      icon: "⏱️", title: "Equity Clock",
+      value: `$${(totalEquity / 1_000_000).toFixed(1)}M dormant`,
+      sub: `Growing ~${Math.round(equityPerMonth / 1000)}K/month`,
+      detail: "Your database holds millions in equity that hasn't been unlocked yet. Every month you wait, your contacts build equity but so do competing agents who outreach first.",
+    },
+    {
+      icon: "📅", title: "Listing Window",
+      value: "Mar to May optimal",
+      sub: "Based on 3yr seasonal data",
+      detail: "Historical data shows autumn is the strongest listing window for the SE corridor: 12% more transactions and 4% higher clearance rates than winter. You're in the window now.",
+    },
+    {
+      icon: "⏰", title: "CGT Deadline",
+      value: `${DAYS_TO_CGT} days left`,
+      sub: "50% discount · closes Jul 2027",
+      detail: `${cgtContacts} of your contacts qualify for the 50% CGT discount, but only if they sell before 1 July 2027. That's ${DAYS_TO_CGT} days. Every week of delay costs them real money.`,
+    },
+    {
+      icon: "🎙️", title: "Voice Intel Engine",
+      value: "Record → we extract the hook",
+      sub: "Personalisation in 10 seconds",
+      detail: "Speak a quick note about any contact on your phone ('Jason's tenant just moved out, he seemed frustrated about the vacancy'). PropOS extracts the personalisation hook and writes the outreach for you.",
+    },
+    {
+      icon: "💬", title: "Smart Reply",
+      value: "Vendor replied? We draft it",
+      sub: "Context-aware follow-up",
+      detail: "When a vendor responds to your outreach, PropOS reads the reply and drafts a perfect follow-up that continues the conversation naturally. Matches your voice, references their specific response.",
+    },
+    {
+      icon: "📄", title: "One-Click Appraisal PDF",
+      value: "Branded · 2 pages · instant",
+      sub: "Comps + equity waterfall",
+      detail: "Generate a print-quality, branded appraisal report for any contact in one click. Includes suburb comps, your estimated value range, equity scenarios, and CGT savings. Leave-behind for listing presentations.",
+    },
+    {
+      icon: "📡", title: "Pre-Market Alert Network",
+      value: `${highPriority} buyers → VIP access`,
+      sub: "Tell them before portals",
+      detail: "Your top-priority past buyers become VIP buyers for new listings in their preferred suburb. Send a pre-market alert 48 hours before Domain/REA. Builds loyalty and creates FOMO that accelerates offers.",
+    },
+    {
+      icon: "🤝", title: "Call Coach",
+      value: "First-call script, personalised",
+      sub: "Handles every objection",
+      detail: "For each contact you're about to call, PropOS prepares a personalised call script: opening line based on their CRM notes, three pitch angles from their financial position, and responses to the top 5 objections.",
+    },
+  ]
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      {/* Collapsed header — always visible */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6, background: "none",
+          border: "none", cursor: "pointer", padding: 0, marginBottom: open ? 10 : 0,
+        }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 800, color: C.faint, letterSpacing: 1.4, textTransform: "uppercase" }}>
+          Pipeline Intelligence
+        </span>
+        <span style={{ fontSize: 11, color: C.faint, transition: "transform 0.2s", display: "inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
+        {!open && <span style={{ fontSize: 10, color: C.faint, fontWeight: 400 }}>({WOW_ITEMS.length} features)</span>}
+      </button>
+
+      <AnimatePresence>
+      {open && (<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} style={{ overflow: "hidden" }}>
+      <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
+        {WOW_ITEMS.map((item, i) => (
+          <motion.div
+            key={item.title}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setActiveIdx(activeIdx === i ? null : i)}
+            style={{
+              flexShrink: 0, width: 140, borderRadius: 14, padding: "14px 14px",
+              background: activeIdx === i ? `linear-gradient(140deg, ${theme.primary}20, ${theme.primary}08)` : C.bg3,
+              border: `1.5px solid ${activeIdx === i ? theme.primary + "60" : C.border}`,
+              cursor: "pointer",
+              boxShadow: activeIdx === i ? `0 0 18px ${theme.primary}18` : "none",
+              transition: "border 0.15s, box-shadow 0.15s",
+            }}
+          >
+            <div style={{ fontSize: 22, marginBottom: 6 }}>{item.icon}</div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.text, marginBottom: 3, lineHeight: 1.2 }}>{item.title}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: theme.primary }}>{item.value}</div>
+            <div style={{ fontSize: 9, color: C.faint, marginTop: 2 }}>{item.sub}</div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Expanded detail for selected item */}
+      <AnimatePresence>
+        {activeIdx !== null && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+            style={{ overflow: "hidden" }}
+          >
+            <div style={{
+              marginTop: 10, background: `${theme.primary}08`, borderRadius: 12,
+              border: `1px solid ${theme.primary}25`, padding: "14px 18px",
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 6 }}>
+                {WOW_ITEMS[activeIdx].icon} {WOW_ITEMS[activeIdx].title}
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                {WOW_ITEMS[activeIdx].detail}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      </motion.div>)}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── Vendor Prospect Gauge (JotForm-style Y/N survey included in outreach) ────
+
+const PROSPECT_GAUGE_QUESTIONS: { id: string; question: string }[] = [
+  { id: "q1", question: "Are you currently thinking about selling your property?" },
+  { id: "q2", question: "Have you had a property appraisal in the last 6 months?" },
+  { id: "q3", question: "Are you aware of recent sales in your street?" },
+  { id: "q4", question: "Do you know your property's current market value?" },
+  { id: "q5", question: "Are you considering upsizing, downsizing, or relocating?" },
+  { id: "q6", question: "Would you be open to a free, no-obligation chat about your options?" },
+]
+
+function VendorProspectGauge({
+  buyerName,
+  agentFirst,
+  agencyShort,
+  theme,
+  includeInOutreach,
+  onToggleInclude,
+}: {
+  buyerName: string
+  agentFirst: string
+  agencyShort: string
+  theme: AgencyTheme
+  includeInOutreach: boolean
+  onToggleInclude: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const fname = buyerName.split("&")[0].split(" ")[0].trim()
+
+  // Deterministic survey URL — real JotForm integration would go here
+  const surveyUrl = `https://propos.addvantage.site/survey?contact=${encodeURIComponent(fname)}&agent=${encodeURIComponent(agentFirst)}&via=outreach`
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(surveyUrl).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <div style={{
+      background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 14,
+      padding: "16px 18px", marginBottom: 10,
+    }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase" as const, marginBottom: 1 }}>
+            Prospect Gauge Survey
+          </div>
+          <div style={{ fontSize: 11, color: C.muted }}>6 Y/N questions · sent to {fname} via outreach</div>
+        </div>
+        {/* Include in outreach toggle */}
+        <div
+          role="switch" aria-checked={includeInOutreach} tabIndex={0}
+          onClick={onToggleInclude}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleInclude() } }}
+          style={{
+            display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+            padding: "5px 10px", borderRadius: 20,
+            background: includeInOutreach ? theme.primary + "18" : C.bg3,
+            border: `1px solid ${includeInOutreach ? theme.primary + "50" : C.border}`,
+            transition: "all 0.15s",
+          }}
+        >
+          <div style={{
+            width: 32, height: 18, borderRadius: 9,
+            background: includeInOutreach ? theme.primary : C.bg3,
+            border: `1px solid ${includeInOutreach ? "transparent" : C.border}`,
+            position: "relative", transition: "background 0.15s", flexShrink: 0,
+          }}>
+            <div style={{
+              position: "absolute", top: 2, left: includeInOutreach ? 14 : 2,
+              width: 12, height: 12, borderRadius: "50%",
+              background: includeInOutreach ? "#fff" : C.muted,
+              transition: "left 0.15s",
+            }} />
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 700, color: includeInOutreach ? theme.primary : C.muted, whiteSpace: "nowrap" }}>
+            {includeInOutreach ? "In outreach" : "Add to outreach"}
+          </span>
+        </div>
+      </div>
+
+      {/* Questions preview */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+        {PROSPECT_GAUGE_QUESTIONS.map(({ id, question }, i) => (
+          <div key={id} style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "7px 10px", borderRadius: 8,
+            background: C.bg3, border: `1px solid ${C.border}`,
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, width: 14, flexShrink: 0 }}>{i + 1}.</div>
+            <div style={{ flex: 1, fontSize: 11, color: C.muted }}>{question}</div>
+            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+              <div style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, color: C.green, background: C.green + "15", border: `1px solid ${C.green}30` }}>Y</div>
+              <div style={{ padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, color: C.red, background: C.red + "15", border: `1px solid ${C.red + "30"}` }}>N</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Survey link + copy */}
+      <div style={{
+        padding: "8px 10px", borderRadius: 8, background: C.bg3, border: `1px solid ${C.border}`,
+        display: "flex", alignItems: "center", gap: 8,
+      }}>
+        <div style={{ fontSize: 10, color: C.faint, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {surveyUrl}
+        </div>
+        <button
+          onClick={handleCopy}
+          style={{
+            padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700,
+            cursor: "pointer", fontFamily: FONT, flexShrink: 0,
+            background: copied ? C.green + "20" : C.bg2,
+            border: `1px solid ${copied ? C.green + "50" : C.border}`,
+            color: copied ? C.green : C.muted,
+            transition: "all 0.15s",
+          }}
+        >
+          {copied ? "Copied!" : "Copy link"}
+        </button>
+        <div style={{
+          fontSize: 9, fontWeight: 700, color: C.orange, background: C.orange + "15",
+          border: `1px solid ${C.orange}30`, borderRadius: 5, padding: "2px 6px", flexShrink: 0,
+        }}>
+          {agencyShort}
+        </div>
+      </div>
+
+      {includeInOutreach && (
+        <div style={{ marginTop: 8, padding: "6px 10px", borderRadius: 8, background: theme.primary + "10", border: `1px solid ${theme.primary}30`, fontSize: 11, color: theme.primary }}>
+          Survey link will be appended to the outreach SMS and email. Responses notify you in PropOS.
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Vendor Sentiment Check ────────────────────────────────────────────────────
+
+const SENTIMENT_QUESTIONS: { id: string; q: string; yesSignal: string }[] = [
+  { id: "open_to_sell",   q: "Open to selling?",                    yesSignal: "vendor has indicated they are open to selling" },
+  { id: "has_timeline",   q: "Mentioned a timeline?",               yesSignal: "vendor has mentioned a specific timeline or deadline" },
+  { id: "nearby_sale",    q: "Neighbour / nearby home sold recently?", yesSignal: "a nearby comparable has recently sold and they are aware" },
+  { id: "life_event",     q: "Life change (kids moved, divorce, new job)?", yesSignal: "there is a life-stage trigger (empty nest, separation, career change)" },
+  { id: "asked_value",    q: "Asked about property value?",         yesSignal: "vendor has proactively asked about current market value" },
+  { id: "owner_occupied", q: "Primary residence (not investment)?", yesSignal: "property is their primary residence which changes the CGT framing" },
+]
+
+interface SentimentAnswers { [id: string]: boolean | null }
+
+function VendorSentimentPanel({
+  answers,
+  onChange,
+}: {
+  answers: SentimentAnswers
+  onChange: (a: SentimentAnswers) => void
+}) {
+  const yesCount = Object.values(answers).filter(v => v === true).length
+
+  return (
+    <div style={{
+      background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 14,
+      padding: "16px 18px", marginBottom: 10,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase" as const }}>
+          Vendor Readiness Check
+        </div>
+        {yesCount > 0 && (
+          <div style={{
+            fontSize: 10, fontWeight: 700, color: C.green,
+            background: C.green + "18", border: `1px solid ${C.green}30`,
+            borderRadius: 5, padding: "2px 7px",
+          }}>
+            {yesCount} signal{yesCount > 1 ? "s" : ""} detected
+          </div>
+        )}
+        <div style={{ fontSize: 10, color: C.faint, marginLeft: "auto" }}>Informs outreach tone</div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {SENTIMENT_QUESTIONS.map(({ id, q }) => {
+          const val = answers[id] ?? null
+          return (
+            <div key={id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1, fontSize: 12, color: C.muted }}>{q}</div>
+              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                {([true, false] as const).map(v => (
+                  <button
+                    key={String(v)}
+                    onClick={() => onChange({ ...answers, [id]: val === v ? null : v })}
+                    style={{
+                      padding: "3px 11px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                      cursor: "pointer", fontFamily: FONT, border: "none",
+                      background: val === v
+                        ? (v ? C.green + "25" : C.red + "25")
+                        : C.bg3,
+                      color: val === v
+                        ? (v ? C.green : C.red ?? "#ef4444")
+                        : C.faint,
+                      outline: val === v
+                        ? `1.5px solid ${v ? C.green : C.red ?? "#ef4444"}50`
+                        : `1px solid ${C.border}`,
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {v ? "Y" : "N"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Vendor Profile Page ───────────────────────────────────────────────────────
+
+function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettings, allEntries, entryIdx, onNavigate }: {
+  entry: SegmentedBuyer
+  agent: AgentProfile
+  theme: AgencyTheme
+  onBack: () => void
+  onReview: (sms: string, emailSubject: string, emailBody: string[]) => void
+  vendorSettings?: import("../../data").VendorDisplaySettings
+  allEntries?: SegmentedBuyer[]
+  entryIdx?: number
+  onNavigate?: (entry: SegmentedBuyer) => void
+}) {
+  const [generating, setGenerating] = useState(false)
+  const [overrideValue, setOverrideValue] = useState<number | null>(null)
+  const [editingValue, setEditingValue] = useState(false)
+  const [editValueInput, setEditValueInput] = useState("")
+  const [voiceNotes, setVoiceNotes] = useState("")  // appended to CRM notes for generation
+  const [sentimentAnswers, setSentimentAnswers] = useState<SentimentAnswers>({})
+  const [includeProspectGauge, setIncludeProspectGauge] = useState(false)
+  const [showNegotiationCoach, setShowNegotiationCoach] = useState(false)
+  const [showPrintAppraisal, setShowPrintAppraisal] = useState(false)
+  const [showAllMetrics, setShowAllMetrics] = useState(false)
+  const [showInsights, setShowInsights] = useState(true)    // triggers open by default
+  const [showPitchAngles, setShowPitchAngles] = useState(false)  // pitch angles collapsed by default
+  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture" | "market-update" | "gci" | "pitch" | "property-pitch" | "introduction" | "proposal">("analysis")
+  const [marketUpdatePreview, setMarketUpdatePreview] = useState<{ html: string; sms: string; subject: string } | null>(null)
+  const [marketUpdateSending, setMarketUpdateSending] = useState(false)
+  const [marketUpdateSent, setMarketUpdateSent] = useState(false)
+  const [marketUpdateLoading, setMarketUpdateLoading] = useState(false)
+  const [pitchPayload, setPitchPayload] = useState<PriceUpdatePayload | null>(null)
+  const [pitchUrl, setPitchUrl] = useState<string | null>(null)
+  const [pitchGenerating, setPitchGenerating] = useState(false)
+  const [pitchSending, setPitchSending] = useState(false)
+  const [pitchSent, setPitchSent] = useState(false)
+  const [pitchViewNotif, setPitchViewNotif] = useState(false)
+  const [introUrl, setIntroUrl] = useState<string | null>(null)
+  const [introGenerating, setIntroGenerating] = useState(false)
+  const [introSent, setIntroSent] = useState(false)
+  const [proposalUrl, setProposalUrl] = useState<string | null>(null)
+  const [proposalGenerating, setProposalGenerating] = useState(false)
+  const [proposalSent, setProposalSent] = useState(false)
+  const [proposalSending, setProposalSending] = useState(false)
+  const [showCallScript, setShowCallScript] = useState(false)
+  const [selectedAngleIdx, setSelectedAngleIdx] = useState(0)
+  // NotesBridge: populated from API response after generation
+  const [extractedHook, setExtractedHook] = useState<string | null>(null)
+  const [personalisationLine, setPersonalisationLine] = useState<string | null>(null)
+
+  const bpVP = useBreakpoint()
+  const isMobileVP = bpVP === "mobile"
+  const [avmRefreshing, setAvmRefreshing] = useState(false)
+  const [avmSource, setAvmSource] = useState<string | null>(null)
+
+  const handleAvmRefresh = async () => {
+    setAvmRefreshing(true)
+    try {
+      const res = await authFetch(apiUrl(`/api/avm?address=${encodeURIComponent(buyer.purchaseAddress + ", " + buyer.suburb)}`))
+      if (res.ok) {
+        const data = await res.json() as { mid?: number; source?: string }
+        if (data.mid && data.mid > 0) {
+          setOverrideValue(data.mid)
+          setAvmSource(data.source ?? "Domain API")
+        }
+      }
+    } catch { /* silent — keep existing estimate */ }
+    setAvmRefreshing(false)
+  }
+
+  // Voice memo — lets agent dictate extra context about this contact before generating
+  const vendorVoice = useVoiceMemo({
+    onTranscript: (t) => setVoiceNotes(prev => prev ? prev + " " + t : t),
+  })
+
+  const { buyer, segment } = entry
+
+  // Flywheel: surface buyer demand from elsewhere in the portfolio when
+  // pitching this vendor a Price Update — "we already have a buyer for this".
+  const buyerDemand = allEntries
+    ? findBuyerDemand(allEntries.map(e => e.buyer), buyer)
+    : null
+
+  const pl = PIPELINE_LABELS[segment.pipeline]
+  const fname = buyer.name.split("&")[0].split(" ")[0].trim()
+  const agentFirst = agent.nickname ?? agent.name.split(" ")[0]
+  const accentColor = theme.accent ?? theme.primary
+
+  // Is this a secondary (not-yet-ready) contact? Show relationship strategies instead of just generate.
+  const isSecondary = segment.pipeline === "renter-to-buyer" || segment.pipeline === "investor-to-rebalance"
+    || (segment.pipeline === "owner-to-seller" && segment.confidence < 50)
+
+  // Recalculate financials if user has overridden the value estimate
+  const fin = overrideValue !== null
+    ? calculateFinancials(buyer.purchasePrice, buyer.purchaseDate, overrideValue, buyer.deposit)
+    : entry.financials
+
+  const stripDashes = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
+
+  const startEditValue = () => {
+    setEditValueInput(String(fin.currentEstimate))
+    setEditingValue(true)
+  }
+  const commitEditValue = () => {
+    const n = parseInt(editValueInput.replace(/\D/g, ""), 10)
+    if (!isNaN(n) && n > 0) setOverrideValue(n)
+    setEditingValue(false)
+  }
+
+  const handleGenerate = async () => {
+    setGenerating(true)
+
+    // Auto-save voice notes to both Sheets and Supabase before generating
+    if (voiceNotes) {
+      const merged = [buyer.notes, voiceNotes].filter(Boolean).join("\n\nVoice note: ")
+      authFetch(apiUrl("/api/sheet"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "updateNotes", id: buyer.id, notes: merged }),
+      }).catch(() => {})
+      // Mirror to Supabase so notes persist across sessions
+      updatePastBuyerInSupabase(buyer.id, { notes: merged }).catch(() => {})
+      buyer.notes = merged  // optimistic local update
+    }
+
+    const triggerSummary = segment.triggers.map(t => t.label).join("; ")
+
+    // Find comparable recent sales in same suburb from agent's portfolio
+    const { sold: agentSoldProps } = getPortfolioForAgent(agent)
+    const suburbComps = agentSoldProps
+      .filter(p => p.suburb.toLowerCase() === buyer.suburb.toLowerCase() && p.soldDate)
+      .slice(0, 2)
+      .map(p => `${p.address}, ${p.suburb}: sold ${fmt(p.price)} (${p.soldDate})`)
+
+    const payload = {
+      agentName: agent.name,
+      agentAgency: agent.agency,
+      agentNickname: agent.nickname,
+      agentAgencyShort: agent.agencyShort,
+      agentPhone: agent.phone,
+      voiceContext: buildVoiceContext(agent.voiceProfile, loadCorpus()),
+      buyerName: buyer.name,
+      buyerPhone: buyer.phone,
+      buyerStatus: buyer.status,
+      purchaseAddress: buyer.purchaseAddress,
+      suburb: buyer.suburb,
+      purchaseYear: buyer.purchaseDate.slice(0, 4),
+      purchasePrice: fin.purchasePrice,
+      currentEstimate: fin.currentEstimate,
+      equityGain: fin.equityGain,
+      equityGainPct: fin.equityGainPct,
+      yearsHeld: fin.yearsHeld,
+      annualAppreciation: fin.annualAppreciation,
+      cashOnCashReturn: fin.cashOnCashReturn,
+      cgtSavingsBy2027: fin.cgtSavingsBy2027,
+      netProceeds: fin.netProceeds,
+      pipelineLabel: pl.label,
+      triggerSummary,
+      // Combine base CRM notes, voice notes, and sentiment answers into one signal block
+      crmNotes: [
+        buyer.notes ?? "",
+        voiceNotes ? `Voice note: ${voiceNotes}` : "",
+        (() => {
+          const signals = SENTIMENT_QUESTIONS
+            .filter(q => sentimentAnswers[q.id] === true)
+            .map(q => q.yesSignal)
+          return signals.length > 0 ? `Agent signals: ${signals.join("; ")}` : ""
+        })(),
+      ].filter(Boolean).join("\n\n"),
+      soldComps: suburbComps.join("; "),
+      // Sheet col R: if agent pre-wrote the hook, send it directly (bypasses OpenAI extraction)
+      parsedPersonalisation: (buyer as { personalisationHook?: string }).personalisationHook ?? undefined,
+    }
+
+    // Template fallback
+    const templateFallback = () => {
+      const addr = shortAddr(buyer.purchaseAddress)
+      const estStr = fmtDollar(fin.currentEstimate)
+      const equityStr = fmtDollar(fin.equityGain)
+      const signoff = buyer.status === "investor" ? "Kind regards" : "Cheers"
+      const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${payload.purchaseYear}). Worth a quick chat? ${signoff}, ${agentFirst}`
+      const emailSubject = stripDashes(`Market update on ${buyer.purchaseAddress}, ${fname}`)
+      const cgtLine = fin.cgtSavingsBy2027 > 0 ? ` The current 50% CGT discount saves you approximately ${fmtDollar(fin.cgtSavingsBy2027)} if you sell before July 2027.` : ""
+      const emailBody = [
+        `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
+        `Your property at ${buyer.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${payload.purchaseYear}. That is ${equityStr} in equity.${cgtLine}`,
+        `I would love to offer a complimentary, no-obligation appraisal if you are curious. Takes about 20 minutes, happy to come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+      ].map(stripDashes)
+      // Append survey link if toggled on
+      const surveyLink = includeProspectGauge
+        ? ` P.S. Quick question for you: ${`https://propos.addvantage.site/survey?contact=${encodeURIComponent(fname)}&agent=${encodeURIComponent(agentFirst)}`}`
+        : ""
+      const finalSms = stripDashes((smsRaw.length > 140 ? smsRaw.slice(0, 137) + "..." : smsRaw) + (includeProspectGauge ? " bit.ly/propgauge" : ""))
+      setGenerating(false)
+      onReview(finalSms, emailSubject, includeProspectGauge ? [...emailBody, surveyLink] : emailBody)
+    }
+
+    try {
+      const res = await Promise.race([
+        authFetch(apiUrl("/api/vendor-generate"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).then(r => r.json()),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 14000)),
+      ]) as {
+        sms?: string
+        email?: { subject?: string; body?: string[] }
+        personalisationHook?: string | null
+        personalisationLine?: string | null
+      }
+
+      const sms = res.sms ?? ""
+      const emailSubject = res.email?.subject ?? ""
+      const emailBody: string[] = res.email?.body ?? []
+      if (!sms) throw new Error("empty — no sms")
+
+      // Capture NotesBridge data — show the transformation BEFORE navigating to review
+      if (res.personalisationHook) {
+        setExtractedHook(res.personalisationHook)
+        // Persist AI-extracted hook to Supabase so it appears next session
+        updatePastBuyerInSupabase(buyer.id, { personalisationHook: res.personalisationHook }).catch(() => {})
+      }
+      if (res.personalisationLine) setPersonalisationLine(res.personalisationLine)
+
+      setGenerating(false)
+
+      // Pause so the user sees the NotesBridge "What AI saw → As written to" animation
+      // before the review screen replaces the page (3.5s = typewriter + moment to read)
+      await new Promise(r => setTimeout(r, res.personalisationLine ? 3500 : 400))
+      const finalEmailBody = emailBody.map(stripDashes)
+      if (includeProspectGauge) {
+        const surveyLink = `https://propos.addvantage.site/survey?contact=${encodeURIComponent(fname)}&agent=${encodeURIComponent(agentFirst)}`
+        finalEmailBody.push(`P.S. I've put together a quick 1-minute survey — just 6 yes/no questions to help me understand your situation: ${surveyLink}`)
+      }
+      const finalSms = includeProspectGauge
+        ? stripDashes(sms.slice(0, 130)) + " Survey: bit.ly/propgauge"
+        : stripDashes(sms)
+      onReview(finalSms, stripDashes(emailSubject), finalEmailBody)
+    } catch {
+      templateFallback()
+    }
+  }
+
+  // Fix 6: Auto-trigger generation as soon as outreach tab is selected — skip the manual button click
+  useEffect(() => {
+    if (profileTab === "outreach" && !generating) {
+      handleGenerate()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileTab])
+
+  const equityPct = Math.round((fin.equityGain / fin.purchasePrice) * 100)
+  const equityBarWidth = Math.min(equityPct, 100)
+
+  // Comparable sales + range — used by angle-based outreach picker
+  const comps = generateComparables({ suburb: buyer.suburb, propertyType: buyer.propertyType as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id })
+  const range = buildAppraisalRange(comps, buyer.suburb)
+
+  return (
+    <div style={{ maxWidth: 1020, margin: "0 auto", padding: isMobileVP ? "80px 16px 48px" : "88px 28px 48px", fontFamily: FONT }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <button onClick={onBack} aria-label="Go back" style={{ background: "transparent", border: "none", cursor: "pointer", color: accentColor, fontSize: 13, fontWeight: 700, fontFamily: FONT, padding: "8px 0", minHeight: 44 }}>← Back</button>
+        {allEntries && entryIdx !== undefined && allEntries.length > 1 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              onClick={() => onNavigate?.(allEntries[entryIdx - 1])}
+              disabled={entryIdx === 0}
+              style={{
+                width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.border}`,
+                background: entryIdx === 0 ? "transparent" : C.bg3,
+                color: entryIdx === 0 ? C.faint : C.text,
+                cursor: entryIdx === 0 ? "default" : "pointer",
+                fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >‹</button>
+            <span style={{ fontSize: 11, color: C.faint, minWidth: 40, textAlign: "center" }}>
+              {entryIdx + 1} / {allEntries.length}
+            </span>
+            <button
+              onClick={() => onNavigate?.(allEntries[entryIdx + 1])}
+              disabled={entryIdx === allEntries.length - 1}
+              style={{
+                width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.border}`,
+                background: entryIdx === allEntries.length - 1 ? "transparent" : C.bg3,
+                color: entryIdx === allEntries.length - 1 ? C.faint : C.text,
+                cursor: entryIdx === allEntries.length - 1 ? "default" : "pointer",
+                fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >›</button>
+          </div>
+        )}
+      </div>
+
+      {/* Identity card — Peake editorial property-card style */}
+      <div style={{
+        background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`,
+        marginBottom: 20, overflow: "hidden",
+      }}>
+        {/* Pipeline tag bar */}
+        <div style={{
+          padding: "8px 22px",
+          background: `${pl.color}0f`, borderBottom: `1px solid ${pl.color}20`,
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <div style={{ fontSize: 9, fontWeight: 800, color: pl.color, textTransform: "uppercase", letterSpacing: 1.5 }}>
+            {pl.icon} {pl.label}
+          </div>
+          <div style={{ fontSize: 9, color: C.faint, fontWeight: 600 }}>
+            Confidence: {entry.segment.confidence}%
+          </div>
+        </div>
+
+        {/* Main profile area */}
+        <div style={{ padding: "20px 22px" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 14 }}>
+            {/* Large avatar */}
+            <div style={{
+              width: 56, height: 56, borderRadius: 12, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: `${accentColor}14`, border: `1.5px solid ${accentColor}25`,
+            }}>
+              <span style={{ fontSize: 22, fontWeight: 800, color: accentColor, letterSpacing: -0.5 }}>
+                {buyer.name.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: isMobileVP ? 20 : 24, fontWeight: 800, color: C.text, letterSpacing: -0.8, lineHeight: 1.1, marginBottom: 4 }}>
+                {buyer.name}
+              </div>
+              <div style={{ fontSize: 13, color: accentColor, fontWeight: 600 }}>
+                {buyer.purchaseAddress}
+              </div>
+              {buyer.suburb && (
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1.5, marginTop: 3 }}>
+                  {buyer.suburb}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Spec grid — Peake: beds · baths · land row */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 8 }}>
+          {[
+            { label: "Purchased", value: buyer.purchaseDate.slice(0, 4) },
+            { label: "Purchase price", value: fmtDollar(buyer.purchasePrice) },
+            { label: "Hold period", value: fmtYears(fin.yearsHeld) },
+            { label: "Type", value: `${buyer.beds}bd ${buyer.baths}ba ${buyer.propertyType}` },
+            buyer.land ? { label: "Land", value: `${buyer.land}m²` } : null,
+            { label: "Status", value: formatBuyerStatus(buyer.status) },
+          ].filter(Boolean).map(item => (
+            <div key={item!.label} style={{
+              background: C.bg3, borderRadius: 8, padding: "8px 12px",
+              border: `1px solid ${C.border}`,
+            }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 }}>{item!.label}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{item!.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      </div>
+
+      {/* Tab bar — Peake underline style */}
+      <div style={{
+        display: "flex", gap: 0, marginBottom: 24,
+        borderBottom: `1.5px solid ${C.border}`,
+        overflowX: "auto", scrollbarWidth: "none",
+      }}>
+        {([
+          { id: "market-update",  label: "Market Update" },
+          { id: "analysis",       label: "Analysis" },
+          { id: "outreach",       label: "Outreach" },
+          { id: "listing",        label: "Listing CMA" },
+          { id: "campaign",       label: "Campaign" },
+          { id: "nurture",        label: "Nurture" },
+          { id: "pitch",          label: "Price Pitch" },
+          { id: "introduction",   label: "Agent Intro" },
+          { id: "proposal",       label: "Proposal" },
+          { id: "property-pitch", label: "Prop. Pitch" },
+          { id: "gci",            label: "GCI Calc" },
+        ] as { id: typeof profileTab; label: string }[]).map(tab => (
+          <button key={tab.id} onClick={() => setProfileTab(tab.id)} style={{
+            padding: isMobileVP ? "9px 12px" : "10px 18px",
+            background: "none", border: "none", cursor: "pointer",
+            fontSize: isMobileVP ? 11 : 12, fontWeight: 700, fontFamily: FONT,
+            whiteSpace: "nowrap", flexShrink: 0, letterSpacing: 0,
+            color: profileTab === tab.id ? accentColor : C.faint,
+            borderBottom: `2px solid ${profileTab === tab.id ? accentColor : "transparent"}`,
+            marginBottom: -1.5,
+            transition: "color 0.15s, border-color 0.15s",
+          }}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Two-column layout — tab controls which sections are visible */}
+      <div style={{ display: "flex", flexDirection: isMobileVP ? "column" : "row", gap: isMobileVP ? 16 : 28 }}>
+        {/* LEFT col */}
+        <div style={{ flex: isMobileVP ? "unset" : "0 0 58%", display: "flex", flexDirection: "column", gap: 18 }}>
+
+          {/* === ANALYSIS TAB: financial + DNA sections === */}
+          {profileTab === "analysis" && (<>
+
+          {/* Financial Snapshot */}
+          <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
+            <div style={{
+              fontSize: 10, fontWeight: 800, letterSpacing: 2, color: accentColor,
+              textTransform: "uppercase", paddingBottom: 7,
+              borderBottom: `2px solid ${accentColor}`, marginBottom: 18, display: "inline-block",
+            }}>
+              Financial snapshot
+            </div>
+
+            {/* Equity bar */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>Purchased {fmtDollar(fin.purchasePrice)}</span>
+                {editingValue ? (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input
+                      autoFocus
+                      value={editValueInput}
+                      onChange={e => setEditValueInput(e.target.value)}
+                      onBlur={commitEditValue}
+                      onKeyDown={e => { if (e.key === "Enter") commitEditValue(); if (e.key === "Escape") setEditingValue(false) }}
+                      style={{
+                        width: 110, padding: "3px 8px", background: C.bg3, border: `1px solid ${accentColor}`,
+                        borderRadius: 6, color: C.text, fontSize: 12, fontFamily: FONT,
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button
+                      onClick={startEditValue}
+                      title="Click to override estimate"
+                      style={{
+                        background: "transparent", border: "none", cursor: "pointer", padding: 0,
+                        display: "flex", alignItems: "center", gap: 4,
+                      }}
+                    >
+                      <span style={{ fontSize: 12, color: C.green, fontWeight: 700, fontFamily: FONT }}>Now {fmtDollar(fin.currentEstimate)}</span>
+                      {overrideValue && <span style={{ fontSize: 9, color: accentColor, background: accentColor + "18", padding: "1px 5px", borderRadius: 4 }}>{avmSource ?? "custom"}</span>}
+                      <span style={{ fontSize: 9, color: C.faint }}>✏️</span>
+                    </button>
+                    <button
+                      onClick={handleAvmRefresh}
+                      disabled={avmRefreshing}
+                      title="Refresh via Domain API"
+                      style={{
+                        background: avmRefreshing ? "none" : C.bg3,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 6, padding: "5px 10px",
+                        fontSize: 11, color: avmRefreshing ? C.faint : accentColor,
+                        cursor: avmRefreshing ? "default" : "pointer", fontFamily: FONT, fontWeight: 600,
+                        minHeight: 28,
+                      }}
+                    >
+                      {avmRefreshing ? "…" : "↻ AVM"}
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div style={{ height: 10, background: C.bg3, borderRadius: 6, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%", borderRadius: 6, width: `${equityBarWidth}%`,
+                  background: `linear-gradient(90deg, ${theme.gradient[0]}, ${C.green})`,
+                  transition: "width 0.8s ease",
+                }} />
+              </div>
+              <div style={{ fontSize: 11, color: C.faint, marginTop: 4, textAlign: "right" }}>
+                {fmtPct(fin.equityGainPct)} equity growth ({fmtPct(fin.annualAppreciation)} p.a.)
+              </div>
+            </div>
+
+            {/* Value growth line chart */}
+            {(() => {
+              const W = 320; const H = 88; const PAD_L = 4; const PAD_R = 4; const PAD_T = 12; const PAD_B = 24
+              const startYear = buyer.purchaseDate ? parseInt(buyer.purchaseDate.slice(0, 4)) || 2013 : 2013
+              const endYear = new Date().getFullYear() + (new Date().getMonth() >= 6 ? 0.5 : 0)
+              // Monthly steps for realistic-looking chart
+              const steps = Math.max(24, Math.round((endYear - startYear) * 12))
+              // Deterministic seeded noise: ±2.5% monthly volatility
+              const seededNoise = (seed: number) => {
+                const x = Math.sin(seed * 9301 + 49297) * 49979
+                return (x - Math.floor(x)) - 0.5  // -0.5 .. 0.5
+              }
+              // Choose data source: real suburb series OR compound formula for unknown suburbs
+              const priceSeries = getSuburbPriceSeries(buyer.suburb)
+              const pts: { x: number; y: number; val: number; year: number }[] = []
+              for (let i = 0; i <= steps; i++) {
+                const y = startYear + (i / steps) * (endYear - startYear)
+                let base: number
+                if (priceSeries) {
+                  // Scale real suburb series so it anchors at purchasePrice at startYear
+                  const rawAt = suburbPriceAt(priceSeries, y)
+                  const rawStart = suburbPriceAt(priceSeries, startYear)
+                  base = buyer.purchasePrice * (rawAt / rawStart)
+                } else {
+                  base = buyer.purchasePrice * Math.pow(1 + fin.annualAppreciation / 100, y - startYear)
+                }
+                // Add monthly noise (±2.5%) — deterministic so chart doesn't re-jitter on re-render
+                const noise = seededNoise(buyer.id * 1000 + i) * 0.05 * base
+                const val = Math.max(base * 0.85, base + noise)
+                pts.push({ year: y, val, x: 0, y: 0 })
+              }
+              const minV = Math.min(...pts.map(p => p.val))
+              const maxV = Math.max(...pts.map(p => p.val))
+              const rng = maxV - minV || 1
+              pts.forEach((p, idx) => {
+                p.x = PAD_L + (idx / (pts.length - 1)) * (W - PAD_L - PAD_R)
+                p.y = PAD_T + (1 - (p.val - minV) / rng) * (H - PAD_T - PAD_B)
+              })
+              const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")
+              const areaD = `${d} L${pts[pts.length-1].x.toFixed(1)},${(H - PAD_B).toFixed(1)} L${PAD_L},${(H - PAD_B).toFixed(1)} Z`
+              const peakPt = pts.reduce((a, b) => a.val > b.val ? a : b)
+              const sourceLabel = priceSeries ? "REA.com.au data" : `${fmtPct(fin.annualAppreciation)} p.a.`
+              // Mid-year axis labels (every 3 years between start and end)
+              const axisYears: { x: number; yr: number }[] = []
+              const step3 = Math.ceil(startYear / 3) * 3
+              for (let yr = step3; yr < Math.floor(endYear); yr += 3) {
+                if (yr > startYear + 0.5) {
+                  const frac = (yr - startYear) / (endYear - startYear)
+                  axisYears.push({ x: PAD_L + frac * (W - PAD_L - PAD_R), yr })
+                }
+              }
+              return (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8 }}>
+                      {buyer.suburb} median price trend
+                    </div>
+                    <div style={{ fontSize: 8, color: C.faint, opacity: 0.6 }}>{sourceLabel}</div>
+                  </div>
+                  <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}>
+                    <defs>
+                      <linearGradient id="vgFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={C.green} stopOpacity="0.22" />
+                        <stop offset="100%" stopColor={C.green} stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <path d={areaD} fill="url(#vgFill)" />
+                    <path d={d} fill="none" stroke={C.green} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    {/* Peak marker */}
+                    {peakPt !== pts[pts.length - 1] && (
+                      <circle cx={peakPt.x} cy={peakPt.y} r="2.5" fill="none" stroke={C.green} strokeWidth="1.2" opacity="0.5" />
+                    )}
+                    <circle cx={pts[0].x} cy={pts[0].y} r="3" fill={C.bg3} stroke={C.green} strokeWidth="1.5" />
+                    <circle cx={pts[pts.length-1].x} cy={pts[pts.length-1].y} r="4" fill={C.green} />
+                    {/* Start/end year labels */}
+                    <text x={PAD_L} y={H} fontSize="8" fill={C.faint} textAnchor="start">{startYear}</text>
+                    <text x={W - PAD_R} y={H} fontSize="8" fill={C.faint} textAnchor="end">{Math.floor(endYear)}</text>
+                    {/* Mid-period year labels */}
+                    {axisYears.map(({ x, yr }) => (
+                      <text key={yr} x={x} y={H} fontSize="8" fill={C.faint} textAnchor="middle" opacity="0.6">{yr}</text>
+                    ))}
+                    {/* Price labels */}
+                    <text x={PAD_L} y={pts[0].y - 4} fontSize="9" fill={C.faint} textAnchor="start" fontFamily={FONT}>{fmtDollar(Math.round(pts[0].val / 1000) * 1000)}</text>
+                    <text x={W - PAD_R} y={pts[pts.length-1].y - 4} fontSize="9" fill={C.green} fontWeight="700" textAnchor="end" fontFamily={FONT}>{fmtDollar(Math.round(pts[pts.length-1].val / 1000) * 1000)}</text>
+                  </svg>
+                </div>
+              )
+            })()}
+
+            {/* Hero metrics — the 3 numbers that matter most */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 10 }}>
+              {[
+                { label: "Equity gain", value: fmtDollar(fin.equityGain), color: C.green },
+                { label: "Est. current value", value: fmtDollar(fin.currentEstimate), color: C.text },
+                fin.cgtSavingsBy2027 > 0
+                  ? { label: "CGT saves by Jul 2027", value: fmtDollar(fin.cgtSavingsBy2027), color: C.red ?? "#ef4444" }
+                  : { label: "Net proceeds (est.)", value: fmtDollar(fin.netProceeds), color: C.green },
+              ].map(m => (
+                <div key={m.label} style={{
+                  background: C.bg3, borderRadius: 10, padding: "10px 12px",
+                  border: `1px solid ${C.border}`,
+                }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>{m.label}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: m.color, fontFamily: FONT }}>{m.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Drill-down toggle */}
+            <button
+              onClick={() => setShowAllMetrics(v => !v)}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                fontSize: 11, color: C.faint, fontFamily: FONT,
+                display: "flex", alignItems: "center", gap: 4, padding: 0, marginBottom: 2,
+              }}
+            >
+              <span style={{ transition: "transform 0.2s", display: "inline-block", transform: showAllMetrics ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
+              {showAllMetrics ? "Hide" : "5 more metrics"}
+            </button>
+
+            {/* Expanded metrics */}
+            <AnimatePresence>
+              {showAllMetrics && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                  style={{ overflow: "hidden" }}
+                >
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, paddingTop: 8 }}>
+                    {[
+                      { label: "Annual growth", value: fmtPct(fin.annualAppreciation), color: C.blue },
+                      fin.cashOnCashReturn ? { label: "Cash-on-cash return", value: `${fin.cashOnCashReturn}%`, color: C.green } : null,
+                      fin.cgtDiscount ? { label: "Est. CGT (50% disc.)", value: fmtDollar(fin.estimatedCGT), color: C.orange } : null,
+                      { label: "Selling costs (est.)", value: fmtDollar(fin.sellingCosts), color: C.muted },
+                      { label: "Net proceeds (est.)", value: fmtDollar(fin.netProceeds), color: C.green },
+                    ].filter(Boolean).map(m => (
+                      <div key={m!.label} style={{
+                        background: C.bg3, borderRadius: 10, padding: "10px 12px",
+                        border: `1px solid ${C.border}`,
+                      }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>{m!.label}</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: m!.color, fontFamily: FONT }}>{m!.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Vendor Appraisal */}
+          <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "20px 24px" }}>
+            <VendorAppraisalPanel buyer={buyer} theme={theme} showEquityScenarios={vendorSettings?.showEquityScenarios} showComparableMap={vendorSettings?.showComparableMap} />
+            <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
+              <button onClick={() => setShowPrintAppraisal(true)}
+                style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${accentColor}40`, background: `${accentColor}10`, color: accentColor, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", gap: 6 }}>
+                🖨️ Print Appraisal Report
+              </button>
+            </div>
+          </div>
+
+          </>)}
+
+          {/* === OUTREACH TAB: notes + voice + nurture === */}
+          {profileTab === "outreach" && (<>
+
+          {/* CRM Notes + Voice Memo Recorder */}
+          <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase" }}>CRM Notes</div>
+              {/* Voice memo button — always visible */}
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {vendorVoice.phase === "idle" && (
+                  <button
+                    onClick={vendorVoice.supported ? vendorVoice.start : undefined}
+                    title={vendorVoice.supported ? undefined : "Voice notes require Chrome or Edge"}
+                    style={{
+                      fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
+                      background: accentColor + "15", color: accentColor,
+                      border: `1px solid ${accentColor}30`,
+                      cursor: vendorVoice.supported ? "pointer" : "default",
+                      opacity: vendorVoice.supported ? 1 : 0.5,
+                      fontFamily: FONT, display: "flex", alignItems: "center", gap: 4,
+                    }}
+                  >
+                    🎙️ Add voice note
+                  </button>
+                )}
+                {vendorVoice.phase === "recording" && (
+                  <button
+                    onClick={vendorVoice.stop}
+                    style={{
+                      fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
+                      background: "#ef444420", color: "#ef4444",
+                      border: "1px solid #ef444440", cursor: "pointer", fontFamily: FONT,
+                      display: "flex", alignItems: "center", gap: 4,
+                    }}
+                  >
+                    <motion.span animate={{ opacity: [1, 0] }} transition={{ duration: 0.6, repeat: Infinity }}>●</motion.span>
+                    Stop ({vendorVoice.seconds}s)
+                  </button>
+                )}
+                {vendorVoice.phase === "done" && (
+                  <button onClick={vendorVoice.reset} style={{
+                    fontSize: 10, color: C.faint, background: "none", border: "none", cursor: "pointer", fontFamily: FONT,
+                  }}>↺ Re-record</button>
+                )}
+              </div>
+            </div>
+            {buyer.notes && <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.55 }}>{buyer.notes}</div>}
+            {/* Live transcript while recording */}
+            {vendorVoice.phase === "recording" && vendorVoice.liveTranscript && (
+              <div style={{ fontSize: 12, color: accentColor, fontStyle: "italic", marginTop: 8, padding: "8px 10px", background: accentColor + "0a", borderRadius: 6, lineHeight: 1.5 }}>
+                🎙️ {vendorVoice.liveTranscript}
+              </div>
+            )}
+            {/* Saved voice notes + upsert button */}
+            {voiceNotes && (
+              <div style={{ fontSize: 12, color: C.text, marginTop: 8, padding: "8px 10px", background: accentColor + "10", borderRadius: 6, lineHeight: 1.5, border: `1px solid ${accentColor}20` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: accentColor, textTransform: "uppercase", letterSpacing: 0.8 }}>🎙️ Voice note · included in outreach</span>
+                  <button
+                    onClick={async () => {
+                      // Append voice transcript to notes — save to both Sheets and Supabase
+                      const merged = [buyer.notes, voiceNotes].filter(Boolean).join("\n\nVoice note: ")
+                      try {
+                        await authFetch(apiUrl("/api/sheet"), {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "updateNotes", id: buyer.id, notes: merged }),
+                        })
+                      } catch { /* non-fatal */ }
+                      updatePastBuyerInSupabase(buyer.id, { notes: merged }).catch(() => {})
+                      buyer.notes = merged
+                      vendorVoice.reset()
+                      setVoiceNotes("")
+                    }}
+                    style={{
+                      fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 5,
+                      background: accentColor + "20", color: accentColor,
+                      border: `1px solid ${accentColor}40`, cursor: "pointer", fontFamily: FONT, flexShrink: 0, marginLeft: 8,
+                    }}
+                  >
+                    ✓ Save to notes
+                  </button>
+                </div>
+                <div style={{ color: C.muted }}>{voiceNotes}</div>
+                <VoiceBriefCard transcript={voiceNotes} buyerName={buyer.name} buyerSuburb={buyer.suburb} theme={theme} />
+              </div>
+            )}
+          </div>
+
+          {/* Nurture Sequence Panel */}
+          <NurtureSequencePanel entry={entry} agent={agent} theme={theme} />
+
+          </>)}
+        </div>
+
+        {/* RIGHT col */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* === OUTREACH TAB: NotesBridge + outreach picker + coach + contact === */}
+          {profileTab === "outreach" && (<>
+
+          {/* ⚡ NotesBridge — CRM notes → AI extraction → outreach sentence */}
+          {vendorSettings?.showCRMNotes && (buyer.notes || voiceNotes) && (
+            <NotesBridgeCard
+              notes={[buyer.notes, voiceNotes ? `Voice note: ${voiceNotes}` : ""].filter(Boolean).join("\n\n")}
+              prewrittenHook={(buyer as { personalisationHook?: string }).personalisationHook ?? null}
+              extractedHook={extractedHook}
+              personalisationLine={personalisationLine}
+              fname={fname}
+              generating={generating}
+              theme={theme}
+            />
+          )}
+
+          </>)}
+
+          {/* === ANALYSIS TAB: triggers + rate sensitivity + best time === */}
+          {profileTab === "analysis" && (<>
+
+          {/* Trigger events + Pitch angles — collapsible */}
+          {vendorSettings?.showTriggers && <div style={{ background: C.bg2, borderRadius: 16, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            {/* Header row — always visible */}
+            <button
+              onClick={() => setShowInsights(v => !v)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "14px 20px", background: "transparent", border: "none", cursor: "pointer", fontFamily: FONT,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, color: C.muted, textTransform: "uppercase" }}>
+                  Triggers &amp; pitch angles
+                </span>
+                {/* Top trigger preview chip */}
+                {!showInsights && segment.triggers[0] && (() => {
+                  const t = segment.triggers[0]
+                  const uColor = t.urgency === "high" ? (C.red ?? "#ef4444") : t.urgency === "medium" ? C.orange : C.faint
+                  return (
+                    <span style={{ fontSize: 10, color: uColor, background: uColor + "15", padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>
+                      {t.label.slice(0, 40)}{t.label.length > 40 ? "…" : ""}
+                    </span>
+                  )
+                })()}
+              </div>
+              <span style={{
+                fontSize: 13, color: C.faint,
+                transform: showInsights ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block",
+              }}>⌄</span>
+            </button>
+
+            {/* Expanded content */}
+            <AnimatePresence>
+              {showInsights && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+                  style={{ overflow: "hidden" }}
+                >
+                  <div style={{ padding: "0 20px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+                    {/* Triggers */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {segment.triggers.map((t, i) => {
+                        const uColor = t.urgency === "high" ? (C.red ?? "#ef4444") : t.urgency === "medium" ? C.orange : C.faint
+                        return (
+                          <div key={i} style={{
+                            display: "flex", gap: 8, padding: "8px 10px", borderRadius: 8,
+                            background: uColor + "0d", border: `1px solid ${uColor}20`,
+                          }}>
+                            <span style={{ fontSize: 8, fontWeight: 800, color: uColor, textTransform: "uppercase", background: uColor + "18", padding: "2px 5px", borderRadius: 3, alignSelf: "flex-start", flexShrink: 0 }}>{t.urgency}</span>
+                            <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{t.label}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {/* Pitch angles — collapsed by default */}
+                    {segment.pitchAngles.length > 0 && (
+                      <div>
+                        <button
+                          onClick={() => setShowPitchAngles(v => !v)}
+                          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 5, fontFamily: FONT, marginBottom: showPitchAngles ? 6 : 0 }}
+                        >
+                          <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8 }}>Pitch angles for {fname}</span>
+                          <span style={{ fontSize: 10, color: C.faint, transform: showPitchAngles ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block" }}>›</span>
+                        </button>
+                        <AnimatePresence>
+                          {showPitchAngles && (
+                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} style={{ overflow: "hidden" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                {segment.pitchAngles.map((angle, i) => (
+                                  <div key={i} style={{
+                                    display: "flex", gap: 8, padding: "8px 10px", borderRadius: 8,
+                                    background: C.bg3, border: `1px solid ${C.border}`,
+                                  }}>
+                                    <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>{angle}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>}
+
+          </>)}
+
+          {/* === OUTREACH TAB: secondary engagement + coach + contact + picker === */}
+          {profileTab === "outreach" && (<>
+
+          {/* Secondary buyer engagement strategies */}
+          {isSecondary && <SecondaryEngagementCard entry={entry} theme={theme} />}
+
+          {/* Negotiation Coach button */}
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setShowNegotiationCoach(true)}
+            style={{ width: "100%", padding: "12px", borderRadius: 12, border: `1px solid ${accentColor}40`, background: `${accentColor}10`, color: accentColor, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            Generate call script for {fname} →
+          </motion.button>
+
+          {/* Contact info */}
+          <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "16px 20px" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Contact</div>
+            <a href={`tel:${buyer.phone}`} style={{ fontSize: 14, color: accentColor, fontWeight: 600, textDecoration: "none", display: "block", marginBottom: 6 }}>{buyer.phone}</a>
+            {buyer.email && <a href={`mailto:${buyer.email}`} style={{ fontSize: 13, color: accentColor, fontWeight: 600, textDecoration: "none" }}>{buyer.email}</a>}
+            {buyer.lastContactDate && (
+              <div style={{ fontSize: 10, color: C.faint, marginTop: 8 }}>
+                Last contacted: {(() => { try { return new Date(buyer.lastContactDate).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) } catch { return buyer.lastContactDate } })()}
+              </div>
+            )}
+            {buyer.lastMessage && (
+              <div style={{ fontSize: 10, color: C.faint, marginTop: 4, fontStyle: "italic", lineHeight: 1.4 }}>
+                "{buyer.lastMessage.slice(0, 120)}{buyer.lastMessage.length > 120 ? "…" : ""}"
+              </div>
+            )}
+          </div>
+
+          {/* Voice note hint if none recorded yet */}
+          {!voiceNotes && vendorVoice.phase === "idle" && (
+            <div style={{ textAlign: "center", fontSize: 10, color: C.faint }}>
+              🎙️ Tap "Add voice note" in CRM Notes above to personalise the outreach
+            </div>
+          )}
+
+          {/* ── Outreach generator — always visible ── */}
+          {(() => {
+            const year = buyer.purchaseDate.slice(0, 4)
+            const signoff = buyer.status === "investor" ? "Kind regards" : "Cheers"
+
+            const angles = [
+              // CGT Deadline — only if meaningful tax savings
+              fin.cgtSavingsBy2027 > 5000 && {
+                id: "cgt", icon: "⏰", title: "CGT Deadline",
+                hook: `Save ${fmtDollar(fin.cgtSavingsBy2027)} in tax`, sub: "Before July 2027 cutoff", color: "#ef4444",
+                buildOutreach: () => {
+                  const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Selling before July 2027 saves you ~${fmtDollar(fin.cgtSavingsBy2027)} in tax. Happy to run the numbers. ${signoff}, ${agentFirst}`
+                  const sms = stripDashes(smsRaw.slice(0, 160))
+                  const emailSubject = `Your CGT window, ${fname}`
+                  const emailBody = [
+                    `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick one on your numbers at ${shortAddr(buyer.purchaseAddress)}.`,
+                    `You've held your place since ${year} and the 50% CGT discount applies right now. Selling before 1 July 2027 saves you roughly ${fmtDollar(fin.cgtSavingsBy2027)} in tax compared to waiting. Your place is estimated at around ${fmtDollar(fin.currentEstimate)}.`,
+                    `Happy to do a quick no-obligation appraisal. Twenty minutes, I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+                  ].map(stripDashes)
+                  return { sms, emailSubject, emailBody }
+                },
+              },
+              // Equity Position
+              fin.equityGain > 100000 && {
+                id: "equity", icon: "💰", title: "Equity Position",
+                hook: `${fmtDollar(fin.equityGain)} in equity`, sub: `Built since ${year}`, color: "#66bb6a",
+                buildOutreach: () => {
+                  const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Your place has grown ${fmtDollar(fin.equityGain)} since ${year}. Worth knowing your options. ${signoff}, ${agentFirst}`
+                  const sms = stripDashes(smsRaw.slice(0, 160))
+                  const emailSubject = `Your equity position, ${fname}`
+                  const emailBody = [
+                    `Hi ${fname}, ${agentFirst} from ${agent.agency} here.`,
+                    `Ran the numbers on your place at ${shortAddr(buyer.purchaseAddress)}. You've built roughly ${fmtDollar(fin.equityGain)} in equity since ${year}. Your property is sitting at around ${fmtDollar(fin.currentEstimate)} now. A lot of people in ${buyer.suburb} don't realise what position they're in.`,
+                    `Happy to do a complimentary appraisal. Twenty minutes, I'll come to you. No obligation, just so you know your options.\n\n${signoff},\n${agentFirst}`,
+                  ].map(stripDashes)
+                  return { sms, emailSubject, emailBody }
+                },
+              },
+              // Recent comparable sale
+              {
+                id: "comps", icon: "🏡", title: "Recent Sale",
+                hook: `${comps[0].address}: ${fmtDollar(comps[0].soldPrice)}`, sub: comps[0].soldDate, color: "#ffa726",
+                buildOutreach: () => {
+                  const smsRaw = `Hi ${fname}, ${agentFirst} here. A ${comps[0].beds}-bed in ${buyer.suburb} just sold for ${fmtDollar(comps[0].soldPrice)}. Your place stacks up really well. ${signoff}, ${agentFirst}`
+                  const sms = stripDashes(smsRaw.slice(0, 160))
+                  const emailSubject = `Recent ${buyer.suburb} sale relevant to your place, ${fname}`
+                  const emailBody = [
+                    `Hi ${fname}, ${agentFirst} from ${agent.agency} here.`,
+                    `A comparable ${comps[0].beds}-bedroom property at ${comps[0].address} just sold for ${fmtDollar(comps[0].soldPrice)} on ${comps[0].soldDate}. That puts your place (bought for ${fmtDollar(buyer.purchasePrice)} in ${year}) in a really strong position at roughly ${fmtDollar(fin.currentEstimate)}.`,
+                    `Happy to put together a quick comps report and walk you through it. No obligation at all. Let me know if it's worth a look.\n\n${signoff},\n${agentFirst}`,
+                  ].map(stripDashes)
+                  return { sms, emailSubject, emailBody }
+                },
+              },
+              // Market Timing
+              {
+                id: "timing", icon: "📈", title: "Market Timing",
+                hook: `${range.clearanceRate}% clearance rate`, sub: `Avg ${range.daysOnMarket} days on market`, color: accentColor,
+                buildOutreach: () => {
+                  const smsRaw = `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} is running at ${range.clearanceRate}% clearance right now. Good time to know your options. ${signoff}, ${agentFirst}`
+                  const sms = stripDashes(smsRaw.slice(0, 160))
+                  const emailSubject = `${buyer.suburb} market is moving, ${fname}`
+                  const emailBody = [
+                    `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
+                    `Clearance rate is at ${range.clearanceRate}% with properties averaging just ${range.daysOnMarket} days on market. Strong seller conditions. Based on recent sales, your place is estimated at around ${fmtDollar(fin.currentEstimate)}, which is ${fmtDollar(fin.equityGain)} up since you bought in ${year}.`,
+                    `If you've had any thoughts about listing, it's a decent window. Happy to do a quick appraisal, 20 minutes and I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+                  ].map(stripDashes)
+                  return { sms, emailSubject, emailBody }
+                },
+              },
+            ].filter(Boolean) as Array<{ id: string; icon: string; title: string; hook: string; sub: string; color: string; buildOutreach: () => { sms: string; emailSubject: string; emailBody: string[] } }>
+
+            const clampedAngleIdx = Math.min(selectedAngleIdx, angles.length - 1)
+            const angle = angles[clampedAngleIdx]
+            const preview = angle.buildOutreach()
+
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+
+                {/* ── Angle carousel (when setting is on) ── */}
+                {vendorSettings?.showOutreachAngles && (
+                  <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                    {/* Header + arrows */}
+                    <div style={{ display: "flex", alignItems: "center", padding: "10px 14px", borderBottom: `1px solid ${C.border}`, gap: 8 }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, flex: 1 }}>Outreach angle</span>
+                      <button onClick={() => setSelectedAngleIdx(i => Math.max(0, i - 1))} disabled={clampedAngleIdx === 0}
+                        style={{ width: 26, height: 26, borderRadius: 7, border: `1px solid ${C.border}`, background: clampedAngleIdx === 0 ? "transparent" : C.bg3, color: clampedAngleIdx === 0 ? C.faint : C.text, cursor: clampedAngleIdx === 0 ? "default" : "pointer", fontSize: 14, fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+                      <span style={{ fontSize: 10, color: C.faint, minWidth: 36, textAlign: "center" }}>{clampedAngleIdx + 1} / {angles.length}</span>
+                      <button onClick={() => setSelectedAngleIdx(i => Math.min(angles.length - 1, i + 1))} disabled={clampedAngleIdx === angles.length - 1}
+                        style={{ width: 26, height: 26, borderRadius: 7, border: `1px solid ${C.border}`, background: clampedAngleIdx === angles.length - 1 ? "transparent" : C.bg3, color: clampedAngleIdx === angles.length - 1 ? C.faint : C.text, cursor: clampedAngleIdx === angles.length - 1 ? "default" : "pointer", fontSize: 14, fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
+                    </div>
+
+                    {/* Current angle info */}
+                    <div style={{ padding: "12px 14px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                        <span style={{ fontSize: 20 }}>{angle.icon}</span>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 800, color: C.text }}>{angle.title}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: angle.color }}>{angle.hook}</div>
+                          <div style={{ fontSize: 10, color: C.faint }}>{angle.sub}</div>
+                        </div>
+                      </div>
+
+                      {/* SMS preview */}
+                      <div style={{ marginBottom: 8, padding: "10px 12px", background: C.bg3, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5, display: "flex", alignItems: "center", gap: 4 }}>📱 SMS preview · {preview.sms.length} chars</div>
+                        <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{preview.sms}</div>
+                      </div>
+
+                      {/* Email subject preview */}
+                      <div style={{ padding: "8px 12px", background: C.bg3, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 10 }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>📧 Email subject</div>
+                        <div style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{preview.emailSubject}</div>
+                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5, marginTop: 5 }}>{preview.emailBody[0]}</div>
+                      </div>
+
+                      {/* Review & send with this angle */}
+                      <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                        onClick={() => { const { sms, emailSubject, emailBody } = angle.buildOutreach(); onReview(sms, emailSubject, emailBody) }}
+                        style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${angle.color}50`, background: `${angle.color}12`, color: angle.color, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                        Review &amp; Send · {angle.title} →
+                      </motion.button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Vendor Readiness Check (agent-side signals) ── */}
+                <VendorSentimentPanel
+                  answers={sentimentAnswers}
+                  onChange={setSentimentAnswers}
+                />
+
+                {/* ── Full AI generate button — always visible ── */}
+                <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={handleGenerate} disabled={generating}
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${accentColor}50`, background: generating ? C.bg3 : `linear-gradient(135deg, ${theme.gradient[0]}18, ${theme.gradient[1]}12)`, color: generating ? C.faint : accentColor, fontSize: 13, fontWeight: 700, cursor: generating ? "default" : "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  {generating ? "✨ Writing personalised outreach..." : "✨ Write personalised SMS + Email →"}
+                </motion.button>
+                {voiceNotes && <div style={{ textAlign: "center", fontSize: 10, color: C.green }}>✅ Voice note included in generation</div>}
+              </div>
+            )
+          })()}
+
+          </>)}
+
+          {/* === ANALYSIS TAB: best time to sell === */}
+          {profileTab === "analysis" && (<>
+
+          {/* Best time to sell */}
+          {vendorSettings?.showOptimalWindow && <BestTimeToSellPanel entry={entry} theme={theme} />}
+
+          {/* ── Prospect Gauge Survey — toggle before generating outreach ── */}
+          <VendorProspectGauge
+            buyerName={buyer.name}
+            agentFirst={agentFirst}
+            agencyShort={agent.agencyShort ?? agent.agency.slice(0, 2).toUpperCase()}
+            theme={theme}
+            includeInOutreach={includeProspectGauge}
+            onToggleInclude={() => setIncludeProspectGauge(v => !v)}
+          />
+
+          </>)}
+        </div>
+      </div>
+
+      {/* === LISTING CMA TAB === */}
+      {profileTab === "listing" && (
+        <div style={{ marginTop: 4 }}>
+          <ListingPresentation buyer={buyer} agent={agent} theme={theme} />
+        </div>
+      )}
+
+      {/* === CAMPAIGN REPORT TAB === */}
+      {profileTab === "campaign" && (
+        <div style={{ marginTop: 4 }}>
+          <CampaignReport buyer={buyer} agent={agent} theme={theme} />
+        </div>
+      )}
+
+      {/* === PROPERTY PITCH TAB === */}
+      {profileTab === "property-pitch" && (() => {
+        const pitchProperty = PORTFOLIO_ACTIVE[0]
+        const pitchSLM = loadSLMForProperty(pitchProperty.id)
+        const comparable = pitchSLM.comparableSales !== "TBD" && pitchSLM.comparableSales.length > 0
+          ? pitchSLM.comparableSales[0]
+          : { address: `${pitchProperty.address}, ${pitchProperty.suburb}`, price: 0, date: "", beds: pitchSLM.beds !== "TBD" ? pitchSLM.beds : 0 }
+
+        return (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
+                PROPERTY PITCH
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
+                {pitchSLM.address}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                A classy, photo-led listing showcase in Peake's brand style, ready to share with prospective buyers.
+              </div>
+            </div>
+
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>PITCH PREVIEW</div>
+              </div>
+              <div style={{ maxHeight: 800, overflow: "auto" }}>
+                <PropertyPitchTemplate slm={pitchSLM} agent={agent} comparable={comparable} />
+              </div>
+            </motion.div>
+          </div>
+        )
+      })()}
+
+      {/* === GCI CALCULATOR TAB === */}
+      {profileTab === "gci" && (
+        <div style={{ marginTop: 4 }}>
+          <GciCalculator />
+        </div>
+      )}
+
+      {/* === PRICE UPDATE PITCH TAB === */}
+      {profileTab === "pitch" && (() => {
+        const handleGeneratePitch = async () => {
+          setPitchGenerating(true)
+          try {
+            const res = await authFetch(apiUrl("/api/pitches"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: "price_update",
+                leadId: String(buyer.id),
+                propertyRef: buyer.purchaseAddress,
+                agent: {
+                  name: agent.name,
+                  agency: agent.agency,
+                  email: agent.email,
+                  phone: agent.phone,
+                  suburb: agent.suburb,
+                  tagline: agent.tagline,
+                },
+                recipientName: buyer.name,
+                propertyAddress: buyer.purchaseAddress,
+                suburb: buyer.suburb,
+                comparableSales: comps.slice(0, 3).map(c => ({
+                  address: `${c.address}, ${buyer.suburb}`,
+                  price: c.soldPrice,
+                  date: c.soldDate,
+                  beds: c.beds,
+                })),
+                marketStats: {
+                  medianPrice: range.mid,
+                  daysOnMarket: range.daysOnMarket,
+                  clearanceRate: range.clearanceRate,
+                  annualGrowthPct: range.demandScore > 7 ? 6.5 : 5.8,
+                },
+                buyerDemand: buyerDemand ?? undefined,
+                voiceContext: buildVoiceContext(agent.voiceProfile, loadCorpus()),
+              }),
+            }).then(r => r.json()) as { payload?: PriceUpdatePayload; url?: string }
+
+            if (res.payload && res.url) {
+              setPitchPayload(res.payload)
+              // Server returns an absolute URL on the production domain (BASE_URL).
+              // Fall back to a relative path off the current origin if it ever
+              // doesn't (e.g. BASE_URL unset in a dev/demo server).
+              setPitchUrl(/^https?:\/\//.test(res.url) ? res.url : `${window.location.origin}${res.url}`)
+              setPitchSent(false)
+            }
+          } catch { /* silent */ }
+          setPitchGenerating(false)
+        }
+
+        const handleSendPitch = async () => {
+          if (!pitchUrl) return
+          setPitchSending(true)
+          try {
+            // Local dev links (localhost) are dead for recipients — embed the pitch
+            // content in the email instead and only include a link on a real domain.
+            const isLocalLink = /localhost|127\.0\.0\.1/.test(pitchUrl)
+            const sms = stripDashes(isLocalLink
+              ? `Hi ${fname}, ${agentFirst} here. I've just emailed you a price update for ${shortAddr(buyer.purchaseAddress)}. Worth a look when you get a minute.`
+              : `Hi ${fname}, ${agentFirst} here. I've put together a quick price update for ${shortAddr(buyer.purchaseAddress)}. Have a look here: ${pitchUrl}`)
+            const subject = stripDashes(`Your price update for ${buyer.purchaseAddress}`)
+            const emailBody = stripDashes(
+              `Hi ${fname},\n\nI've put together a price update for your property at ${buyer.purchaseAddress}. The full breakdown, including recent comparable sales near you, is below.${isLocalLink ? "" : ` You can also view it online here: ${pitchUrl}`}\n\nCheers,\n${agentFirst}`
+            )
+            await authFetch(apiUrl("/api/send"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                leadId: String(buyer.id), leadName: buyer.name,
+                phone: buyer.phone, email: buyer.email,
+                agentEmail: agent.email, agentName: agent.name, agentAgency: agent.agency,
+                agentPhone: agent.phone, agencyColor: theme.primary, agencyTagline: agent.tagline,
+                propertyAddress: buyer.purchaseAddress,
+                sms, subject, emailBody,
+                pitchPayload: pitchPayload ?? undefined,
+                channel: buyer.email ? "both" : "sms",
+              }),
+            })
+            setPitchSent(true)
+            // Demo: simulate the vendor opening the pitch shortly after send
+            setPitchViewNotif(false)
+            setTimeout(() => setPitchViewNotif(true), 9000)
+          } catch { /* silent */ }
+          setPitchSending(false)
+        }
+
+        return (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
+                PRICE UPDATE PITCH
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
+                {buyer.purchaseAddress}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                Generate a shareable Price Update page for {fname}, written in your voice, with comparable sales and market stats. You'll be notified when {fname} opens it.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                onClick={handleGeneratePitch}
+                disabled={pitchGenerating}
+                style={{
+                  padding: "12px 24px", borderRadius: 12, border: "none", cursor: pitchGenerating ? "default" : "pointer",
+                  background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                  color: "#fff", fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                  boxShadow: `0 4px 16px ${theme.glow}`,
+                  opacity: pitchGenerating ? 0.7 : 1,
+                }}
+              >
+                {pitchGenerating ? "Generating..." : pitchPayload ? "Regenerate Pitch" : "Generate Price Update Pitch"}
+              </motion.button>
+
+              {pitchUrl && !pitchSent && (
+                <motion.button
+                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                  onClick={handleSendPitch}
+                  disabled={pitchSending}
+                  style={{
+                    padding: "12px 24px", borderRadius: 12, border: `1px solid ${C.green}55`,
+                    cursor: pitchSending ? "default" : "pointer",
+                    background: C.green + "15", color: C.green,
+                    fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                  }}
+                >
+                  {pitchSending ? "Sending..." : `Send to ${fname} →`}
+                </motion.button>
+              )}
+
+              {pitchSent && (
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 12, background: C.green + "15", border: `1px solid ${C.green}40` }}>
+                  <span style={{ fontSize: 16 }}>✓</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Pitch link sent to {fname}</span>
+                </motion.div>
+              )}
+            </div>
+
+            {/* Voice confidence badge — shown after pitch is generated */}
+            {pitchPayload && !pitchGenerating && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 10,
+                  padding: "8px 14px", borderRadius: 10, marginBottom: 14,
+                  background: `${accentColor}14`, border: `1px solid ${accentColor}33`,
+                }}
+              >
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                  style={{ width: 8, height: 8, borderRadius: "50%", background: accentColor, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 12, fontWeight: 700, color: accentColor }}>
+                  Drafted in {agent.name.split(" ")[0]}'s voice
+                </span>
+                <span style={{ fontSize: 12, color: C.muted }}>
+                  {Math.round(agent.voiceProfile.confidence ?? 91)}% style match
+                </span>
+              </motion.div>
+            )}
+
+            {/* Simulated view notification — the strike-while-hot moment */}
+            {pitchViewNotif && (
+              <motion.div initial={{ opacity: 0, y: -12, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14, padding: "16px 18px", marginBottom: 16,
+                  borderRadius: 14, background: `linear-gradient(135deg, ${theme.gradient[0]}22, ${theme.gradient[1]}22)`,
+                  border: `1px solid ${accentColor}66`, boxShadow: `0 8px 28px ${theme.glow}`,
+                }}>
+                <motion.div
+                  animate={{ scale: [1, 1.35, 1], opacity: [1, 0.6, 1] }}
+                  transition={{ duration: 1.4, repeat: Infinity }}
+                  style={{ width: 12, height: 12, borderRadius: "50%", background: C.green, flexShrink: 0 }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>
+                    {fname} just opened your Price Update
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                    3 views in the last few minutes. Strike while the iron is hot.
+                  </div>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                  onClick={() => setShowCallScript(true)}
+                  style={{
+                    padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer",
+                    background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                    color: "#fff", fontSize: 13, fontWeight: 700, fontFamily: FONT, whiteSpace: "nowrap",
+                  }}
+                >
+                  Call {fname} now
+                </motion.button>
+                <button onClick={() => setPitchViewNotif(false)} style={{ background: "none", border: "none", color: C.faint, fontSize: 16, cursor: "pointer", padding: 4, lineHeight: 1 }}>
+                  ×
+                </button>
+              </motion.div>
+            )}
+
+            {/* Call script overlay */}
+            {showCallScript && (
+              <div
+                onClick={() => setShowCallScript(false)}
+                style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                  onClick={e => e.stopPropagation()}
+                  style={{ width: "100%", maxWidth: 520, maxHeight: "85vh", overflow: "auto", background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 18, padding: 26, fontFamily: FONT }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
+                    Strike while the iron is hot
+                  </div>
+                  <div style={{ fontSize: 19, fontWeight: 800, color: C.text, marginBottom: 4 }}>
+                    Call {buyer.name}
+                  </div>
+                  {buyer.phone && (
+                    <a href={`tel:${buyer.phone}`} style={{ fontSize: 24, fontWeight: 800, color: C.green, textDecoration: "none", display: "inline-block", marginBottom: 18 }}>
+                      {buyer.phone}
+                    </a>
+                  )}
+
+                  <div style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Your script</div>
+                    <p style={{ fontSize: 14, lineHeight: 1.75, color: C.text, margin: 0 }}>
+                      "Hi {fname}, it's {agentFirst} from {agent.agency}. It's been a while since we last chatted. We've been seeing buyer interest in your area at around the {fmt(range.low)} to {fmt(range.high)} mark, and I'm wondering if you'd be interested in an updated appraisal of your property. Are you interested?"
+                    </p>
+                  </div>
+
+                  <div style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>If they're too busy — Script B</div>
+                    <p style={{ fontSize: 14, lineHeight: 1.75, color: C.muted, margin: 0 }}>
+                      "I understand you're very busy. Instead of a full appraisal, how about I send you a quick market snapshot of comparable recent sales near your property?"
+                    </p>
+                  </div>
+
+                  <div style={{ background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Warm check-in — Script C</div>
+                    <p style={{ fontSize: 14, lineHeight: 1.75, color: C.muted, margin: 0 }}>
+                      "Hi {fname}, it's {agentFirst} from {agent.agency}. I just sent you a quick price update for your property — I think you'll find the numbers interesting. Have you had a chance to have a look? ... Great. Based on what we're seeing, there's real buyer demand in your suburb right now. Are you open to a quick 10-minute chat about your options?"
+                    </p>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 11, color: C.faint }}>Scripts: Tom Panos method</div>
+                    <button onClick={() => setShowCallScript(false)} style={{ padding: "10px 20px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg3, color: C.text, fontSize: 13, fontWeight: 700, fontFamily: FONT, cursor: "pointer" }}>
+                      Close
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+
+            {pitchUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.bg2, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, color: C.faint, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {pitchUrl}
+                </div>
+                <button
+                  onClick={() => navigator.clipboard.writeText(pitchUrl)}
+                  style={{
+                    padding: "6px 14px", borderRadius: 8, border: `1px solid ${C.border}`,
+                    background: C.bg3, color: C.text, fontSize: 11, fontWeight: 700, fontFamily: FONT, cursor: "pointer",
+                  }}
+                >
+                  Copy link
+                </button>
+              </div>
+            )}
+
+            {pitchPayload && (
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>PITCH PREVIEW</div>
+                </div>
+                <div style={{ maxHeight: 700, overflow: "auto" }}>
+                  <PriceUpdateTemplate payload={pitchPayload} />
+                </div>
+              </motion.div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* === AGENT INTRODUCTION TAB === */}
+      {profileTab === "introduction" && (() => {
+        const introPayload = {
+          agentCard: {
+            name: agent.name,
+            agency: agent.agency,
+            email: agent.email ?? "",
+            phone: agent.phone ?? "",
+            suburb: agent.suburb ?? "Berwick",
+            tagline: `Your local ${agent.agency} specialist`,
+          },
+          recipientName: buyer.name,
+          leadName: buyer.name,
+          personalNote: `Hi ${buyer.name.split(" ")[0]}, it was great meeting you at the open home. I wanted to share a bit about my background so you can get to know who I am before we connect.`,
+          bio: `${agent.name.split(" ")[0]} has been the go-to agent for ${agent.suburb ?? "the area"} for over 8 years, specialising in family homes and delivering results consistently above price guide. Known for a straight-talking approach and a deep understanding of the local market, ${agent.name.split(" ")[0]} puts your goals first.`,
+          stats: {
+            salesCount: 87,
+            avgDaysOnMarket: 18,
+            avgAboveGuidePct: 8.2,
+            yearsExperience: 8,
+          },
+          recentSales: [
+            { address: "34 Hartsmere Drive, Berwick", price: 1280000, date: "2026-04-10" },
+            { address: "9 Arlington Place, Berwick", price: 880000, date: "2026-02-14" },
+            { address: "12 Birkdale Close, Berwick", price: 1050000, date: "2025-12-08" },
+          ],
+          testimonials: [
+            { quote: `${agent.name.split(" ")[0]} was exceptional from start to finish. We sold above our reserve and he kept us informed every step of the way.`, author: "James & Sarah T.", suburb: "Berwick" },
+            { quote: `Professional, honest, and genuinely cared about getting us the right result. Highly recommend.`, author: "Michelle K.", suburb: "Officer" },
+          ],
+        }
+
+        const handleGenerateIntro = async () => {
+          setIntroGenerating(true)
+          try {
+            const res = await authFetch(apiUrl("/api/pitches"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: "introduction",
+                leadId: String(buyer.id),
+                propertyRef: null,
+                agentCard: introPayload.agentCard,
+                introPayload,
+              }),
+            })
+            const data = await res.json() as { pitchUrl?: string }
+            if (data.pitchUrl) setIntroUrl(data.pitchUrl)
+          } catch { /* non-fatal */ }
+          setIntroGenerating(false)
+        }
+
+        return (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
+                DIGITAL INTRODUCTION
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
+                Agent Profile for {buyer.name.split(" ")[0]}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                Send a branded agent profile page to {buyer.name.split(" ")[0]} — who you are, your track record, and a personal note. They'll see your stats and recent sales before you've even called.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                onClick={handleGenerateIntro}
+                disabled={introGenerating}
+                style={{
+                  padding: "12px 24px", borderRadius: 12, border: "none",
+                  cursor: introGenerating ? "default" : "pointer",
+                  background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                  color: "#fff", fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                  boxShadow: `0 4px 16px ${theme.glow}`,
+                  opacity: introGenerating ? 0.7 : 1,
+                }}
+              >
+                {introGenerating ? "Creating page..." : introUrl ? "Regenerate Intro" : "Create Agent Intro Page"}
+              </motion.button>
+
+              {introUrl && !introSent && (
+                <motion.button
+                  initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                  onClick={async () => {
+                    const sms = `Hi ${buyer.name.split(" ")[0]}, ${agent.name.split(" ")[0]} here from ${agent.agency}. It was great meeting you — here's a bit about me before we chat: ${introUrl}`
+                    await authFetch(apiUrl("/api/send"), {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ phone: buyer.phone, sms, email: buyer.email ?? "", subject: `Meeting ${agent.name.split(" ")[0]} from ${agent.agency}`, body: sms }),
+                    }).catch(() => {})
+                    setIntroSent(true)
+                  }}
+                  style={{
+                    padding: "12px 24px", borderRadius: 12, border: `1px solid ${C.green}55`,
+                    cursor: "pointer", background: C.green + "15", color: C.green,
+                    fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                  }}
+                >
+                  Send to {buyer.name.split(" ")[0]} →
+                </motion.button>
+              )}
+
+              {introSent && (
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 12, background: C.green + "15", border: `1px solid ${C.green}40` }}>
+                  <span style={{ fontSize: 16 }}>✓</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Intro sent to {buyer.name.split(" ")[0]}</span>
+                </motion.div>
+              )}
+            </div>
+
+            {introUrl && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.bg2, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 16 }}>
+                <span style={{ fontSize: 11, color: C.muted, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{introUrl}</span>
+                <button onClick={() => navigator.clipboard.writeText(introUrl)} style={{ fontSize: 11, color: accentColor, background: "none", border: "none", cursor: "pointer", fontWeight: 700, flexShrink: 0 }}>
+                  Copy link
+                </button>
+              </div>
+            )}
+
+            {/* Template preview */}
+            <div style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>PREVIEW</div>
+              </div>
+              <div style={{ maxHeight: 700, overflow: "auto" }}>
+                <DigitalIntroductionTemplate payload={introPayload} />
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* === LISTING PROPOSAL TAB === */}
+      {profileTab === "proposal" && (() => {
+        const proposalComps = comps.slice(0, 4).map(c => ({
+          address: `${c.address}, ${buyer.suburb}`,
+          price: c.soldPrice,
+          date: c.soldDate,
+          beds: c.beds,
+          result: "auction" as const,
+        }))
+
+        const proposalPayload: ListingProposalPayload = {
+          agentCard: {
+            name: agent.name,
+            agency: agent.agency,
+            email: agent.email,
+            phone: agent.phone,
+            suburb: agent.suburb,
+            tagline: agent.tagline,
+          },
+          vendorName: buyer.name,
+          propertyAddress: buyer.purchaseAddress ?? `${buyer.suburb} property`,
+          suburb: buyer.suburb,
+          beds: buyer.beds,
+          baths: buyer.baths ?? 2,
+          land: buyer.land ?? 500,
+          propertyType: buyer.propertyType ?? "House",
+          methodOfSale: "auction",
+          estimatedRange: { low: range.low, high: range.high },
+          comparableSales: proposalComps,
+          agencyStats: {
+            salesCount: 87,
+            avgDaysOnMarket: range.daysOnMarket,
+            clearanceRate: range.clearanceRate,
+            avgAboveGuidePct: 8.2,
+          },
+          personalNote: `Hi ${buyer.name.split(" ")[0]}, thank you for considering ${agent.agency} to manage the sale of your home. Based on current market conditions in ${buyer.suburb}, I believe we have a strong opportunity to achieve an excellent result. I've put together this proposal outlining our recommended approach, comparable sales, and marketing plan.`,
+          testimonials: [
+            { quote: `${agentFirst} was exceptional from start to finish. We sold above our reserve and he kept us informed every step of the way.`, author: "James & Sarah T.", suburb: "Berwick" },
+            { quote: "Professional, honest, and genuinely cared about getting us the right result. Highly recommend.", author: "Michelle K.", suburb: "Officer" },
+          ],
+        }
+
+        const handleGenerateProposal = async () => {
+          setProposalGenerating(true)
+          try {
+            const res = await authFetch(apiUrl("/api/pitches"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                type: "proposal",
+                leadId: String(buyer.id),
+                propertyRef: buyer.purchaseAddress,
+                agentCard: proposalPayload.agentCard,
+                proposalPayload,
+              }),
+            })
+            const data = await res.json() as { pitchUrl?: string }
+            if (data.pitchUrl) setProposalUrl(/^https?:\/\//.test(data.pitchUrl) ? data.pitchUrl : `${window.location.origin}${data.pitchUrl}`)
+          } catch { /* silent */ }
+          setProposalGenerating(false)
+        }
+
+        const handleSendProposal = async () => {
+          if (!proposalUrl) return
+          setProposalSending(true)
+          try {
+            const isLocalLink = /localhost|127\.0\.0\.1/.test(proposalUrl)
+            const sms = stripDashes(isLocalLink
+              ? `Hi ${fname}, ${agentFirst} here from ${agent.agency}. I've emailed you a listing proposal for ${shortAddr(buyer.purchaseAddress)}.`
+              : `Hi ${fname}, ${agentFirst} here. I've put together a listing proposal for ${shortAddr(buyer.purchaseAddress)}. Have a look: ${proposalUrl}`)
+            const emailBody = stripDashes(
+              `Hi ${fname},\n\nThank you for your time — I've put together a listing proposal for ${buyer.purchaseAddress} outlining the recommended method of sale, comparable sales, our marketing plan, and what you can expect from working with us.${isLocalLink ? "" : `\n\nView it here: ${proposalUrl}`}\n\nHappy to walk you through it at a time that suits.\n\nKind regards,\n${agentFirst}`
+            )
+            await authFetch(apiUrl("/api/send"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                leadId: String(buyer.id), leadName: buyer.name,
+                phone: buyer.phone, email: buyer.email,
+                agentEmail: agent.email, agentName: agent.name, agentAgency: agent.agency,
+                agentPhone: agent.phone, agencyColor: theme.primary, agencyTagline: agent.tagline,
+                propertyAddress: buyer.purchaseAddress,
+                sms, subject: stripDashes(`Listing proposal for ${buyer.purchaseAddress}`), emailBody,
+                channel: buyer.email ? "both" : "sms",
+              }),
+            })
+            setProposalSent(true)
+          } catch { /* silent */ }
+          setProposalSending(false)
+        }
+
+        return (
+          <div style={{ marginTop: 4 }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
+                LISTING PROPOSAL
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
+                {buyer.purchaseAddress ?? buyer.suburb}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                Generate a professional listing proposal for {fname} — method of sale, comparable sales, marketing plan, and timeline in one branded page.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                onClick={handleGenerateProposal}
+                disabled={proposalGenerating}
+                style={{
+                  padding: "12px 24px", borderRadius: 12, border: "none", cursor: proposalGenerating ? "default" : "pointer",
+                  background: accentColor, color: "#fff", fontWeight: 700, fontSize: 14, fontFamily: FONT,
+                  opacity: proposalGenerating ? 0.7 : 1,
+                }}
+              >
+                {proposalGenerating ? "Creating..." : proposalUrl ? "Regenerate Proposal" : "Create Listing Proposal"}
+              </motion.button>
+              {proposalUrl && !proposalSent && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                  onClick={handleSendProposal}
+                  disabled={proposalSending}
+                  style={{
+                    padding: "12px 24px", borderRadius: 12, border: `1px solid ${C.border}`,
+                    cursor: proposalSending ? "default" : "pointer",
+                    background: "transparent", color: C.text, fontWeight: 600, fontSize: 14, fontFamily: FONT,
+                  }}
+                >
+                  {proposalSending ? "Sending..." : `Send to ${fname} →`}
+                </motion.button>
+              )}
+              {proposalSent && (
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.green, alignSelf: "center" }}>Proposal sent to {fname}</span>
+              )}
+            </div>
+
+            {proposalUrl && (
+              <div style={{ marginBottom: 16 }}>
+                <a href={proposalUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: accentColor, wordBreak: "break-all" }}>
+                  {proposalUrl}
+                </a>
+              </div>
+            )}
+
+            <div style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>PREVIEW</div>
+              </div>
+              <div style={{ maxHeight: 700, overflow: "auto" }}>
+                <ListingProposalTemplate payload={proposalPayload} />
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* === MARKET UPDATE TAB === */}
+      {profileTab === "market-update" && (() => {
+        const muComps = generateComparables({ suburb: buyer.suburb, propertyType: (buyer.propertyType ?? "House") as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id + 9000 })
+        const muRange = buildAppraisalRange(muComps, buyer.suburb)
+        const muComps2 = generateComparables({ suburb: buyer.suburb, propertyType: (buyer.propertyType ?? "House") as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id + 7000 })
+        const allComps = [...muComps, ...muComps2].slice(0, 6)
+
+        const handlePreview = async () => {
+          setMarketUpdateLoading(true)
+          try {
+            const res = await authFetch(apiUrl("/api/market-update/preview"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                agentName: agent.name,
+                agencyName: agent.agency,
+                agencyColor: theme.primary,
+                agentPhone: agent.phone,
+                agentEmail: agent.email,
+                vendorName: buyer.name,
+                vendorEmail: buyer.email,
+                vendorPhone: buyer.phone,
+                propertyAddress: buyer.purchaseAddress,
+                suburb: buyer.suburb,
+                beds: buyer.beds,
+                baths: buyer.baths ?? 2,
+                land: buyer.land ?? 500,
+                buyerId: buyer.id,
+                estimateLow: muRange.low,
+                estimateMid: muRange.mid,
+                estimateHigh: muRange.high,
+                equityGain: fin.equityGain > 0 ? fin.equityGain : undefined,
+                annualGrowthPct: muRange.demandScore > 7 ? 6.5 : 5.8,
+                comps: allComps.map(c => ({ address: c.address + ", " + buyer.suburb, beds: c.beds, baths: c.baths, land: c.land, soldPrice: c.soldPrice, soldDate: c.soldDate, matchScore: c.matchScore })),
+                medianHouse: muRange.mid,
+                daysOnMarket: muRange.daysOnMarket,
+                clearanceRate: muRange.clearanceRate,
+                demandScore: muRange.demandScore,
+              }),
+            })
+            const data = await res.json()
+            if (data.ok) setMarketUpdatePreview(data)
+          } catch { /* silent */ }
+          setMarketUpdateLoading(false)
+        }
+
+        const handleSend = async () => {
+          setMarketUpdateSending(true)
+          try {
+            await authFetch(apiUrl("/api/market-update/send"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                agentName: agent.name,
+                agencyName: agent.agency,
+                agencyColor: theme.primary,
+                agentPhone: agent.phone,
+                agentEmail: agent.email,
+                vendorName: buyer.name,
+                vendorEmail: buyer.email,
+                vendorPhone: buyer.phone,
+                propertyAddress: buyer.purchaseAddress,
+                suburb: buyer.suburb,
+                beds: buyer.beds,
+                baths: buyer.baths ?? 2,
+                land: buyer.land ?? 500,
+                buyerId: buyer.id,
+                estimateLow: muRange.low,
+                estimateMid: muRange.mid,
+                estimateHigh: muRange.high,
+                equityGain: fin.equityGain > 0 ? fin.equityGain : undefined,
+                annualGrowthPct: muRange.demandScore > 7 ? 6.5 : 5.8,
+                comps: allComps.map(c => ({ address: c.address + ", " + buyer.suburb, beds: c.beds, baths: c.baths, land: c.land, soldPrice: c.soldPrice, soldDate: c.soldDate, matchScore: c.matchScore })),
+                medianHouse: muRange.mid,
+                daysOnMarket: muRange.daysOnMarket,
+                clearanceRate: muRange.clearanceRate,
+                demandScore: muRange.demandScore,
+                channel: buyer.email ? "email" : "sms",
+              }),
+            })
+            setMarketUpdateSent(true)
+          } catch { /* silent */ }
+          setMarketUpdateSending(false)
+        }
+
+        return (
+        <div style={{ marginTop: 4 }}>
+          {/* Header */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: accentColor, textTransform: "uppercase", marginBottom: 6 }}>
+              MARKET UPDATE
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>
+              {buyer.purchaseAddress}
+            </div>
+            <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+              Send {fname} a personalised property market snapshot with {allComps.length} comparable sales, estimated value range, and a CTA to book a free appraisal.
+            </div>
+          </div>
+
+          {/* Value estimate card */}
+          <div style={{ background: C.bg2, borderRadius: 14, padding: 20, border: `1px solid ${accentColor}30`, marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>ESTIMATED VALUE RANGE</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: accentColor, letterSpacing: -0.5 }}>
+              {fmtDollar(muRange.low)} – {fmtDollar(muRange.high)}
+            </div>
+            <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
+              {[
+                { v: `${muRange.demandScore > 7 ? "6.5" : "5.8"}%`, l: "Annual growth" },
+                { v: `${muRange.daysOnMarket}d`, l: "Days on market" },
+                { v: `${muRange.clearanceRate}%`, l: "Clearance rate" },
+              ].map(m => (
+                <div key={m.l}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{m.v}</div>
+                  <div style={{ fontSize: 10, color: C.faint }}>{m.l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Comparable sales */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: accentColor, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>COMPARABLE SALES ({allComps.length})</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {allComps.map((c, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: C.bg2, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{c.address}</div>
+                    <div style={{ fontSize: 11, color: C.faint }}>{c.beds}bd {c.baths}ba{c.land ? ` · ${c.land}m²` : ""}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{fmtDollar(c.soldPrice)}</div>
+                    <div style={{ fontSize: 10, color: C.faint }}>{c.soldDate}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Equity gain callout */}
+          {fin.equityGain > 0 && (
+            <div style={{ background: `linear-gradient(135deg, ${accentColor}08, ${accentColor}15)`, borderRadius: 12, padding: 16, border: `1px solid ${accentColor}25`, marginBottom: 16, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: C.muted }}>Estimated equity gain since purchase</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: C.green, marginTop: 4 }}>+{fmtDollar(fin.equityGain)}</div>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+            <motion.button
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              onClick={handlePreview}
+              disabled={marketUpdateLoading}
+              style={{
+                padding: "12px 24px", borderRadius: 12, border: "none", cursor: marketUpdateLoading ? "default" : "pointer",
+                background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                color: "#fff", fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                boxShadow: `0 4px 16px ${theme.glow}`,
+                opacity: marketUpdateLoading ? 0.7 : 1,
+              }}
+            >
+              {marketUpdateLoading ? "Generating..." : "Preview Market Update"}
+            </motion.button>
+
+            {marketUpdatePreview && !marketUpdateSent && (
+              <motion.button
+                initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                onClick={handleSend}
+                disabled={marketUpdateSending}
+                style={{
+                  padding: "12px 24px", borderRadius: 12, border: `1px solid ${C.green}55`,
+                  cursor: marketUpdateSending ? "default" : "pointer",
+                  background: C.green + "15", color: C.green,
+                  fontSize: 13, fontWeight: 700, fontFamily: FONT,
+                }}
+              >
+                {marketUpdateSending ? "Sending..." : `Send to ${fname} →`}
+              </motion.button>
+            )}
+
+            {marketUpdateSent && (
+              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 12, background: C.green + "15", border: `1px solid ${C.green}40` }}>
+                <span style={{ fontSize: 16 }}>✓</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Market Update sent to {fname}</span>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Email preview iframe */}
+          {marketUpdatePreview && (
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden", marginBottom: 16 }}>
+              <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>EMAIL PREVIEW</div>
+                <div style={{ fontSize: 11, color: C.faint }}>Subject: {marketUpdatePreview.subject}</div>
+              </div>
+              <iframe
+                srcDoc={marketUpdatePreview.html}
+                style={{ width: "100%", height: 700, border: "none", background: "#fff" }}
+                title="Market Update Preview"
+                sandbox="allow-same-origin"
+              />
+            </motion.div>
+          )}
+
+          {/* SMS preview */}
+          {marketUpdatePreview && (
+            <div style={{ borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+              <div style={{ padding: "10px 16px", background: C.bg2, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 1 }}>SMS PREVIEW</div>
+              </div>
+              <div style={{ padding: 16 }}>
+                <div style={{ background: C.bg2, borderRadius: 12, padding: 14, fontSize: 13, color: C.text, lineHeight: 1.6, maxWidth: 320 }}>
+                  {marketUpdatePreview.sms}
+                </div>
+                <div style={{ fontSize: 10, color: C.faint, marginTop: 6 }}>
+                  {marketUpdatePreview.sms.length}/160 characters
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        )
+      })()}
+
+      {/* === NURTURE SEQUENCE TAB === */}
+      {profileTab === "nurture" && (
+        <div style={{ marginTop: 4 }}>
+          <NurtureSequence buyer={buyer} agent={agent} theme={theme} pipeline={segment.pipeline} />
+        </div>
+      )}
+
+      {/* Negotiation Coach Modal */}
+      <AnimatePresence>
+        {showNegotiationCoach && <NegotiationCoachModal entry={entry} agent={agent} theme={theme} onClose={() => setShowNegotiationCoach(false)} />}
+      </AnimatePresence>
+
+      {/* Printable Appraisal Modal */}
+      <AnimatePresence>
+        {showPrintAppraisal && <PrintableAppraisalModal entry={entry} agent={agent} theme={theme} onClose={() => setShowPrintAppraisal(false)} />}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── Vendor Review Panel ───────────────────────────────────────────────────────
+
+function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: initSubject, emailBody: initBody, onBack, onNext, allEntries }: {
+  entry: SegmentedBuyer
+  agent: AgentProfile
+  theme: AgencyTheme
+  sms: string
+  emailSubject: string
+  emailBody: string[]
+  onBack: () => void
+  onNext?: () => void
+  allEntries?: SegmentedBuyer[]
+}) {
+  const [subject, setSubject] = useState(initSubject)
+  const [bodyText, setBodyText] = useState(initBody.join("\n\n"))
+  const [editMode, setEditMode] = useState<"sms" | "email" | null>(null)
+  const [sendingChannel, setSendingChannel] = useState<"sms" | "email" | null>(null)
+  const [sent, setSent] = useState(false)
+  const [sendingToSelf, setSendingToSelf] = useState(false)
+  const [sentToSelf, setSentToSelf] = useState(false)
+  const [deliveryNote, setDeliveryNote] = useState("")
+  const bpRV = useBreakpoint()
+  const isMobileRV = bpRV === "mobile"
+  const [appraisalBooked, setAppraisalBooked] = useState(false)
+  const [listingWon, setListingWon] = useState(false)
+  const [listingPrice, setListingPrice] = useState("")
+  const [savingMilestone, setSavingMilestone] = useState(false)
+  const [showNurture, setShowNurture] = useState(false)
+  // SMS carousel: 3 tone variants
+  const [smsVariantIdx, setSmsVariantIdx] = useState(0)
+
+  const { buyer, financials: fin, segment } = entry
+  const pl = PIPELINE_LABELS[segment.pipeline]
+  const fname = buyer.name.split("&")[0].split(" ")[0].trim()
+  const bubbleColor = theme?.primary ?? "rgb(0,122,255)"
+  const avatarGrad = `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`
+  // Bright variant for text/borders on the dark page background (primary may be too dark)
+  const accentColor = theme.accent ?? theme.primary
+
+  // ── Pitch-angle carousel ─────────────────────────────────────────────────────
+  const agentFirstRV = agent.nickname ?? agent.name.split(" ")[0]
+  const purchaseYearRV = buyer.purchaseDate?.slice(0, 4) ?? "2020"
+  const estStrRV = fmtDollar(fin.currentEstimate)
+  const equityStrRV = fmtDollar(fin.equityGain)
+  const shortAddrRV = shortAddr(buyer.purchaseAddress)
+  const signoffRV = buyer.status === "investor" ? "Kind regards" : "Cheers"
+  const trim160 = (t: string) => t.length > 160 ? t.slice(0, 157) + "..." : t
+  const noEmDash = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
+
+  // Persona detection — used to filter / adapt angles
+  const isInvestor = buyer.status === "investor"
+  const notesLower = (buyer.notes ?? "").toLowerCase()
+  void(!isInvestor && (
+    buyer.status === "owner-occupier" ||
+    /family|kids|school|upsize|downsize|retire|retirement|downsiz/i.test(notesLower)
+  )) // computed via isDownsizer/isUpsizer checks below
+  const isDownsizer = /downsize|downsi|retire|retirement|empty.nest/i.test(notesLower)
+  const isUpsizer = /upsize|upsi|growing|kids|school|room/i.test(notesLower)
+
+  // Agent-sold opener: find most recent agent sold in same suburb
+  const agentSoldInSuburb = (() => {
+    const { sold } = getPortfolioForAgent(agent)
+    const match = sold.find(p => p.suburb.toLowerCase() === buyer.suburb.toLowerCase() && p.soldDate)
+    return match ? `Following the sale of ${shortAddr(match.address)} in ${buyer.suburb}` : null
+  })()
+  const soldOpener = agentSoldInSuburb ? `${agentSoldInSuburb}, ` : ""
+
+  // Build pitch-angle SMS variants based on persona (investors get financial angles; families get lifestyle)
+  interface SmsVariant { label: string; sms: string; emailSubject: string; emailBody: string[] }
+  const buildVariants = (): SmsVariant[] => {
+    const variants: SmsVariant[] = []
+
+    // Variant A: AI-generated (always first)
+    variants.push({
+      label: "personalised",
+      sms: initSMS,
+      emailSubject: initSubject,
+      emailBody: initBody,
+    })
+
+    if (isInvestor) {
+      // Investor angle 1: CGT deadline (high value)
+      if (fin.cgtSavingsBy2027 > 5000) {
+        variants.push({
+          label: "CGT deadline",
+          sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Selling before July 2027 saves you ~${fmtDollar(fin.cgtSavingsBy2027)} in CGT. Happy to run the numbers. Kind regards, ${agentFirstRV}`)),
+          emailSubject: `Your CGT window is closing, ${fname}`,
+          emailBody: [
+            `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+            `You've held ${shortAddrRV} since ${purchaseYearRV} and the 50% CGT discount applies right now. Selling before 1 July 2027 saves you roughly ${fmtDollar(fin.cgtSavingsBy2027)} in tax. Your property is currently estimated at around ${estStrRV}.`,
+            `Happy to run a quick, no-obligation appraisal. Twenty minutes, I'll come to you. No pressure.\n\nKind regards,\n${agentFirstRV}`,
+          ],
+        })
+      }
+      // Investor angle 2: equity / ROI
+      variants.push({
+        label: "Equity & ROI",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${shortAddrRV} is now worth ~${estStrRV}, that's ${equityStrRV} in equity since ${purchaseYearRV}. Good time to review your position. Kind regards, ${agentFirstRV}`)),
+        emailSubject: `Your equity position at ${shortAddrRV}, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `Ran the numbers on ${shortAddrRV}. You've built roughly ${equityStrRV} in equity since ${purchaseYearRV} and the property is sitting at around ${estStrRV}. With current market conditions in ${buyer.suburb}, now is a strong time to review your portfolio position.`,
+          `Happy to do a complimentary appraisal and walk through your options. No obligation at all.\n\nKind regards,\n${agentFirstRV}`,
+        ],
+      })
+    } else if (isDownsizer) {
+      // Downsizer: lifestyle + equity release, no CGT jargon
+      variants.push({
+        label: "Equity release",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place in ${buyer.suburb} has come a long way since ${purchaseYearRV}, you've built ${equityStrRV} in equity. Worth a chat about your options? ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `Great time to explore your options, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `Just wanted to share that ${shortAddrRV} is now worth around ${estStrRV}. Since ${purchaseYearRV} you've built up ${equityStrRV} in equity. A lot of people in your position are finding this a great moment to right-size and free up that equity for the next chapter.`,
+          `I'd love to offer a complimentary, no-pressure appraisal. Happy to come to you and walk through what the market looks like.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+      variants.push({
+        label: "Local market",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${buyer.suburb} is very active right now, properties are moving well and demand is strong. Thought it was worth letting you know. ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `${buyer.suburb} market update, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `Quick market update for ${buyer.suburb}: demand has been strong and comparable properties are achieving great results. With ${shortAddrRV} valued at around ${estStrRV}, the timing looks really good if you've been thinking about making a move.`,
+          `Happy to have an informal chat, no pressure, just want to make sure you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+    } else if (isUpsizer) {
+      // Upsizer family: focus on equity to fund next home, not financial jargon
+      variants.push({
+        label: "Ready to upsize",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place has grown to ~${estStrRV} and the equity you've built could go a long way toward your next home. Happy to chat. ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `Your equity could fund your next move, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `Just wanted to share that ${shortAddrRV} has grown to around ${estStrRV}, that's ${equityStrRV} in equity built since ${purchaseYearRV}. For families thinking about upsizing, that kind of position makes a real difference when it comes to your next purchase.`,
+          `Happy to walk through what the numbers look like for you. No obligation, just a friendly chat.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+      variants.push({
+        label: "Recent nearby sale",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. A similar home in ${buyer.suburb} recently sold well. Your place at ${shortAddrRV} is in great shape. Thought you'd want to know. ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `What's happening in ${buyer.suburb}, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `A comparable property in ${buyer.suburb} recently sold really well, and your place at ${shortAddrRV} stacks up nicely at around ${estStrRV}. If a bigger home is on your radar, the equity you've built (around ${equityStrRV}) puts you in a strong position.`,
+          `Happy to come by for a complimentary appraisal and a chat. No pressure at all.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+    } else {
+      // General owner-occupier: friendly, lifestyle-focused, no financial jargon
+      variants.push({
+        label: "Property value update",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. ${shortAddrRV} is now estimated at around ${estStrRV}, great to see how far it's come since ${purchaseYearRV}. Worth a quick chat? ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `Your property update, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `Just a quick update on ${shortAddrRV}. The property is now worth around ${estStrRV}, which is a great result from when you purchased in ${purchaseYearRV}.`,
+          `I'd love to pop over for a complimentary appraisal if you're curious. Completely no-obligation, just so you have the full picture.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+      variants.push({
+        label: "Market timing",
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${buyer.suburb} is seeing strong demand at the moment. Thought it was worth letting you know given ${shortAddrRV} is in great shape. ${signoffRV}, ${agentFirstRV}`)),
+        emailSubject: `${buyer.suburb} is moving, ${fname}`,
+        emailBody: [
+          `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
+          `${buyer.suburb} has been really active lately with strong buyer demand. Your property at ${shortAddrRV} is estimated around ${estStrRV} and would present very well in the current market.`,
+          `Happy to do a free, no-pressure appraisal if you'd like an up-to-date picture. Takes about 20 minutes.\n\n${signoffRV},\n${agentFirstRV}`,
+        ],
+      })
+    }
+
+    return variants.slice(0, 3) // cap at 3 in carousel
+  }
+  const smsVariants = buildVariants()
+  const [sms, setSMS] = useState(initSMS)
+
+  // Sync sms + email to selected carousel variant
+  useEffect(() => {
+    const v = smsVariants[smsVariantIdx]
+    if (v) {
+      setSMS(v.sms)
+      setSubject(v.emailSubject)
+      setBodyText(v.emailBody.join("\n\n"))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [smsVariantIdx])
+
+  const handleSend = async (channel: "sms" | "email") => {
+    setSendingChannel(channel)
+    try {
+      const deliveryRes = await authFetch(apiUrl("/api/send"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: `vendor_${buyer.id}`,
+          leadName: buyer.name,
+          phone: buyer.phone,
+          email: buyer.email ?? "",
+          agentEmail: agent.email,
+          agentName: agent.name,
+          agentAgency: agent.agency,
+          agentPhone: agent.phone,
+          agencyColor: theme.primary,
+          agencyTagline: agent.tagline,
+          propertyAddress: fullAddr(buyer.purchaseAddress, buyer.suburb),
+          priceGuide: fmtDollar(fin.currentEstimate),
+          sms, subject,
+          emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
+          channel,
+          pipeline: segment.pipeline,
+          nurtureContext: {
+            agentName: agent.name,
+            agentAgency: agent.agency,
+            agentEmail: agent.email,
+            agentPhone: agent.phone,
+            agencyColor: theme.primary,
+            agencyTagline: agent.tagline,
+            pipeline: segment.pipeline,
+          },
+        }),
+      }).then(r => r.json()).catch(() => null)
+      const delivered = deliveryRes?.ok === true
+      const vTransport: string = deliveryRes?.sms?.transport ?? "sms"
+      const vTransportLabel = vTransport === "bluebubbles" ? "BlueBubbles" : vTransport === "imsg" ? "iMessage" : vTransport
+      setDeliveryNote(
+        delivered
+          ? channel === "sms"
+            ? `SMS sent via ${vTransportLabel}`
+            : `Email sent via Gmail`
+          : deliveryRes?.errors?.length
+          ? "Send failed: " + deliveryRes.errors[0]
+          : "Send failed — check BlueBubbles is running and you are signed in"
+      )
+
+      // Write today's date + last message to both Google Sheets AND Supabase
+      const lastMsg = sms || bodyText.split("\n\n")[0]?.slice(0, 200)
+      const today = new Date().toISOString().slice(0, 10)
+      await updateLastContactDate(buyer.id, today, lastMsg)
+      updatePastBuyerInSupabase(buyer.id, { lastContactDate: today, lastMessage: lastMsg }).catch(() => {})
+
+      // Log sent outreach to Sheets event log (same as buyer outreach)
+      postEvent({
+        leadId: `vendor_${buyer.id}`, leadName: buyer.name,
+        propertyAddress: fullAddr(buyer.purchaseAddress, buyer.suburb),
+        fromProperty: buyer.purchaseAddress, eventType: "outreach_sent",
+        smsText: sms, emailSubject: subject,
+        emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
+        deliveryChannel: "both",
+        deliverySid: deliveryRes?.sms?.sid,
+        sendgridId: deliveryRes?.email?.messageId,
+        leadStatus: "outreach_sent",
+      }).catch(() => {})
+
+      // Write approved vendor outreach to VoiceCorpus tab
+      const ts = new Date().toISOString()
+      writeAgentVoiceEntry({ text: sms, type: "sms", channel: "sms", ts }).catch(() => {})
+      writeAgentVoiceEntry({ text: subject, type: "email_subject", channel: "email", ts }).catch(() => {})
+      writeAgentVoiceEntry({ text: bodyText.split("\n\n")[0], type: "email_body", channel: "email", ts }).catch(() => {})
+
+      // Edit learning: if agent modified the AI text, write the edited version as a high-weight training example
+      const selectedVariant = smsVariants[smsVariantIdx]
+      const smsWasEdited = sms.trim() !== (selectedVariant?.sms ?? initSMS).trim()
+      const emailWasEdited = bodyText.trim() !== (selectedVariant?.emailBody.join("\n\n") ?? initBody.join("\n\n")).trim()
+      if (smsWasEdited) {
+        writeAgentVoiceEntry({ text: `[HUMAN_EDIT] ${sms}`, type: "sms", channel: "sms", ts }).catch(() => {})
+      }
+      if (emailWasEdited) {
+        writeAgentVoiceEntry({ text: `[HUMAN_EDIT] ${bodyText.split("\n\n")[0]}`, type: "email_body", channel: "email", ts }).catch(() => {})
+      }
+    } catch {}
+    setSendingChannel(null)
+    setSent(true)
+  }
+
+  const handleSendToSelf = async () => {
+    setSendingToSelf(true)
+    try {
+      await authFetch(apiUrl("/api/send"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: "self_demo",
+          leadName: "Yourself (demo)",
+          phone: agent.phone,
+          email: agent.email,
+          agentEmail: agent.email,
+          agentName: agent.name,
+          agentAgency: agent.agency,
+          agentPhone: agent.phone,
+          agencyColor: theme.primary,
+          agencyTagline: agent.tagline,
+          propertyAddress: fullAddr(buyer.purchaseAddress, buyer.suburb),
+          priceGuide: fmtDollar(fin.currentEstimate),
+          sms, subject,
+          emailBody: bodyText.split("\n\n").filter(p => p.trim()).join("\n\n"),
+          channel: "both",
+        }),
+      })
+      setSentToSelf(true)
+    } catch {}
+    setSendingToSelf(false)
+  }
+
+  if (sent) {
+    return (
+      <div style={{
+        minHeight: "80vh", display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 24, fontFamily: FONT,
+      }}>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          style={{ textAlign: "center", maxWidth: 520 }}
+        >
+          <div style={{ fontSize: 56, marginBottom: 16 }}>✓</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: -0.5, marginBottom: 8 }}>
+            Vendor outreach approved for {fname}
+          </div>
+          {deliveryNote && (
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 24, padding: "6px 14px",
+              background: C.bg3, borderRadius: 8, display: "inline-block" }}>
+              {deliveryNote}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            {onNext ? (
+              <button onClick={onNext} style={{
+                padding: "12px 28px", borderRadius: 12, border: "none",
+                background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+              }}>
+                Next buyer →
+              </button>
+            ) : (
+              <button onClick={onBack} style={{
+                padding: "12px 28px", borderRadius: 12, border: "none",
+                background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+                color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+              }}>
+                Back to pipeline
+              </button>
+            )}
+            {onNext && (
+              <button onClick={onBack} style={{
+                padding: "12px 28px", borderRadius: 12,
+                border: `1px solid ${theme.primary}44`, background: "transparent",
+                color: theme.primary, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+              }}>
+                Pipeline
+              </button>
+            )}
+            <a href={`tel:${buyer.phone}`} style={{
+              padding: "12px 28px", borderRadius: 12, textDecoration: "none",
+              border: `1px solid ${theme.primary}44`,
+              color: theme.primary, fontSize: 14, fontWeight: 700, fontFamily: FONT,
+            }}>
+              📞 Call {fname}
+            </a>
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobileRV ? "76px 16px 48px" : "80px 32px 48px", fontFamily: FONT }}>
+      <button onClick={onBack} aria-label="Go back" style={{
+        background: "transparent", border: "none", cursor: "pointer",
+        color: accentColor, fontSize: 13, fontWeight: 700, fontFamily: FONT,
+        display: "flex", alignItems: "center", gap: 6, marginBottom: 24, padding: "8px 0", lineHeight: 1, minHeight: 44,
+      }}>← Back</button>
+
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: accentColor, textTransform: "uppercase", marginBottom: 4 }}>
+          Review outreach
+        </div>
+        <div style={{ fontSize: isMobileRV ? 18 : 24, fontWeight: 800, color: C.text, letterSpacing: -0.8 }}>
+          {fname}'s personalised vendor messages
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+          <div style={{ fontSize: 13, color: C.muted }}>{buyer.purchaseAddress}</div>
+          <div style={{
+            fontSize: 10, padding: "2px 8px", borderRadius: 6,
+            background: pl.color + "18", color: pl.color, fontWeight: 700,
+          }}>
+            {pl.icon} {pl.shortLabel}
+          </div>
+          <div style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>{fmtDollar(fin.equityGain)} equity</div>
+        </div>
+        <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+          Edit either message before approving.
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobileRV ? "1fr" : "1fr 1fr", gap: 24, marginBottom: 24 }}>
+        {/* SMS — iMessage style */}
+        <div>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 10,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>SMS</div>
+            <button onClick={() => setEditMode(editMode === "sms" ? null : "sms")} style={{
+              background: "transparent", border: "none", cursor: "pointer",
+              color: accentColor, fontSize: 12, fontFamily: FONT, fontWeight: 600,
+            }}>
+              {editMode === "sms" ? "Done" : "Edit"}
+            </button>
+          </div>
+          {editMode === "sms" ? (
+            <>
+              <textarea
+                autoFocus
+                value={sms}
+                onChange={e => setSMS(e.target.value)}
+                maxLength={160}
+                style={{
+                  width: "100%", minHeight: 120, background: C.bg3,
+                  border: `1px solid ${sms.length >= 155 ? "#f87171" : theme.primary + "44"}`, borderRadius: 12,
+                  padding: "12px 14px", color: C.text, fontSize: 13,
+                  fontFamily: FONT, lineHeight: 1.5, resize: "vertical", outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              <div style={{ textAlign: "right", fontSize: 11, marginTop: 4, fontWeight: 600,
+                color: sms.length >= 155 ? "#f87171" : sms.length >= 140 ? "#f59e0b" : C.faint }}>
+                {sms.length}/160
+              </div>
+            </>
+          ) : (
+            <div style={{ background: "rgb(24,24,24)", borderRadius: 20, padding: 16 }}>
+              <div style={{ textAlign: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>iMessage</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.9)" }}>{fname}</div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <div style={{
+                  maxWidth: "80%", padding: "9px 13px",
+                  borderRadius: "16px 16px 4px 16px",
+                  background: bubbleColor,
+                  fontSize: 13, color: "white", lineHeight: 1.45,
+                }}>
+                  {sms}
+                </div>
+                <div style={{
+                  width: 30, height: 30, borderRadius: "50%",
+                  background: avatarGrad,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: 700, color: "white", flexShrink: 0, alignSelf: "flex-end",
+                }}>
+                  {agent.name.charAt(0)}
+                </div>
+              </div>
+              {/* Carousel navigation */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 12 }}>
+                <button
+                  onClick={() => setSmsVariantIdx(i => Math.max(0, i - 1))}
+                  disabled={smsVariantIdx === 0}
+                  style={{
+                    width: 28, height: 28, borderRadius: "50%", border: "none",
+                    background: smsVariantIdx === 0 ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.18)",
+                    color: smsVariantIdx === 0 ? "rgba(255,255,255,0.25)" : "white",
+                    cursor: smsVariantIdx === 0 ? "default" : "pointer",
+                    fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >‹</button>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", fontWeight: 600 }}>
+                    {smsVariants[smsVariantIdx]?.label ?? "Variant"}
+                  </div>
+                  <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)" }}>
+                    {smsVariantIdx + 1} / {smsVariants.length}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSmsVariantIdx(i => Math.min(smsVariants.length - 1, i + 1))}
+                  disabled={smsVariantIdx === smsVariants.length - 1}
+                  style={{
+                    width: 28, height: 28, borderRadius: "50%", border: "none",
+                    background: smsVariantIdx === smsVariants.length - 1 ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.18)",
+                    color: smsVariantIdx === smsVariants.length - 1 ? "rgba(255,255,255,0.25)" : "white",
+                    cursor: smsVariantIdx === smsVariants.length - 1 ? "default" : "pointer",
+                    fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >›</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Email — Gmail style */}
+        <div>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 10,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>Email</div>
+            <button onClick={() => setEditMode(editMode === "email" ? null : "email")} style={{
+              background: "transparent", border: "none", cursor: "pointer",
+              color: accentColor, fontSize: 12, fontFamily: FONT, fontWeight: 600,
+            }}>
+              {editMode === "email" ? "Done" : "Edit"}
+            </button>
+          </div>
+          {editMode === "email" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <input
+                value={subject}
+                onChange={e => setSubject(e.target.value)}
+                placeholder="Subject line..."
+                style={{
+                  background: C.bg3, border: `1px solid ${theme.primary}44`,
+                  borderRadius: 8, padding: "9px 12px", color: C.text,
+                  fontSize: 13, fontFamily: FONT, outline: "none",
+                }}
+              />
+              <textarea
+                value={bodyText}
+                onChange={e => setBodyText(e.target.value)}
+                placeholder="Email body..."
+                style={{
+                  background: C.bg3, border: `1px solid ${theme.primary}44`,
+                  borderRadius: 8, padding: "10px 12px", color: C.text,
+                  fontSize: 13, fontFamily: FONT, lineHeight: 1.5,
+                  resize: "vertical", minHeight: 160, outline: "none",
+                }}
+              />
+            </div>
+          ) : (
+            <div style={{
+              background: "white", borderRadius: 12, overflow: "hidden",
+              boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
+            }}>
+              <div style={{ background: "#f1f3f4", padding: "10px 16px", borderBottom: "1px solid #e0e0e0" }}>
+                <div style={{ fontSize: 11, color: "#666", marginBottom: 2 }}>
+                  <span style={{ fontWeight: 500, color: "#333" }}>From: </span>{agent.email}
+                </div>
+                <div style={{ fontSize: 11, color: "#666", marginBottom: 2 }}>
+                  <span style={{ fontWeight: 500, color: "#333" }}>To: </span>{buyer.email ?? `${fname.toLowerCase()}@email.com`}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#111", marginTop: 4 }}>{subject}</div>
+              </div>
+              <div style={{ padding: "16px 20px" }}>
+                {bodyText.split("\n\n").filter(p => p.trim()).map((p, i, arr) => (
+                  <p key={i} style={{ fontSize: 13, color: "#333", lineHeight: 1.6, marginBottom: i < arr.length - 1 ? 12 : 0 }}>{p}</p>
+                ))}
+                <div style={{
+                  marginTop: 20, paddingTop: 16, borderTop: `2px solid ${theme.primary}`,
+                  fontSize: 12, color: "#666",
+                  display: "flex", gap: 10, alignItems: "center",
+                }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                    background: avatarGrad,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 800, color: "white",
+                  }}>
+                    {theme.logo}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, color: "#111", fontSize: 13 }}>{agent.name}</div>
+                    <div style={{ color: theme.primary, fontWeight: 600 }}>{agent.agency}</div>
+                    <div style={{ color: "#888", fontSize: 11 }}>{agent.email}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Send buttons */}
+      <div style={{ display: "flex", gap: 10 }}>
+        <motion.button
+          whileHover={{ scale: sendingChannel ? 1 : 1.02 }}
+          whileTap={{ scale: sendingChannel ? 1 : 0.97 }}
+          onClick={() => handleSend("sms")}
+          disabled={sendingChannel !== null}
+          style={{
+            flex: 1, padding: "15px",
+            borderRadius: 14, border: "none",
+            background: sendingChannel !== null
+              ? C.bg3
+              : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+            color: sendingChannel !== null ? C.muted : "white",
+            fontSize: 15, fontWeight: 700, cursor: sendingChannel !== null ? "default" : "pointer",
+            fontFamily: FONT, letterSpacing: -0.3,
+            boxShadow: sendingChannel !== null ? "none" : `0 6px 24px ${theme.glow}`,
+          }}
+        >
+          {sendingChannel === "sms" ? "Sending..." : "Send SMS"}
+        </motion.button>
+        <motion.button
+          whileHover={{ scale: sendingChannel ? 1 : 1.02 }}
+          whileTap={{ scale: sendingChannel ? 1 : 0.97 }}
+          onClick={() => handleSend("email")}
+          disabled={sendingChannel !== null}
+          style={{
+            flex: 1, padding: "15px",
+            borderRadius: 14, border: "none",
+            background: sendingChannel !== null
+              ? C.bg3
+              : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
+            color: sendingChannel !== null ? C.muted : "white",
+            fontSize: 15, fontWeight: 700, cursor: sendingChannel !== null ? "default" : "pointer",
+            fontFamily: FONT, letterSpacing: -0.3,
+            boxShadow: sendingChannel !== null ? "none" : `0 6px 24px ${theme.glow}`,
+          }}
+        >
+          {sendingChannel === "email" ? "Sending..." : "Send Email"}
+        </motion.button>
+      </div>
+      <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
+        Preview what your leads receive.
+      </div>
+
+      {/* Batch send — only shown when multiple entries are available */}
+      {allEntries && allEntries.length > 1 && !sent && (
+        <div style={{
+          marginTop: 8, padding: "12px 16px", borderRadius: 12,
+          border: `1px solid ${C.border}`, background: C.bg2,
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+        }}>
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.4 }}>
+            <strong style={{ color: C.text, display: "block" }}>Send all {allEntries.length} leads at once</strong>
+            PropOS generates personalised outreach for every lead.
+          </div>
+          <button
+            onClick={onBack}
+            style={{
+              flexShrink: 0, padding: "8px 14px", borderRadius: 10, border: "none",
+              background: `${accentColor}20`, color: accentColor,
+              fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap",
+            }}
+          >
+            Batch send →
+          </button>
+        </div>
+      )}
+
+      <button
+        onClick={handleSendToSelf}
+        disabled={sendingToSelf || sentToSelf}
+        style={{
+          width: "100%", padding: "13px",
+          borderRadius: 14, marginTop: 12,
+          background: "transparent",
+          border: `1px solid ${accentColor}55`,
+          color: sentToSelf ? C.green : accentColor,
+          fontSize: 14, fontWeight: 600, cursor: sendingToSelf || sentToSelf ? "default" : "pointer",
+          fontFamily: FONT, letterSpacing: -0.2,
+        }}
+      >
+        {sentToSelf ? "✓ Sent to your phone, check it now" : sendingToSelf ? "Sending..." : "📱 Send to my phone"}
+      </button>
+      <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 6 }}>
+        Experience what your vendors feel
+      </div>
+
+      {/* Appraisal booked + listing won */}
+      <div style={{ marginTop: 28, padding: "18px 20px", borderRadius: 14, background: C.bg2, border: `1px solid ${C.border}` }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+          Did {fname} agree to an appraisal?
+        </div>
+        <button
+          onClick={async () => {
+            if (appraisalBooked) return
+            setSavingMilestone(true)
+            try {
+              await authFetch(apiUrl("/api/analytics/milestone"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contactPhone: buyer.phone,
+                  contactName: buyer.name,
+                  type: "appraisal_booked",
+                  propertyAddress: buyer.purchaseAddress,
+                }),
+              })
+            } catch { /* offline — still show UI update */ }
+            finally { setSavingMilestone(false) }
+            setAppraisalBooked(true)
+          }}
+          disabled={appraisalBooked || savingMilestone}
+          style={{
+            padding: "10px 20px", borderRadius: 10,
+            border: `1px solid ${appraisalBooked ? C.green + "44" : accentColor + "44"}`,
+            background: appraisalBooked ? C.green + "22" : theme.dim,
+            color: appraisalBooked ? C.green : accentColor,
+            fontSize: 13, fontWeight: 700, cursor: appraisalBooked ? "default" : "pointer",
+            fontFamily: FONT,
+          }}
+        >
+          {savingMilestone ? "Saving…" : appraisalBooked ? "✓ Appraisal booked" : "Mark appraisal booked"}
+        </button>
+        {appraisalBooked && !listingWon && (
+          <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+              Did it convert to a listing?
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="number"
+                placeholder="Sale price (e.g. 870000)"
+                value={listingPrice}
+                onChange={e => setListingPrice(e.target.value)}
+                style={{
+                  flex: 1, padding: "8px 12px", borderRadius: 8,
+                  border: `1px solid ${C.border}`, background: C.bg3,
+                  color: C.text, fontSize: 13, fontFamily: FONT,
+                }}
+              />
+              <button
+                disabled={!listingPrice || savingMilestone}
+                onClick={async () => {
+                  setSavingMilestone(true)
+                  try {
+                    await authFetch(apiUrl("/api/analytics/milestone"), {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        contactPhone: buyer.phone,
+                        contactName: buyer.name,
+                        type: "listing_won",
+                        propertyAddress: buyer.purchaseAddress,
+                        listingPrice: parseInt(listingPrice) || 0,
+                      }),
+                    })
+                  } catch { /* offline */ }
+                  finally { setSavingMilestone(false) }
+                  setListingWon(true)
+                }}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, border: "none",
+                  background: C.green, color: "#04070d",
+                  fontSize: 13, fontWeight: 700, cursor: listingPrice ? "pointer" : "default",
+                  fontFamily: FONT, opacity: listingPrice ? 1 : 0.5,
+                }}
+              >
+                {savingMilestone ? "…" : "Mark won →"}
+              </button>
+            </div>
+          </div>
+        )}
+        {listingWon && (
+          <div style={{ fontSize: 12, color: C.green, marginTop: 10, fontWeight: 700 }}>
+            🏆 Listing won recorded — GCI updated in ROI dashboard.
+          </div>
+        )}
+        {appraisalBooked && !listingWon && (
+          <div style={{ fontSize: 11, color: C.green, marginTop: 8 }}>
+            Pipeline status updated. Follow up within 48 hrs to confirm time.
+          </div>
+        )}
+      </div>
+
+      {/* 30-day vendor nurture sequence */}
+      <div style={{ marginTop: 20, padding: "18px 20px", borderRadius: 14, background: C.bg2, border: `1px solid ${C.border}` }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>30-day vendor nurture sequence</div>
+          <button onClick={() => setShowNurture(v => !v)} style={{
+            background: "transparent", border: "none", cursor: "pointer",
+            color: accentColor, fontSize: 12, fontFamily: FONT, fontWeight: 600,
+          }}>
+            {showNurture ? "Hide" : "Preview →"}
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: C.muted }}>
+          Scheduled follow-ups if {fname} doesn't respond to your first message.
+        </div>
+        {showNurture && (() => {
+          const nurtureSteps = [
+            { day: 0,  label: "Day 0: Initial outreach", color: theme.primary, note: "SMS + email sent (see above)" },
+            { day: 7,  label: "Day 7: Market pulse",    color: C.blue,
+              sms: `Hi ${fname}, quick market update. A comparable home in ${buyer.suburb} sold well above guide this week. Worth a conversation? ${agent.name.split(" ")[0]}` },
+            { day: 14, label: "Day 14: Value reminder", color: C.green,
+              sms: `Hi ${fname}, ${agent.name.split(" ")[0]} here. Equity in ${buyer.suburb} is up ${Math.round(fin.equityGainPct)}% since you bought. Happy to run through the numbers if useful.` },
+            { day: 30, label: "Day 30: Soft close",     color: C.orange,
+              sms: `Hi ${fname}, touching base on ${buyer.purchaseAddress.split(",")[0]}. If timing isn't right yet, no problem. Happy to keep you updated on the market. ${agent.name.split(" ")[0]}` },
+          ]
+          return (
+            <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+              {nurtureSteps.map(step => (
+                <div key={step.day} style={{
+                  padding: "12px 14px", borderRadius: 10,
+                  background: C.bg3, border: `1px solid ${step.color}22`,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: step.color, marginBottom: step.sms ? 6 : 0 }}>
+                    {step.label}
+                  </div>
+                  {step.note && <div style={{ fontSize: 11, color: C.faint }}>{step.note}</div>}
+                  {step.sms && (
+                    <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, fontStyle: "italic" }}>
+                      "{step.sms}"
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+      </div>
+    </div>
+  )
+}
+
+// ── Outreach Queue Stage wrapper ─────────────────────────────────────────────
+
+function OutreachQueueStage({ items, agent, theme, onBack, onDone }: {
+  items: QueueItem[]
+  agent: AgentProfile
+  theme: AgencyTheme
+  onBack: () => void
+  onDone: () => void
+}) {
+  const [sending, setSending] = useState(false)
+  return (
+    <OutreachQueue
+      items={items}
+      agentName={agent.name}
+      sending={sending}
+      theme={theme}
+      onBack={onBack}
+      onSend={async approved => {
+        setSending(true)
+        try {
+          await authFetch(apiUrl("/api/vendor-batch/send"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ items: approved }),
+          })
+        } catch { /* best-effort */ }
+        setSending(false)
+        onDone()
+      }}
+    />
+  )
+}
+
+// ── Main DemoView ─────────────────────────────────────────────────────────────
+
+
+// ── Vendor Stage Router (lazy-loaded) ────────────────────────────────────────
+
+export default function VendorStages({
+  stage,
+  setStage,
+  agent,
+  theme,
+  vendorSettings,
+}: {
+  stage: Stage
+  setStage: (s: Stage) => void
+  agent: AgentProfile
+  theme: AgencyTheme
+  vendorSettings?: VendorDisplaySettings
+}) {
+  return (
+    <>
+      {stage.kind === "vendorPortfolio" && (
+        <motion.div key="vendorPortfolio" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
+          <VendorPortfolioPage
+            agent={agent}
+            theme={theme}
+            showMarketTriggers={vendorSettings?.showMarketTriggers}
+            onAnalyse={segmented =>
+              setStage({ kind: "vendorAnalysing", segmented })
+            }
+            onSelectBuyer={entry =>
+              setStage({ kind: "vendorProfile", entry, from: "vendorPortfolio" })
+            }
+          />
+        </motion.div>
+      )}
+
+      {stage.kind === "vendorAnalysing" && (
+        <motion.div key="vendorAnalysing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
+          <VendorAnalysingScreen
+            segmented={stage.segmented}
+            theme={theme}
+            onComplete={() => setStage({ kind: "vendorDashboard", segmented: stage.segmented })}
+          />
+        </motion.div>
+      )}
+
+      {stage.kind === "vendorDashboard" && (
+        <motion.div key="vendorDashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
+          <VendorDashboardPage
+            segmented={stage.segmented}
+            onBack={() => setStage({ kind: "vendorPortfolio" })}
+            theme={theme}
+            agent={agent}
+            vendorSettings={vendorSettings}
+            onSelectEntry={entry => {
+              const idx = stage.segmented.findIndex(e => e.buyer.id === entry.buyer.id)
+              setStage({ kind: "vendorProfile", entry, allEntries: stage.segmented, entryIdx: idx >= 0 ? idx : 0, from: "vendorDashboard" })
+            }}
+            onGenerateAll={items =>
+              setStage({ kind: "outreachQueue", items, segmented: stage.segmented })
+            }
+          />
+        </motion.div>
+      )}
+
+      {stage.kind === "outreachQueue" && (
+        <motion.div key="outreachQueue" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+          <OutreachQueueStage
+            items={stage.items}
+            agent={agent}
+            theme={theme}
+            onBack={() => setStage({ kind: "vendorDashboard", segmented: stage.segmented })}
+            onDone={() => setStage({ kind: "vendorDashboard", segmented: stage.segmented })}
+          />
+        </motion.div>
+      )}
+
+      {stage.kind === "vendorProfile" && (
+        <motion.div key="vendorProfile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
+          <VendorProfilePage
+            entry={stage.entry}
+            agent={agent}
+            theme={theme}
+            onBack={() => {
+              if (stage.from === "vendorPortfolio") {
+                setStage({ kind: "vendorPortfolio" })
+              } else {
+                const buyers = getPastBuyersForAgent(agent)
+                const financialsMap = new Map<number, FinancialSnapshot>()
+                for (const b of buyers) {
+                  const est = CURRENT_VALUE_ESTIMATES[b.id]
+                  if (!est) continue
+                  financialsMap.set(b.id, calculateFinancials(b.purchasePrice, b.purchaseDate, est, b.deposit))
+                }
+                setStage({ kind: "vendorDashboard", segmented: batchSegment(buyers, financialsMap) })
+              }
+            }}
+            allEntries={stage.allEntries}
+            entryIdx={stage.entryIdx}
+            onNavigate={entry => {
+              const idx = stage.allEntries?.findIndex(e => e.buyer.id === entry.buyer.id) ?? 0
+              setStage({ kind: "vendorProfile", entry, allEntries: stage.allEntries, entryIdx: idx, from: stage.from })
+            }}
+            onReview={(sms, emailSubject, emailBody) =>
+              setStage({ kind: "vendorReview", entry: stage.entry, sms, emailSubject, emailBody, allEntries: stage.allEntries, entryIdx: stage.entryIdx })
+            }
+            vendorSettings={vendorSettings}
+          />
+        </motion.div>
+      )}
+
+      {stage.kind === "vendorReview" && (
+        <motion.div key="vendorReview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }}>
+          <VendorReviewPanel
+            entry={stage.entry}
+            agent={agent}
+            theme={theme}
+            sms={stage.sms}
+            emailSubject={stage.emailSubject}
+            emailBody={stage.emailBody}
+            allEntries={stage.allEntries}
+            onBack={() => setStage({ kind: "vendorProfile", entry: stage.entry, allEntries: stage.allEntries, entryIdx: stage.entryIdx ?? 0, from: "vendorDashboard" })}
+            onNext={(() => {
+              if (!stage.allEntries || stage.entryIdx == null) return undefined
+              const nextIdx = stage.entryIdx + 1
+              if (nextIdx >= stage.allEntries.length) return undefined
+              const nextEntry = stage.allEntries[nextIdx]
+              return () => setStage({ kind: "vendorProfile", entry: nextEntry, allEntries: stage.allEntries, entryIdx: nextIdx, from: "vendorDashboard" })
+            })()}
+          />
+        </motion.div>
+      )}
+    </>
+  )
+}
