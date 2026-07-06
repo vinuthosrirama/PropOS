@@ -17,6 +17,7 @@ const router = Router()
 type DocEventType =
   | "open" | "section_enter" | "section_exit" | "scroll_depth"
   | "cursor_sample" | "text_select" | "tab_blur" | "tab_focus" | "session_end"
+  | "print"
 
 interface DocEvent {
   type:       DocEventType

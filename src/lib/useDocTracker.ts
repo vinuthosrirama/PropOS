@@ -13,6 +13,7 @@ import { apiUrl } from "./api"
 type DocEventType =
   | "open" | "section_enter" | "section_exit" | "scroll_depth"
   | "cursor_sample" | "text_select" | "tab_blur" | "tab_focus" | "session_end"
+  | "print"
 
 interface DocEvent {
   type:       DocEventType
@@ -170,6 +171,17 @@ export function useDocTracker(pitchId: string, pitchType: string): DocTracker {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ── Print / Save-PDF tracking ─────────────────────────────────────────────
+
+  useEffect(() => {
+    function handlePrint() {
+      push({ type: "print", ts: Date.now() })
+      flush()
+    }
+    window.addEventListener("beforeprint", handlePrint)
+    return () => window.removeEventListener("beforeprint", handlePrint)
+  }, [flush])
 
   // ── Auto-flush every 5 seconds ─────────────────────────────────────────────
 

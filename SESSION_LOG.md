@@ -2,6 +2,18 @@
 
 Cross-conversation handoff file. Every Claude session appends a dated entry at the TOP (newest first) before its final push: what was built, what was verified, what is half-done, and the exact next step. Read this at session start.
 
+## 2026-07-06: Document tracking audit, DOC_TRACKING_PLAN.md, disclosure footer + print event
+
+**Fixed / Built:** Session began as "build a document tracking system for vendor pitches" and pivoted on discovering the MVP already exists (useDocTracker.ts, doc-track.ts, document_sessions/events tables, DocInsightsView heatmap, intent scoring into contacts.engagement_score, SMS alerts). Wrote DOC_TRACKING_PLAN.md (repo root): full audited inventory with file refs, open-source research (Papermark/PostHog/OpenReplay rejected in favour of the existing custom tracker), gap list, phased roadmap, privacy stance. Built the two MVP gaps: analytics disclosure footer on PitchView (founder decision: subtle disclosure, no banner) and a tracked "print" event (beforeprint listener in useDocTracker, type extended client + server). Also committed prior sessions' untracked source (39e7064) per session-start protocol. Added vite.config.verify.ts: local verification config proxying to port 3002 because another app (Python app.py) holds 3001 on this Mac.
+
+**Verified (Preview screenshots):** Pitch created via authed API in DB-free in-memory mode (template cover note, correct "Cheers, Cameron" sign-off, no em-dashes). /p/MaORNHrx rendered with disclosure footer visible above the accept bar (screenshot taken). POST /api/doc-track batches observed firing in network log; intercepted flush payload confirmed events:["print"] after beforeprint. No DB writes, no SMS, no LLM spend (scrubbed env; doc-track is inert without DB).
+
+**tsc:** root + server, both clean.
+
+**Deployed:** Not deployed. Committed locally only; push is ask-first.
+
+**Next:** DOC_TRACKING_PLAN.md Phase 0: full end-to-end verification WITH a database (events persisting, DocInsightsView heatmap from real samples, score delta applied). Needs founder decision on test DB vs prod, and approval for the first-open SMS autofire (doc-track.ts:259 fires real SMS on first open when DB + transport live). Also investigate: PitchView.tsx:291 type-routing oddity, and server/index.ts local static path resolving to repo/public (has no index.html) when run via tsx.
+
 ---
 
 ## 2026-06-28 — Instant CMA tab + 3 Tier-1 Realtair features complete

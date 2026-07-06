@@ -306,6 +306,14 @@ export default function PitchView({ slug }: { slug: string }) {
     <DocTrackerContext.Provider value={tracker}>
       {renderContent()}
 
+      {/* Analytics disclosure — subtle footer, per privacy stance in DOC_TRACKING_PLAN.md */}
+      <div style={{
+        textAlign: "center", padding: showAcceptUI && !isAccepted ? "16px 20px 76px" : "16px 20px 24px",
+        fontSize: 11, color: "#6b7280", fontFamily: FONT, background: "transparent",
+      }}>
+        This page uses analytics to help us serve you better.
+      </div>
+
       {/* Acceptance UI — bottom bar or confirmed banner */}
       {showAcceptUI && (
         <>
