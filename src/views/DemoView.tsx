@@ -1211,8 +1211,8 @@ function BuyerMatchQueuePage({ agent, theme, onBack }: {
                         disabled={isSending}
                         style={{
                           flex: 1, padding: "10px 0", borderRadius: 10, border: "none",
-                          background: isSending ? C.bg3 : C.green,
-                          color: isSending ? C.muted : "#0a0f1a",
+                          background: isSending ? C.bg3 : theme.primary,
+                          color: isSending ? C.muted : "#fff",
                           fontSize: 12, fontWeight: 800, fontFamily: FONT, cursor: isSending ? "default" : "pointer",
                           transition: "all 0.15s",
                         }}
