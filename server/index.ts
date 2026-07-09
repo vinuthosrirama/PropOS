@@ -74,6 +74,23 @@ import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
 import { getDomainEstimate } from "./lib/domainAvm.js"
 
+// A11: global crash guard. Express 4 does not catch rejected promises from async
+// route handlers, so an unguarded `await query(...)` that throws (bad SQL, a
+// transient DB connection drop) becomes a true Node "unhandledRejection" and, by
+// Node 15+ default behaviour, kills the whole process — taking down every other
+// in-flight request too. Found in practice: server/routes/pitches.ts and
+// server/routes/doc-track.ts (a uuid/text join mismatch) and
+// server/routes/agent-demo.ts (a transient Postgres connection timeout), each of
+// which crashed the server on a request that should have just 500'd. Route-by-route
+// try/catch is still the right fix per call site (see those files), but this is the
+// backstop for the ones not yet found. Log and keep serving; do not exit.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason instanceof Error ? reason.message : reason)
+})
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err.message)
+})
+
 const app = express()
 const PORT = process.env.PORT ?? 3001
 
