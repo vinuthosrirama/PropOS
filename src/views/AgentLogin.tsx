@@ -250,7 +250,15 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
   if (phase === "welcoming") {
     const t = welcomeSub ? getAgencyTheme(welcomeSub.split(" · ")[0] ?? "") : null
     const welcomeBg = t?.gradient?.[1] ?? leftBg
-    const nameColor = t ? themeTextAccent(t) : "#00e676"
+    // themeTextAccent() picks its color based on the primary's own darkness, not on
+    // contrast against welcomeBg specifically. For themes where gradient[1] equals
+    // primary (Peake, Harcourts, Fletchers, Biggin & Scott, First National, LJ Hooker,
+    // Uphill), that produces identical text and background — "Welcome back, Cameron"
+    // rendered invisibly. Fall back to accent, or white, only when they'd collide.
+    const rawNameColor = t ? themeTextAccent(t) : "#00e676"
+    const nameColor = t && rawNameColor.toLowerCase() === welcomeBg.toLowerCase()
+      ? (t.accent ?? "#ffffff")
+      : rawNameColor
     const gradStart = t?.gradient?.[0] ?? "#553990"
     return (
       <div style={{
