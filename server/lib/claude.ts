@@ -21,24 +21,15 @@ export function llmConfigured(): boolean {
 
 /**
  * Provider-agnostic JSON-mode chat completion.
- * Prefers Anthropic (Sonnet 4.6) when ANTHROPIC_API_KEY is set, falling back
- * to OpenAI (gpt-4o-mini) when only OPENAI_API_KEY is available. Returns the
+ * Prefers OpenAI (gpt-4o-mini) when OPENAI_API_KEY is set, falling back to
+ * Anthropic (Haiku) when only ANTHROPIC_API_KEY is available. Returns the
  * raw text response (JSON string, fenced code blocks stripped).
  *
  * Used by smsAgent.ts so the conversational agent works with either provider.
+ * OpenAI-first because this repo currently runs on an OpenAI key only — a
+ * stray ANTHROPIC_API_KEY in any environment must not silently take over.
  */
 export async function generateChatJSON(prompt: string, maxTokens = 400): Promise<string> {
-  if (process.env.ANTHROPIC_API_KEY) {
-    const message = await withLLMTimeout(signal =>
-      getClient().messages.create({
-        model: "claude-haiku-4-5", max_tokens: maxTokens,
-        messages: [{ role: "user", content: prompt }],
-      }, { signal }),
-    )
-    const t = message.content[0]?.type === "text" ? (message.content[0].text ?? "") : ""
-    return t.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
-  }
-
   if (process.env.OPENAI_API_KEY) {
     const { getOpenAIClient } = await import("./openai.js")
     const completion = await withLLMTimeout(signal =>
@@ -50,6 +41,17 @@ export async function generateChatJSON(prompt: string, maxTokens = 400): Promise
       }, { signal }),
     )
     return (completion.choices[0]?.message?.content ?? "").trim()
+  }
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    const message = await withLLMTimeout(signal =>
+      getClient().messages.create({
+        model: "claude-haiku-4-5", max_tokens: maxTokens,
+        messages: [{ role: "user", content: prompt }],
+      }, { signal }),
+    )
+    const t = message.content[0]?.type === "text" ? (message.content[0].text ?? "") : ""
+    return t.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
   }
 
   throw new Error("No LLM provider configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY)")
@@ -117,7 +119,7 @@ ${slmBlock}
 Hard rules:
 - Write in first person as ${agentName} — use "I" throughout. This is a personal message from the agent to a contact they already know.
 - HARD CONSTRAINT: never use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma instead.
-- SMS must be under 160 characters, reads like a real text
+- SMS may run up to 2 segments (~300 characters). Do NOT compress into one 160-char text if it costs the natural cadence. Reads like a real text.
 - VOICE MATCH: SMS sign-off MUST match closing style from training examples above. If examples show "Cheers" or "Cheers ${agentFirst}", use that exactly.
 - Email is 2-3 short paragraphs maximum
 - Use the lead's first name at least once
@@ -134,7 +136,7 @@ Questions raised: ${lead.questions || "none"}${transcriptBlock}
 STRATEGY: ${strategy}
 
 Write personalised SMS and email outreach for ${lead.name}. Rules:
-- SMS: Under 160 chars. ${smsAddrGuide} Structure: (1) Greet by first name + thank them for coming to the old property — "Hi [Name], thanks for coming to [OldAddr]". (2) Natural bridge: "I actually have another property that fits your profile" or similar, then name 2-3 specific matching attributes from their notes (beds, land, school zone, yard, etc.) + new property address. (3) Soft CTA — open home date/time if known, or "keen for a look?" or "call me anytime". (4) Sign off with agent's first name: "Cheers, [AgentFirst]". Example: "Hi James, thanks for coming to 3 Thirlmere. Got another that suits — 4 bed, 744sqm, same school zone at 3 Fairholme. Open Sat 12:30. Keen? Cheers, Cameron" — warm, personal, under 160 chars.
+- SMS: up to 2 segments (~300 chars), do not compress if it costs natural cadence. ${smsAddrGuide} Structure: (1) Greet by first name + thank them for coming to the old property, "Hi [Name], thanks for coming to [OldAddr]". (2) Natural bridge: "I actually have another property that fits your profile" or similar, then name 2-3 specific matching attributes from their notes (beds, land, school zone, yard, etc.) + new property address. (3) Soft CTA, open home date/time if known, or "keen for a look?" or "call me anytime". (4) Sign off using the voice profile's sign-off block exactly (e.g. "Cheers, [Agent], Peake Real Estate"). Example: "Hi James, thanks for coming to 3 Thirlmere. Got another that suits, 4 bed, 744sqm, same school zone at 3 Fairholme. Open Sat 12:30. Keen? Cheers, Cameron" (warm, personal).
 - Email subject: Conversational, specific. Reference the old property or their question. No "New Listing" or generic subjects.
 - Email body: Para 1 name the old property and one specific thing they asked/said. Para 2 answer their key question with a data point from the Q&A context (e.g. land size, school zone, price comparison). Para 3 open home date/CTA. Sign off with your name only.
 - Never write generic phrases when you have real intel.
@@ -257,7 +259,7 @@ Email body:
 ${emailBody.map((p, i) => `[${i + 1}] ${p}`).join("\n")}
 
 Rules to check:
-1. SMS must be under 160 characters
+1. SMS may run up to 2 segments (~300 characters); do not fail it for exceeding 160
 2. HARD CONSTRAINT: no em-dashes (—), en-dashes (–), or double-hyphens (--) anywhere. Use a comma instead.
 3. No false claims or promises
 4. Agent writes in first person as ${agentName} — uses "I" throughout (personal message to a known contact)
@@ -315,7 +317,7 @@ export async function generateMessageHaiku(params: GenerateParams): Promise<Gene
   const { agentName, agentAgency, agentSuburb, lead, strategy } = params
 
   const prompt = `You are ${agentName}, a real estate agent at ${agentAgency} in ${agentSuburb}.
-Hard rules: first person as ${agentName} using "I" throughout, SMS under 160 chars, HARD CONSTRAINT no em-dashes (—) or en-dashes (–) use a comma instead, 2 paragraphs max email, use lead's first name.
+Hard rules: first person as ${agentName} using "I" throughout, SMS up to 2 segments (~300 chars, don't compress if it costs natural cadence), HARD CONSTRAINT no em-dashes (—) or en-dashes (–) use a comma instead, 2 paragraphs max email, use lead's first name.
 NEVER use: leverage, utilize, robust, seamless, holistic, actionable, synergy, pivotal, transformative, cornerstone, empower, nuanced, paramount, comprehensive, "I wanted to reach out", "I hope this finds you well", "just wanted to touch base". Plain words only.
 
 LEAD: ${lead.name} | Budget: ${lead.budget} | Buyer type: ${lead.persona}

@@ -80,7 +80,7 @@ export async function enqueueShortcutMessage(
   const rows = await query<{ id: string }>(
     `INSERT INTO shortcut_queue (device_id, to_phone, body)
      VALUES ($1, $2, $3) RETURNING id`,
-    [deviceId, actualTo, actualBody.slice(0, 160)],
+    [deviceId, actualTo, actualBody.slice(0, 320)],
   )
 
   const id = rows[0]?.id

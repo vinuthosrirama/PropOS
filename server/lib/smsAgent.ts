@@ -18,7 +18,9 @@ import { getThread } from "./conversations.js"
 import { getVoiceProfile, DEFAULT_VOICE_ID, formatVoiceProfileForPrompt } from "./voiceProfile.js"
 import type { SmsContact } from "./smsContacts.js"
 
-const SMS_LIMIT = 160
+// 2 SMS segments (~320 chars). Vinuth's relational voice needs the room; do not
+// compress to a single 160-char segment. See docs/VOICE_CORPUS_VINUTH.md.
+const SMS_LIMIT = 320
 
 // ── Agent context (who is logged in sending these messages) ──────────────────
 export interface AgentContext {

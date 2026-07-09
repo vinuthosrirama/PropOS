@@ -174,14 +174,15 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
 
   // Master quick-access (Vinuth only)
   const masterQuickLogin = async () => {
-    const agentData = { name: "Vinuth Srirama", agency: "Peake", email: "vinuth.o.srirama@gmail.com", phone: "0415 883 354", suburb: "Berwick", tagline: "Berwick specialist." }
+    const agentData = { name: "Vinuth Srirama", agency: "Peake Real Estate", email: "vinuth.o.srirama@gmail.com", phone: "0415 883 354", suburb: "Berwick", tagline: "Berwick specialist." }
     setWelcomeName("Vinuth")
     setWelcomeSub("Peake · Berwick")
     setPhase("welcoming")
     const t = getAgencyTheme("Peake")
     const agent: AgentProfile = {
       ...agentData,
-      voiceProfile: { greeting: "Hi", closing: "Cheers", lengthStyle: "short", formalityScore: 2, aussieIndex: 2, specificity: 3, emojiUsage: "occasional", examplesCount: 0, confidence: 0, detectedTraits: [] },
+      // Derived from docs/VOICE_CORPUS_VINUTH.md — his own hand-written outreach samples.
+      voiceProfile: { greeting: "Hey", closing: "Cheers", lengthStyle: "medium", formalityScore: 2, aussieIndex: 4, specificity: 4, emojiUsage: "occasional", examplesCount: 9, confidence: 80, detectedTraits: ["coffee (or tea) CTA", "more than happy", "no dramas", "partner-inclusive"] },
       trainingCorpus: [],
     }
     setTimeout(() => onLogin(agent, t, mode), 2800)

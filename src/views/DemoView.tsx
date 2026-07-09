@@ -2669,6 +2669,11 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
         questions: (lead.questions ?? []).join("; "),
         transcript,
       },
+      // /api/generate defaults to the zero-cost template engine, which never
+      // reads voiceContext/corpus above. This is the primary, most personal
+      // first-touch message — force the LLM+voice-corpus path so it actually
+      // sounds like the agent. See docs/VOICE_CORPUS_VINUTH.md.
+      forceAI: true,
     }
 
     const stripDashes = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
@@ -2698,13 +2703,14 @@ function GeneratingScreen({ property, lead, soldSLM, transcript, agent, theme, o
       }
       // Final fallback — template strings
       const agentFirst = agent.nickname ?? agent.name.split(" ")[0]
-      const mockSMS = `Hey ${fname}, ${agentFirst} here. Thought of you for ${property.address.split(",")[0]}, ${activeSLM.beds !== "TBD" ? activeSLM.beds + "bd" : "similar"}/${activeSLM.baths !== "TBD" ? activeSLM.baths + "ba" : ""}${activeSLM.landSqm !== "TBD" ? ", " + activeSLM.landSqm + "sqm" : ""}. Open ${property.openDate ?? "this weekend"}. Worth a look?`
+      const agentSig = agent.agency ? `${agentFirst}, ${agent.agency}` : agentFirst
+      const mockSMS = `Hey ${fname}, ${agentFirst} here. Thought of you for ${property.address.split(",")[0]}, ${activeSLM.beds !== "TBD" ? activeSLM.beds + "bd" : "similar"}/${activeSLM.baths !== "TBD" ? activeSLM.baths + "ba" : ""}${activeSLM.landSqm !== "TBD" ? ", " + activeSLM.landSqm + "sqm" : ""}. Open ${property.openDate ?? "this weekend"}. Worth a look? Cheers, ${agentSig}`
       const mockSubject = `Hey ${fname}, thought of you for ${property.address.split(",")[0]}`
       const mockBody = [
         `Hey ${fname}, hope you're well.`,
         `After you came through ${soldSLM.address}, I thought this new listing might tick some boxes. It's ${activeSLM.beds !== "TBD" ? activeSLM.beds + "-bed" : "similar"}, ${activeSLM.landSqm !== "TBD" ? activeSLM.landSqm + "sqm" : "comparable land"}, ${activeSLM.priceMin !== "TBD" && activeSLM.priceMax !== "TBD" ? "price guide " + fmt(activeSLM.priceMin as number) + " to " + fmt(activeSLM.priceMax as number) : "priced competitively"}.`,
         `${property.openDate ? "Open home is " + property.openDate + "." : "Happy to arrange a private inspection."} Let me know if you'd like the details.`,
-        `Cheers,\n${agentFirst}`,
+        `Cheers,\n${agentSig}`,
       ]
       storeResult(mockSMS, mockSubject, mockBody)
     }
@@ -6863,10 +6869,10 @@ function NurtureSequencePanel({ entry, agent, theme }: { entry: SegmentedBuyer; 
   const signoff   = buyer.status === "investor" ? "Kind regards" : "Cheers"
 
   const templates = [
-    { sms: `Hi ${fname}, ${agentFirst} from ${agent.agency}. Quick market update on ${buyer.suburb}. Your place is looking really strong. Worth a chat? ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `Market update for ${buyer.suburb}, ${fname}` },
-    { sms: `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} clearance rate is tracking well. Happy to share the data. ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `${buyer.suburb} market moving, ${fname}` },
-    { sms: `Hi ${fname}, a comparable property in ${buyer.suburb} just sold for ${fmtK(Math.round(fin.currentEstimate * 1.03 / 5000) * 5000)}. Want the full comps? ${agentFirst}`.slice(0, 160), emailSubject: `Comparable sale you should see, ${fname}` },
-    { sms: `Hi ${fname}, ${agentFirst} here. Just circling back. Happy to chat whenever the timing suits. ${signoff}, ${agentFirst}`.slice(0, 160), emailSubject: `Still here when you're ready, ${fname}` },
+    { sms: `Hi ${fname}, ${agentFirst} from ${agent.agency}. Quick market update on ${buyer.suburb}. Your place is looking really strong. Worth a chat? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 320), emailSubject: `Market update for ${buyer.suburb}, ${fname}` },
+    { sms: `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} clearance rate is tracking well. Happy to share the data. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 320), emailSubject: `${buyer.suburb} market moving, ${fname}` },
+    { sms: `Hi ${fname}, a comparable property in ${buyer.suburb} just sold for ${fmtK(Math.round(fin.currentEstimate * 1.03 / 5000) * 5000)}. Want the full comps? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 320), emailSubject: `Comparable sale you should see, ${fname}` },
+    { sms: `Hi ${fname}, ${agentFirst} here. Just circling back. Happy to chat whenever the timing suits. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 320), emailSubject: `Still here when you're ready, ${fname}` },
   ]
 
   const handleEnable = () => {
@@ -7667,6 +7673,22 @@ function VendorSentimentPanel({
 
 // ── Vendor Profile Page ───────────────────────────────────────────────────────
 
+type ProfileTabId = "analysis" | "outreach" | "listing" | "campaign" | "nurture" | "gci" | "pitch" | "property-pitch" | "introduction" | "proposal" | "appraisal"
+
+const VENDOR_PROFILE_TABS: { id: ProfileTabId; label: string; settingsKey: keyof import("../data").VendorDisplaySettings }[] = [
+  { id: "analysis",       label: "Analysis",     settingsKey: "showTabAnalysis" },
+  { id: "outreach",       label: "Outreach",     settingsKey: "showTabOutreach" },
+  { id: "listing",        label: "Listing CMA",  settingsKey: "showTabListing" },
+  { id: "campaign",       label: "Campaign",     settingsKey: "showTabCampaign" },
+  { id: "nurture",        label: "Nurture",      settingsKey: "showTabNurture" },
+  { id: "pitch",          label: "Price Pitch",  settingsKey: "showTabPitch" },
+  { id: "introduction",   label: "Agent Intro",  settingsKey: "showTabIntroduction" },
+  { id: "proposal",       label: "Proposal",     settingsKey: "showTabProposal" },
+  { id: "appraisal",      label: "Instant CMA",  settingsKey: "showTabAppraisal" },
+  { id: "property-pitch", label: "Prop. Pitch",  settingsKey: "showTabPropertyPitch" },
+  { id: "gci",            label: "GCI Calc",     settingsKey: "showTabGci" },
+]
+
 function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettings, allEntries, entryIdx, onNavigate }: {
   entry: SegmentedBuyer
   agent: AgentProfile
@@ -7690,7 +7712,15 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [showAllMetrics, setShowAllMetrics] = useState(false)
   const [showInsights, setShowInsights] = useState(true)    // triggers open by default
   const [showPitchAngles, setShowPitchAngles] = useState(false)  // pitch angles collapsed by default
-  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture" | "market-update" | "gci" | "pitch" | "property-pitch" | "introduction" | "proposal" | "appraisal">("analysis")
+  const [profileTab, setProfileTab] = useState<ProfileTabId>("analysis")
+  const visibleProfileTabs = VENDOR_PROFILE_TABS.filter(tab => vendorSettings?.[tab.settingsKey] !== false)
+  // If the active tab gets hidden via Settings, fall back to the first visible one
+  useEffect(() => {
+    if (visibleProfileTabs.length > 0 && !visibleProfileTabs.some(t => t.id === profileTab)) {
+      setProfileTab(visibleProfileTabs[0].id)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendorSettings])
   const [marketUpdatePreview, setMarketUpdatePreview] = useState<{ html: string; sms: string; subject: string } | null>(null)
   const [marketUpdateSending, setMarketUpdateSending] = useState(false)
   const [marketUpdateSent, setMarketUpdateSent] = useState(false)
@@ -7719,6 +7749,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   // NotesBridge: populated from API response after generation
   const [extractedHook, setExtractedHook] = useState<string | null>(null)
   const [personalisationLine, setPersonalisationLine] = useState<string | null>(null)
+  // Generated outreach draft — renders inline under the nurture sequence panel
+  // instead of navigating to the full-screen review stage.
+  const [inlineOutreach, setInlineOutreach] = useState<{ sms: string; emailSubject: string; emailBody: string[] } | null>(null)
 
   const bpVP = useBreakpoint()
   const isMobileVP = bpVP === "mobile"
@@ -7850,21 +7883,21 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       const estStr = fmtDollar(fin.currentEstimate)
       const equityStr = fmtDollar(fin.equityGain)
       const signoff = buyer.status === "investor" ? "Kind regards" : "Cheers"
-      const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${payload.purchaseYear}). Worth a quick chat? ${signoff}, ${agentFirst}`
+      const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${payload.purchaseYear}). Worth a quick chat? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
       const emailSubject = stripDashes(`Market update on ${buyer.purchaseAddress}, ${fname}`)
       const cgtLine = fin.cgtSavingsBy2027 > 0 ? ` The current 50% CGT discount saves you approximately ${fmtDollar(fin.cgtSavingsBy2027)} if you sell before July 2027.` : ""
       const emailBody = [
         `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
         `Your property at ${buyer.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${payload.purchaseYear}. That is ${equityStr} in equity.${cgtLine}`,
-        `I would love to offer a complimentary, no-obligation appraisal if you are curious. Takes about 20 minutes, happy to come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+        `I would love to offer a complimentary, no-obligation appraisal if you are curious. Takes about 20 minutes, happy to come to you. No pressure at all.\n\n${signoff},\n${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`,
       ].map(stripDashes)
       // Append survey link if toggled on
       const surveyLink = includeProspectGauge
         ? ` P.S. Quick question for you: ${`https://propos.addvantage.site/survey?contact=${encodeURIComponent(fname)}&agent=${encodeURIComponent(agentFirst)}`}`
         : ""
-      const finalSms = stripDashes((smsRaw.length > 140 ? smsRaw.slice(0, 137) + "..." : smsRaw) + (includeProspectGauge ? " bit.ly/propgauge" : ""))
+      const finalSms = stripDashes((smsRaw.length > 300 ? smsRaw.slice(0, 297) + "..." : smsRaw) + (includeProspectGauge ? " bit.ly/propgauge" : ""))
       setGenerating(false)
-      onReview(finalSms, emailSubject, includeProspectGauge ? [...emailBody, surveyLink] : emailBody)
+      setInlineOutreach({ sms: finalSms, emailSubject, emailBody: includeProspectGauge ? [...emailBody, surveyLink] : emailBody })
     }
 
     try {
@@ -7887,7 +7920,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       const emailBody: string[] = res.email?.body ?? []
       if (!sms) throw new Error("empty — no sms")
 
-      // Capture NotesBridge data — show the transformation BEFORE navigating to review
+      // Capture NotesBridge data — show the transformation before the draft renders inline
       if (res.personalisationHook) {
         setExtractedHook(res.personalisationHook)
         // Persist AI-extracted hook to Supabase so it appears next session
@@ -7898,7 +7931,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       setGenerating(false)
 
       // Pause so the user sees the NotesBridge "What AI saw → As written to" animation
-      // before the review screen replaces the page (3.5s = typewriter + moment to read)
+      // before the inline draft appears (3.5s = typewriter + moment to read)
       await new Promise(r => setTimeout(r, res.personalisationLine ? 3500 : 400))
       const finalEmailBody = emailBody.map(stripDashes)
       if (includeProspectGauge) {
@@ -7908,19 +7941,21 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       const finalSms = includeProspectGauge
         ? stripDashes(sms.slice(0, 130)) + " Survey: bit.ly/propgauge"
         : stripDashes(sms)
-      onReview(finalSms, stripDashes(emailSubject), finalEmailBody)
+      setInlineOutreach({ sms: finalSms, emailSubject: stripDashes(emailSubject), emailBody: finalEmailBody })
     } catch {
       templateFallback()
     }
   }
 
-  // Fix 6: Auto-trigger generation as soon as outreach tab is selected — skip the manual button click
+  // Fix 6: Auto-trigger generation as soon as outreach tab is selected — skip the manual button click.
+  // Re-fires on lead change too, so switching leads via "Next" doesn't leave a stale draft on screen.
   useEffect(() => {
+    setInlineOutreach(null)
     if (profileTab === "outreach" && !generating) {
       handleGenerate()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileTab])
+  }, [profileTab, entry.buyer.id])
 
   const equityPct = Math.round((fin.equityGain / fin.purchasePrice) * 100)
   const equityBarWidth = Math.min(equityPct, 100)
@@ -8039,20 +8074,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         borderBottom: `1.5px solid ${C.border}`,
         overflowX: "auto", scrollbarWidth: "none",
       }}>
-        {([
-          { id: "market-update",  label: "Market Update" },
-          { id: "analysis",       label: "Analysis" },
-          { id: "outreach",       label: "Outreach" },
-          { id: "listing",        label: "Listing CMA" },
-          { id: "campaign",       label: "Campaign" },
-          { id: "nurture",        label: "Nurture" },
-          { id: "pitch",          label: "Price Pitch" },
-          { id: "introduction",   label: "Agent Intro" },
-          { id: "proposal",       label: "Proposal" },
-          { id: "appraisal",      label: "Instant CMA" },
-          { id: "property-pitch", label: "Prop. Pitch" },
-          { id: "gci",            label: "GCI Calc" },
-        ] as { id: typeof profileTab; label: string }[]).map(tab => (
+        {visibleProfileTabs.map(tab => (
           <button key={tab.id} onClick={() => setProfileTab(tab.id)} style={{
             padding: isMobileVP ? "9px 12px" : "10px 18px",
             background: "none", border: "none", cursor: "pointer",
@@ -8404,6 +8426,76 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
           {/* Nurture Sequence Panel */}
           <NurtureSequencePanel entry={entry} agent={agent} theme={theme} />
 
+          {/* Generated outreach draft — appears here instead of navigating to a new screen */}
+          <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase" }}>Generated outreach</div>
+              {inlineOutreach && !generating && (
+                <button onClick={handleGenerate} style={{ fontSize: 10, color: accentColor, background: "none", border: "none", cursor: "pointer", fontFamily: FONT, textDecoration: "underline" }}>
+                  ↻ Regenerate
+                </button>
+              )}
+            </div>
+
+            {generating && !inlineOutreach && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", fontSize: 12, color: C.faint }}>
+                <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>✨</motion.span>
+                Writing personalised outreach in {agentFirst}'s voice...
+              </div>
+            )}
+
+            {!generating && !inlineOutreach && (
+              <div style={{ fontSize: 12, color: C.faint, padding: "6px 0" }}>Draft will appear here once generated.</div>
+            )}
+
+            {inlineOutreach && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 }}>
+                    📱 SMS · {inlineOutreach.sms.length} chars
+                  </div>
+                  <textarea
+                    value={inlineOutreach.sms}
+                    onChange={e => setInlineOutreach(d => d ? { ...d, sms: e.target.value } : d)}
+                    rows={3}
+                    style={{
+                      width: "100%", boxSizing: "border-box", resize: "vertical",
+                      background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 10,
+                      padding: "10px 12px", fontSize: 12, color: C.text, lineHeight: 1.5, fontFamily: FONT,
+                    }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 }}>📧 Email subject</div>
+                  <input
+                    value={inlineOutreach.emailSubject}
+                    onChange={e => setInlineOutreach(d => d ? { ...d, emailSubject: e.target.value } : d)}
+                    style={{
+                      width: "100%", boxSizing: "border-box",
+                      background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 10,
+                      padding: "8px 12px", fontSize: 12, fontWeight: 600, color: C.text, fontFamily: FONT, marginBottom: 6,
+                    }}
+                  />
+                  <textarea
+                    value={inlineOutreach.emailBody.join("\n\n")}
+                    onChange={e => setInlineOutreach(d => d ? { ...d, emailBody: e.target.value.split("\n\n") } : d)}
+                    rows={4}
+                    style={{
+                      width: "100%", boxSizing: "border-box", resize: "vertical",
+                      background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 10,
+                      padding: "10px 12px", fontSize: 12, color: C.muted, lineHeight: 1.5, fontFamily: FONT,
+                    }}
+                  />
+                </div>
+                <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                  onClick={() => onReview(inlineOutreach.sms, inlineOutreach.emailSubject, inlineOutreach.emailBody)}
+                  style={{ padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${accentColor}50`, background: `${accentColor}12`, color: accentColor, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                  Edit &amp; Send →
+                </motion.button>
+              </div>
+            )}
+          </div>
+
           </>)}
         </div>
 
@@ -8569,13 +8661,13 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 id: "cgt", icon: "⏰", title: "CGT Deadline",
                 hook: `Save ${fmtDollar(fin.cgtSavingsBy2027)} in tax`, sub: "Before July 2027 cutoff", color: "#ef4444",
                 buildOutreach: () => {
-                  const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Selling before July 2027 saves you ~${fmtDollar(fin.cgtSavingsBy2027)} in tax. Happy to run the numbers. ${signoff}, ${agentFirst}`
-                  const sms = stripDashes(smsRaw.slice(0, 160))
+                  const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Selling before July 2027 saves you ~${fmtDollar(fin.cgtSavingsBy2027)} in tax. Happy to run the numbers. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
+                  const sms = stripDashes(smsRaw.slice(0, 320))
                   const emailSubject = `Your CGT window, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick one on your numbers at ${shortAddr(buyer.purchaseAddress)}.`,
                     `You've held your place since ${year} and the 50% CGT discount applies right now. Selling before 1 July 2027 saves you roughly ${fmtDollar(fin.cgtSavingsBy2027)} in tax compared to waiting. Your place is estimated at around ${fmtDollar(fin.currentEstimate)}.`,
-                    `Happy to do a quick no-obligation appraisal. Twenty minutes, I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+                    `Happy to do a quick no-obligation appraisal. Twenty minutes, I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
                 },
@@ -8585,13 +8677,13 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 id: "equity", icon: "💰", title: "Equity Position",
                 hook: `${fmtDollar(fin.equityGain)} in equity`, sub: `Built since ${year}`, color: "#66bb6a",
                 buildOutreach: () => {
-                  const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Your place has grown ${fmtDollar(fin.equityGain)} since ${year}. Worth knowing your options. ${signoff}, ${agentFirst}`
-                  const sms = stripDashes(smsRaw.slice(0, 160))
+                  const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Your place has grown ${fmtDollar(fin.equityGain)} since ${year}. Worth knowing your options. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
+                  const sms = stripDashes(smsRaw.slice(0, 320))
                   const emailSubject = `Your equity position, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here.`,
                     `Ran the numbers on your place at ${shortAddr(buyer.purchaseAddress)}. You've built roughly ${fmtDollar(fin.equityGain)} in equity since ${year}. Your property is sitting at around ${fmtDollar(fin.currentEstimate)} now. A lot of people in ${buyer.suburb} don't realise what position they're in.`,
-                    `Happy to do a complimentary appraisal. Twenty minutes, I'll come to you. No obligation, just so you know your options.\n\n${signoff},\n${agentFirst}`,
+                    `Happy to do a complimentary appraisal. Twenty minutes, I'll come to you. No obligation, just so you know your options.\n\n${signoff},\n${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
                 },
@@ -8601,13 +8693,13 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 id: "comps", icon: "🏡", title: "Recent Sale",
                 hook: `${comps[0].address}: ${fmtDollar(comps[0].soldPrice)}`, sub: comps[0].soldDate, color: "#ffa726",
                 buildOutreach: () => {
-                  const smsRaw = `Hi ${fname}, ${agentFirst} here. A ${comps[0].beds}-bed in ${buyer.suburb} just sold for ${fmtDollar(comps[0].soldPrice)}. Your place stacks up really well. ${signoff}, ${agentFirst}`
-                  const sms = stripDashes(smsRaw.slice(0, 160))
+                  const smsRaw = `Hi ${fname}, ${agentFirst} here. A ${comps[0].beds}-bed in ${buyer.suburb} just sold for ${fmtDollar(comps[0].soldPrice)}. Your place stacks up really well. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
+                  const sms = stripDashes(smsRaw.slice(0, 320))
                   const emailSubject = `Recent ${buyer.suburb} sale relevant to your place, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here.`,
                     `A comparable ${comps[0].beds}-bedroom property at ${comps[0].address} just sold for ${fmtDollar(comps[0].soldPrice)} on ${comps[0].soldDate}. That puts your place (bought for ${fmtDollar(buyer.purchasePrice)} in ${year}) in a really strong position at roughly ${fmtDollar(fin.currentEstimate)}.`,
-                    `Happy to put together a quick comps report and walk you through it. No obligation at all. Let me know if it's worth a look.\n\n${signoff},\n${agentFirst}`,
+                    `Happy to put together a quick comps report and walk you through it. No obligation at all. Let me know if it's worth a look.\n\n${signoff},\n${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
                 },
@@ -8617,13 +8709,13 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 id: "timing", icon: "📈", title: "Market Timing",
                 hook: `${range.clearanceRate}% clearance rate`, sub: `Avg ${range.daysOnMarket} days on market`, color: accentColor,
                 buildOutreach: () => {
-                  const smsRaw = `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} is running at ${range.clearanceRate}% clearance right now. Good time to know your options. ${signoff}, ${agentFirst}`
-                  const sms = stripDashes(smsRaw.slice(0, 160))
+                  const smsRaw = `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} is running at ${range.clearanceRate}% clearance right now. Good time to know your options. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
+                  const sms = stripDashes(smsRaw.slice(0, 320))
                   const emailSubject = `${buyer.suburb} market is moving, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
                     `Clearance rate is at ${range.clearanceRate}% with properties averaging just ${range.daysOnMarket} days on market. Strong seller conditions. Based on recent sales, your place is estimated at around ${fmtDollar(fin.currentEstimate)}, which is ${fmtDollar(fin.equityGain)} up since you bought in ${year}.`,
-                    `If you've had any thoughts about listing, it's a decent window. Happy to do a quick appraisal, 20 minutes and I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}`,
+                    `If you've had any thoughts about listing, it's a decent window. Happy to do a quick appraisal, 20 minutes and I'll come to you. No pressure at all.\n\n${signoff},\n${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`,
                   ].map(stripDashes)
                   return { sms, emailSubject, emailBody }
                 },
@@ -8842,7 +8934,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
               : `Hi ${fname}, ${agentFirst} here. I've put together a quick price update for ${shortAddr(buyer.purchaseAddress)}. Have a look here: ${pitchUrl}`)
             const subject = stripDashes(`Your price update for ${buyer.purchaseAddress}`)
             const emailBody = stripDashes(
-              `Hi ${fname},\n\nI've put together a price update for your property at ${buyer.purchaseAddress}. The full breakdown, including recent comparable sales near you, is below.${isLocalLink ? "" : ` You can also view it online here: ${pitchUrl}`}\n\nCheers,\n${agentFirst}`
+              `Hi ${fname},\n\nI've put together a price update for your property at ${buyer.purchaseAddress}. The full breakdown, including recent comparable sales near you, is below.${isLocalLink ? "" : ` You can also view it online here: ${pitchUrl}`}\n\nCheers,\n${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
             )
             await authFetch(apiUrl("/api/send"), {
               method: "POST",
@@ -9278,7 +9370,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
               ? `Hi ${fname}, ${agentFirst} here from ${agent.agency}. I've emailed you a listing proposal for ${shortAddr(buyer.purchaseAddress)}.`
               : `Hi ${fname}, ${agentFirst} here. I've put together a listing proposal for ${shortAddr(buyer.purchaseAddress)}. Have a look: ${proposalUrl}`)
             const emailBody = stripDashes(
-              `Hi ${fname},\n\nThank you for your time — I've put together a listing proposal for ${buyer.purchaseAddress} outlining the recommended method of sale, comparable sales, our marketing plan, and what you can expect from working with us.${isLocalLink ? "" : `\n\nView it here: ${proposalUrl}`}\n\nHappy to walk you through it at a time that suits.\n\nKind regards,\n${agentFirst}`
+              `Hi ${fname},\n\nThank you for your time — I've put together a listing proposal for ${buyer.purchaseAddress} outlining the recommended method of sale, comparable sales, our marketing plan, and what you can expect from working with us.${isLocalLink ? "" : `\n\nView it here: ${proposalUrl}`}\n\nHappy to walk you through it at a time that suits.\n\nKind regards,\n${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
             )
             await authFetch(apiUrl("/api/send"), {
               method: "POST",
@@ -9419,7 +9511,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
               ? `Hi ${fname}, ${agentFirst} here. I've put together a quick property appraisal for ${shortAddr(buyer.purchaseAddress)} and will email it through now.`
               : `Hi ${fname}, ${agentFirst} here. Your property appraisal for ${shortAddr(buyer.purchaseAddress)} is ready: ${appraisalUrl}`
             const emailBody =
-              `Hi ${fname},\n\nI've prepared an instant CMA for your property at ${buyer.purchaseAddress}.${isLocalLink ? "" : `\n\nView your appraisal here: ${appraisalUrl}`}\n\nIt includes recent comparable sales, suburb market data, and my recommended price range. Happy to talk you through it.\n\nCheers,\n${agentFirst}`
+              `Hi ${fname},\n\nI've prepared an instant CMA for your property at ${buyer.purchaseAddress}.${isLocalLink ? "" : `\n\nView your appraisal here: ${appraisalUrl}`}\n\nIt includes recent comparable sales, suburb market data, and my recommended price range. Happy to talk you through it.\n\nCheers,\n${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
             await authFetch(apiUrl("/api/send"), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -9551,8 +9643,8 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         )
       })()}
 
-      {/* === MARKET UPDATE TAB === */}
-      {profileTab === "market-update" && (() => {
+      {/* Merged into Analysis tab — market update generator shows below the financial/appraisal sections */}
+      {profileTab === "analysis" && (() => {
         const muComps = generateComparables({ suburb: buyer.suburb, propertyType: (buyer.propertyType ?? "House") as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id + 9000 })
         const muRange = buildAppraisalRange(muComps, buyer.suburb)
         const muComps2 = generateComparables({ suburb: buyer.suburb, propertyType: (buyer.propertyType ?? "House") as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id + 7000 })
@@ -9844,7 +9936,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const equityStrRV = fmtDollar(fin.equityGain)
   const shortAddrRV = shortAddr(buyer.purchaseAddress)
   const signoffRV = buyer.status === "investor" ? "Kind regards" : "Cheers"
-  const trim160 = (t: string) => t.length > 160 ? t.slice(0, 157) + "..." : t
+  const trim160 = (t: string) => t.length > 320 ? t.slice(0, 317) + "..." : t   // 2 SMS segments (~320 chars)
   const noEmDash = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
 
   // Persona detection — used to filter / adapt angles
@@ -9883,7 +9975,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       if (fin.cgtSavingsBy2027 > 5000) {
         variants.push({
           label: "CGT deadline",
-          sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Selling before July 2027 saves you ~${fmtDollar(fin.cgtSavingsBy2027)} in CGT. Happy to run the numbers. Kind regards, ${agentFirstRV}`)),
+          sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Selling before July 2027 saves you ~${fmtDollar(fin.cgtSavingsBy2027)} in CGT. Happy to run the numbers. Kind regards, ${agentFirstRV}${agent.agency ? `, ${agent.agency}` : ""}`)),
           emailSubject: `Your CGT window is closing, ${fname}`,
           emailBody: [
             `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
@@ -9895,7 +9987,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       // Investor angle 2: equity / ROI
       variants.push({
         label: "Equity & ROI",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${shortAddrRV} is now worth ~${estStrRV}, that's ${equityStrRV} in equity since ${purchaseYearRV}. Good time to review your position. Kind regards, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${shortAddrRV} is now worth ~${estStrRV}, that's ${equityStrRV} in equity since ${purchaseYearRV}. Good time to review your position. Kind regards, ${agentFirstRV}${agent.agency ? `, ${agent.agency}` : ""}`)),
         emailSubject: `Your equity position at ${shortAddrRV}, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
@@ -9907,7 +9999,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       // Downsizer: lifestyle + equity release, no CGT jargon
       variants.push({
         label: "Equity release",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place in ${buyer.suburb} has come a long way since ${purchaseYearRV}, you've built ${equityStrRV} in equity. Worth a chat about your options? ${signoffRV}, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place in ${buyer.suburb} has come a long way since ${purchaseYearRV}, you've built ${equityStrRV} in equity. Worth a chat about your options? ${signoffRV}, ${agentFirstRV}${agent.agency ? `, ${agent.agency}` : ""}`)),
         emailSubject: `Great time to explore your options, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
@@ -9917,7 +10009,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       })
       variants.push({
         label: "Local market",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${buyer.suburb} is very active right now, properties are moving well and demand is strong. Thought it was worth letting you know. ${signoffRV}, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${buyer.suburb} is very active right now, properties are moving well and demand is strong. Thought it was worth letting you know. ${signoffRV}, ${agentFirstRV}${agent.agency ? `, ${agent.agency}` : ""}`)),
         emailSubject: `${buyer.suburb} market update, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
@@ -9929,7 +10021,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       // Upsizer family: focus on equity to fund next home, not financial jargon
       variants.push({
         label: "Ready to upsize",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place has grown to ~${estStrRV} and the equity you've built could go a long way toward your next home. Happy to chat. ${signoffRV}, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. Your place has grown to ~${estStrRV} and the equity you've built could go a long way toward your next home. Happy to chat. ${signoffRV}, ${agentFirstRV}${agent.agency ? `, ${agent.agency}` : ""}`)),
         emailSubject: `Your equity could fund your next move, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
@@ -9939,7 +10031,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       })
       variants.push({
         label: "Recent nearby sale",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. A similar home in ${buyer.suburb} recently sold well. Your place at ${shortAddrRV} is in great shape. Thought you'd want to know. ${signoffRV}, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. A similar home in ${buyer.suburb} recently sold well. Your place at ${shortAddrRV} is in great shape. Thought you'd want to know. ${signoffRV}, ${agentFirstRV}${agent.agency ? `, ${agent.agency}` : ""}`)),
         emailSubject: `What's happening in ${buyer.suburb}, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
@@ -9951,7 +10043,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       // General owner-occupier: friendly, lifestyle-focused, no financial jargon
       variants.push({
         label: "Property value update",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. ${shortAddrRV} is now estimated at around ${estStrRV}, great to see how far it's come since ${purchaseYearRV}. Worth a quick chat? ${signoffRV}, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency}. ${shortAddrRV} is now estimated at around ${estStrRV}, great to see how far it's come since ${purchaseYearRV}. Worth a quick chat? ${signoffRV}, ${agentFirstRV}${agent.agency ? `, ${agent.agency}` : ""}`)),
         emailSubject: `Your property update, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,
@@ -9961,7 +10053,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       })
       variants.push({
         label: "Market timing",
-        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${buyer.suburb} is seeing strong demand at the moment. Thought it was worth letting you know given ${shortAddrRV} is in great shape. ${signoffRV}, ${agentFirstRV}`)),
+        sms: trim160(noEmDash(`Hi ${fname}, ${soldOpener}${agentFirstRV} here. ${buyer.suburb} is seeing strong demand at the moment. Thought it was worth letting you know given ${shortAddrRV} is in great shape. ${signoffRV}, ${agentFirstRV}${agent.agency ? `, ${agent.agency}` : ""}`)),
         emailSubject: `${buyer.suburb} is moving, ${fname}`,
         emailBody: [
           `Hi ${fname}, ${soldOpener}${agentFirstRV} from ${agent.agency} here.`,

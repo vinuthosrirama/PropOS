@@ -1,5 +1,6 @@
 import { Router } from "express"
 import { query, isDbConnected } from "../lib/db.js"
+import { guard } from "../lib/asyncGuard.js"
 
 const router = Router()
 
@@ -7,7 +8,7 @@ const router = Router()
 // Returns { sold: PortfolioProperty[], active: PortfolioProperty[] } from DB.
 // Returns HTTP 204 (no content) when the agent has no DB portfolio — DemoView
 // falls back to hardcoded Cameron data in that case.
-router.get("/portfolio", async (req, res) => {
+router.get("/portfolio", guard(async (req, res) => {
   if (!isDbConnected() || req.agentId === undefined) return res.sendStatus(204)
 
   const rows = await query<{
@@ -65,11 +66,11 @@ router.get("/portfolio", async (req, res) => {
   const active = rows.filter(r => r.status !== "sold").map((r, i) => toProperty(r, i + 100))
 
   res.json({ sold, active })
-})
+}, 204))
 
 // ── GET /api/agent-demo/slm/:portfolioId ─────────────────────────────────────
 // Returns the SLM JSON for one listing, or 204 if not generated yet.
-router.get("/slm/:portfolioId", async (req, res) => {
+router.get("/slm/:portfolioId", guard(async (req, res) => {
   if (!isDbConnected()) return res.sendStatus(204)
 
   const portfolioId = parseInt(req.params.portfolioId, 10)
@@ -82,12 +83,12 @@ router.get("/slm/:portfolioId", async (req, res) => {
 
   if (rows.length === 0) return res.sendStatus(204)
   res.json(rows[0].slm_json)
-})
+}, 204))
 
 // ── GET /api/agent-demo/leads ─────────────────────────────────────────────────
 // Returns demo buyer contacts assigned to this agent (cloned from Cameron's buyers).
 // Returns 204 if none found — DemoView falls back to DEMO_FALLBACK_LEADS.
-router.get("/leads", async (req, res) => {
+router.get("/leads", guard(async (req, res) => {
   if (!isDbConnected() || req.agentId === undefined) return res.sendStatus(204)
 
   const rows = await query<{
@@ -104,11 +105,11 @@ router.get("/leads", async (req, res) => {
 
   if (rows.length === 0) return res.sendStatus(204)
   res.json({ leads: rows })
-})
+}, 204))
 
 // ── GET /api/agent-demo/theme ─────────────────────────────────────────────────
 // Returns brand colours for the agent, or 204 if not set.
-router.get("/theme", async (req, res) => {
+router.get("/theme", guard(async (req, res) => {
   if (!isDbConnected() || req.agentId === undefined) return res.sendStatus(204)
 
   const rows = await query<{
@@ -130,6 +131,6 @@ router.get("/theme", async (req, res) => {
     logo:     agent.brand_logo ?? agent.agency.slice(0, 2).toUpperCase(),
     gradient: agent.brand_gradient ?? [agent.brand_primary, agent.brand_primary],
   })
-})
+}, 204))
 
 export default router

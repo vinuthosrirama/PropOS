@@ -2152,6 +2152,18 @@ const VENDOR_PANEL_META: Array<{
   // ── BuyerOS controls ─────────────────────────────────────────────────────
   { key: "showMatchQueue",     label: "BuyerOS Match Queue",          description: "Show the Match Queue button on the BuyerOS portfolio page",                                    group: "BuyerOS" },
   { key: "showCaptureLead",   label: "Capture Lead Button",          description: "Show the Capture Lead button in the nav bar for manual lead entry",                                group: "BuyerOS" },
+  // ── Vendor profile tab bar ────────────────────────────────────────────────
+  { key: "showTabAnalysis",      label: "Analysis tab",       description: "Financial snapshot, appraisal, triggers, market update", group: "Vendor Tabs" },
+  { key: "showTabOutreach",      label: "Outreach tab",       description: "CRM notes, nurture sequence, outreach generator",         group: "Vendor Tabs" },
+  { key: "showTabListing",       label: "Listing CMA tab",    description: "Listing presentation / CMA",                              group: "Vendor Tabs" },
+  { key: "showTabCampaign",      label: "Campaign tab",       description: "Campaign report",                                         group: "Vendor Tabs" },
+  { key: "showTabNurture",       label: "Nurture tab",        description: "Standalone nurture sequence view",                        group: "Vendor Tabs" },
+  { key: "showTabPitch",         label: "Price Pitch tab",    description: "Price update pitch generator",                            group: "Vendor Tabs" },
+  { key: "showTabIntroduction",  label: "Agent Intro tab",    description: "Agent introduction generator",                            group: "Vendor Tabs" },
+  { key: "showTabProposal",      label: "Proposal tab",       description: "Listing proposal generator",                              group: "Vendor Tabs" },
+  { key: "showTabPropertyPitch", label: "Prop. Pitch tab",    description: "Property pitch showcase",                                 group: "Vendor Tabs" },
+  { key: "showTabGci",           label: "GCI Calc tab",       description: "Gross commission income calculator",                      group: "Vendor Tabs" },
+  { key: "showTabAppraisal",     label: "Instant CMA tab",    description: "Instant CMA / appraisal generator",                       group: "Vendor Tabs" },
 ]
 
 function TogglePill({ on }: { on: boolean }) {
@@ -2194,7 +2206,7 @@ function VendorPanelToggles({
     return acc
   }, {})
 
-  const groupOrder = ["BuyerOS", "Vendor Profile", "Interface Controls", "Demo Mode"]
+  const groupOrder = ["BuyerOS", "Vendor Tabs", "Vendor Profile", "Interface Controls", "Demo Mode"]
 
   const groupLabel: React.CSSProperties = {
     fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",

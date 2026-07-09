@@ -74,7 +74,7 @@ ${slmBlock}${evolvedBlock}
 Hard rules — never break these:
 - Write in first person as ${agentName} — use "I" throughout. This is a personal message from the agent to someone they already know.
 - HARD CONSTRAINT: never use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma, period, or "and" instead.
-- SMS must be under 160 characters and read like a real text message, not a marketing blast
+- SMS may run up to 2 segments (~300 characters). Do NOT compress into one 160-char text if it costs the natural cadence. Read like a real text message, not a marketing blast.
 - VOICE MATCH: Your sign-off in the SMS MUST match the closing style from the training examples above. If examples show "Cheers" or "Cheers ${agentFirst}", use that. Do not default to "Thanks" or "Regards" if the training shows otherwise.
 - Email must be 2-3 short paragraphs maximum
 - Always use the lead's first name at least once
@@ -98,7 +98,7 @@ STRATEGY: ${strategy}
 CHANNEL: ${channel}
 
 Write the message now:
-- SMS: Under 160 chars. ${smsAddrGuide} Structure: (1) Greet by first name + thank them for coming to the old property — "Hi [Name], thanks for coming to [OldAddr]". (2) Natural bridge: "I actually have another property that fits your profile" or similar, then name 2-3 specific matching attributes pulled from their notes (beds, land size, school zone, yard, etc.) + the new property address. (3) Soft CTA — open home date/time if known, or "keen for a look?" or "call me anytime". (4) Sign off with agent's first name: "Cheers, [AgentFirst]". Example: "Hi James, thanks for coming to 3 Thirlmere. Got another that suits — 4 bed, 744sqm, same school zone at 3 Fairholme. Open Sat 12:30. Keen? Cheers, Cameron" — warm, personal, under 160 chars, NOT a marketing blast.
+- SMS: up to 2 segments (~300 chars), do not compress if it costs natural cadence. ${smsAddrGuide} Structure: (1) Greet by first name + thank them for coming to the old property, "Hi [Name], thanks for coming to [OldAddr]". (2) Natural bridge: "I actually have another property that fits your profile" or similar, then name 2-3 specific matching attributes pulled from their notes (beds, land size, school zone, yard, etc.) + the new property address. (3) Soft CTA, open home date/time if known, or "keen for a look?" or "call me anytime". (4) Sign off using the voice profile's sign-off block exactly (e.g. "Cheers, [Agent], Peake Real Estate"). Example: "Hi James, thanks for coming to 3 Thirlmere. Got another that suits, 4 bed, 744sqm, same school zone at 3 Fairholme. Open Sat 12:30. Keen? Cheers, Cameron" (warm, personal, not a marketing blast).
 - Email subject: Conversational, specific to this lead. Reference the old property address or their question. No "[TEST", "New Listing", or generic subjects.
 - Email body: Para 1, name the old property and one specific thing they said/asked there. Para 2, directly answer their key question using a data point from the Q&A context above (e.g. "land here is 650sqm vs the 612sqm at [old addr]"). Para 3, open home date/time with a low-pressure CTA. Sign off with your name only.
 - NEVER write "I have a new listing that might interest you" or "let me know if you want more info".

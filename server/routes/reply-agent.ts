@@ -14,6 +14,7 @@
 
 import { Router } from "express"
 import Anthropic from "@anthropic-ai/sdk"
+import OpenAI from "openai"
 import { sanitiseText } from "../lib/sanitise.js"
 
 const router = Router()
@@ -23,6 +24,13 @@ let _client: Anthropic | null = null
 function getClient(): Anthropic {
   if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   return _client
+}
+
+// Lazy OpenAI client — primary provider, see generateReplyRaw() below
+let _openai: OpenAI | null = null
+function getOpenAI(): OpenAI {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  return _openai
 }
 
 export type ReplyIntent = "INTEREST" | "QUESTION" | "OBJECTION" | "BOOKING" | "OPT_OUT" | "UNKNOWN"
@@ -79,8 +87,8 @@ export interface ReplyAgentResponse {
 
 // Hard cap on SMS (same rule as outbound)
 function clampSMS(s: string): string {
-  if (s.length <= 160) return s
-  return s.slice(0, 157).trimEnd() + "..."
+  if (s.length <= 320) return s          // 2 SMS segments (~320 chars)
+  return s.slice(0, 317).trimEnd() + "..."
 }
 
 // Shared safety net: em-dash hard rule + AI-tell vocabulary + hollow openers.
@@ -101,12 +109,12 @@ const INTENT_FRAMEWORKS: Record<ReplyIntent, (ctx: {
   QUESTION:  ({ leadFirst, agentFirst, agentPhone }) =>
     clampSMS(`Hi ${leadFirst}, happy to answer that. Give me a call on ${agentPhone ?? "the office"} or I can arrange a walkthrough this week. ${agentFirst}`),
   OBJECTION: ({ leadFirst, agentFirst }) =>
-    clampSMS(`Hi ${leadFirst}, totally understand — still worth seeing it in person. I can arrange a private viewing on your terms. ${agentFirst}`),
+    clampSMS(`Hi ${leadFirst}, totally understand, still worth seeing it in person. I can arrange a private viewing on your terms. ${agentFirst}`),
   BOOKING:   ({ leadFirst, agentFirst, auctionDate }) =>
-    clampSMS(`Hi ${leadFirst}, confirmed${auctionDate ? ` — see you ${auctionDate}` : ""}! Any questions before then, just reply here. ${agentFirst}`),
+    clampSMS(`Hi ${leadFirst}, confirmed${auctionDate ? `, see you ${auctionDate}` : ""}! Any questions before then, just reply here. ${agentFirst}`),
   OPT_OUT:   () => "",
   UNKNOWN:   ({ leadFirst, agentFirst }) =>
-    clampSMS(`Hi ${leadFirst}, thanks for getting back to me. Happy to help — what would you like to know? ${agentFirst}`),
+    clampSMS(`Hi ${leadFirst}, thanks for getting back to me. Happy to help, what would you like to know? ${agentFirst}`),
 }
 
 function contingencyDraft(intent: ReplyIntent, leadFirst: string, agentFirst: string, auctionDate?: string): string {
@@ -135,8 +143,10 @@ router.post("/", async (req, res) => {
   const agentFirst = safeAgentName.split(" ")[0]
   const leadFirst  = safeLeadName.split(" ")[0]
 
-  // No API key — return contingency framework immediately so inbox is never blank
-  if (!process.env.ANTHROPIC_API_KEY) {
+  // No API key at all — return contingency framework immediately so inbox is never blank.
+  // Was gated on ANTHROPIC_API_KEY alone, so an OpenAI-only setup always hit this early
+  // return and never reached the LLM call below. OpenAI is now a real path there.
+  if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
     return res.json({
       intent:                "UNKNOWN",
       confidence:            0,
@@ -186,33 +196,45 @@ Your job:
    - OPT_OUT: asking to stop receiving messages (STOP, unsubscribe, not interested)
    - UNKNOWN: unclear or ambiguous
 
-2. Draft a reply SMS (max 160 characters) from ${agentFirst} that:
+2. Draft a reply SMS (up to 2 segments, ~300 characters; do not pad, keep it natural) from ${agentFirst} that:
    - Uses the lead's first name
-   - Directly addresses their message — do not be vague
+   - Directly addresses their message, do not be vague
    - For QUESTION: answer the specific question using the property context above
    - For BOOKING: confirm the open home time and offer to meet them there or separately
    - For OBJECTION: acknowledge the concern without being pushy; if vendorContext provided, cite the specific equity/net proceeds number as a counter-point
    - For OPT_OUT: just return empty string "" — the system handles opt-out separately
    - HARD CONSTRAINT: no em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma instead.
    - Australian tone. Warm but brief.
-   - Sign off with ${agentFirst}'s first name only
+   - Sign off using the agent's voice sign-off block (e.g. "Cheers, ${agentFirst}, Peake Real Estate")
 
 Return ONLY valid JSON (no markdown):
 {
   "intent": "INTEREST|QUESTION|OBJECTION|BOOKING|OPT_OUT|UNKNOWN",
   "confidence": 0-100,
-  "draft": "reply SMS here, max 160 chars",
+  "draft": "reply SMS here, up to ~300 chars",
   "reasoning": "one sentence explaining intent classification"
 }`
 
   try {
-    const message = await getClient().messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 300,
-      messages: [{ role: "user", content: prompt }],
-    })
+    // OpenAI is primary — this repo currently runs without an Anthropic key.
+    let raw: string
+    if (process.env.OPENAI_API_KEY) {
+      const completion = await getOpenAI().chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 300,
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content: prompt }],
+      })
+      raw = completion.choices[0]?.message?.content ?? "{}"
+    } else {
+      const message = await getClient().messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 300,
+        messages: [{ role: "user", content: prompt }],
+      })
+      raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
+    }
 
-    const raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
     const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
 
     let parsed: ReplyAgentResponse

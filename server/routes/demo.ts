@@ -22,6 +22,7 @@ import { Router, type Request, type Response } from "express"
 import { isDbConnected, query, execute } from "../lib/db.js"
 import { runReadyOutreach } from "../lib/smsReadyOutreach.js"
 import { DEMO_SCENARIOS, DEMO_SOURCE_PREFIX } from "../data/demoContacts.js"
+import { guard } from "../lib/asyncGuard.js"
 
 const router = Router()
 
@@ -33,7 +34,7 @@ function normalisePhone(phone: string): string {
   return cleaned
 }
 
-router.post("/instant", async (req, res) => {
+router.post("/instant", guard(async (req, res) => {
   const { name, phone, email, suburb, agency, source = "lead-magnet" } = req.body as Record<string, string>
 
   if (!name?.trim() || !phone?.trim()) {
@@ -79,7 +80,7 @@ router.post("/instant", async (req, res) => {
 
   console.log(`[demo/instant] contact ${contactId} (${name.trim()}) queued for opener`)
   return res.json({ ok: true, contactId, message: "Opener queued — check the Voice tab in ~30s" })
-})
+}))
 
 // ── Guard: refuse to seed/activate in production without explicit opt-in ──────
 function isDemoAllowed(): boolean {
@@ -102,7 +103,7 @@ async function getDemoContacts() {
 
 // ── POST /api/demo/seed ───────────────────────────────────────────────────────
 
-router.post("/seed", async (_req: Request, res: Response) => {
+router.post("/seed", guard(async (_req: Request, res: Response) => {
   if (!isDemoAllowed()) return res.status(403).json({ error: "Demo mode not enabled in production. Set DEMO_MODE=true." })
   if (!isDbConnected()) return res.status(503).json({ error: "Database not connected" })
 
@@ -140,11 +141,11 @@ router.post("/seed", async (_req: Request, res: Response) => {
   }
 
   res.json({ ok: true, seeded: results })
-})
+}))
 
 // ── GET /api/demo/contacts ────────────────────────────────────────────────────
 
-router.get("/contacts", async (_req: Request, res: Response) => {
+router.get("/contacts", guard(async (_req: Request, res: Response) => {
   if (!isDbConnected()) return res.json({ ok: true, contacts: [] })
 
   const rows = await getDemoContacts()
@@ -166,13 +167,13 @@ router.get("/contacts", async (_req: Request, res: Response) => {
   })
 
   res.json({ ok: true, contacts })
-})
+}))
 
 // ── POST /api/demo/activate/:key ─────────────────────────────────────────────
 // Swaps ONE demo contact's phone to the real demo recipient (REA agent being demoed to).
 // All other demo contacts are reset to their fake phones first (only one can be live at a time).
 
-router.post("/activate/:key", async (req: Request, res: Response) => {
+router.post("/activate/:key", guard(async (req: Request, res: Response) => {
   if (!isDemoAllowed()) return res.status(403).json({ error: "Demo mode not enabled in production." })
   if (!isDbConnected()) return res.status(503).json({ error: "Database not connected" })
 
@@ -218,12 +219,12 @@ router.post("/activate/:key", async (req: Request, res: Response) => {
     activated: { id: rows[0].id, name: rows[0].name, phone: e164, email: liveEmail, scenario: scenario.tag },
     message: `${rows[0].name} activated — SMS → ${e164}, email → ${liveEmail}. Tick ready_to_contact to fire the opener.`,
   })
-})
+}))
 
 // ── POST /api/demo/reset ──────────────────────────────────────────────────────
 // Restores all demo contacts to their fake placeholder phones and clears ready_to_contact.
 
-router.post("/reset", async (_req: Request, res: Response) => {
+router.post("/reset", guard(async (_req: Request, res: Response) => {
   if (!isDbConnected()) return res.status(503).json({ error: "Database not connected" })
 
   for (const s of DEMO_SCENARIOS) {
@@ -235,6 +236,6 @@ router.post("/reset", async (_req: Request, res: Response) => {
   }
 
   res.json({ ok: true, message: "All demo contacts reset to placeholder phones and emails." })
-})
+}))
 
 export default router

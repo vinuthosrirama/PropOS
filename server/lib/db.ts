@@ -55,6 +55,14 @@ async function tryConnect(url: string): Promise<boolean> {
       statement_timeout:       15_000,  // kill runaway queries — prevents pool starvation
     })
 
+    // Without this listener, an error on an IDLE client (Supabase pooler recycling
+    // a connection, a network drop between requests) is an unhandled "error" event,
+    // which throws at process level. The pool discards the broken client and opens
+    // a fresh one on the next query, so log and move on.
+    candidate.on("error", (err) => {
+      console.warn("[db] idle client error (pool will replace the connection):", err.message)
+    })
+
     // Verify connection
     const client = await candidate.connect()
     client.release()
@@ -814,14 +822,46 @@ async function migrate(): Promise<void> {
 
 // ── Query helpers ───────────────────────────────────────────────────────────
 
+// Transient failure classes that deserve one automatic retry: socket drops,
+// pooler recycling (Supabase pgbouncer restarts show as 57P01 admin_shutdown),
+// connect timeouts under momentary load. A retry after a short pause rides out
+// the blip so routes (and live demos) never see it. Anything else (bad SQL,
+// constraint violation) throws immediately, retrying would not help.
+const TRANSIENT_PATTERNS = [
+  "ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "EPIPE", "EAI_AGAIN",
+  "Connection terminated", "connection timeout",
+  "timeout exceeded when trying to connect",
+  "57P01",  // admin_shutdown
+  "53300",  // too_many_connections
+]
+
+function isTransient(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  const code = (err as NodeJS.ErrnoException).code ?? ""
+  const haystack = `${code} ${err.message}`
+  return TRANSIENT_PATTERNS.some(p => haystack.includes(p))
+}
+
+async function runWithRetry(sql: string, params?: unknown[]) {
+  if (!pool) return null
+  try {
+    return await pool.query(sql, params)
+  } catch (err) {
+    if (!pool || !isTransient(err)) throw err
+    console.warn(`[db] transient error, retrying once: ${(err as Error).message}`)
+    await new Promise(r => setTimeout(r, 300))
+    if (!pool) return null
+    return await pool.query(sql, params)
+  }
+}
+
 /** Run a parameterised query. Returns rows or empty array if DB not connected. */
 export async function query<T = Record<string, unknown>>(
   sql: string,
   params?: unknown[],
 ): Promise<T[]> {
-  if (!pool) return []
-  const result = await pool.query(sql, params)
-  return result.rows as T[]
+  const result = await runWithRetry(sql, params)
+  return (result?.rows ?? []) as T[]
 }
 
 /** Run a parameterised query and return the first row, or null. */
@@ -835,9 +875,8 @@ export async function queryOne<T = Record<string, unknown>>(
 
 /** Run an INSERT/UPDATE/DELETE and return the number of affected rows. */
 export async function execute(sql: string, params?: unknown[]): Promise<number> {
-  if (!pool) return 0
-  const result = await pool.query(sql, params)
-  return result.rowCount ?? 0
+  const result = await runWithRetry(sql, params)
+  return result?.rowCount ?? 0
 }
 
 // ── Outreach logging ────────────────────────────────────────────────────────

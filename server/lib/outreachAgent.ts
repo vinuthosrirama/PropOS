@@ -105,8 +105,8 @@ function matchFastIntent(body: string): FastIntent["template"] | null {
 // ── Reply generation ──────────────────────────────────────────────────────────
 
 function clampSMS(s: string): string {
-  if (s.length <= 160) return s
-  return s.slice(0, 157).trimEnd() + "..."
+  if (s.length <= 320) return s          // 2 SMS segments (~320 chars)
+  return s.slice(0, 317).trimEnd() + "..."
 }
 
 function sanitise(s: string): string {
@@ -166,7 +166,7 @@ ${threadBlock}
 Latest message from ${target.name.split(" ")[0]}:
 "${inboundMessage.slice(0, 400)}"
 
-Write a reply SMS (max 160 chars). Return ONLY the SMS text, no quotes, no explanation.`
+Write a reply SMS (up to 2 segments, ~300 chars max; do not pad, keep it natural). Return ONLY the SMS text, no quotes, no explanation.`
 
   try {
     const completion = await getClient().chat.completions.create({
@@ -219,7 +219,7 @@ Recent sale: ${target.recent_sale_address ?? "N/A"}
 Background: ${target.personal_note ?? "N/A"}
 Days since initial outreach: ${daysSinceContact}
 
-They haven't replied to the initial message. Write a brief follow-up SMS (max 160 chars) using a different angle or new information. Don't mention you already texted them. Keep it fresh and specific to their background. Sign off as "Vinuth".
+They haven't replied to the initial message. Write a brief follow-up SMS (up to 2 segments, ~300 chars max) using a different angle or new information. Don't mention you already texted them. Keep it fresh and specific to their background. Sign off as "Vinuth".
 
 Return ONLY the SMS text.`
 

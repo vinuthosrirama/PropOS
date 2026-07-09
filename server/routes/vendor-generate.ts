@@ -23,7 +23,8 @@ function getOpenAI(): OpenAI {
 }
 
 function clampSMS(s: string): string {
-  return s.length <= 160 ? s : s.slice(0, 157).trimEnd() + "..."
+  // 2 SMS segments (~320 chars) — Vinuth's relational voice needs the room.
+  return s.length <= 320 ? s : s.slice(0, 317).trimEnd() + "..."
 }
 
 // Shared safety net: em-dash hard rule + AI-tell vocabulary + hollow openers.
@@ -83,7 +84,7 @@ export interface VendorGenerateParams {
  * Pipeline:
  *   1. Claude Haiku  → extract personalisation hook from CRM notes
  *   2. Claude Sonnet → write SMS + email with financial incentives
- *   3. Sanitise      → no em-dashes, SMS clamped to 160 chars
+ *   3. Sanitise      → no em-dashes, SMS clamped to 2 segments (~320 chars)
  */
 router.post("/", async (req, res) => {
   const params = req.body as VendorGenerateParams
@@ -104,9 +105,14 @@ router.post("/", async (req, res) => {
   const estStr      = fmtK(params.currentEstimate)
   const equityStr   = fmtK(params.equityGain)
   const equityPct   = Math.round(params.equityGainPct)
+  const agentSig     = params.agentAgency ? `${agentFirst}, ${params.agentAgency}` : agentFirst
 
-  // ── Template fallback (no API keys) ─────────────────────────────────────────
-  if (!process.env.ANTHROPIC_API_KEY) {
+  // ── Template fallback (no API keys at all) ──────────────────────────────────
+  // Previously gated on `!ANTHROPIC_API_KEY` alone, so an OpenAI-only setup (no
+  // Anthropic key) skipped the LLM entirely and always fell to the hardcoded
+  // template below — Step 2 had no OpenAI branch to reach. Fixed: only fall to
+  // template when neither key is present; OpenAI is now a real path in Step 2.
+  if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
     const cgtLine = params.cgtSavingsBy2027 > 0
       ? ` The current 50% CGT discount saves you approximately ${fmtK(params.cgtSavingsBy2027)} if you sell before July 2027.`
       : ""
@@ -119,7 +125,7 @@ router.post("/", async (req, res) => {
       `Your property at ${params.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${params.purchaseYear}. That's ${equityStr} in equity, a ${equityPct}% gain.${cgtLine}` +
       (hookSentence ? ` ${hookSentence}` : "")
     )
-    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${params.purchaseYear}). Worth a quick chat? ${signoff}, ${agentFirst}`
+    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${params.purchaseYear}). Worth a quick chat? ${signoff}, ${agentSig}`
     const sms = clampSMS(sanitise(smsRaw))
     return res.json({
       sms,
@@ -128,7 +134,7 @@ router.post("/", async (req, res) => {
         body: [
           `${greeting} ${fname}, ${agentFirst} from ${agencyLabel} here. Quick market update on ${params.suburb}.`,
           para2,
-          `I'd love to offer a complimentary, no-obligation appraisal if you're curious. Takes about 20 minutes, happy to come to you.\n\n${signoff},\n${agentFirst}`,
+          `I'd love to offer a complimentary, no-obligation appraisal if you're curious. Takes about 20 minutes, happy to come to you.\n\n${signoff},\n${agentSig}`,
         ].map(sanitise),
       },
       personalisationHook: params.parsedPersonalisation || null,
@@ -250,8 +256,8 @@ ${vocBlock}
 Hard rules:
 - Write in first person as ${params.agentName} — use "I" throughout. This is a personal message from the agent to someone they already know.
 - HARD CONSTRAINT: NEVER use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma or period instead.
-- SMS must be under 160 characters, reads like a real text — warm, not salesy
-- SMS sign-off: "${signoff}, ${agentFirst}" (match agent voice style above)
+- SMS may run up to 2 segments (~300 characters); do not compress into one 160-char text if it costs the natural cadence. Reads like a real text, warm, not salesy.
+- SMS sign-off: "${signoff}, ${agentSig}" (match agent voice style above)
 - Email: 2-3 short paragraphs maximum
 - This is vendor prospecting — you sold this person a home and now you're reaching out about their property's value growth. Never say "I remember you from the open home."
 - Reference the settlement — "hope you've been well since we settled on ${addr}" is a natural opener
@@ -282,13 +288,28 @@ Write personalised SMS and email vendor outreach for ${fname}.
 Respond ONLY with valid JSON, no markdown:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]},"personalisationLine":"the single sentence from the email body that best references the personal detail from the CRM notes (copy verbatim from the body, or empty string if no personal detail was used)"}`
 
-    const message = await getClient().messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 700,
-      messages: [{ role: "user", content: sonnetPrompt }],
-    })
-
-    const raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
+    // OpenAI is primary — this repo currently runs without an Anthropic key.
+    // Anthropic stays as the fallback for any deployment that does have one.
+    let raw: string
+    let modelUsed: string
+    if (process.env.OPENAI_API_KEY) {
+      modelUsed = "gpt-4o-mini"
+      const completion = await getOpenAI().chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 700,
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content: sonnetPrompt }],
+      })
+      raw = completion.choices[0]?.message?.content ?? "{}"
+    } else {
+      modelUsed = "claude-haiku-4-5"
+      const message = await getClient().messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 700,
+        messages: [{ role: "user", content: sonnetPrompt }],
+      })
+      raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
+    }
     const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
 
     try {
@@ -305,6 +326,7 @@ Respond ONLY with valid JSON, no markdown:
         },
         personalisationHook: personalisationHook || null,
         personalisationLine: sanitise(parsed.personalisationLine ?? "") || null,
+        meta: { model_used: modelUsed },
       })
     } catch {
       // JSON parse failed — return template fallback
@@ -317,7 +339,7 @@ Respond ONLY with valid JSON, no markdown:
     const cgtLine = params.cgtSavingsBy2027 > 0
       ? ` The current 50% CGT discount saves you approximately ${fmtK(params.cgtSavingsBy2027)} if you sell before July 2027.`
       : ""
-    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. ${addr} is worth ~${estStr} today, ${equityStr} gain since ${params.purchaseYear}. Free appraisal? ${signoff} ${agentFirst}`
+    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. ${addr} is worth ~${estStr} today, ${equityStr} gain since ${params.purchaseYear}. Free appraisal? ${signoff}, ${agentSig}`
     return res.json({
       sms: clampSMS(sanitise(smsRaw)),
       email: {
@@ -325,7 +347,7 @@ Respond ONLY with valid JSON, no markdown:
         body: [
           `${greeting} ${fname}, ${agentFirst} from ${agencyLabel} here.`,
           `Just wanted to give you a quick market update on ${params.purchaseAddress}. The suburb has grown well and your property is now worth approximately ${estStr}, representing ${equityStr} in equity since you purchased in ${params.purchaseYear}.${cgtLine}`,
-          `I'd love to provide a complimentary appraisal at no obligation. Happy to call or come by whenever suits.\n\n${signoff},\n${agentFirst}`,
+          `I'd love to provide a complimentary appraisal at no obligation. Happy to call or come by whenever suits.\n\n${signoff},\n${agentSig}`,
         ].map(sanitise),
       },
     })

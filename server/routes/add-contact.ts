@@ -1,6 +1,7 @@
 import { Router } from "express"
 import { isDbConnected, execute } from "../lib/db.js"
 import { writeToSheet } from "../lib/sheets.js"
+import { guard } from "../lib/asyncGuard.js"
 
 const router = Router()
 
@@ -15,7 +16,7 @@ const router = Router()
  *       land, status, notes)
  * Returns: { ok: true }
  */
-router.post("/", async (req, res) => {
+router.post("/", guard(async (req, res) => {
   const contact = req.body as Record<string, unknown>
 
   if (!contact.name || !contact.purchaseAddress) {
@@ -75,6 +76,6 @@ router.post("/", async (req, res) => {
 
   console.log("[add-contact] New contact added")
   return res.json({ ok: true })
-})
+}))
 
 export default router

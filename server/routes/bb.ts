@@ -14,6 +14,7 @@ import { Router, type Request, type Response } from "express"
 import { checkSmsTransport, checkTransportChain } from "../lib/sms.js"
 import { requireAuth } from "../middleware/auth.js"
 import { execute, query, isDbConnected } from "../lib/db.js"
+import { guard } from "../lib/asyncGuard.js"
 
 const router = Router()
 
@@ -32,7 +33,7 @@ function isDaemonAuthed(req: Request): boolean {
 
 // ── GET /api/bb/status — live transport health (JWT) ─────────────────────────
 
-router.get("/status", requireAuth, async (_req: Request, res: Response) => {
+router.get("/status", requireAuth, guard(async (_req: Request, res: Response) => {
   const [primary, chain] = await Promise.all([
     checkSmsTransport().catch(() => ({ ok: false, transport: "none" as const, label: "error", detail: "health check threw" })),
     checkTransportChain().catch(() => []),
@@ -67,11 +68,11 @@ router.get("/status", requireAuth, async (_req: Request, res: Response) => {
       restartQueued,
     },
   })
-})
+}))
 
 // ── POST /api/bb/restart — queue restart (JWT) ────────────────────────────────
 
-router.post("/restart", requireAuth, async (_req: Request, res: Response) => {
+router.post("/restart", requireAuth, guard(async (_req: Request, res: Response) => {
   if (!isDbConnected()) {
     return res.status(503).json({ error: "Database not connected — cannot queue restart command" })
   }
@@ -85,11 +86,11 @@ router.post("/restart", requireAuth, async (_req: Request, res: Response) => {
     ok:      true,
     message: "Restart command queued. Mac daemon will restart BlueBubbles + cloudflared within 30s.",
   })
-})
+}))
 
 // ── GET /api/bb/daemon/poll — daemon polls for commands (WEBHOOK_SECRET) ─────
 
-router.get("/daemon/poll", async (req: Request, res: Response) => {
+router.get("/daemon/poll", guard(async (req: Request, res: Response) => {
   if (!isDaemonAuthed(req)) return res.status(401).json({ error: "Unauthorized" })
   if (!isDbConnected()) return res.json({ restart: false })
 
@@ -104,11 +105,11 @@ router.get("/daemon/poll", async (req: Request, res: Response) => {
   ).catch(() => [])
 
   res.json({ restart: rows[0]?.value === "1" })
-})
+}))
 
 // ── POST /api/bb/daemon/ack — daemon reports completion ───────────────────────
 
-router.post("/daemon/ack", async (req: Request, res: Response) => {
+router.post("/daemon/ack", guard(async (req: Request, res: Response) => {
   if (!isDaemonAuthed(req)) return res.status(401).json({ error: "Unauthorized" })
 
   const { action, status: ackStatus = "ok", detail } = req.body as {
@@ -132,6 +133,6 @@ router.post("/daemon/ack", async (req: Request, res: Response) => {
 
   console.log(`[bb-daemon] ack: action=${action ?? "heartbeat"} status=${ackStatus}${detail ? ` detail=${detail}` : ""}`)
   res.json({ ok: true })
-})
+}))
 
 export default router

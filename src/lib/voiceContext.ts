@@ -294,9 +294,80 @@ const MANPREET_SEED: SeedEntry[] = [
   },
 ]
 
+// ── Vinuth seed corpus (Peake Real Estate) ───────────────────────────────────
+// Voice: warm, relational, multi-clause. Greeting "Hey"/"Hi". Sign-off block
+// "Cheers/Thanks/Kind Regards, [Agent], Peake Real Estate". Signature CTA:
+// "meet for a coffee (or tea) to discuss?". SMS runs up to 2 segments, do NOT
+// compress to 160. Source of truth: docs/VOICE_CORPUS_VINUTH.md (raw answers).
+const VINUTH_SEED: SeedEntry[] = [
+  {
+    type: "paste",
+    persona: "investor",
+    label: "Investor CGT nudge",
+    source: "SMS to investor: CGT + equity, coffee CTA",
+    text: "Hey Michael, I was looking through our lists, and noticed your IP on Cedarwood Drive, that you bought in 2016, is sitting on roughly ~$680-700k in equity and given the current market, it's crossing the 12-mo CGT discount window soon. If you'd like I can organise an appraisal to be sent your way, and we could meet for a coffee (or tea) to discuss? Let me know what you and Sarah are thinking, Cheers, Vinuth, Peake Real Estate",
+  },
+  {
+    type: "paste",
+    persona: "family",
+    label: "Upsizer, comparable sold",
+    source: "SMS to upsizer: references what they told you",
+    text: "Hey David, one of my colleagues sold a similar 4 bed, down the road from Thirlmere Drive, and I thought I'd reach out if you wanted to explore what Peake could do for you and Amy as well? I noticed you mentioned it was a bit cramped, the last time we spoke. More than happy to meet for a coffee (or tea) to discuss further? Thanks, Vinuth, Peake Real Estate",
+  },
+  {
+    type: "paste",
+    persona: "downsizer",
+    label: "Downsizer gentle check-in",
+    source: "SMS to downsizer: courtesy, zero pressure",
+    text: "Hey Sandra, hope you and Peter have both been well since we last spoke a few years ago at the sale at Birkdale Drive. Hoping you are settled well! A colleague of mine recently sold a similar property down the road, and wanted to give you guys a courtesy call to see what your thinking. More than happy to meet for a coffee (or tea) to see if there's anything we can help with? Thanks, Vinuth, Peake Real Estate",
+  },
+  {
+    type: "paste",
+    persona: "general",
+    label: "Cold database, no trigger",
+    source: "SMS: low-pressure re-engagement",
+    text: "Hey James, just reaching out to see if you are still actively looking for anything in the current property market. Despite the doom and gloom, there's still opportunities in the area. No dramas if not, Cheers, Vinuth, Peake Real Estate",
+  },
+  {
+    type: "paste",
+    persona: "general",
+    label: "Buyer follow-up after open home",
+    source: "SMS to buyer: answer questions, forward S32",
+    text: "Hey Priya, it was great to meet both you and Raj at Fairholme Drive on Saturday. Reaching back out to see if I can answer any more questions, or forward across the Section 32 or any docs across. Regarding the question about covenants, I have let my team know and I'll get back to you with an update. In the meantime, let me know if anything, Vinuth, Peake Real Estate",
+  },
+  {
+    type: "paste",
+    persona: "investor",
+    label: "Bad news honestly, market softened",
+    source: "SMS: honest market softening, warm relationship",
+    text: "Hey Michael, hope you and the family have been well since we last spoke. I'm sure you are familiar with the market softening across the nation, and Berwick is not immune. If there's anything we at Peake can help with, whether it's finding some new tenants, adding to the portfolio or freeing up some equity, don't hesitate to reach out. Cheers, Vinuth, Peake Real Estate",
+  },
+  {
+    type: "paste",
+    persona: "general",
+    label: "Not interested, keep door open",
+    source: "SMS: gracious close, no pressure",
+    text: "Hi David, absolutely no worries! If anything changes as the market moves, please do feel free to reach out any time, Vinuth, Peake Real Estate",
+  },
+  {
+    type: "paste",
+    persona: "general",
+    label: "Referral ask after a win",
+    source: "SMS: celebrate result, soft referral ask",
+    text: "Congratulations again Sandra, incredible result! The team and I are absolutely buzzing as well. As always if we can also make someone else's dream come true as well, just reach out. We'd be more than happy in helping out where we can. Congrats again, Vinuth, Peake Real Estate",
+  },
+  {
+    type: "paste",
+    persona: "general",
+    label: "Cold reconnect, casual scheduling",
+    source: "SMS: time-gap opener, parenthetical aside, real-calendar CTA",
+    text: "Hi Tom, it's been a little while since we connected and the market (definitely) has changed a lot since then. Riverglen Road is sitting on a fair bit of equity since you purchased in 2016. If you're interested, I can schedule in a quick coffee chat in between meetings this or next week? Cheers, Vinuth, Peake RE",
+  },
+]
+
 /**
  * Seeds the training corpus on first login.
- * Picks the right seed corpus for Cameron, Manpreet, or Pas.
+ * Picks the right seed corpus for Cameron, Manpreet, Pas, or Vinuth.
  * Clears and re-seeds if switching agents (different prefix detected).
  */
 export function seedCorpusIfEmpty(agentName?: string): TrainingEntry[] {
@@ -304,9 +375,13 @@ export function seedCorpusIfEmpty(agentName?: string): TrainingEntry[] {
 
   const isManpreet = name.includes("manpreet")
   const isPas      = name.includes("pas") || name.includes("sunilchandra")
+  const isCameron  = name.includes("cameron") || name.includes("knoll")
 
-  const seed   = isManpreet ? MANPREET_SEED : isPas ? PAS_SEED : CAMERON_SEED
-  const prefix = isManpreet ? "manpreet" : isPas ? "pas" : "cameron"
+  // Vinuth is the default corpus: the Master login (and any unrecognised agent)
+  // now falls through to Vinuth's voice instead of Cameron's. Cameron, Manpreet
+  // and Pas are still served their own corpus when explicitly logged in.
+  const seed   = isManpreet ? MANPREET_SEED : isPas ? PAS_SEED : isCameron ? CAMERON_SEED : VINUTH_SEED
+  const prefix = isManpreet ? "manpreet" : isPas ? "pas" : isCameron ? "cameron" : "vinuth"
 
   // If corpus already has entries for this agent, leave it alone
   const existing = loadCorpus()
@@ -496,11 +571,12 @@ ${qaBlock}
 ${pitchBlock}
 
 WRITE:
-1. An SMS (strictly under 160 characters) that:
+1. An SMS (up to 2 segments, ~300 characters max — do NOT compress into one 160-char text if it costs the natural cadence) that:
    - Opens with their first name + your name
    - References one specific thing from the voice transcript or their questions
    - Names the new listing and one key similarity to what they saw
    - Has a clear call to action (open home date or "worth a look?")
+   - Signs off using the voice profile's sign-off block exactly (e.g. "Cheers, [Agent], Peake Real Estate")
    - No em-dashes. Ranges use "to". Warm and Australian.
 
 2. An email (subject line + body, 3 short paragraphs) that:

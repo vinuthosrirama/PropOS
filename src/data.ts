@@ -191,6 +191,18 @@ export interface VendorDisplaySettings {
   // Added in v4 — BuyerOS controls
   showMatchQueue:      boolean   // BuyerOS Match Queue button on portfolio page
   showCaptureLead:     boolean   // Capture Lead button in nav + portfolio
+  // Added in v5 — VendorOS profile tab visibility (vendor profile tab bar)
+  showTabAnalysis:      boolean
+  showTabOutreach:      boolean
+  showTabListing:       boolean
+  showTabCampaign:      boolean
+  showTabNurture:       boolean
+  showTabPitch:         boolean
+  showTabIntroduction:  boolean
+  showTabProposal:      boolean
+  showTabPropertyPitch: boolean
+  showTabGci:           boolean
+  showTabAppraisal:     boolean   // "Instant CMA" tab (DemoView's VendorProfilePage only)
 }
 
 export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
@@ -206,6 +218,17 @@ export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
   forceDemoData:       false,
   showMatchQueue:      true,
   showCaptureLead:     false,
+  showTabAnalysis:      true,
+  showTabOutreach:      true,
+  showTabListing:       true,
+  showTabCampaign:      true,
+  showTabNurture:       true,
+  showTabPitch:         true,
+  showTabIntroduction:  true,
+  showTabProposal:      true,
+  showTabPropertyPitch: true,
+  showTabGci:           true,
+  showTabAppraisal:     true,
 }
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────

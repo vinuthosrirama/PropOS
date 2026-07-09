@@ -3970,6 +3970,21 @@ function VendorSentimentPanel({
 
 // ── Vendor Profile Page ───────────────────────────────────────────────────────
 
+type ProfileTabId = "analysis" | "outreach" | "listing" | "campaign" | "nurture" | "gci" | "pitch" | "property-pitch" | "introduction" | "proposal"
+
+const VENDOR_PROFILE_TABS: { id: ProfileTabId; label: string; settingsKey: keyof import("../../data").VendorDisplaySettings }[] = [
+  { id: "analysis",       label: "Analysis",     settingsKey: "showTabAnalysis" },
+  { id: "outreach",       label: "Outreach",     settingsKey: "showTabOutreach" },
+  { id: "listing",        label: "Listing CMA",  settingsKey: "showTabListing" },
+  { id: "campaign",       label: "Campaign",     settingsKey: "showTabCampaign" },
+  { id: "nurture",        label: "Nurture",      settingsKey: "showTabNurture" },
+  { id: "pitch",          label: "Price Pitch",  settingsKey: "showTabPitch" },
+  { id: "introduction",   label: "Agent Intro",  settingsKey: "showTabIntroduction" },
+  { id: "proposal",       label: "Proposal",     settingsKey: "showTabProposal" },
+  { id: "property-pitch", label: "Prop. Pitch",  settingsKey: "showTabPropertyPitch" },
+  { id: "gci",            label: "GCI Calc",     settingsKey: "showTabGci" },
+]
+
 function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettings, allEntries, entryIdx, onNavigate }: {
   entry: SegmentedBuyer
   agent: AgentProfile
@@ -3993,7 +4008,15 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const [showAllMetrics, setShowAllMetrics] = useState(false)
   const [showInsights, setShowInsights] = useState(true)    // triggers open by default
   const [showPitchAngles, setShowPitchAngles] = useState(false)  // pitch angles collapsed by default
-  const [profileTab, setProfileTab] = useState<"analysis" | "outreach" | "listing" | "campaign" | "nurture" | "market-update" | "gci" | "pitch" | "property-pitch" | "introduction" | "proposal">("analysis")
+  const [profileTab, setProfileTab] = useState<ProfileTabId>("analysis")
+  const visibleProfileTabs = VENDOR_PROFILE_TABS.filter(tab => vendorSettings?.[tab.settingsKey] !== false)
+  // If the active tab gets hidden via Settings, fall back to the first visible one
+  useEffect(() => {
+    if (visibleProfileTabs.length > 0 && !visibleProfileTabs.some(t => t.id === profileTab)) {
+      setProfileTab(visibleProfileTabs[0].id)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendorSettings])
   const [marketUpdatePreview, setMarketUpdatePreview] = useState<{ html: string; sms: string; subject: string } | null>(null)
   const [marketUpdateSending, setMarketUpdateSending] = useState(false)
   const [marketUpdateSent, setMarketUpdateSent] = useState(false)
@@ -4016,6 +4039,9 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   // NotesBridge: populated from API response after generation
   const [extractedHook, setExtractedHook] = useState<string | null>(null)
   const [personalisationLine, setPersonalisationLine] = useState<string | null>(null)
+  // Generated outreach draft — renders inline under the nurture sequence panel
+  // instead of navigating to the full-screen review stage.
+  const [inlineOutreach, setInlineOutreach] = useState<{ sms: string; emailSubject: string; emailBody: string[] } | null>(null)
 
   const bpVP = useBreakpoint()
   const isMobileVP = bpVP === "mobile"
@@ -4161,7 +4187,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         : ""
       const finalSms = stripDashes((smsRaw.length > 140 ? smsRaw.slice(0, 137) + "..." : smsRaw) + (includeProspectGauge ? " bit.ly/propgauge" : ""))
       setGenerating(false)
-      onReview(finalSms, emailSubject, includeProspectGauge ? [...emailBody, surveyLink] : emailBody)
+      setInlineOutreach({ sms: finalSms, emailSubject, emailBody: includeProspectGauge ? [...emailBody, surveyLink] : emailBody })
     }
 
     try {
@@ -4184,7 +4210,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       const emailBody: string[] = res.email?.body ?? []
       if (!sms) throw new Error("empty — no sms")
 
-      // Capture NotesBridge data — show the transformation BEFORE navigating to review
+      // Capture NotesBridge data — show the transformation before the draft renders inline
       if (res.personalisationHook) {
         setExtractedHook(res.personalisationHook)
         // Persist AI-extracted hook to Supabase so it appears next session
@@ -4195,7 +4221,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       setGenerating(false)
 
       // Pause so the user sees the NotesBridge "What AI saw → As written to" animation
-      // before the review screen replaces the page (3.5s = typewriter + moment to read)
+      // before the inline draft appears (3.5s = typewriter + moment to read)
       await new Promise(r => setTimeout(r, res.personalisationLine ? 3500 : 400))
       const finalEmailBody = emailBody.map(stripDashes)
       if (includeProspectGauge) {
@@ -4205,19 +4231,21 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       const finalSms = includeProspectGauge
         ? stripDashes(sms.slice(0, 130)) + " Survey: bit.ly/propgauge"
         : stripDashes(sms)
-      onReview(finalSms, stripDashes(emailSubject), finalEmailBody)
+      setInlineOutreach({ sms: finalSms, emailSubject: stripDashes(emailSubject), emailBody: finalEmailBody })
     } catch {
       templateFallback()
     }
   }
 
-  // Fix 6: Auto-trigger generation as soon as outreach tab is selected — skip the manual button click
+  // Fix 6: Auto-trigger generation as soon as outreach tab is selected — skip the manual button click.
+  // Re-fires on lead change too, so switching leads via "Next" doesn't leave a stale draft on screen.
   useEffect(() => {
+    setInlineOutreach(null)
     if (profileTab === "outreach" && !generating) {
       handleGenerate()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileTab])
+  }, [profileTab, entry.buyer.id])
 
   const equityPct = Math.round((fin.equityGain / fin.purchasePrice) * 100)
   const equityBarWidth = Math.min(equityPct, 100)
@@ -4336,19 +4364,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
         borderBottom: `1.5px solid ${C.border}`,
         overflowX: "auto", scrollbarWidth: "none",
       }}>
-        {([
-          { id: "market-update",  label: "Market Update" },
-          { id: "analysis",       label: "Analysis" },
-          { id: "outreach",       label: "Outreach" },
-          { id: "listing",        label: "Listing CMA" },
-          { id: "campaign",       label: "Campaign" },
-          { id: "nurture",        label: "Nurture" },
-          { id: "pitch",          label: "Price Pitch" },
-          { id: "introduction",   label: "Agent Intro" },
-          { id: "proposal",       label: "Proposal" },
-          { id: "property-pitch", label: "Prop. Pitch" },
-          { id: "gci",            label: "GCI Calc" },
-        ] as { id: typeof profileTab; label: string }[]).map(tab => (
+        {visibleProfileTabs.map(tab => (
           <button key={tab.id} onClick={() => setProfileTab(tab.id)} style={{
             padding: isMobileVP ? "9px 12px" : "10px 18px",
             background: "none", border: "none", cursor: "pointer",
@@ -4699,6 +4715,76 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
 
           {/* Nurture Sequence Panel */}
           <NurtureSequencePanel entry={entry} agent={agent} theme={theme} />
+
+          {/* Generated outreach draft — appears here instead of navigating to a new screen */}
+          <div style={{ background: C.bg2, borderRadius: 14, border: `1px solid ${C.border}`, padding: "14px 18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: 1, textTransform: "uppercase" }}>Generated outreach</div>
+              {inlineOutreach && !generating && (
+                <button onClick={handleGenerate} style={{ fontSize: 10, color: accentColor, background: "none", border: "none", cursor: "pointer", fontFamily: FONT, textDecoration: "underline" }}>
+                  ↻ Regenerate
+                </button>
+              )}
+            </div>
+
+            {generating && !inlineOutreach && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", fontSize: 12, color: C.faint }}>
+                <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>✨</motion.span>
+                Writing personalised outreach in {agentFirst}'s voice...
+              </div>
+            )}
+
+            {!generating && !inlineOutreach && (
+              <div style={{ fontSize: 12, color: C.faint, padding: "6px 0" }}>Draft will appear here once generated.</div>
+            )}
+
+            {inlineOutreach && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 }}>
+                    📱 SMS · {inlineOutreach.sms.length} chars
+                  </div>
+                  <textarea
+                    value={inlineOutreach.sms}
+                    onChange={e => setInlineOutreach(d => d ? { ...d, sms: e.target.value } : d)}
+                    rows={3}
+                    style={{
+                      width: "100%", boxSizing: "border-box", resize: "vertical",
+                      background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 10,
+                      padding: "10px 12px", fontSize: 12, color: C.text, lineHeight: 1.5, fontFamily: FONT,
+                    }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 }}>📧 Email subject</div>
+                  <input
+                    value={inlineOutreach.emailSubject}
+                    onChange={e => setInlineOutreach(d => d ? { ...d, emailSubject: e.target.value } : d)}
+                    style={{
+                      width: "100%", boxSizing: "border-box",
+                      background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 10,
+                      padding: "8px 12px", fontSize: 12, fontWeight: 600, color: C.text, fontFamily: FONT, marginBottom: 6,
+                    }}
+                  />
+                  <textarea
+                    value={inlineOutreach.emailBody.join("\n\n")}
+                    onChange={e => setInlineOutreach(d => d ? { ...d, emailBody: e.target.value.split("\n\n") } : d)}
+                    rows={4}
+                    style={{
+                      width: "100%", boxSizing: "border-box", resize: "vertical",
+                      background: C.bg3, border: `1px solid ${C.border}`, borderRadius: 10,
+                      padding: "10px 12px", fontSize: 12, color: C.muted, lineHeight: 1.5, fontFamily: FONT,
+                    }}
+                  />
+                </div>
+                <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                  onClick={() => onReview(inlineOutreach.sms, inlineOutreach.emailSubject, inlineOutreach.emailBody)}
+                  style={{ padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${accentColor}50`, background: `${accentColor}12`, color: accentColor, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT }}>
+                  Edit &amp; Send →
+                </motion.button>
+              </div>
+            )}
+          </div>
 
           </>)}
         </div>
@@ -5138,7 +5224,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
               : `Hi ${fname}, ${agentFirst} here. I've put together a quick price update for ${shortAddr(buyer.purchaseAddress)}. Have a look here: ${pitchUrl}`)
             const subject = stripDashes(`Your price update for ${buyer.purchaseAddress}`)
             const emailBody = stripDashes(
-              `Hi ${fname},\n\nI've put together a price update for your property at ${buyer.purchaseAddress}. The full breakdown, including recent comparable sales near you, is below.${isLocalLink ? "" : ` You can also view it online here: ${pitchUrl}`}\n\nCheers,\n${agentFirst}`
+              `Hi ${fname},\n\nI've put together a price update for your property at ${buyer.purchaseAddress}. The full breakdown, including recent comparable sales near you, is below.${isLocalLink ? "" : ` You can also view it online here: ${pitchUrl}`}\n\nCheers,\n${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
             )
             await authFetch(apiUrl("/api/send"), {
               method: "POST",
@@ -5574,7 +5660,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
               ? `Hi ${fname}, ${agentFirst} here from ${agent.agency}. I've emailed you a listing proposal for ${shortAddr(buyer.purchaseAddress)}.`
               : `Hi ${fname}, ${agentFirst} here. I've put together a listing proposal for ${shortAddr(buyer.purchaseAddress)}. Have a look: ${proposalUrl}`)
             const emailBody = stripDashes(
-              `Hi ${fname},\n\nThank you for your time — I've put together a listing proposal for ${buyer.purchaseAddress} outlining the recommended method of sale, comparable sales, our marketing plan, and what you can expect from working with us.${isLocalLink ? "" : `\n\nView it here: ${proposalUrl}`}\n\nHappy to walk you through it at a time that suits.\n\nKind regards,\n${agentFirst}`
+              `Hi ${fname},\n\nThank you for your time — I've put together a listing proposal for ${buyer.purchaseAddress} outlining the recommended method of sale, comparable sales, our marketing plan, and what you can expect from working with us.${isLocalLink ? "" : `\n\nView it here: ${proposalUrl}`}\n\nHappy to walk you through it at a time that suits.\n\nKind regards,\n${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
             )
             await authFetch(apiUrl("/api/send"), {
               method: "POST",
@@ -5661,7 +5747,8 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       })()}
 
       {/* === MARKET UPDATE TAB === */}
-      {profileTab === "market-update" && (() => {
+      {/* Merged into Analysis tab — market update generator shows below the financial/appraisal sections */}
+      {profileTab === "analysis" && (() => {
         const muComps = generateComparables({ suburb: buyer.suburb, propertyType: (buyer.propertyType ?? "House") as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id + 9000 })
         const muRange = buildAppraisalRange(muComps, buyer.suburb)
         const muComps2 = generateComparables({ suburb: buyer.suburb, propertyType: (buyer.propertyType ?? "House") as "House"|"Unit"|"Townhouse", beds: buyer.beds, land: buyer.land ?? 500, buyerId: buyer.id + 7000 })

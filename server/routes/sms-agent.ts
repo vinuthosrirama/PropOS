@@ -251,7 +251,7 @@ router.post("/sequences/market-report", async (req, res) => {
   const agentCtx = await getAgentContext((req as any).agentId)
   const marketData = await generateMarketReport(suburb, [contact], agentCtx)
 
-  const objective = `Offer ${contact.name.split(" ")[0]} a free market report for ${suburb}. Key stat: ${marketData.keyStat ?? "strong recent sales"}. Market sentiment: ${marketData.sentiment}. Sequence: (1) Brief natural opener offering the report. (2) If they say yes, send the key stat summary. (3) Offer a free appraisal of their next listing. Keep each message under 160 chars.`
+  const objective = `Offer ${contact.name.split(" ")[0]} a free market report for ${suburb}. Key stat: ${marketData.keyStat ?? "strong recent sales"}. Market sentiment: ${marketData.sentiment}. Sequence: (1) Brief natural opener offering the report. (2) If they say yes, send the key stat summary. (3) Offer a free appraisal of their next listing. Keep each message up to 2 segments (~300 chars), natural, not padded.`
 
   await upsertContact({ name: contact.name, phone: contact.phone, conversation_objective: objective })
 
