@@ -251,7 +251,16 @@ app.post("/api/test-sms", requireAuth, express.json(), async (req: Request, res:
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
   // Webhook routes have their own gate (verifyWebhookSecret, below) — never JWT-gated.
   if (req.path.startsWith("/webhook/")) return next()
-  if (!isDbConnected()) return next()
+  if (!isDbConnected()) {
+    // A4: fail closed. When DATABASE_URL is configured (production) but the pool is
+    // down, skipping auth would expose every /api route unauthenticated, exactly the
+    // state prod ran in after a boot-time connect failure. 503 until the retry loop
+    // (db.ts scheduleRetry) restores the connection. No DATABASE_URL = local demo, open.
+    if (process.env.DATABASE_URL?.trim()) {
+      return res.status(503).json({ error: "Database connection recovering, try again shortly" })
+    }
+    return next()
+  }
   return requireAuth(req, res, next)
 })
 

@@ -347,24 +347,31 @@ router.get("/overview", async (req: Request, res: Response) => {
   const agentId = String(req.query.agentId ?? "")
   if (!agentId) return res.status(400).json({ error: "agentId required" })
 
-  const rows = await query(
-    `SELECT
-       ds.pitch_id, ds.pitch_type, ds.session_id, ds.opened_at, ds.last_active_at,
-       ds.total_time_s, ds.completion_pct, ds.lead_score_delta,
-       ds.sections_viewed, ds.text_selections,
-       p.payload_json->>'vendorName' AS vendor_name,
-       p.payload_json->>'buyerName'  AS buyer_name,
-       p.payload_json->'property'->>'address' AS property_address,
-       p.payload_json->>'propertyAddress' AS property_address2,
-       p.slug
-     FROM document_sessions ds
-     JOIN pitches p ON p.id = ds.pitch_id
-     WHERE p.agent_id = $1
-     ORDER BY ds.opened_at DESC
-     LIMIT 200`,
-    [agentId],
-  )
-  res.json({ rows })
+  try {
+    const rows = await query(
+      `SELECT
+         ds.pitch_id, ds.pitch_type, ds.session_id, ds.opened_at, ds.last_active_at,
+         ds.total_time_s, ds.completion_pct, ds.lead_score_delta,
+         ds.sections_viewed, ds.text_selections,
+         p.payload_json->>'vendorName' AS vendor_name,
+         p.payload_json->>'buyerName'  AS buyer_name,
+         p.payload_json->'property'->>'address' AS property_address,
+         p.payload_json->>'propertyAddress' AS property_address2,
+         p.slug
+       FROM document_sessions ds
+       JOIN pitches p ON p.id::text = ds.pitch_id
+       WHERE p.agent_id = $1
+       ORDER BY ds.opened_at DESC
+       LIMIT 200`,
+      [agentId],
+    )
+    res.json({ rows })
+  } catch (err) {
+    // Same pitches.id (UUID) vs document_sessions.pitch_id (TEXT) drift as
+    // contact-summary below — degrade to an empty list instead of crashing.
+    console.error("[doc-track] overview query failed:", (err as Error).message)
+    res.json({ rows: [] })
+  }
 })
 
 // GET /api/doc-track/contact-summary — aggregate engagement for a contact
@@ -376,20 +383,27 @@ router.get("/contact-summary", async (req: Request, res: Response) => {
 
   if (!leadId && !phone) return res.json({ docsSent: 0, lastOpened: null, totalScore: 0 })
 
-  const rows = await query<{ docs_sent: number; last_opened: string | null; total_score: number }>(
-    `SELECT
-       COUNT(DISTINCT p.id)::int                  AS docs_sent,
-       MAX(ds.opened_at)                          AS last_opened,
-       COALESCE(SUM(ds.lead_score_delta), 0)::int AS total_score
-     FROM pitches p
-     LEFT JOIN document_sessions ds ON ds.pitch_id = p.id
-     WHERE ($1::text IS NOT NULL AND p.lead_id = $1)
-        OR ($2::text IS NOT NULL AND replace(p.payload_json->>'phone', ' ', '') = $2)`,
-    [leadId ?? null, phone ?? null],
-  )
+  try {
+    const rows = await query<{ docs_sent: number; last_opened: string | null; total_score: number }>(
+      `SELECT
+         COUNT(DISTINCT p.id)::int                  AS docs_sent,
+         MAX(ds.opened_at)                          AS last_opened,
+         COALESCE(SUM(ds.lead_score_delta), 0)::int AS total_score
+       FROM pitches p
+       LEFT JOIN document_sessions ds ON ds.pitch_id = p.id::text
+       WHERE ($1::text IS NOT NULL AND p.lead_id = $1)
+          OR ($2::text IS NOT NULL AND replace(p.payload_json->>'phone', ' ', '') = $2)`,
+      [leadId ?? null, phone ?? null],
+    )
 
-  const r = rows[0] ?? { docs_sent: 0, last_opened: null, total_score: 0 }
-  res.json({ docsSent: r.docs_sent, lastOpened: r.last_opened, totalScore: r.total_score })
+    const r = rows[0] ?? { docs_sent: 0, last_opened: null, total_score: 0 }
+    res.json({ docsSent: r.docs_sent, lastOpened: r.last_opened, totalScore: r.total_score })
+  } catch (err) {
+    // Same pitches.id (UUID) vs document_sessions.pitch_id (TEXT) drift as
+    // buyer-brief/matches — degrade to zeros instead of an unhandled rejection.
+    console.error("[doc-track] contact-summary query failed:", (err as Error).message)
+    res.json({ docsSent: 0, lastOpened: null, totalScore: 0 })
+  }
 })
 
 export default router

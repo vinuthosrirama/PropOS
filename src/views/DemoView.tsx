@@ -23,9 +23,9 @@ import {
 } from "../data/propertySlm"
 import { matchLeadToListing, matchQuestionToSLM, type MatchResult } from "../lib/slmMatch"
 import {
-  readLeadsFromSheet, readAllLeadsFromSheet, postEvent, sheetsConnected,
+  postEvent,
   postLeadStatus, markAttended, writeAgentVoiceEntry,
-  readPastBuyersFromSheet, updateLastContactDate,
+  updateLastContactDate,
   type SheetLead,
 } from "../lib/sheet"
 import { readPastBuyersFromSupabase, readBuyerNotesFromSupabase, supabaseConnected, updatePastBuyerInSupabase } from "../lib/supabase"
@@ -1021,7 +1021,7 @@ function BuyerMatchQueuePage({ agent, theme, onBack }: {
             )}
           </div>
           <div style={{ fontSize: 13, color: C.muted, maxWidth: 560, lineHeight: 1.6 }}>
-            AI-ranked contacts matched to your active listings. Approve to send a personalised buyer brief — skip to dismiss.
+            AI-ranked contacts matched to your active listings. Approve to send a personalised buyer brief, skip to dismiss.
           </div>
         </div>
 
@@ -1060,7 +1060,7 @@ function BuyerMatchQueuePage({ agent, theme, onBack }: {
             <div style={{ fontSize: 32, marginBottom: 12 }}>✓</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 8 }}>Queue complete</div>
             <div style={{ fontSize: 13, color: C.muted }}>
-              {sent.size > 0 ? `${sent.size} brief${sent.size > 1 ? "s" : ""} sent` : "No matches found — try importing more contacts."}
+              {sent.size > 0 ? `${sent.size} brief${sent.size > 1 ? "s" : ""} sent` : "No matches found. Import contacts or check your CRM connection."}
             </div>
           </div>
         ) : (
@@ -1337,6 +1337,13 @@ function isRealLead(lead: SheetLead): boolean {
   if (!name) return false
   // Obvious test/seed row names
   if (["test lead", "lead_status", "name", "test", "sample"].includes(name)) return false
+  // Event-log / field-name rows leaked from the sheet write-back carry names like
+  // "update_lead_status" and "upsert_conversation". An underscore never appears in a
+  // real buyer name, so it is a reliable discriminator for these junk rows.
+  if (name.includes("_")) return false
+  // Budgets derived from phone numbers or junk parsing are absurdly large (e.g.
+  // "$61400.24M"); no residential buyer budget approaches this. Reject as junk.
+  if (lead.budget > 50_000_000) return false
   // Seed rows that look like column headers or events (no space in name = likely a field name)
   if (!name.includes(" ") && lead.budget === 0) return false
   return true
@@ -1402,7 +1409,9 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
 
   useEffect(() => {
     let mounted = true
-    const CACHE_KEY = "propOS_leads_cache_v3"
+    // v4: v3 caches were poisoned by Google Sheets event-log rows before the sheet
+    // was removed as a lead source. Bumping the key abandons those stale caches.
+    const CACHE_KEY = "propOS_leads_cache_v4"
 
     const applyLeads = (leads: SheetLead[], save = false) => {
       if (!mounted) return
@@ -1444,9 +1453,12 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
       return () => { mounted = false }
     }
 
-    // ── Primary source: Supabase PropOS_democontacts ──────────────────────────
-    // Try the live CRM before Sheets or hardcoded fallback.
-    // This ensures James Whitfield and all Supabase leads are always visible.
+    // ── Sole live source: Supabase PropOS_democontacts ────────────────────────
+    // Leads come from the CRM (Supabase) only. The Google Sheets read was removed
+    // as a lead source: the sheet accumulated write-back event rows and inbound
+    // message fragments (named "update_lead_status", junk budgets, spam text) that
+    // leaked into the attendee list whenever the CRM was empty. Offline/empty CRM
+    // now falls back to the vetted hardcoded DEMO_FALLBACK_LEADS, never the sheet.
     authFetch(apiUrl("/api/crm-leads"))
       .then(r => r.json())
       .then((data: { leads?: SheetLead[]; count?: number }) => {
@@ -1456,67 +1468,19 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
           applyLeads(crmLeads, true)
           return
         }
-        // CRM empty — fall through to Sheets / hardcoded fallback
-        loadFromSheets()
+        // CRM empty — use the vetted demo fallback (never the sheet).
+        applyDemoFallback()
       })
       .catch(() => {
-        if (mounted) loadFromSheets()
+        if (mounted) applyDemoFallback()
       })
 
     return () => { mounted = false }
 
-    function loadFromSheets() {
-      // If Sheets not configured, stop here — cache or fallback is sufficient
-      if (!sheetsConnected()) {
-        if ((!cached || cached.length === 0) && agentSold.length > 0) applyLeads(DEMO_FALLBACK_LEADS)
-        else setSheetsLoading(false)
-        return
-      }
-
-    // Race Sheets fetch against 4s timeout — use cache if available, else fallback
-    let settled = false
-    const fallbackTimer = setTimeout(() => {
-      if (!settled && mounted && (!cached || cached.length === 0)) {
-        applyLeads(DEMO_FALLBACK_LEADS)
-      } else if (!settled && mounted) {
-        setSheetsLoading(false)
-      }
-    }, 4000)
-
-    // Strategy 1: bulk fetch, group client-side with fuzzy address match.
-    readAllLeadsFromSheet()
-      .then(allLeads => {
-        settled = true
-        clearTimeout(fallbackTimer)
-        if (allLeads && allLeads.length > 0) {
-          const real = allLeads.filter(isRealLead)
-          if (real.length > 0) { applyLeads(real, true); return }
-          // All rows were test/placeholder — fall through to per-property or fallback
-        }
-        // Strategy 2: bulk empty or all-fake — try per-property queries.
-        return Promise.all(
-          agentSold.map(p => readLeadsFromSheet(p.address + ", " + p.suburb))
-        ).then(results => {
-          const flat = results.flatMap((leads, i) =>
-            (leads ?? []).map(l => ({ ...l, _pid: agentSold[i].id }))
-          ).filter(isRealLead) as SheetLead[]
-          if (flat.length > 0) {
-            applyLeads(flat, true)
-          } else if (!cached || cached.length === 0) {
-            applyLeads(DEMO_FALLBACK_LEADS)
-          } else {
-            setSheetsLoading(false)
-          }
-        })
-      })
-      .catch(() => {
-        settled = true
-        clearTimeout(fallbackTimer)
-        if (!cached || cached.length === 0) applyLeads(DEMO_FALLBACK_LEADS)
-        else setSheetsLoading(false)
-      })
-
-    } // end loadFromSheets
+    function applyDemoFallback() {
+      if ((!cached || cached.length === 0) && agentSold.length > 0) applyLeads(DEMO_FALLBACK_LEADS)
+      else setSheetsLoading(false)
+    }
   }, [])
 
   // Poll /api/crm-leads every 30s so PropOS_democontacts changes appear quickly
@@ -1531,7 +1495,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
           const total = Object.values(grouped).reduce((a, l) => a + l.length, 0)
           if (total > 0) {
             setSoldLeads(grouped)
-            try { localStorage.setItem("propOS_leads_cache_v3", JSON.stringify(leads)) } catch {}
+            try { localStorage.setItem("propOS_leads_cache_v4", JSON.stringify(leads)) } catch {}
           }
         })
         .catch(() => {})
@@ -1592,7 +1556,7 @@ function PortfolioPage({ onSelectActive, onSelectSold, onAuctionSaved, onSetting
           </h1>
         </div>
         <div style={{ fontSize: 13, color: C.muted, maxWidth: 540, lineHeight: 1.6 }}>
-          Match every open-home attendee to your active listings by price, beds, and suburb. Generate hyper-personalised SMS and email in your voice — in seconds.
+          Match every open-home attendee to your active listings by price, beds, and suburb. Generate hyper-personalised SMS and email in your voice, in seconds.
         </div>
         {onMatchQueue && (
           <button
@@ -4217,17 +4181,16 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
     },
   })
 
-  // Try loading past buyers — Supabase first, Google Sheet fallback, then static demo data
+  // Try loading past buyers — Supabase first, then static demo data.
   const loadFromSheet = () => {
     setSheetLoading(true)
-    // Priority: Supabase → Google Sheets → static fallback
+    // Priority: Supabase (live source of truth), then the vetted static fallback.
+    // The Google Sheets read was removed here for the same reason as the buyer
+    // leads path: the sheet is no longer a trusted data source (event-log rows,
+    // inbound message fragments). Supabase is the live source; static covers offline.
     const dataPromise = supabaseConnected()
-      ? readPastBuyersFromSupabase(agent.name).then(sbRows => {
-          if (sbRows && sbRows.length > 0) return sbRows
-          // Supabase returned nothing — fall through to Google Sheets
-          return readPastBuyersFromSheet(agent.name)
-        })
-      : readPastBuyersFromSheet(agent.name)
+      ? readPastBuyersFromSupabase(agent.name)
+      : Promise.resolve(null)
 
     dataPromise.then(rows => {
       if (rows && rows.length > 0) {
@@ -4779,7 +4742,6 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
         border: `1px solid ${theme.primary}22`, padding: "18px 22px",
         display: "flex", alignItems: "flex-start", gap: 14,
       }}>
-        <div style={{ fontSize: 22 }}>💡</div>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>How it works</div>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
@@ -5073,21 +5035,21 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
                   <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Connect your CRM to sync contacts automatically. PropOS maps your fields and upserts new records to Supabase.</div>
                   <div style={{ display: "grid", gridTemplateColumns: isMobileVPP ? "1fr" : "1fr 1fr", gap: 10 }}>
                     {([
-                      ["RealBase",       "rb", "🏠", true],
-                      ["Rex Software",   "rex", "📋", false],
-                      ["AgentBox",       "ab", "📦", false],
-                      ["Box+Dice",       "bd", "🎲", false],
-                      ["ActivePipe",     "ap", "🔥", false],
-                      ["Propic",         "pp", "💡", false],
-                      ["Reapit",         "rp", "🏢", false],
-                      ["VaultRE",        "vr", "🔐", false],
-                      ["Console Cloud",  "cc", "☁️", false],
-                      ["HubSpot",        "hs", "🟠", false],
+                      ["RealBase",       "rb", "RB", true],
+                      ["Rex Software",   "rex", "RX", false],
+                      ["AgentBox",       "ab", "AB", false],
+                      ["Box+Dice",       "bd", "BD", false],
+                      ["ActivePipe",     "ap", "AP", false],
+                      ["Propic",         "pp", "PR", false],
+                      ["Reapit",         "rp", "RP", false],
+                      ["VaultRE",        "vr", "VR", false],
+                      ["Console Cloud",  "cc", "CC", false],
+                      ["HubSpot",        "hs", "HS", false],
                     ] as [string, string, string, boolean][]).map(([name, key, icon, featured]) => (
                       <div key={key} style={{ background: C.bg3, borderRadius: 12, padding: "14px 16px", border: `1px solid ${featured ? theme.primary + "44" : C.border}`, position: "relative" }}>
                         {featured && <div style={{ position: "absolute", top: 8, right: 8, background: theme.primary, color: "#fff", fontSize: 8, fontWeight: 800, padding: "2px 6px", borderRadius: 4, letterSpacing: 0.5 }}>FEATURED</div>}
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                          <span style={{ fontSize: 20 }}>{icon}</span>
+                          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, color: C.muted, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 6px", minWidth: 26, textAlign: "center" }}>{icon}</span>
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{name}</div>
                         </div>
                         {(() => {
@@ -7091,7 +7053,7 @@ function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
           <span style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>Appraisal Report Preview · {buyer.name}</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => window.print()} style={{ padding: "7px 18px", borderRadius: 9, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 12, fontWeight: 700, fontFamily: FONT, boxShadow: `0 2px 8px ${theme.glow}` }}>
-              🖨️ Print Report
+              Print Report
             </button>
             <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
           </div>
@@ -8343,7 +8305,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
             <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => setShowPrintAppraisal(true)}
                 style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${accentColor}40`, background: `${accentColor}10`, color: accentColor, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", gap: 6 }}>
-                🖨️ Print Appraisal Report
+                Print Appraisal Report
               </button>
             </div>
           </div>
@@ -10976,7 +10938,7 @@ export default function DemoView({
                     <div style={{ padding: "24px 16px", textAlign: "center", color: C.muted, fontSize: 12 }}>
                       {inboxConnected === null
                         ? "Loading conversations…"
-                        : "Connected — no replies yet. Hit \"Simulate reply\" to demo the inbox flow."}
+                        : "Connected. No replies yet. Hit \"Simulate reply\" to demo the inbox flow."}
                     </div>
                   ) : inboxThreads.map(t => {
                     const last = t.messages[t.messages.length - 1]

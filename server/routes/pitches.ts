@@ -658,43 +658,98 @@ interface BuyerCandidateRow {
   totalScore:    number
 }
 
+// Vetted synthetic fallback so the Match Queue is never empty in a demo session.
+// Same four attendees already shown on the 34 Hartsmere Drive sold-property page
+// (src/lib/demoFallback.ts fb-037..fb-040) — re-surfacing them here as "matched to
+// a new active listing" is the actual BuyerOS product story, not filler. Phone/email
+// route to the safe TEST_RECIPIENT-equivalent contact used throughout the demo data.
+// Used both when the DB is unreachable and when a real query returns zero rows for
+// the requested agent (empty PropOS_democontacts is a valid but undemoable state).
+const FALLBACK_BUYER_CANDIDATES: BuyerCandidateRow[] = [
+  {
+    id: -37, firstName: "Paul", lastName: "Andreacchio", name: "Paul Andreacchio",
+    phone: "0415 883 354", email: "vinuth.srirama@outlook.com", leadType: "open_home_attendee",
+    suburb: "Berwick", address: "34 Hartsmere Drive, Berwick VIC", beds: 4, baths: 2,
+    priceRangeMin: 780000, priceRangeMax: 900000, openHomeDate: "2026-02-08",
+    notes: "Came with wife and three young kids. Very positive about the Kingsmere estate feel, mentioned they have friends in the same street. Paul is a tradie and made comments about build quality that suggest he knows what to look for. Solid prospect.",
+    questionsAsked: "Council rates?; Pergola dimensions?; Primary school zone?",
+    docsSent: 0, lastOpened: null, totalScore: 8,
+  },
+  {
+    id: -38, firstName: "Cheryl", lastName: "Nguyen", name: "Cheryl Nguyen",
+    phone: "0415 883 354", email: "vinuth.srirama@outlook.com", leadType: "open_home_attendee",
+    suburb: "Berwick", address: "34 Hartsmere Drive, Berwick VIC", beds: 4, baths: 2,
+    priceRangeMin: 700000, priceRangeMax: 820000, openHomeDate: "2026-02-06",
+    notes: "Came with husband Dave. Selling their Berwick home of 22 years, stepping down to something more manageable. Loved the ducted heating and cooling and the street presence. Low-maintenance is the key word.",
+    questionsAsked: "Body corporate fees?; Maintenance history?; Nearest medical centre?",
+    docsSent: 0, lastOpened: null, totalScore: 4,
+  },
+  {
+    id: -39, firstName: "Tyler", lastName: "Grosvenor", name: "Tyler Grosvenor",
+    phone: "0415 883 354", email: "vinuth.srirama@outlook.com", leadType: "open_home_attendee",
+    suburb: "Berwick", address: "34 Hartsmere Drive, Berwick VIC", beds: 3, baths: 2,
+    priceRangeMin: 650000, priceRangeMax: 750000, openHomeDate: "2026-02-07",
+    notes: "Young couple, first open home they've attended in Berwick. Pre-approved at $750K. Asked about the first home buyer grant and stamp duty. Budget is a stretch but they're keen.",
+    questionsAsked: "First home buyer stamp duty concession?; Any negotiation flexibility?; Settlement period?",
+    docsSent: 0, lastOpened: null, totalScore: 2,
+  },
+  {
+    id: -40, firstName: "Vivek", lastName: "Anand", name: "Vivek Anand",
+    phone: "0415 883 354", email: "vinuth.srirama@outlook.com", leadType: "open_home_attendee",
+    suburb: "Berwick", address: "34 Hartsmere Drive, Berwick VIC", beds: 4, baths: 2,
+    priceRangeMin: 800000, priceRangeMax: 950000, openHomeDate: "2026-02-05",
+    notes: "Came alone, efficient inspection. Checked the meter box, asked about the hot water system age, photographed the roof. Very focused on yield and the Kingsmere estate's rental demand. Worth a follow-up call.",
+    questionsAsked: "Rental yield estimate?; Hot water system age?; Vacancy rate in Berwick?",
+    docsSent: 0, lastOpened: null, totalScore: 6,
+  },
+]
+
 authedRouter.get("/buyer-brief/matches", async (req: Request, res: Response) => {
   const agentName = (req.query.agentName as string) || "Cameron Knoll"
 
-  if (!isDbConnected()) return res.json({ candidates: [] })
+  if (!isDbConnected()) return res.json({ candidates: FALLBACK_BUYER_CANDIDATES })
 
-  const candidates = await query<BuyerCandidateRow>(`
-    SELECT
-      c.id,
-      c.lead_first_name                              AS "firstName",
-      c.lead_last_name                               AS "lastName",
-      (c.lead_first_name || ' ' || c.lead_last_name) AS name,
-      c.lead_phone                                   AS phone,
-      c.lead_email                                   AS email,
-      c.lead_type                                    AS "leadType",
-      c.property_suburb                              AS suburb,
-      c.property_address                             AS address,
-      c.property_beds                                AS beds,
-      c.property_baths                               AS baths,
-      c.price_range_min                              AS "priceRangeMin",
-      c.price_range_max                              AS "priceRangeMax",
-      c.open_home_date                               AS "openHomeDate",
-      c.notes,
-      c.questions_asked                              AS "questionsAsked",
-      COUNT(DISTINCT p.id)::int                      AS "docsSent",
-      MAX(ds.opened_at)                              AS "lastOpened",
-      COALESCE(SUM(ds.lead_score_delta), 0)::int     AS "totalScore"
-    FROM "PropOS_democontacts" c
-    LEFT JOIN pitches p  ON p.lead_id = c.id::text
-    LEFT JOIN document_sessions ds ON ds.pitch_id = p.id
-    WHERE c.rea_agent_name ILIKE $1
-      AND c.lead_type IN ('open_home_attendee', 'previous_buyer', 'prospective_buyer')
-    GROUP BY c.id
-    ORDER BY "totalScore" DESC, c.open_home_date DESC NULLS LAST, c.id ASC
-    LIMIT 100
-  `, [agentName])
+  try {
+    const candidates = await query<BuyerCandidateRow>(`
+      SELECT
+        c.id,
+        c.lead_first_name                              AS "firstName",
+        c.lead_last_name                               AS "lastName",
+        (c.lead_first_name || ' ' || c.lead_last_name) AS name,
+        c.lead_phone                                   AS phone,
+        c.lead_email                                   AS email,
+        c.lead_type                                    AS "leadType",
+        c.property_suburb                              AS suburb,
+        c.property_address                             AS address,
+        c.property_beds                                AS beds,
+        c.property_baths                               AS baths,
+        c.price_range_min                              AS "priceRangeMin",
+        c.price_range_max                              AS "priceRangeMax",
+        c.open_home_date                               AS "openHomeDate",
+        c.notes,
+        c.questions_asked                              AS "questionsAsked",
+        COUNT(DISTINCT p.id)::int                      AS "docsSent",
+        MAX(ds.opened_at)                              AS "lastOpened",
+        COALESCE(SUM(ds.lead_score_delta), 0)::int     AS "totalScore"
+      FROM "PropOS_democontacts" c
+      LEFT JOIN pitches p  ON p.lead_id = c.id::text
+      LEFT JOIN document_sessions ds ON ds.pitch_id = p.id::text
+      WHERE c.rea_agent_name ILIKE $1
+        AND c.lead_type IN ('open_home_attendee', 'previous_buyer', 'prospective_buyer')
+      GROUP BY c.id
+      ORDER BY "totalScore" DESC, c.open_home_date DESC NULLS LAST, c.id ASC
+      LIMIT 100
+    `, [agentName])
 
-  res.json({ candidates })
+    res.json({ candidates: candidates.length > 0 ? candidates : FALLBACK_BUYER_CANDIDATES })
+  } catch (err) {
+    // pitches.id is UUID, document_sessions.pitch_id is TEXT — a schema drift here
+    // previously threw an unhandled rejection that crashed the whole process (Node
+    // 20 default behaviour). Catch and degrade to the fallback instead of taking
+    // the server down for every agent because one query hit a type mismatch.
+    console.error("[pitches] buyer-brief/matches query failed:", (err as Error).message)
+    res.json({ candidates: FALLBACK_BUYER_CANDIDATES })
+  }
 })
 
 export { publicRouter, authedRouter }

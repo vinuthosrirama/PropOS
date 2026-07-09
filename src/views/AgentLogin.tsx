@@ -52,7 +52,7 @@ function AuthLoginPanel({ onSuccess, mode }: {
         trainingCorpus: [],
       }
       onSuccess(agent, getAgencyTheme(a.agency), "vendor")
-    } catch { setError("Network error — please try again"); setLoginLoading(false) }
+    } catch { setError("Network error, please try again"); setLoginLoading(false) }
   }
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -75,7 +75,7 @@ function AuthLoginPanel({ onSuccess, mode }: {
         trainingCorpus: [],
       }
       onSuccess(agent, getAgencyTheme(a.agency || regForm.agency), "vendor")
-    } catch { setRegError("Network error — please try again"); setRegLoading(false) }
+    } catch { setRegError("Network error, please try again"); setRegLoading(false) }
   }
 
   return (
@@ -235,7 +235,7 @@ export default function AgentLogin({ onLogin, productMode }: Props) {
         setTimeout(() => onLogin(agent, t, mode), 2800)
         return
       }
-      setLookupError("Network error — please try again"); setLookupLoading(false)
+      setLookupError("Network error, please try again"); setLookupLoading(false)
     }
   }
 

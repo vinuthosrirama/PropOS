@@ -40,33 +40,50 @@ export async function getThread(phone: string): Promise<ConversationThread | und
 }
 
 /**
+ * Demo-mode gate. When DEMO_MODE=true (the public demo deployment), the inbox must
+ * only surface synthetic seeded threads (lead_id begins "demo"), never the agent's
+ * real inbound messages (unmatched senders such as Docusign, service numbers, or
+ * personal texts, which all carry an empty lead_id). Set false for real agent use.
+ */
+export function inboxDemoOnly(): boolean {
+  return process.env.DEMO_MODE === "true"
+}
+
+/**
  * Returns all threads sorted by recency.
  * Messages are stripped from list results — fetch the full thread via getThread()
  * when you need message bodies. This keeps the inbox payload bounded.
+ * In demo mode, only synthetic seeded threads are returned (see inboxDemoOnly).
  */
-export async function getAllThreads(): Promise<ConversationThread[]> {
+export async function getAllThreads(demoOnly = false): Promise<ConversationThread[]> {
   if (isDbConnected()) {
     const rows = await query<DbRow>(
       // Return metadata only — callers that need messages should use getThread()
       `SELECT phone, lead_id, lead_name, property_address, email,
               '[]'::jsonb AS messages, last_reply_at, unread
-       FROM conversations ORDER BY last_reply_at DESC`,
+       FROM conversations
+       ${demoOnly ? "WHERE lead_id LIKE 'demo%'" : ""}
+       ORDER BY last_reply_at DESC`,
     )
     return rows.map(fromDbRow)
   }
   return Array.from(threads.values())
+    .filter(t => !demoOnly || t.leadId.startsWith("demo"))
     .sort((a, b) => new Date(b.lastReplyAt).getTime() - new Date(a.lastReplyAt).getTime())
     .map(t => ({ ...t, messages: [] }))  // strip messages from list — load on demand
 }
 
-export async function getUnreadCount(): Promise<number> {
+export async function getUnreadCount(demoOnly = false): Promise<number> {
   if (isDbConnected()) {
     const rows = await query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM conversations WHERE unread = true`,
+      `SELECT COUNT(*) as count FROM conversations
+       WHERE unread = true ${demoOnly ? "AND lead_id LIKE 'demo%'" : ""}`,
     )
     return parseInt(rows[0]?.count ?? "0", 10)
   }
-  return Array.from(threads.values()).filter(t => t.unread).length
+  return Array.from(threads.values())
+    .filter(t => t.unread && (!demoOnly || t.leadId.startsWith("demo")))
+    .length
 }
 
 export async function markThreadRead(phone: string): Promise<void> {

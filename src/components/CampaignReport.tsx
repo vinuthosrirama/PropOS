@@ -359,7 +359,7 @@ export default function CampaignReport({ buyer, agent, theme }: CampaignReportPr
                 fontSize: 13, fontWeight: 600, fontFamily: FONT,
               }}
             >
-              🖨 Print
+              Print
             </button>
           </div>
         </motion.div>

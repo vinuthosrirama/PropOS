@@ -2,6 +2,15 @@
 // 100-data-point structured knowledge store per property
 // Property 101: Narre Warren South VIC 3805 | Properties 102+: Berwick VIC 3806
 
+import { PORTFOLIO_SOLD, PORTFOLIO_ACTIVE, type PortfolioProperty } from "../data"
+
+// Address/suburb lookup so a blank SLM (property without a seeded SLM row) still
+// shows the real property label instead of the "Unknown" default. data.ts has no
+// imports of its own, so this edge does not create an import cycle.
+const PORTFOLIO_BY_ID: Record<number, PortfolioProperty> = Object.fromEntries(
+  [...PORTFOLIO_SOLD, ...PORTFOLIO_ACTIVE].map(p => [p.id, p]),
+)
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -5073,8 +5082,16 @@ export function loadSLMForProperty(propertyId: number): PropertySLM {
     // fall through to default
   }
 
-  // 3. Hardcoded fallback — or blank SLM if no data exists for this property
-  return SLM_DATA[propertyId] ?? createBlankSLM(propertyId)
+  // 3. Hardcoded fallback, or a blank SLM if no data exists for this property.
+  //    A blank SLM must still carry the property's real address/suburb so the lead
+  //    detail reads "34 Hartsmere Drive" rather than "Unknown" when a sold property
+  //    (e.g. id 107) has no seeded SLM row. Metric values stay TBD; only the label
+  //    is resolved from the portfolio registry.
+  if (SLM_DATA[propertyId]) return SLM_DATA[propertyId]
+  const known = PORTFOLIO_BY_ID[propertyId]
+  return known
+    ? createBlankSLM(propertyId, `${known.address}, ${known.suburb}`, known.suburb, known.status === "sold" ? "sold" : "active")
+    : createBlankSLM(propertyId)
 }
 
 export function saveSLMForProperty(slm: PropertySLM): void {

@@ -40,8 +40,13 @@ export async function initDb(): Promise<void> {
     return
   }
 
+  const connected = await tryConnect(url)
+  if (!connected) scheduleRetry(url)
+}
+
+async function tryConnect(url: string): Promise<boolean> {
   try {
-    pool = new Pool({
+    const candidate = new Pool({
       connectionString: url,
       ssl: url.includes("localhost") ? false : { rejectUnauthorized: false },
       max: 10,
@@ -51,17 +56,32 @@ export async function initDb(): Promise<void> {
     })
 
     // Verify connection
-    const client = await pool.connect()
+    const client = await candidate.connect()
     client.release()
+
+    pool = candidate
 
     // Run migrations
     await migrate()
 
     console.log("  Database: connected (PostgreSQL)")
+    return true
   } catch (err) {
-    console.warn("  Database: connection failed, falling back to in-memory", (err as Error).message)
+    console.warn("  Database: connection failed, will retry", (err as Error).message)
     pool = null
+    return false
   }
+}
+
+// A transient connect failure at boot previously stranded the whole process in
+// in-memory mode until the next deploy (pool stayed null, auth gate fell open,
+// CRM reads returned empty). Retry with capped backoff until the DB comes back.
+function scheduleRetry(url: string, attempt = 1): void {
+  const delayMs = Math.min(30_000 * attempt, 5 * 60_000)
+  setTimeout(async () => {
+    const connected = await tryConnect(url)
+    if (!connected) scheduleRetry(url, attempt + 1)
+  }, delayMs).unref?.()
 }
 
 // ── Schema Migration ────────────────────────────────────────────────────────

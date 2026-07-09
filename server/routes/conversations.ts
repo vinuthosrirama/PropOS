@@ -6,6 +6,7 @@ import {
   markThreadRead,
   addReplyToThread,
   addAgentMessageToThread,
+  inboxDemoOnly,
 } from "../lib/conversations.js"
 
 const router = Router()
@@ -13,7 +14,8 @@ const router = Router()
 /** GET /api/conversations — all threads, sorted newest-reply-first */
 router.get("/", async (_req, res) => {
   try {
-    const [threads, unread] = await Promise.all([getAllThreads(), getUnreadCount()])
+    const demoOnly = inboxDemoOnly()
+    const [threads, unread] = await Promise.all([getAllThreads(demoOnly), getUnreadCount(demoOnly)])
     res.json({ threads, unread })
   } catch (err) {
     console.error("[conversations] GET / error:", (err as Error).message)

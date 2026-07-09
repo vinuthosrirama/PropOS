@@ -1061,7 +1061,6 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
         border: `1px solid ${theme.primary}22`, padding: "18px 22px",
         display: "flex", alignItems: "flex-start", gap: 14,
       }}>
-        <div style={{ fontSize: 22 }}>💡</div>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>How it works</div>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
@@ -1355,21 +1354,21 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
                   <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Connect your CRM to sync contacts automatically. PropOS maps your fields and upserts new records to Supabase.</div>
                   <div style={{ display: "grid", gridTemplateColumns: isMobileVPP ? "1fr" : "1fr 1fr", gap: 10 }}>
                     {([
-                      ["RealBase",       "rb", "🏠", true],
-                      ["Rex Software",   "rex", "📋", false],
-                      ["AgentBox",       "ab", "📦", false],
-                      ["Box+Dice",       "bd", "🎲", false],
-                      ["ActivePipe",     "ap", "🔥", false],
-                      ["Propic",         "pp", "💡", false],
-                      ["Reapit",         "rp", "🏢", false],
-                      ["VaultRE",        "vr", "🔐", false],
-                      ["Console Cloud",  "cc", "☁️", false],
-                      ["HubSpot",        "hs", "🟠", false],
+                      ["RealBase",       "rb", "RB", true],
+                      ["Rex Software",   "rex", "RX", false],
+                      ["AgentBox",       "ab", "AB", false],
+                      ["Box+Dice",       "bd", "BD", false],
+                      ["ActivePipe",     "ap", "AP", false],
+                      ["Propic",         "pp", "PR", false],
+                      ["Reapit",         "rp", "RP", false],
+                      ["VaultRE",        "vr", "VR", false],
+                      ["Console Cloud",  "cc", "CC", false],
+                      ["HubSpot",        "hs", "HS", false],
                     ] as [string, string, string, boolean][]).map(([name, key, icon, featured]) => (
                       <div key={key} style={{ background: C.bg3, borderRadius: 12, padding: "14px 16px", border: `1px solid ${featured ? theme.primary + "44" : C.border}`, position: "relative" }}>
                         {featured && <div style={{ position: "absolute", top: 8, right: 8, background: theme.primary, color: "#fff", fontSize: 8, fontWeight: 800, padding: "2px 6px", borderRadius: 4, letterSpacing: 0.5 }}>FEATURED</div>}
                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                          <span style={{ fontSize: 20 }}>{icon}</span>
+                          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5, color: C.muted, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 6px", minWidth: 26, textAlign: "center" }}>{icon}</span>
                           <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{name}</div>
                         </div>
                         {(() => {
@@ -3357,7 +3356,7 @@ function PrintableAppraisalModal({ entry, agent, theme, onClose }: {
           <span style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>Appraisal Report Preview · {buyer.name}</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => window.print()} style={{ padding: "7px 18px", borderRadius: 9, border: "none", cursor: "pointer", background: `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`, color: "white", fontSize: 12, fontWeight: 700, fontFamily: FONT, boxShadow: `0 2px 8px ${theme.glow}` }}>
-              🖨️ Print Report
+              Print Report
             </button>
             <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 20 }}>×</button>
           </div>
@@ -4602,7 +4601,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
             <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => setShowPrintAppraisal(true)}
                 style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${accentColor}40`, background: `${accentColor}10`, color: accentColor, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT, display: "flex", alignItems: "center", gap: 6 }}>
-                🖨️ Print Appraisal Report
+                Print Appraisal Report
               </button>
             </div>
           </div>

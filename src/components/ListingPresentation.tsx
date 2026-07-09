@@ -364,7 +364,7 @@ export default function ListingPresentation({ buyer, agent, theme }: ListingPres
             fontSize: 13, fontWeight: 700, fontFamily: FONT,
           }}
         >
-          🖨 Print / Save PDF
+          Print / Save PDF
         </button>
       </div>
     </div>
