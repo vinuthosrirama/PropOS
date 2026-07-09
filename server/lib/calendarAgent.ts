@@ -15,7 +15,8 @@ import { getThread } from "./conversations.js"
 import { getVoiceProfile, formatVoiceProfileForPrompt } from "./voiceProfile.js"
 import { getOpenSlots, getBlockedSlots, type SmsContact } from "./smsContacts.js"
 
-const SMS_LIMIT = 160
+// No style-driven cap — pure runaway-generation safety net. See docs/VOICE_CORPUS_VINUTH.md.
+const SMS_LIMIT = 700
 const MELBOURNE_TZ = "Australia/Melbourne"
 
 export type SchedClass = "YES" | "COUNTER" | "VAGUE" | "QUESTION" | "DECLINE" | "RESCHEDULE" | "OTHER"
@@ -145,7 +146,7 @@ Return ONLY this JSON (no markdown):
 {"classification":"YES|COUNTER|VAGUE|QUESTION|DECLINE|RESCHEDULE","action":"BOOK|COUNTER|PROPOSE|CONTEXT|DECLINE|RESCHEDULE","draft_reply":"...","voice_confidence":0.0,"booking":{"iso":"...","location":"..."} or null,"contact_status":"interested|booked|declined|backlog|active"}
 
 HARD RULES:
-- Under ${SMS_LIMIT} characters. No em-dashes. No AI tells. Match Vinuth's voice profile exactly.
+- No strict length cap, match Vinuth's voice profile's natural length exactly. No em-dashes. No AI tells.
 - Never propose a blocked time or one already declined. Mirror informal time words ("arvo", "mid-morning") if the agent uses them.
 - Booking iso MUST be copied exactly from an available slot above when action is BOOK.`
 

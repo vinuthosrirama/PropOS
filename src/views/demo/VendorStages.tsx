@@ -5965,7 +5965,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   {marketUpdatePreview.sms}
                 </div>
                 <div style={{ fontSize: 10, color: C.faint, marginTop: 6 }}>
-                  {marketUpdatePreview.sms.length}/160 characters
+                  {marketUpdatePreview.sms.length} characters
                 </div>
               </div>
             </div>
@@ -6423,7 +6423,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
               />
               <div style={{ textAlign: "right", fontSize: 11, marginTop: 4, fontWeight: 600,
                 color: sms.length >= 155 ? "#f87171" : sms.length >= 140 ? "#f59e0b" : C.faint }}>
-                {sms.length}/160
+                {sms.length} chars
               </div>
             </>
           ) : (

@@ -214,8 +214,8 @@ export function generateFromTemplate(params: {
   const smsPool = SMS[strategy] || DEFAULT_SMS
   const smsTemplate = smsPool[hash % smsPool.length]
   let sms = fill(smsTemplate, slots)
-  // 2 SMS segments (~320 chars) — see docs/VOICE_CORPUS_VINUTH.md
-  if (sms.length > 320) sms = sms.slice(0, 317).trimEnd() + "..."
+  // No style-driven cap, pure runaway safety net — see docs/VOICE_CORPUS_VINUTH.md
+  if (sms.length > 700) sms = sms.slice(0, 697).trimEnd() + "..."
 
   const subjectIdx = hash % SUBJECTS.length
   const bodyIdx = hash % BODIES.length

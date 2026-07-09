@@ -4,7 +4,7 @@
  * What it does:
  *   1. Receives an inbound SMS reply + the full conversation thread + lead SLM context
  *   2. Classifies the lead's intent (INTEREST / QUESTION / OBJECTION / BOOKING / OPT_OUT)
- *   3. Drafts a personalised SMS reply (max 160 chars) in the agent's voice
+ *   3. Drafts a personalised SMS reply in the agent's voice, no strict length cap
  *   4. Returns the draft for agent approval — nothing is sent automatically
  *
  * POST /api/reply-agent
@@ -79,16 +79,17 @@ export interface ReplyAgentRequest {
 export interface ReplyAgentResponse {
   intent:                ReplyIntent
   confidence:            number   // 0-100
-  draft:                 string   // ready-to-send SMS draft, max 160 chars
+  draft:                 string   // ready-to-send SMS draft, matches agent's natural length
   reasoning:             string   // why this intent was chosen (for agent review)
   autoSend:              false    // always false — agent must approve
   financialDataInjected: boolean
 }
 
-// Hard cap on SMS (same rule as outbound)
+// No style-driven cap (same rule as outbound) — pure runaway-generation
+// safety net. See docs/VOICE_CORPUS_VINUTH.md for Vinuth's real SMS range.
 function clampSMS(s: string): string {
-  if (s.length <= 320) return s          // 2 SMS segments (~320 chars)
-  return s.slice(0, 317).trimEnd() + "..."
+  if (s.length <= 700) return s
+  return s.slice(0, 697).trimEnd() + "..."
 }
 
 // Shared safety net: em-dash hard rule + AI-tell vocabulary + hollow openers.
@@ -196,7 +197,7 @@ Your job:
    - OPT_OUT: asking to stop receiving messages (STOP, unsubscribe, not interested)
    - UNKNOWN: unclear or ambiguous
 
-2. Draft a reply SMS (up to 2 segments, ~300 characters; do not pad, keep it natural) from ${agentFirst} that:
+2. Draft a reply SMS (no strict length limit, match the voice profile's natural length above, do not pad) from ${agentFirst} that:
    - Uses the lead's first name
    - Directly addresses their message, do not be vague
    - For QUESTION: answer the specific question using the property context above
@@ -211,7 +212,7 @@ Return ONLY valid JSON (no markdown):
 {
   "intent": "INTEREST|QUESTION|OBJECTION|BOOKING|OPT_OUT|UNKNOWN",
   "confidence": 0-100,
-  "draft": "reply SMS here, up to ~300 chars",
+  "draft": "reply SMS here, length matches the voice profile above",
   "reasoning": "one sentence explaining intent classification"
 }`
 

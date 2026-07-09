@@ -219,7 +219,7 @@ ${rejectedBlock || "(none yet)"}
 
 Write CONCISE style refinements (bullet points only, max 8 bullets, under 400 tokens) that capture what makes the approved examples better.
 Focus on: tone, structure, sign-off style, how they reference the property, phrasing patterns.
-Do NOT repeat the hard rules (no em-dashes, under 160 chars) — those are enforced elsewhere.
+Do NOT repeat the hard rules (no em-dashes, no strict length cap) — those are enforced elsewhere.
 Return ONLY the bullet-point style refinements, no preamble, no explanation.`
 
     const completion = await getClient().chat.completions.create({

@@ -264,7 +264,7 @@ export default function OutreachQueue({ items: initial, agentName: _agentName, s
                 }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8, marginTop: 14 }}>
-                      SMS (160 chars)
+                      SMS
                     </div>
                     <div style={{
                       background: C.bg3, borderRadius: 10, padding: "12px 14px",
@@ -273,7 +273,7 @@ export default function OutreachQueue({ items: initial, agentName: _agentName, s
                       {item.sms}
                     </div>
                     <div style={{ fontSize: 10, color: C.faint, marginTop: 4 }}>
-                      {item.sms.length}/160 chars
+                      {item.sms.length} characters
                     </div>
                   </div>
                   <div>

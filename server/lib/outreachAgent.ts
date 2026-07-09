@@ -104,9 +104,10 @@ function matchFastIntent(body: string): FastIntent["template"] | null {
 
 // ── Reply generation ──────────────────────────────────────────────────────────
 
+// No style-driven cap — pure runaway-generation safety net. See docs/VOICE_CORPUS_VINUTH.md.
 function clampSMS(s: string): string {
-  if (s.length <= 320) return s          // 2 SMS segments (~320 chars)
-  return s.slice(0, 317).trimEnd() + "..."
+  if (s.length <= 700) return s
+  return s.slice(0, 697).trimEnd() + "..."
 }
 
 function sanitise(s: string): string {
@@ -117,7 +118,7 @@ function sanitise(s: string): string {
 
 /**
  * Generate an AI draft reply for an inbound message from an outreach target.
- * Returns { draft, versionId } — draft is SMS text (≤160 chars), versionId for signal tracking.
+ * Returns { draft, versionId } — draft is SMS text (no strict length cap), versionId for signal tracking.
  * Uses intent pre-screen to skip OpenAI for clear-cut replies (~35% cost reduction).
  */
 export async function generateOutreachDraft(
@@ -166,7 +167,7 @@ ${threadBlock}
 Latest message from ${target.name.split(" ")[0]}:
 "${inboundMessage.slice(0, 400)}"
 
-Write a reply SMS (up to 2 segments, ~300 chars max; do not pad, keep it natural). Return ONLY the SMS text, no quotes, no explanation.`
+Write a reply SMS (no strict length cap, match Vinuth's natural voice length; do not pad). Return ONLY the SMS text, no quotes, no explanation.`
 
   try {
     const completion = await getClient().chat.completions.create({
@@ -219,7 +220,7 @@ Recent sale: ${target.recent_sale_address ?? "N/A"}
 Background: ${target.personal_note ?? "N/A"}
 Days since initial outreach: ${daysSinceContact}
 
-They haven't replied to the initial message. Write a brief follow-up SMS (up to 2 segments, ~300 chars max) using a different angle or new information. Don't mention you already texted them. Keep it fresh and specific to their background. Sign off as "Vinuth".
+They haven't replied to the initial message. Write a follow-up SMS (no strict length cap, match Vinuth's natural voice length) using a different angle or new information. Don't mention you already texted them. Keep it fresh and specific to their background. Sign off as "Vinuth".
 
 Return ONLY the SMS text.`
 

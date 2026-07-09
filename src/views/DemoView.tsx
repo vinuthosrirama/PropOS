@@ -3327,7 +3327,7 @@ function ReviewPanel({ property, lead, soldSLM, agent, theme, transcript, sms: i
               />
               <div style={{ textAlign: "right", fontSize: 11, marginTop: 4, fontWeight: 600,
                 color: sms.length >= 155 ? "#f87171" : sms.length >= 140 ? "#f59e0b" : C.faint }}>
-                {sms.length}/160
+                {sms.length} chars
               </div>
             </>
           ) : (
@@ -6869,10 +6869,10 @@ function NurtureSequencePanel({ entry, agent, theme }: { entry: SegmentedBuyer; 
   const signoff   = buyer.status === "investor" ? "Kind regards" : "Cheers"
 
   const templates = [
-    { sms: `Hi ${fname}, ${agentFirst} from ${agent.agency}. Quick market update on ${buyer.suburb}. Your place is looking really strong. Worth a chat? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 320), emailSubject: `Market update for ${buyer.suburb}, ${fname}` },
-    { sms: `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} clearance rate is tracking well. Happy to share the data. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 320), emailSubject: `${buyer.suburb} market moving, ${fname}` },
-    { sms: `Hi ${fname}, a comparable property in ${buyer.suburb} just sold for ${fmtK(Math.round(fin.currentEstimate * 1.03 / 5000) * 5000)}. Want the full comps? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 320), emailSubject: `Comparable sale you should see, ${fname}` },
-    { sms: `Hi ${fname}, ${agentFirst} here. Just circling back. Happy to chat whenever the timing suits. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 320), emailSubject: `Still here when you're ready, ${fname}` },
+    { sms: `Hi ${fname}, ${agentFirst} from ${agent.agency}. Quick market update on ${buyer.suburb}. Your place is looking really strong. Worth a chat? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 700), emailSubject: `Market update for ${buyer.suburb}, ${fname}` },
+    { sms: `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} clearance rate is tracking well. Happy to share the data. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 700), emailSubject: `${buyer.suburb} market moving, ${fname}` },
+    { sms: `Hi ${fname}, a comparable property in ${buyer.suburb} just sold for ${fmtK(Math.round(fin.currentEstimate * 1.03 / 5000) * 5000)}. Want the full comps? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 700), emailSubject: `Comparable sale you should see, ${fname}` },
+    { sms: `Hi ${fname}, ${agentFirst} here. Just circling back. Happy to chat whenever the timing suits. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 700), emailSubject: `Still here when you're ready, ${fname}` },
   ]
 
   const handleEnable = () => {
@@ -8662,7 +8662,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 hook: `Save ${fmtDollar(fin.cgtSavingsBy2027)} in tax`, sub: "Before July 2027 cutoff", color: "#ef4444",
                 buildOutreach: () => {
                   const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Selling before July 2027 saves you ~${fmtDollar(fin.cgtSavingsBy2027)} in tax. Happy to run the numbers. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
-                  const sms = stripDashes(smsRaw.slice(0, 320))
+                  const sms = stripDashes(smsRaw.slice(0, 700))
                   const emailSubject = `Your CGT window, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick one on your numbers at ${shortAddr(buyer.purchaseAddress)}.`,
@@ -8678,7 +8678,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 hook: `${fmtDollar(fin.equityGain)} in equity`, sub: `Built since ${year}`, color: "#66bb6a",
                 buildOutreach: () => {
                   const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Your place has grown ${fmtDollar(fin.equityGain)} since ${year}. Worth knowing your options. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
-                  const sms = stripDashes(smsRaw.slice(0, 320))
+                  const sms = stripDashes(smsRaw.slice(0, 700))
                   const emailSubject = `Your equity position, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here.`,
@@ -8694,7 +8694,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 hook: `${comps[0].address}: ${fmtDollar(comps[0].soldPrice)}`, sub: comps[0].soldDate, color: "#ffa726",
                 buildOutreach: () => {
                   const smsRaw = `Hi ${fname}, ${agentFirst} here. A ${comps[0].beds}-bed in ${buyer.suburb} just sold for ${fmtDollar(comps[0].soldPrice)}. Your place stacks up really well. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
-                  const sms = stripDashes(smsRaw.slice(0, 320))
+                  const sms = stripDashes(smsRaw.slice(0, 700))
                   const emailSubject = `Recent ${buyer.suburb} sale relevant to your place, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here.`,
@@ -8710,7 +8710,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 hook: `${range.clearanceRate}% clearance rate`, sub: `Avg ${range.daysOnMarket} days on market`, color: accentColor,
                 buildOutreach: () => {
                   const smsRaw = `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} is running at ${range.clearanceRate}% clearance right now. Good time to know your options. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
-                  const sms = stripDashes(smsRaw.slice(0, 320))
+                  const sms = stripDashes(smsRaw.slice(0, 700))
                   const emailSubject = `${buyer.suburb} market is moving, ${fname}`
                   const emailBody = [
                     `Hi ${fname}, ${agentFirst} from ${agent.agency} here. Quick update on ${buyer.suburb}.`,
@@ -9861,7 +9861,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                   {marketUpdatePreview.sms}
                 </div>
                 <div style={{ fontSize: 10, color: C.faint, marginTop: 6 }}>
-                  {marketUpdatePreview.sms.length}/160 characters
+                  {marketUpdatePreview.sms.length} characters
                 </div>
               </div>
             </div>
@@ -9936,7 +9936,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const equityStrRV = fmtDollar(fin.equityGain)
   const shortAddrRV = shortAddr(buyer.purchaseAddress)
   const signoffRV = buyer.status === "investor" ? "Kind regards" : "Cheers"
-  const trim160 = (t: string) => t.length > 320 ? t.slice(0, 317) + "..." : t   // 2 SMS segments (~320 chars)
+  const trim160 = (t: string) => t.length > 700 ? t.slice(0, 697) + "..." : t   // pure runaway-generation safety net, no style cap
   const noEmDash = (s: string) => s.replace(/—|–|--/g, ",").replace(/ {2,}/g, " ").trim()
 
   // Persona detection — used to filter / adapt angles
@@ -10319,7 +10319,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
               />
               <div style={{ textAlign: "right", fontSize: 11, marginTop: 4, fontWeight: 600,
                 color: sms.length >= 155 ? "#f87171" : sms.length >= 140 ? "#f59e0b" : C.faint }}>
-                {sms.length}/160
+                {sms.length} chars
               </div>
             </>
           ) : (
@@ -11137,7 +11137,7 @@ export default function DemoView({
                           }}
                         />
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 10, color: replyText.length > 160 ? "#ef4444" : C.faint }}>{replyText.length}/160</span>
+                          <span style={{ fontSize: 10, color: C.faint }}>{replyText.length} chars</span>
                           <button
                             onClick={handleSendReply}
                             disabled={sendingReply || !replyText.trim()}

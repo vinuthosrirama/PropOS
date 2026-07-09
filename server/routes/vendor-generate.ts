@@ -22,9 +22,11 @@ function getOpenAI(): OpenAI {
   return _openai
 }
 
+// No style-driven cap — Vinuth's real SMS answers run 138-455 chars (see
+// docs/VOICE_CORPUS_VINUTH.md), prompt is told to match that range naturally.
+// Pure runaway-generation safety net, not meant to trigger in normal use.
 function clampSMS(s: string): string {
-  // 2 SMS segments (~320 chars) — Vinuth's relational voice needs the room.
-  return s.length <= 320 ? s : s.slice(0, 317).trimEnd() + "..."
+  return s.length <= 700 ? s : s.slice(0, 697).trimEnd() + "..."
 }
 
 // Shared safety net: em-dash hard rule + AI-tell vocabulary + hollow openers.
@@ -84,7 +86,7 @@ export interface VendorGenerateParams {
  * Pipeline:
  *   1. Claude Haiku  → extract personalisation hook from CRM notes
  *   2. Claude Sonnet → write SMS + email with financial incentives
- *   3. Sanitise      → no em-dashes, SMS clamped to 2 segments (~320 chars)
+ *   3. Sanitise      → no em-dashes, SMS length matches voice profile (no strict cap)
  */
 router.post("/", async (req, res) => {
   const params = req.body as VendorGenerateParams
@@ -256,7 +258,7 @@ ${vocBlock}
 Hard rules:
 - Write in first person as ${params.agentName} — use "I" throughout. This is a personal message from the agent to someone they already know.
 - HARD CONSTRAINT: NEVER use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma or period instead.
-- SMS may run up to 2 segments (~300 characters); do not compress into one 160-char text if it costs the natural cadence. Reads like a real text, warm, not salesy.
+- SMS has no strict length cap. Match the training examples' natural length, do not compress or pad. Reads like a real text, warm, not salesy.
 - SMS sign-off: "${signoff}, ${agentSig}" (match agent voice style above)
 - Email: 2-3 short paragraphs maximum
 - This is vendor prospecting — you sold this person a home and now you're reaching out about their property's value growth. Never say "I remember you from the open home."

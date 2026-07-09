@@ -5,9 +5,13 @@ import { generateFromTemplate } from "../lib/outreachTemplates.js"
 
 const router = Router()
 
+// No style-driven cap — Vinuth's real SMS answers run 138-455 chars (see
+// docs/VOICE_CORPUS_VINUTH.md) and the prompt is told to match that range
+// naturally. This is a pure runaway-generation safety net, never meant to
+// trigger in normal operation.
 function clampSMS(sms: string): string {
-  if (sms.length <= 320) return sms          // 2 SMS segments (~320 chars)
-  return sms.slice(0, 317).trimEnd() + "..."
+  if (sms.length <= 700) return sms
+  return sms.slice(0, 697).trimEnd() + "..."
 }
 
 function cleanStr(s: string): string {

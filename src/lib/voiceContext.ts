@@ -297,8 +297,9 @@ const MANPREET_SEED: SeedEntry[] = [
 // ── Vinuth seed corpus (Peake Real Estate) ───────────────────────────────────
 // Voice: warm, relational, multi-clause. Greeting "Hey"/"Hi". Sign-off block
 // "Cheers/Thanks/Kind Regards, [Agent], Peake Real Estate". Signature CTA:
-// "meet for a coffee (or tea) to discuss?". SMS runs up to 2 segments, do NOT
-// compress to 160. Source of truth: docs/VOICE_CORPUS_VINUTH.md (raw answers).
+// "meet for a coffee (or tea) to discuss?". SMS has no strict length cap
+// (real range 138-455 chars), do NOT compress to fit a marketing-SMS ceiling.
+// Source of truth: docs/VOICE_CORPUS_VINUTH.md (raw answers).
 const VINUTH_SEED: SeedEntry[] = [
   {
     type: "paste",
@@ -571,7 +572,7 @@ ${qaBlock}
 ${pitchBlock}
 
 WRITE:
-1. An SMS (up to 2 segments, ~300 characters max — do NOT compress into one 160-char text if it costs the natural cadence) that:
+1. An SMS (no strict length cap — match the training examples' natural length above, do NOT compress or pad) that:
    - Opens with their first name + your name
    - References one specific thing from the voice transcript or their questions
    - Names the new listing and one key similarity to what they saw
