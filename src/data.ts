@@ -458,6 +458,7 @@ export interface PortfolioProperty {
   image:       string
   description: string
   leadCount:   number          // expected attendees / known leads
+  hidden?:     boolean         // excluded from display/matching until its SLM data is ready
 }
 
 // ── Agent gating ──────────────────────────────────────────────────────────────
@@ -513,15 +514,20 @@ function isMasterAccount(agent: AgentProfile): boolean {
 }
 
 export function getPortfolioForAgent(agent: AgentProfile): { sold: PortfolioProperty[]; active: PortfolioProperty[] } {
-  if (_dbPortfolioCache) return _dbPortfolioCache   // DB wins — provisioned agent
-  if (isCamKnoll(agent) || isMasterAccount(agent)) return { sold: PORTFOLIO_SOLD, active: PORTFOLIO_ACTIVE }
-  if (isPasSunilchandra(agent)) return { sold: PAS_PORTFOLIO_SOLD, active: PAS_PORTFOLIO_ACTIVE }
-  if (isManpreetSingh(agent)) return { sold: MANPREET_PORTFOLIO_SOLD, active: MANPREET_PORTFOLIO_ACTIVE }
-  if (isHarkiratGill(agent)) return { sold: GILL_PORTFOLIO_SOLD, active: GILL_PORTFOLIO_ACTIVE }
-  if (isChrisKumarage(agent)) return { sold: KUMARAGE_PORTFOLIO_SOLD, active: KUMARAGE_PORTFOLIO_ACTIVE }
-  if (isAnthonyAbeysena(agent)) return { sold: ABEYSENA_PORTFOLIO_SOLD, active: ABEYSENA_PORTFOLIO_ACTIVE }
-  // Other agents see empty portfolio
-  return { sold: [], active: [] }
+  const portfolio = ((): { sold: PortfolioProperty[]; active: PortfolioProperty[] } => {
+    if (_dbPortfolioCache) return _dbPortfolioCache   // DB wins — provisioned agent
+    if (isCamKnoll(agent) || isMasterAccount(agent)) return { sold: PORTFOLIO_SOLD, active: PORTFOLIO_ACTIVE }
+    if (isPasSunilchandra(agent)) return { sold: PAS_PORTFOLIO_SOLD, active: PAS_PORTFOLIO_ACTIVE }
+    if (isManpreetSingh(agent)) return { sold: MANPREET_PORTFOLIO_SOLD, active: MANPREET_PORTFOLIO_ACTIVE }
+    if (isHarkiratGill(agent)) return { sold: GILL_PORTFOLIO_SOLD, active: GILL_PORTFOLIO_ACTIVE }
+    if (isChrisKumarage(agent)) return { sold: KUMARAGE_PORTFOLIO_SOLD, active: KUMARAGE_PORTFOLIO_ACTIVE }
+    if (isAnthonyAbeysena(agent)) return { sold: ABEYSENA_PORTFOLIO_SOLD, active: ABEYSENA_PORTFOLIO_ACTIVE }
+    // Other agents see empty portfolio
+    return { sold: [], active: [] }
+  })()
+  // `hidden` excludes a listing from every consumer (Portfolio cards, Match Queue
+  // pairing, VendorOS) from this single choke point, until its SLM data is ready.
+  return { sold: portfolio.sold, active: portfolio.active.filter(p => !p.hidden) }
 }
 
 // Sold comparable properties — leads come exclusively from Google Sheets (Leads tab, inspectedProperty column)
@@ -1082,6 +1088,7 @@ export const PORTFOLIO_ACTIVE: PortfolioProperty[] = [
     image: "/1-2-maclaine-court.jpg",
     description: "Substantial 5-bed executive home on a rare 6-car allotment in Narre Warren North. Listed 30 Jun 2026.",
     leadCount: 0,
+    hidden: true,
   },
   {
     id: 109,
@@ -1104,6 +1111,7 @@ export const PORTFOLIO_ACTIVE: PortfolioProperty[] = [
     image: "/12-carambola-place.jpg",
     description: "Spacious 5-bed, 3-bath family home in Berwick. Listed 25 Jun 2026.",
     leadCount: 0,
+    hidden: true,
   },
   {
     id: 111,
@@ -1126,6 +1134,7 @@ export const PORTFOLIO_ACTIVE: PortfolioProperty[] = [
     image: "/40-highvale-crescent.jpg",
     description: "Executive 5-bed, 3-bath family home with triple garage in Berwick. Listed 17 Jun 2026.",
     leadCount: 0,
+    hidden: true,
   },
   {
     id: 113,
@@ -1137,6 +1146,7 @@ export const PORTFOLIO_ACTIVE: PortfolioProperty[] = [
     image: "/5-5-17-william-road.jpg",
     description: "2-bed, 2-bath unit with double car space in a boutique Berwick complex. Listed 17 Jun 2026.",
     leadCount: 0,
+    hidden: true,
   },
   {
     id: 114,
