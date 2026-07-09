@@ -101,3 +101,28 @@ export function sanitiseResult(r: GenerateResult): GenerateResult {
     },
   }
 }
+
+/**
+ * Guarantees the SMS ends with a sign-off naming the agent.
+ *
+ * The generation prompt tells the LLM to "sign off using the voice profile's
+ * sign-off block exactly" — a soft instruction among many hard rules, and
+ * LLMs don't follow it 100% of the time. The QA reviewer built specifically
+ * to catch this (qaMessage() in claude.ts) is not wired into the live
+ * generate routes, so nothing was catching a dropped sign-off before this.
+ * A second LLM call to "fix" it would cost more, add latency, and can fail
+ * on the exact same provider outage that produced the bad text in the first
+ * place — deterministic and free is the right fix here.
+ *
+ * Lenient by design: if the agent's first name already appears near the end
+ * of the message in any form, leave it alone rather than force a rewrite.
+ * Only appends when a sign-off is genuinely missing.
+ */
+export function ensureSignoff(sms: string, agentFirst: string, agencyLabel: string, closer = "Cheers"): string {
+  const trimmed = sms.trim()
+  if (!trimmed || !agentFirst) return trimmed
+  const tail = trimmed.slice(-40).toLowerCase()
+  if (tail.includes(agentFirst.toLowerCase())) return trimmed
+  const needsPeriod = /[.!?]$/.test(trimmed) ? "" : "."
+  return `${trimmed}${needsPeriod} ${closer}, ${agentFirst}${agencyLabel ? `, ${agencyLabel}` : ""}`
+}

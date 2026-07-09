@@ -4,7 +4,7 @@ import OpenAI from "openai"
 import { inferLifeStage, renderLifeStageBlock } from "../lib/lifeStageInference.js"
 import { getSuburbContext } from "../lib/suburbContext.js"
 import { getTimingTriggers, renderTimingBlock } from "../lib/timingTriggers.js"
-import { sanitiseText } from "../lib/sanitise.js"
+import { sanitiseText, ensureSignoff } from "../lib/sanitise.js"
 import { withRetry } from "../lib/llmUtils.js"
 
 const router = Router()
@@ -324,7 +324,7 @@ Respond ONLY with valid JSON, no markdown:
         personalisationLine?: string
       }
       return res.json({
-        sms:   clampSMS(sanitise(parsed.sms ?? "")),
+        sms:   clampSMS(ensureSignoff(sanitise(parsed.sms ?? ""), agentFirst, agencyLabel, signoff)),
         email: {
           subject: sanitise(parsed.email?.subject ?? ""),
           body:    (parsed.email?.body ?? []).map(sanitise),

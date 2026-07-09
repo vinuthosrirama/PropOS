@@ -2,6 +2,7 @@ import { Router } from "express"
 import { generateMessage, type GenerateParams } from "../lib/openai.js"
 import { generateMessageHaiku, MODEL_COSTS } from "../lib/claude.js"
 import { generateFromTemplate } from "../lib/outreachTemplates.js"
+import { ensureSignoff } from "../lib/sanitise.js"
 
 const router = Router()
 
@@ -18,10 +19,14 @@ function cleanStr(s: string): string {
   return s.replace(/—|–/g, ",").replace(/--/g, ",")
 }
 
-function sanitise<T extends { sms: string; email: { subject: string; body: string[] } }>(r: T): T {
+// agentFirst/agencyLabel default to "" so this stays a drop-in replacement at
+// call sites that don't have agent context handy — ensureSignoff no-ops on ""
+function sanitise<T extends { sms: string; email: { subject: string; body: string[] } }>(
+  r: T, agentFirst = "", agencyLabel = "",
+): T {
   return {
     ...r,
-    sms: clampSMS(cleanStr(r.sms)),
+    sms: clampSMS(ensureSignoff(cleanStr(r.sms), agentFirst, agencyLabel)),
     email: {
       ...r.email,
       subject: cleanStr(r.email.subject),
@@ -87,6 +92,7 @@ router.post("/", async (req, res) => {
     // OpenAI is primary — this repo currently runs without an Anthropic key, and a
     // stray ANTHROPIC_API_KEY in any environment should never silently override that.
     // Anthropic stays available as the fallback when OpenAI is unset or errors.
+    const agentFirst = params.agentName?.split(" ")[0] ?? ""
     if (process.env.OPENAI_API_KEY) {
       result = sanitise(await generateMessage(params).catch(async () => {
         if (process.env.ANTHROPIC_API_KEY) {
@@ -94,10 +100,10 @@ router.post("/", async (req, res) => {
           return generateMessageHaiku(params)
         }
         throw new Error("no-llm")
-      }))
+      }), agentFirst, params.agentAgency)
     } else if (process.env.ANTHROPIC_API_KEY) {
       modelUsed = "claude-haiku-4-5"
-      result = sanitise(await generateMessageHaiku(params))
+      result = sanitise(await generateMessageHaiku(params), agentFirst, params.agentAgency)
     } else {
       throw new Error("no-llm")
     }
