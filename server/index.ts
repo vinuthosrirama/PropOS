@@ -77,6 +77,26 @@ import { getDomainEstimate } from "./lib/domainAvm.js"
 const app = express()
 const PORT = process.env.PORT ?? 3001
 
+// ── Fail-closed secret guard (A2/A4/A7) ───────────────────────────────────────
+// In production, refuse to boot on a missing security secret rather than silently
+// falling back to a public, source-committed default. A single misconfigured deploy
+// otherwise runs on guessable JWT/webhook/unsubscribe secrets.
+if (process.env.NODE_ENV === "production") {
+  const required = [
+    "JWT_SECRET",
+    "JWT_REFRESH_SECRET",
+    "WEBHOOK_SECRET",
+    "UNSUBSCRIBE_SECRET",
+    "DATABASE_URL",
+  ]
+  const missing = required.filter(k => !process.env[k]?.trim())
+  if (missing.length > 0) {
+    console.error(`FATAL: missing required production secrets: ${missing.join(", ")}`)
+    console.error("Refusing to boot on insecure defaults. Set these via `flyctl secrets set` and redeploy.")
+    process.exit(1)
+  }
+}
+
 // Trust Fly.io / Cloudflare proxy — required for express-rate-limit to read the
 // real client IP from X-Forwarded-For without throwing ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
 app.set("trust proxy", 1)
@@ -180,7 +200,11 @@ app.use("/api/auth",         authRouter)
 app.use("/unsubscribe",      unsubscribeRouter)
 app.use("/api/track",        trackRouter)
 app.use("/api/doc-track",   docTrackRouter)
-app.use("/api/webhook",      webhookRouter)
+// A1: apply the shared-secret gate INLINE at mount time. `verifyWebhookSecret` is a
+// hoisted function declaration (defined below), so it is available here. Without this,
+// the later `app.use("/api/webhook", verifyWebhookSecret)` runs AFTER this router in
+// registration order and never protects /api/webhook/sms + /api/webhook/email.
+app.use("/api/webhook",      verifyWebhookSecret, webhookRouter)
 // iOS Shortcut relay — public, auth via SHORTCUT_RELAY_SECRET query param
 app.use("/api/sms-shortcut", smsShortcutRouter)
 // BB daemon poll/ack — public (WEBHOOK_SECRET); status/restart use requireAuth per-route
@@ -207,7 +231,9 @@ app.get("/api/sms-transport", async (_req: Request, res: Response) => {
 
 // POST /api/test-sms — fire a test SMS via the active transport, no DB required
 // Body: { to?: string, message?: string }  (both optional — defaults to TEST_RECIPIENT_PHONE + "Hello World!")
-app.post("/api/test-sms", express.json(), async (req: Request, res: Response) => {
+// A5: requireAuth — this sends from the agent's real number, so it must never be
+// anonymously reachable (was a public SMS-send / cost-abuse endpoint).
+app.post("/api/test-sms", requireAuth, express.json(), async (req: Request, res: Response) => {
   const to      = String(req.body?.to      ?? process.env.TEST_RECIPIENT_PHONE ?? "").trim()
   const message = String(req.body?.message ?? "Hello World!").trim()
   if (!to) return res.status(400).json({ error: "No 'to' phone number — set TEST_RECIPIENT_PHONE or pass { to } in body" })
@@ -424,6 +450,15 @@ app.get("*", (_req, res) => {
   res.setHeader("Expires", "0")
   res.setHeader("Surrogate-Control", "no-store")
   res.sendFile(path.join(distPath, "index.html"))
+})
+
+// A10: global error handler — catches any uncaught throw so Express's default handler
+// (which leaks stack traces when NODE_ENV !== "production") is never reached.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("[unhandled]", err.message)
+  if (res.headersSent) return
+  res.status(500).json({ error: "Internal server error" })
 })
 
 app.listen(PORT, async () => {

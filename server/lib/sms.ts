@@ -27,6 +27,7 @@ import { sendViaTextingBlue, textingBlueConfigured, pingTextingBlue }          f
 import { sendViaAndroidGateway, androidGatewayConfigured, pingAndroidGateway } from "./androidgateway.js"
 import { sendViaHttpSms, httpSmsConfigured }                                   from "./httpsms.js"
 import { enqueueShortcutMessage, shortcutRelayConfigured }                     from "./shortcutRelay.js"
+import { smsOptOutReason }                                                     from "./compliance.js"
 
 export type SmsTransport =
   | "bluebubbles"
@@ -143,6 +144,14 @@ export async function sendSMS(
   skipTransports: SmsTransport[] = [],
   liveMode = false,
 ): Promise<SmsSendResult> {
+  // A8: single opt-out choke point. Every send path routes through sendSMS, so
+  // enforcing the AU SPAM Act opt-out registry here guarantees no caller can bypass it.
+  // smsOptOutReason fails open on transient DB errors (a hiccup must not drop legit sends).
+  const optedOut = await smsOptOutReason(to)
+  if (optedOut) {
+    throw new Error(`Recipient ${to} has ${optedOut} — send blocked by compliance guard`)
+  }
+
   const chain = getTransportChain().filter(t => !skipTransports.includes(t))
 
   if (chain.length === 0) {

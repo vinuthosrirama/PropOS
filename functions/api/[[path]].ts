@@ -26,9 +26,20 @@ export async function onRequest(context: { request: Request }): Promise<Response
 
   const response = await fetch(proxied)
 
-  // Pass the response through, adding CORS header for safety
+  // A6: echo a specific allowed origin instead of a blanket "*". Wildcard CORS made
+  // every proxied backend response readable cross-origin by any site on the internet.
+  const ALLOWED_ORIGINS = new Set([
+    "https://propos.addvantage.site",
+    "https://propos-demo.pages.dev",
+    "http://localhost:5173",
+  ])
+  const reqOrigin = request.headers.get("Origin") ?? ""
   const headers = new Headers(response.headers)
-  headers.set("Access-Control-Allow-Origin", "*")
+  if (ALLOWED_ORIGINS.has(reqOrigin)) {
+    headers.set("Access-Control-Allow-Origin", reqOrigin)
+    headers.set("Vary", "Origin")
+    headers.set("Access-Control-Allow-Credentials", "true")
+  }
 
   return new Response(response.body, {
     status:  response.status,

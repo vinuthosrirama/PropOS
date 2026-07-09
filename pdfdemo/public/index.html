@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AddVantage Document Intelligence Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #04070D; color: #E7ECF2; font-family: "Inter", -apple-system, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .box { max-width: 620px; text-align: center; }
+  .kicker { font-size: 12px; letter-spacing: 3px; color: #A6DAFF; font-weight: 700; }
+  h1 { font-size: 34px; font-weight: 800; margin: 14px 0 14px; color: #fff; }
+  p { font-size: 15px; line-height: 1.7; color: #8B96A5; }
+  .cta { display: flex; gap: 14px; justify-content: center; margin-top: 32px; flex-wrap: wrap; }
+  a.btn { text-decoration: none; border-radius: 12px; padding: 15px 26px; font-size: 15px; font-weight: 700; }
+  a.primary { background: linear-gradient(135deg, #7B35BE, #3f0278); color: #fff; }
+  a.secondary { background: rgba(166,218,255,0.08); color: #A6DAFF; border: 1px solid rgba(166,218,255,0.3); }
+  .steps { margin-top: 40px; text-align: left; display: grid; gap: 12px; }
+  .step { display: flex; gap: 14px; align-items: flex-start; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 15px 18px; }
+  .n { width: 26px; height: 26px; border-radius: 50%; background: rgba(166,218,255,0.12); color: #A6DAFF; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .step div { font-size: 13.5px; line-height: 1.6; color: #C6CFDA; }
+  .foot { margin-top: 36px; font-size: 11px; color: #6b7280; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="kicker">ADDVANTAGE DOCUMENT INTELLIGENCE</div>
+    <h1>Know the moment they read it.<br>And exactly what they read.</h1>
+    <p>Send a vendor pitch as a link instead of an attachment. Every reading session streams
+    back: time on each section, scroll depth, cursor heatmaps, what they highlighted, and
+    whether they saved it as a PDF. All of it rolls into a live intent score.</p>
+
+    <div class="cta">
+      <a class="btn primary" href="/pitch.html" target="_blank">Open the vendor pitch</a>
+      <a class="btn secondary" href="/insights.html" target="_blank">Open the live dashboard</a>
+    </div>
+
+    <div class="steps">
+      <div class="step"><div class="n">1</div><div>Open the sample pitch in one tab. This is what
+        the vendor receives, a branded page, not a dead PDF attachment.</div></div>
+      <div class="step"><div class="n">2</div><div>Read it like a vendor would. Linger on the
+        price guide, highlight a sentence, try Print / Save as PDF.</div></div>
+      <div class="step"><div class="n">3</div><div>Watch the dashboard in a second tab. Within
+        seconds you'll see read time per section, the cursor heatmap, and the intent score climb.</div></div>
+    </div>
+
+    <div class="foot">Demo environment. Synthetic data only. Part of PropOS by AddVantage AI.</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Document Intelligence: Live Insights</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #04070D; color: #E7ECF2; font-family: "Inter", -apple-system, sans-serif; }
+  .top { padding: 34px 24px 10px; max-width: 900px; margin: 0 auto; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  h1 { font-size: 24px; font-weight: 800; }
+  .sub { color: #8B96A5; font-size: 13px; margin-top: 6px; }
+  .live { display: inline-flex; align-items: center; gap: 7px; background: rgba(34,197,94,0.12); color: #4ade80; border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 700; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 18px 24px 60px; }
+  .empty { text-align: center; color: #8B96A5; padding: 70px 20px; font-size: 14px; }
+  .empty a { color: #A6DAFF; }
+  .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 22px; margin-bottom: 18px; }
+  .row1 { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .score { font-size: 26px; font-weight: 800; border-radius: 12px; padding: 8px 16px; }
+  .score.hot { background: rgba(239,68,68,0.15); color: #f87171; }
+  .score.warm { background: rgba(251,146,60,0.15); color: #fb923c; }
+  .score.cool { background: rgba(166,218,255,0.1); color: #A6DAFF; }
+  .meta { font-size: 13px; color: #8B96A5; line-height: 1.7; }
+  .meta b { color: #E7ECF2; }
+  .badges { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { font-size: 11px; font-weight: 700; border-radius: 20px; padding: 5px 12px; background: rgba(255,255,255,0.07); color: #C6CFDA; }
+  .badge.print { background: rgba(239,68,68,0.15); color: #f87171; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 18px; }
+  .stat { background: rgba(255,255,255,0.03); border-radius: 10px; padding: 12px; text-align: center; }
+  .stat .v { font-size: 20px; font-weight: 800; color: #A6DAFF; }
+  .stat .k { font-size: 10px; letter-spacing: 1px; color: #8B96A5; margin-top: 4px; }
+  .sect { margin-top: 18px; }
+  .sect .srow { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .sect .sname { width: 150px; font-size: 12px; color: #C6CFDA; flex-shrink: 0; }
+  .sect .sbar { flex: 1; height: 10px; background: rgba(255,255,255,0.06); border-radius: 5px; overflow: hidden; }
+  .sect .sfill { height: 100%; background: linear-gradient(90deg, #0099FF, #A6DAFF); border-radius: 5px; }
+  .sect .sval { width: 44px; font-size: 12px; color: #8B96A5; text-align: right; }
+  .h2 { font-size: 11px; letter-spacing: 2px; color: #A6DAFF; font-weight: 700; margin: 20px 0 10px; }
+  .heat { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .heatbox { position: relative; }
+  .heatbox canvas { width: 100%; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); display: block; }
+  .heatbox .hname { font-size: 10px; color: #8B96A5; text-align: center; margin-top: 5px; }
+  .sels { margin-top: 6px; }
+  .sel { font-size: 12px; color: #C6CFDA; background: rgba(166,218,255,0.07); border-left: 3px solid #A6DAFF; border-radius: 6px; padding: 8px 12px; margin-top: 6px; font-style: italic; }
+  .clear { background: none; border: 1px solid rgba(255,255,255,0.15); color: #8B96A5; border-radius: 8px; padding: 7px 14px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .note { font-size: 12px; color: #6b7280; margin-top: 24px; line-height: 1.7; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div>
+      <h1>Document Intelligence</h1>
+      <div class="sub">Live reading signals from the tracked vendor pitch. Refreshes every 5 seconds.</div>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <span class="live"><span class="dot"></span>LIVE</span>
+      <button class="clear" onclick="clearAll()">Clear demo data</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="list"><div class="empty">Waiting for the first reading session.<br><br>
+      Open the <a href="/pitch.html" target="_blank">sample vendor pitch</a> in another tab,
+      read it for a while, and watch this dashboard update.</div></div>
+    <div class="note">In PropOS production this same engine writes each session's intent score
+    straight onto the lead's CRM record and sends the agent an SMS the moment the document is
+    opened, and again when engagement crosses the high-interest threshold.</div>
+  </div>
+
+<script>
+var SECTIONS = [
+  ["cover-note", "Cover note"],
+  ["price-guide", "Price guide"],
+  ["comparable-sales", "Comparable sales"],
+  ["campaign", "Campaign plan"],
+  ["agent-card", "Agent card"]
+];
+
+function fmtTime(s) {
+  if (s < 60) return s + "s";
+  return Math.floor(s / 60) + "m " + (s % 60) + "s";
+}
+function fmtAgo(ms) {
+  var d = Math.round((Date.now() - ms) / 1000);
+  if (d < 60) return d + "s ago";
+  if (d < 3600) return Math.round(d / 60) + "m ago";
+  return new Date(ms).toLocaleString("en-AU");
+}
+function scoreClass(sc) { return sc >= 10 ? "hot" : sc >= 5 ? "warm" : "cool"; }
+function scoreWord(sc) { return sc >= 10 ? "HOT LEAD" : sc >= 5 ? "WARMING" : "EARLY"; }
+function esc(t) { var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+
+function render(sessions) {
+  var list = document.getElementById("list");
+  if (!sessions.length) return; // keep the empty-state
+  list.innerHTML = "";
+
+  sessions.forEach(function (s, idx) {
+    var card = document.createElement("div");
+    card.className = "card";
+
+    var maxT = 1;
+    SECTIONS.forEach(function (sec) { maxT = Math.max(maxT, s.pageTimes[sec[0]] || 0); });
+
+    var bars = SECTIONS.map(function (sec) {
+      var t = s.pageTimes[sec[0]] || 0;
+      return '<div class="srow"><div class="sname">' + sec[1] + '</div>' +
+        '<div class="sbar"><div class="sfill" style="width:' + Math.round((t / maxT) * 100) + '%"></div></div>' +
+        '<div class="sval">' + fmtTime(t) + '</div></div>';
+    }).join("");
+
+    var sels = s.textSelections.map(function (t) {
+      return '<div class="sel">"' + esc(t) + '"</div>';
+    }).join("");
+
+    card.innerHTML =
+      '<div class="row1">' +
+        '<div class="score ' + scoreClass(s.score) + '">+' + s.score + '</div>' +
+        '<div class="meta"><b>' + scoreWord(s.score) + '</b> · Reader ' + (idx + 1) +
+          '<br>' + s.device + (s.location ? " · " + s.location : "") +
+          ' · opened ' + fmtAgo(s.openedAt) + ' · last active ' + fmtAgo(s.lastActiveAt) + '</div>' +
+        '<div class="badges">' +
+          (s.printed ? '<span class="badge print">SAVED AS PDF</span>' : "") +
+          (s.returnFocusCount > 0 ? '<span class="badge">CAME BACK x' + s.returnFocusCount + '</span>' : "") +
+        '</div>' +
+      '</div>' +
+      '<div class="stats">' +
+        '<div class="stat"><div class="v">' + fmtTime(s.totalTimeS) + '</div><div class="k">READ TIME</div></div>' +
+        '<div class="stat"><div class="v">' + s.completionPct + '%</div><div class="k">COMPLETION</div></div>' +
+        '<div class="stat"><div class="v">' + s.scrollDepthPct + '%</div><div class="k">SCROLL DEPTH</div></div>' +
+        '<div class="stat"><div class="v">' + s.cursorSamples.length + '</div><div class="k">CURSOR SAMPLES</div></div>' +
+      '</div>' +
+      '<div class="h2">TIME PER SECTION</div><div class="sect">' + bars + '</div>' +
+      '<div class="h2">CURSOR HEATMAP BY SECTION</div><div class="heat" id="heat-' + idx + '"></div>' +
+      (sels ? '<div class="h2">TEXT THEY HIGHLIGHTED</div><div class="sels">' + sels + '</div>' : "");
+
+    list.appendChild(card);
+    drawHeat(document.getElementById("heat-" + idx), s.cursorSamples);
+  });
+}
+
+function drawHeat(container, samples) {
+  SECTIONS.forEach(function (sec) {
+    var pts = samples.filter(function (p) { return p.section === sec[0]; });
+    var box = document.createElement("div");
+    box.className = "heatbox";
+    var cv = document.createElement("canvas");
+    cv.width = 300; cv.height = 170;
+    box.appendChild(cv);
+    var nm = document.createElement("div");
+    nm.className = "hname";
+    nm.textContent = sec[1] + " (" + pts.length + ")";
+    box.appendChild(nm);
+    container.appendChild(box);
+
+    var ctx = cv.getContext("2d");
+    pts.forEach(function (p) {
+      var x = (p.x / 100) * cv.width, y = (p.y / 100) * cv.height;
+      var g = ctx.createRadialGradient(x, y, 0, x, y, 26);
+      g.addColorStop(0, "rgba(255,80,80,0.28)");
+      g.addColorStop(0.5, "rgba(255,160,60,0.12)");
+      g.addColorStop(1, "rgba(255,160,60,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, 26, 0, Math.PI * 2); ctx.fill();
+    });
+  });
+}
+
+function poll() {
+  fetch("/api/sessions").then(function (r) { return r.json(); }).then(function (d) {
+    render(d.sessions || []);
+  }).catch(function () { /* retry next tick */ });
+}
+
+function clearAll() {
+  fetch("/api/sessions", { method: "DELETE" }).then(function () {
+    document.getElementById("list").innerHTML =
+      '<div class="empty">Demo data cleared. Open the <a href="/pitch.html" target="_blank">sample vendor pitch</a> to start a new session.</div>';
+  });
+}
+
+poll();
+setInterval(poll, 5000);
+</script>
+</body>
+</html>

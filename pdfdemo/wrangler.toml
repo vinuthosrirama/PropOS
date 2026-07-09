@@ -1,0 +1,7 @@
+name = "pdfdemo-addvantage"
+compatibility_date = "2026-07-01"
+pages_build_output_dir = "public"
+
+[[kv_namespaces]]
+binding = "EVENTS"
+id = "71f490cd190f4e34a11b2ad699912663"
