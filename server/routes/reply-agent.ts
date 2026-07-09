@@ -16,6 +16,7 @@ import { Router } from "express"
 import Anthropic from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 import { sanitiseText } from "../lib/sanitise.js"
+import { withRetry } from "../lib/llmUtils.js"
 
 const router = Router()
 
@@ -220,12 +221,12 @@ Return ONLY valid JSON (no markdown):
     // OpenAI is primary — this repo currently runs without an Anthropic key.
     let raw: string
     if (process.env.OPENAI_API_KEY) {
-      const completion = await getOpenAI().chat.completions.create({
+      const completion = await withRetry(() => getOpenAI().chat.completions.create({
         model: "gpt-4o-mini",
         max_tokens: 300,
         response_format: { type: "json_object" },
         messages: [{ role: "user", content: prompt }],
-      })
+      }))
       raw = completion.choices[0]?.message?.content ?? "{}"
     } else {
       const message = await getClient().messages.create({

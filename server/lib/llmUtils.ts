@@ -14,3 +14,26 @@ export function withLLMTimeout<T>(fn: (signal: AbortSignal) => Promise<T>): Prom
   const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS)
   return fn(controller.signal).finally(() => clearTimeout(timer))
 }
+
+/**
+ * Retries a transient-failure-prone LLM call once before giving up.
+ *
+ * A single dropped connection (observed locally: node-fetch + gzip
+ * "Premature close" on an otherwise-healthy OpenAI account) previously meant
+ * one network hiccup silently fell all the way through to the generic
+ * hardcoded template, throwing away the trained voice for the whole message.
+ * One retry with a short backoff turns a transient blip into a normal
+ * successful call instead of a visible quality drop.
+ */
+export async function withRetry<T>(fn: () => Promise<T>, attempts = 2, delayMs = 600): Promise<T> {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, delayMs))
+    }
+  }
+  throw lastErr
+}

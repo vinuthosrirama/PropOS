@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
 import type { GenerateParams, GenerateResult } from "./openai.js"
 import { sanitiseResult, sanitiseText } from "./sanitise.js"
-import { withLLMTimeout } from "./llmUtils.js"
+import { withLLMTimeout, withRetry } from "./llmUtils.js"
 export { withLLMTimeout }  // re-exported so existing importers don't change
 
 // Lazy init — only creates the client when ANTHROPIC_API_KEY is set
@@ -32,14 +32,14 @@ export function llmConfigured(): boolean {
 export async function generateChatJSON(prompt: string, maxTokens = 400): Promise<string> {
   if (process.env.OPENAI_API_KEY) {
     const { getOpenAIClient } = await import("./openai.js")
-    const completion = await withLLMTimeout(signal =>
+    const completion = await withRetry(() => withLLMTimeout(signal =>
       getOpenAIClient().chat.completions.create({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: prompt }],
         max_tokens: maxTokens,
         response_format: { type: "json_object" },
       }, { signal }),
-    )
+    ))
     return (completion.choices[0]?.message?.content ?? "").trim()
   }
 

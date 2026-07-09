@@ -1,7 +1,7 @@
 import OpenAI from "openai"
 import fs from "fs"
 import { sanitiseResult } from "./sanitise.js"
-import { withLLMTimeout } from "./llmUtils.js"
+import { withLLMTimeout, withRetry } from "./llmUtils.js"
 
 // Lazy init — only creates the client when actually called (avoids crash when key is empty)
 let _openai: OpenAI | null = null
@@ -105,7 +105,7 @@ Write the message now:
 Respond ONLY with valid JSON, no markdown:
 {"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2","paragraph 3"]}}`
 
-  const completion = await withLLMTimeout(signal =>
+  const completion = await withRetry(() => withLLMTimeout(signal =>
     getOpenAI().chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -116,7 +116,7 @@ Respond ONLY with valid JSON, no markdown:
       max_tokens: 600,
       response_format: { type: "json_object" },
     }, { signal }),
-  )
+  ))
 
   const raw = completion.choices[0]?.message?.content ?? "{}"
   try {

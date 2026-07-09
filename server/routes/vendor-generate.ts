@@ -5,6 +5,7 @@ import { inferLifeStage, renderLifeStageBlock } from "../lib/lifeStageInference.
 import { getSuburbContext } from "../lib/suburbContext.js"
 import { getTimingTriggers, renderTimingBlock } from "../lib/timingTriggers.js"
 import { sanitiseText } from "../lib/sanitise.js"
+import { withRetry } from "../lib/llmUtils.js"
 
 const router = Router()
 
@@ -127,16 +128,18 @@ router.post("/", async (req, res) => {
       `Your property at ${params.purchaseAddress} has grown to approximately ${estStr} since you purchased in ${params.purchaseYear}. That's ${equityStr} in equity, a ${equityPct}% gain.${cgtLine}` +
       (hookSentence ? ` ${hookSentence}` : "")
     )
-    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${params.purchaseYear}). Worth a quick chat? ${signoff}, ${agentSig}`
+    // Signature phrasing (see docs/VOICE_CORPUS_VINUTH.md) even in the last-resort
+    // template, so a genuine outage still sounds like a person, not a mail-merge.
+    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. It's been a little while, ${addr} is sitting on a fair bit of equity, about ${equityStr} since ${params.purchaseYear}. More than happy to grab a coffee (or tea) and run through the numbers if you're keen? ${signoff}, ${agentSig}`
     const sms = clampSMS(sanitise(smsRaw))
     return res.json({
       sms,
       email: {
         subject: sanitise(`Market update on ${params.purchaseAddress}, ${fname}`),
         body: [
-          `${greeting} ${fname}, ${agentFirst} from ${agencyLabel} here. Quick market update on ${params.suburb}.`,
+          `${greeting} ${fname}, ${agentFirst} from ${agencyLabel} here. It's been a little while since we connected, so wanted to send a quick market update on ${params.suburb}.`,
           para2,
-          `I'd love to offer a complimentary, no-obligation appraisal if you're curious. Takes about 20 minutes, happy to come to you.\n\n${signoff},\n${agentSig}`,
+          `More than happy to offer a complimentary, no-obligation appraisal if you're curious, no pressure at all. Takes about 20 minutes, happy to come to you.\n\n${signoff},\n${agentSig}`,
         ].map(sanitise),
       },
       personalisationHook: params.parsedPersonalisation || null,
@@ -296,20 +299,20 @@ Respond ONLY with valid JSON, no markdown:
     let modelUsed: string
     if (process.env.OPENAI_API_KEY) {
       modelUsed = "gpt-4o-mini"
-      const completion = await getOpenAI().chat.completions.create({
+      const completion = await withRetry(() => getOpenAI().chat.completions.create({
         model: "gpt-4o-mini",
         max_tokens: 700,
         response_format: { type: "json_object" },
         messages: [{ role: "user", content: sonnetPrompt }],
-      })
+      }))
       raw = completion.choices[0]?.message?.content ?? "{}"
     } else {
       modelUsed = "claude-haiku-4-5"
-      const message = await getClient().messages.create({
+      const message = await withRetry(() => getClient().messages.create({
         model: "claude-haiku-4-5",
         max_tokens: 700,
         messages: [{ role: "user", content: sonnetPrompt }],
-      })
+      }))
       raw = message.content[0]?.type === "text" ? message.content[0].text : "{}"
     }
     const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
@@ -341,15 +344,15 @@ Respond ONLY with valid JSON, no markdown:
     const cgtLine = params.cgtSavingsBy2027 > 0
       ? ` The current 50% CGT discount saves you approximately ${fmtK(params.cgtSavingsBy2027)} if you sell before July 2027.`
       : ""
-    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. ${addr} is worth ~${estStr} today, ${equityStr} gain since ${params.purchaseYear}. Free appraisal? ${signoff}, ${agentSig}`
+    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. It's been a little while, ${addr} is sitting on a fair bit of equity today, about ${equityStr} since ${params.purchaseYear}. More than happy to grab a coffee (or tea) if you're keen? ${signoff}, ${agentSig}`
     return res.json({
       sms: clampSMS(sanitise(smsRaw)),
       email: {
         subject: sanitise(`Your property update, ${fname}`),
         body: [
-          `${greeting} ${fname}, ${agentFirst} from ${agencyLabel} here.`,
-          `Just wanted to give you a quick market update on ${params.purchaseAddress}. The suburb has grown well and your property is now worth approximately ${estStr}, representing ${equityStr} in equity since you purchased in ${params.purchaseYear}.${cgtLine}`,
-          `I'd love to provide a complimentary appraisal at no obligation. Happy to call or come by whenever suits.\n\n${signoff},\n${agentSig}`,
+          `${greeting} ${fname}, ${agentFirst} from ${agencyLabel} here. It's been a little while since we connected.`,
+          `Wanted to give you a quick market update on ${params.purchaseAddress}. The suburb has grown well and your property is now worth approximately ${estStr}, representing ${equityStr} in equity since you purchased in ${params.purchaseYear}.${cgtLine}`,
+          `More than happy to provide a complimentary appraisal, no obligation at all. Happy to call or come by whenever suits.\n\n${signoff},\n${agentSig}`,
         ].map(sanitise),
       },
     })
