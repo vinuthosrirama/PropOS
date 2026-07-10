@@ -19,6 +19,7 @@
 import { Router, type Request, type Response } from "express"
 import { randomBytes } from "crypto"
 import { query, queryOne, execute, isDbConnected } from "../lib/db.js"
+import { guard } from "../lib/asyncGuard.js"
 import {
   generatePriceUpdatePitch,
   type PitchAgentInfo,
@@ -71,7 +72,7 @@ const memPitches = new Map<string, PitchRow>()
 
 // ── GET /api/pitches/by-slug/:slug  (public) ──────────────────────────────────
 
-publicRouter.get("/by-slug/:slug", async (req: Request, res: Response) => {
+publicRouter.get("/by-slug/:slug", guard(async (req: Request, res: Response) => {
   const row = isDbConnected()
     ? await queryOne<PitchRow>(`SELECT * FROM pitches WHERE slug = $1`, [req.params.slug])
     : memPitches.get(req.params.slug) ?? null
@@ -92,11 +93,11 @@ publicRouter.get("/by-slug/:slug", async (req: Request, res: Response) => {
     vendorEmail:     row.vendor_email ?? null,
     vendorName:      row.vendor_name ?? null,
   })
-})
+}))
 
 // ── POST /api/pitches/:id/view  (public) ─────────────────────────────────────
 
-publicRouter.post("/:id/view", async (req: Request, res: Response) => {
+publicRouter.post("/:id/view", guard(async (req: Request, res: Response) => {
   const { id } = req.params
 
   if (!isDbConnected()) {
@@ -121,13 +122,13 @@ publicRouter.post("/:id/view", async (req: Request, res: Response) => {
   if (updated === 0) return res.status(404).json({ error: "Pitch not found" })
   await execute(`UPDATE pitches SET status = 'viewed' WHERE id = $1 AND status != 'accepted'`, [id]).catch(() => {/* non-fatal */})
   res.json({ ok: true })
-})
+}))
 
 // ── POST /api/pitches/:token/accept  (public) ─────────────────────────────────
 // Proposal e-acceptance: captures name + timestamp + IP as an audit trail.
 // NOT a legally-binding e-signature — see disclaimer in frontend modal.
 
-publicRouter.post("/:token/accept", async (req: Request, res: Response) => {
+publicRouter.post("/:token/accept", guard(async (req: Request, res: Response) => {
   const { token } = req.params
   const name = (req.body?.name ?? "").toString().trim()
 
@@ -194,7 +195,7 @@ publicRouter.post("/:token/accept", async (req: Request, res: Response) => {
   }
 
   res.json({ ok: true, acceptedAt, acceptedBy: name })
-})
+}))
 
 // ── POST /api/pitches  (authed) — price_update pitch ─────────────────────────
 
@@ -215,7 +216,7 @@ interface CreatePitchBody {
   cachedCoverNote?: string
 }
 
-authedRouter.post("/", async (req: Request, res: Response) => {
+authedRouter.post("/", guard(async (req: Request, res: Response) => {
   const body = req.body as CreatePitchBody
   const type = body.type ?? "price_update"
 
@@ -274,7 +275,7 @@ authedRouter.post("/", async (req: Request, res: Response) => {
 
   const base = process.env.BASE_URL ?? "https://propos.addvantage.site"
   res.json({ id: row.id, slug: row.slug, type: row.type, payload, url: `${base}/p/${row.slug}` })
-})
+}))
 
 // ── POST /api/pitches/appraisal  (authed) — instant CMA ──────────────────────
 
@@ -292,7 +293,7 @@ interface AppraisalBody {
   vendorName?:    string
 }
 
-authedRouter.post("/appraisal", async (req: Request, res: Response) => {
+authedRouter.post("/appraisal", guard(async (req: Request, res: Response) => {
   const body = req.body as AppraisalBody
 
   if (!body.agent || !body.address || !body.suburb) {
@@ -356,11 +357,11 @@ authedRouter.post("/appraisal", async (req: Request, res: Response) => {
 
   const base = process.env.BASE_URL ?? "https://propos.addvantage.site"
   res.json({ id: row.id, slug: row.slug, type: "appraisal", payload, url: `${base}/p/${row.slug}` })
-})
+}))
 
 // ── POST /api/pitches/:id/send-email  (authed) ────────────────────────────────
 
-authedRouter.post("/:id/send-email", async (req: Request, res: Response) => {
+authedRouter.post("/:id/send-email", guard(async (req: Request, res: Response) => {
   const { id } = req.params
   const to: string = (req.body?.to ?? "").toString().trim()
   const subject: string = (req.body?.subject ?? "").toString().trim() || "Your property report from PropOS"
@@ -408,11 +409,11 @@ authedRouter.post("/:id/send-email", async (req: Request, res: Response) => {
   } catch (err) {
     res.status(500).json({ error: `Email send failed: ${(err as Error).message}` })
   }
-})
+}))
 
 // ── GET /api/pitches  (authed) — list ─────────────────────────────────────────
 
-authedRouter.get("/", async (req: Request, res: Response) => {
+authedRouter.get("/", guard(async (req: Request, res: Response) => {
   const agentId = req.agentId ? String(req.agentId) : "default"
 
   if (!isDbConnected()) {
@@ -427,12 +428,12 @@ authedRouter.get("/", async (req: Request, res: Response) => {
     [agentId],
   )
   res.json({ pitches: rows })
-})
+}))
 
 // ── Vendor report endpoints (authed) ──────────────────────────────────────────
 
 // GET /api/vendor-reports
-authedRouter.get("/vendor-reports", async (req: Request, res: Response) => {
+authedRouter.get("/vendor-reports", guard(async (req: Request, res: Response) => {
   const agentId = req.agentId ? String(req.agentId) : "default"
   if (!isDbConnected()) return res.json({ reports: [] })
 
@@ -446,10 +447,10 @@ authedRouter.get("/vendor-reports", async (req: Request, res: Response) => {
     [agentId],
   )
   res.json({ reports })
-})
+}))
 
 // POST /api/vendor-reports/generate  — manual trigger for a specific pitch
-authedRouter.post("/vendor-reports/generate", async (req: Request, res: Response) => {
+authedRouter.post("/vendor-reports/generate", guard(async (req: Request, res: Response) => {
   const pitchId: string = (req.body?.pitchId ?? "").toString().trim()
   if (!pitchId) return res.status(400).json({ error: "pitchId required" })
   if (!gmailConfigured()) return res.status(503).json({ error: "Gmail not configured" })
@@ -484,10 +485,10 @@ authedRouter.post("/vendor-reports/generate", async (req: Request, res: Response
   } catch (err) {
     res.status(500).json({ error: (err as Error).message })
   }
-})
+}))
 
 // POST /api/vendor-reports/:id/send  — resend a failed/draft report
-authedRouter.post("/vendor-reports/:id/send", async (req: Request, res: Response) => {
+authedRouter.post("/vendor-reports/:id/send", guard(async (req: Request, res: Response) => {
   if (!isDbConnected()) return res.status(503).json({ error: "Database not available" })
   if (!gmailConfigured()) return res.status(503).json({ error: "Gmail not configured" })
 
@@ -526,15 +527,15 @@ authedRouter.post("/vendor-reports/:id/send", async (req: Request, res: Response
   } catch (err) {
     res.status(500).json({ error: (err as Error).message })
   }
-})
+}))
 
 // ── GET /api/vendor-reports/:id  (authed) — fetch report HTML ─────────────────
-authedRouter.get("/vendor-reports/:id", async (req: Request, res: Response) => {
+authedRouter.get("/vendor-reports/:id", guard(async (req: Request, res: Response) => {
   if (!isDbConnected()) return res.status(503).json({ error: "Database not available" })
   const report = await queryOne<VendorReportRow>(`SELECT * FROM vendor_reports WHERE id = $1`, [req.params.id])
   if (!report) return res.status(404).json({ error: "Report not found" })
   res.json(report)
-})
+}))
 
 // ── POST /api/pitches/buyer-brief  (authed) ───────────────────────────────────
 // Create a BuyerOS brief connecting an open-home contact to a matched listing.
@@ -557,7 +558,7 @@ interface BuyerBriefBody {
   listingUrl?:     string
 }
 
-authedRouter.post("/buyer-brief", async (req: Request, res: Response) => {
+authedRouter.post("/buyer-brief", guard(async (req: Request, res: Response) => {
   const body = req.body as BuyerBriefBody
 
   if (!body.contactId || !body.propertyAddress || !body.suburb) {
@@ -630,7 +631,7 @@ authedRouter.post("/buyer-brief", async (req: Request, res: Response) => {
 
   const baseUrl = process.env.FRONTEND_URL ?? "https://propos.addvantage.site"
   res.json({ ok: true, slug, pitchId, url: `${baseUrl}/p/${slug}` })
-})
+}))
 
 // ── GET /api/pitches/buyer-brief/matches  (authed) ────────────────────────────
 // Returns CRM contacts for the agent with engagement data, for the match queue UI.

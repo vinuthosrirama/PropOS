@@ -333,11 +333,18 @@ router.post("/flush",
 router.get("/sessions/:pitchId", async (req: Request, res: Response) => {
   if (!isDbConnected()) return res.json({ sessions: [] })
 
-  const sessions = await query<SessionRow>(
-    `SELECT * FROM document_sessions WHERE pitch_id = $1 ORDER BY opened_at DESC LIMIT 50`,
-    [req.params.pitchId],
-  )
-  res.json({ sessions })
+  try {
+    const sessions = await query<SessionRow>(
+      `SELECT * FROM document_sessions WHERE pitch_id = $1 ORDER BY opened_at DESC LIMIT 50`,
+      [req.params.pitchId],
+    )
+    res.json({ sessions })
+  } catch (err) {
+    // Same pitches.id (UUID) vs document_sessions.pitch_id (TEXT) drift as
+    // overview/contact-summary above — degrade to an empty list instead of crashing.
+    console.error("[doc-track] sessions query failed:", (err as Error).message)
+    res.json({ sessions: [] })
+  }
 })
 
 // GET /api/doc-track/overview — all sessions for an agent (DocInsightsView global tab)

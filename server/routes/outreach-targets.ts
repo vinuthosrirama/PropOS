@@ -41,12 +41,13 @@ import {
 } from "../lib/outreachAgent.js"
 import { triggerOutreachNow, getSchedulerStatus } from "../lib/outreachScheduler.js"
 import { recordSignal } from "../lib/promptOptimiser.js"
+import { guard } from "../lib/asyncGuard.js"
 
 const router = Router()
 
 // ── Seed ──────────────────────────────────────────────────────────────────────
 
-router.post("/seed", async (_req, res) => {
+router.post("/seed", guard(async (_req, res) => {
   if (!isDbConnected()) {
     return res.status(503).json({ error: "Database not connected — set DATABASE_URL in server/.env" })
   }
@@ -87,11 +88,11 @@ router.post("/seed", async (_req, res) => {
   }
 
   res.json({ ok: errors.length === 0, total: OUTREACH_TARGETS_SEED.length, upserted, errors })
-})
+}))
 
 // ── Test seed: 25 synthetic leads, phones redirect to TEST_RECIPIENT_PHONE ───
 
-router.post("/seed-test", async (_req, res) => {
+router.post("/seed-test", guard(async (_req, res) => {
   if (!isDbConnected()) {
     return res.status(503).json({ error: "Database not connected" })
   }
@@ -131,11 +132,11 @@ router.post("/seed-test", async (_req, res) => {
   }
   const testPhone = process.env.TEST_RECIPIENT_PHONE?.trim() ?? "(not set)"
   res.json({ ok: errors.length === 0, total: TEST_TARGETS_SEED.length, upserted, errors, testPhone })
-})
+}))
 
 // ── Clear test leads ──────────────────────────────────────────────────────────
 
-router.post("/clear-test", async (_req, res) => {
+router.post("/clear-test", guard(async (_req, res) => {
   if (!isDbConnected()) {
     return res.status(503).json({ error: "Database not connected" })
   }
@@ -143,11 +144,11 @@ router.post("/clear-test", async (_req, res) => {
     `DELETE FROM outreach_targets WHERE source = 'test:synthetic'`,
   )
   res.json({ ok: true, deleted })
-})
+}))
 
 // ── List ──────────────────────────────────────────────────────────────────────
 
-router.get("/", async (req, res) => {
+router.get("/", guard(async (req, res) => {
   if (!isDbConnected()) return res.json({ targets: [], demo: true })
 
   const status = typeof req.query.status === "string" ? req.query.status : undefined
@@ -156,27 +157,27 @@ router.get("/", async (req, res) => {
     : await query("SELECT * FROM outreach_targets ORDER BY id")
 
   res.json({ targets: rows, total: rows.length })
-})
+}))
 
 // ── Morning brief — MUST be before /:id ───────────────────────────────────────
 
-router.get("/brief", async (_req, res) => {
+router.get("/brief", guard(async (_req, res) => {
   if (!isDbConnected()) return res.json({ demo: true, pendingDrafts: 0 })
   const [brief, schedulerStatus] = await Promise.all([getMorningBrief(), Promise.resolve(getSchedulerStatus())])
   res.json({ ...brief, scheduler: schedulerStatus })
-})
+}))
 
 // ── Pending AI drafts — MUST be before /:id ───────────────────────────────────
 
-router.get("/drafts", async (_req, res) => {
+router.get("/drafts", guard(async (_req, res) => {
   if (!isDbConnected()) return res.json({ drafts: [], demo: true })
   const drafts = await getPendingDrafts()
   res.json({ drafts, total: drafts.length })
-})
+}))
 
 // ── Approve draft and send ────────────────────────────────────────────────────
 
-router.post("/approve-draft/:id", async (req, res) => {
+router.post("/approve-draft/:id", guard(async (req, res) => {
   if (!isDbConnected()) return res.status(503).json({ error: "No database" })
   if (!smsConfigured())  return res.status(503).json({ error: "No SMS transport configured" })
 
@@ -263,11 +264,11 @@ router.post("/approve-draft/:id", async (req, res) => {
     )
     res.status(502).json({ error: `SMS send failed: ${msg}` })
   }
-})
+}))
 
 // ── Reject draft ──────────────────────────────────────────────────────────────
 
-router.post("/reject-draft/:id", async (req, res) => {
+router.post("/reject-draft/:id", guard(async (req, res) => {
   if (!isDbConnected()) return res.status(503).json({ error: "No database" })
   const draftId = parseInt(req.params.id, 10)
   if (isNaN(draftId)) return res.status(400).json({ error: "Invalid draft ID" })
@@ -284,22 +285,22 @@ router.post("/reject-draft/:id", async (req, res) => {
   if (versionId) void recordSignal(versionId, "rejected", { draftId })
 
   res.json({ ok: true })
-})
+}))
 
 // ── Manual trigger (test mode) — MUST be before /:id ─────────────────────────
 
-router.post("/trigger-now", async (req, res) => {
+router.post("/trigger-now", guard(async (req, res) => {
   if (!isDbConnected()) return res.status(503).json({ error: "No database" })
   if (!smsConfigured())  return res.status(503).json({ error: "No SMS transport configured" })
   const limit = Math.min(Number(req.body?.limit ?? 1), 5)
   if (isNaN(limit)) return res.status(400).json({ error: "limit must be a number" })
   const result = await triggerOutreachNow(limit)
   res.json(result)
-})
+}))
 
 // ── Batch send — MUST be before /:id ─────────────────────────────────────────
 
-router.post("/send-batch", async (req, res) => {
+router.post("/send-batch", guard(async (req, res) => {
   if (!isDbConnected()) return res.status(503).json({ error: "No database" })
   if (!smsConfigured())  return res.status(503).json({ error: "No SMS transport configured" })
 
@@ -335,21 +336,21 @@ router.post("/send-batch", async (req, res) => {
 
   const sent = results.filter(r => r.ok).length
   res.json({ ok: true, total: targets.length, sent, results })
-})
+}))
 
 // ── Single target ─────────────────────────────────────────────────────────────
 // NOTE: All static paths above must be registered before this dynamic route.
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", guard(async (req, res) => {
   if (!isDbConnected()) return res.status(503).json({ error: "No database" })
   const rows = await query("SELECT * FROM outreach_targets WHERE id=$1", [req.params.id])
   if (!rows.length) return res.status(404).json({ error: "Not found" })
   res.json(rows[0])
-})
+}))
 
 // ── Conversation thread for a target ─────────────────────────────────────────
 
-router.get("/:id/thread", async (req, res) => {
+router.get("/:id/thread", guard(async (req, res) => {
   if (!isDbConnected()) return res.status(503).json({ error: "No database" })
   const targets = await query<OutreachTargetRow>(
     `SELECT * FROM outreach_targets WHERE id = $1`, [req.params.id],
@@ -367,11 +368,11 @@ router.get("/:id/thread", async (req, res) => {
   ])
 
   res.json({ target, thread, drafts })
-})
+}))
 
 // ── Manual custom reply ───────────────────────────────────────────────────────
 
-router.post("/:id/reply", async (req, res) => {
+router.post("/:id/reply", guard(async (req, res) => {
   if (!isDbConnected()) return res.status(503).json({ error: "No database" })
   if (!smsConfigured())  return res.status(503).json({ error: "No SMS transport configured" })
 
@@ -405,11 +406,11 @@ router.post("/:id/reply", async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: err instanceof Error ? err.message : String(err) })
   }
-})
+}))
 
 // ── On-demand AI draft generation ─────────────────────────────────────────────
 
-router.post("/:id/generate-draft", async (req, res) => {
+router.post("/:id/generate-draft", guard(async (req, res) => {
   if (!isDbConnected()) return res.status(503).json({ error: "No database" })
   const targets = await query<OutreachTargetRow>(
     `SELECT * FROM outreach_targets WHERE id = $1`, [req.params.id],
@@ -424,7 +425,7 @@ router.post("/:id/generate-draft", async (req, res) => {
   const { draft, versionId } = await generateOutreachDraft(target, inbound)
   const draftId = await saveOutreachDraft(target.id, inbound, draft, versionId)
   res.json({ ok: true, draft, draftId })
-})
+}))
 
 // ── Update ────────────────────────────────────────────────────────────────────
 
@@ -438,7 +439,7 @@ interface UpdateBody {
   demoBookedAt?: string
 }
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", guard(async (req, res) => {
   if (!isDbConnected()) return res.status(503).json({ error: "No database" })
   const b = req.body as UpdateBody
 
@@ -476,11 +477,11 @@ router.put("/:id", async (req, res) => {
   }
 
   res.json({ ok: true })
-})
+}))
 
 // ── Send pre-written script ───────────────────────────────────────────────────
 
-router.post("/send/:id", async (req, res) => {
+router.post("/send/:id", guard(async (req, res) => {
   if (!isDbConnected()) return res.status(503).json({ error: "No database" })
   if (!smsConfigured())  return res.status(503).json({ error: "No SMS transport configured" })
 
@@ -518,6 +519,6 @@ router.post("/send/:id", async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: `SMS send failed: ${err instanceof Error ? err.message : String(err)}` })
   }
-})
+}))
 
 export default router

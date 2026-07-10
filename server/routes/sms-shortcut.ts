@@ -40,6 +40,7 @@ import {
   getDevice,
   getQueueStats,
 } from "../lib/shortcutRelay.js"
+import { guard } from "../lib/asyncGuard.js"
 
 const router = Router()
 
@@ -61,7 +62,7 @@ function requireShortcutSecret(req: Request, res: Response, next: () => void): v
 // Body: { device_id, phone, secret, label? }
 // Returns: { ok: true, device_id }
 
-router.post("/register", async (req: Request, res: Response) => {
+router.post("/register", guard(async (req: Request, res: Response) => {
   const { device_id, phone, secret, label } = req.body ?? {}
 
   if (!verifyShortcutSecret(String(secret ?? ""))) {
@@ -81,7 +82,7 @@ router.post("/register", async (req: Request, res: Response) => {
   )
 
   res.json({ ok: true, device_id })
-})
+}))
 
 // ── GET /poll ─────────────────────────────────────────────────────────────────
 // The iOS Shortcut calls this on every automation trigger.
@@ -96,8 +97,16 @@ router.get("/poll", requireShortcutSecret, async (req: Request, res: Response) =
     return res.status(400).json({ error: "device_id required" })
   }
 
-  const messages = await pollPending(deviceId)
-  res.json(messages)
+  try {
+    const messages = await pollPending(deviceId)
+    res.json(messages)
+  } catch (err) {
+    // The Shortcut expects a bare array ("empty array means nothing to send"),
+    // not an error object — degrade to [] so a DB blip just skips this poll
+    // cycle instead of erroring out visibly on the agent's phone mid-automation.
+    console.error("[sms-shortcut] poll failed:", (err as Error).message)
+    res.json([])
+  }
 })
 
 // ── POST /sent/:id ────────────────────────────────────────────────────────────
@@ -107,13 +116,13 @@ router.get("/poll", requireShortcutSecret, async (req: Request, res: Response) =
 // Query: ?secret=Y
 // Returns: { ok: true }
 
-router.post("/sent/:id", requireShortcutSecret, async (req: Request, res: Response) => {
+router.post("/sent/:id", requireShortcutSecret, guard(async (req: Request, res: Response) => {
   const id = req.params.id?.trim()
   if (!id) return res.status(400).json({ error: "id required" })
 
   await markSent(id)
   res.json({ ok: true })
-})
+}))
 
 // ── POST /failed/:id ──────────────────────────────────────────────────────────
 // Called by the Shortcut if a send fails (e.g. recipient not on iMessage,
@@ -123,7 +132,7 @@ router.post("/sent/:id", requireShortcutSecret, async (req: Request, res: Respon
 // Body: { reason? }
 // Returns: { ok: true }
 
-router.post("/failed/:id", requireShortcutSecret, async (req: Request, res: Response) => {
+router.post("/failed/:id", requireShortcutSecret, guard(async (req: Request, res: Response) => {
   const id     = req.params.id?.trim()
   const reason = typeof req.body?.reason === "string" ? req.body.reason.slice(0, 200) : undefined
 
@@ -131,7 +140,7 @@ router.post("/failed/:id", requireShortcutSecret, async (req: Request, res: Resp
 
   await markFailed(id, reason)
   res.json({ ok: true })
-})
+}))
 
 // ── POST /reply ───────────────────────────────────────────────────────────────
 // Called by the Shortcut when a reply arrives in Messages app.
@@ -175,7 +184,7 @@ router.post("/reply", requireShortcutSecret, async (req: Request, res: Response)
 // Debug endpoint — shows device info + queue stats.
 // Useful to verify the Shortcut is polling correctly.
 
-router.get("/status", requireShortcutSecret, async (req: Request, res: Response) => {
+router.get("/status", requireShortcutSecret, guard(async (req: Request, res: Response) => {
   const deviceId = String(req.query.device_id ?? "").trim()
   if (!deviceId) return res.status(400).json({ error: "device_id required" })
 
@@ -190,6 +199,6 @@ router.get("/status", requireShortcutSecret, async (req: Request, res: Response)
     transport: "shortcut-relay",
     pollUrl: `${process.env.BASE_URL ?? ""}/api/sms-shortcut/poll?device_id=${deviceId}&secret=<SECRET>`,
   })
-})
+}))
 
 export default router

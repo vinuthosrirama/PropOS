@@ -51,6 +51,7 @@ import { generateMarketReport } from "../lib/marketReport.js"
 import { buildStage1TestContact, buildStage2Contact, buildDemoPastClientPersonas, STARTER_VOICE_SAMPLES } from "../data/smsAgentSeed.js"
 import { generateAppraisalPayload } from "../lib/appraisalGenerator.js"
 import { randomBytes } from "crypto"
+import { guard } from "../lib/asyncGuard.js"
 
 const router = Router()
 
@@ -60,7 +61,7 @@ function noDb(res: import("express").Response) {
 
 // ── Contacts ────────────────────────────────────────────────────────────────────
 
-router.get("/contacts", async (req, res) => {
+router.get("/contacts", guard(async (req, res) => {
   if (!isDbConnected()) return res.json({ demo: true, contacts: [] })
   const stage = req.query.stage ? parseInt(String(req.query.stage), 10) : undefined
   const status = req.query.status ? String(req.query.status) as never : undefined
@@ -71,9 +72,9 @@ router.get("/contacts", async (req, res) => {
     return { ...c, prospectability: s?.prospectability ?? 50, interest: s?.interest ?? 20, score_label: s?.label ?? "warm", score_highlights: s?.highlights ?? [] }
   })
   res.json({ contacts: enriched })
-})
+}))
 
-router.post("/contacts", async (req, res) => {
+router.post("/contacts", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const { name, phone } = req.body ?? {}
   if (!name || !phone) return res.status(400).json({ error: "name and phone are required" })
@@ -89,56 +90,56 @@ router.post("/contacts", async (req, res) => {
     source: req.body.source,
   })
   res.json({ ok: true, id })
-})
+}))
 
-router.patch("/contacts/:id", async (req, res) => {
+router.patch("/contacts/:id", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const id = parseInt(req.params.id, 10)
   if (isNaN(id)) return res.status(400).json({ error: "invalid id" })
   const { personalisation, rea_data, conversation_objective, status, follow_up_at } = req.body ?? {}
   await updateContact(id, { personalisation, rea_data, conversation_objective, status, follow_up_at })
   res.json({ ok: true })
-})
+}))
 
-router.get("/suburb-stats/:suburb", async (req, res) => {
+router.get("/suburb-stats/:suburb", guard(async (req, res) => {
   if (!isDbConnected()) return res.json({ suburb: req.params.suburb, saleCount: 0, medianPrice: null, fromSoldDb: false })
   const days = parseInt(String(req.query.days ?? "90"), 10)
   const stats = await getSuburbStats(req.params.suburb, isNaN(days) ? 90 : days)
   res.json(stats)
-})
+}))
 
 // ── Voice ─────────────────────────────────────────────────────────────────────
 
-router.get("/voice-profile", async (req, res) => {
+router.get("/voice-profile", guard(async (req, res) => {
   const agentCtx = await getAgentContext((req as any).agentId)
   const vp = await getVoiceProfile(agentCtx.voiceId)
   res.json(vp)
-})
+}))
 
-router.post("/calibrate", async (req, res) => {
+router.post("/calibrate", guard(async (req, res) => {
   const samples: string[] = Array.isArray(req.body?.samples) ? req.body.samples.map(String) : []
   if (samples.length === 0) return res.status(400).json({ error: "samples (string array) is required" })
   const agentCtx = await getAgentContext((req as any).agentId)
   const vp = await calibrateVoice(samples, agentCtx.voiceId)
   res.json({ ok: true, confidence: vp.confidence, samples_analysed: vp.samples_analysed, profile: vp.profile, voiceId: agentCtx.voiceId })
-})
+}))
 
-router.post("/recalibrate", async (req, res) => {
+router.post("/recalibrate", guard(async (req, res) => {
   const agentCtx = await getAgentContext((req as any).agentId)
   const vp = await recalibrateVoice(agentCtx.voiceId)
   if (!vp) return res.json({ ok: false, message: "Not enough signals to recalibrate yet (need 5+)" })
   res.json({ ok: true, confidence: vp.confidence, samples_analysed: vp.samples_analysed, voiceId: agentCtx.voiceId })
-})
+}))
 
 // ── Drafts (approval queue) ─────────────────────────────────────────────────────
 
-router.get("/drafts", async (_req, res) => {
+router.get("/drafts", guard(async (_req, res) => {
   if (!isDbConnected()) return res.json({ demo: true, drafts: [] })
   const drafts = await getPendingAgentDrafts()
   res.json({ drafts })
-})
+}))
 
-router.post("/drafts/:id/approve", async (req, res) => {
+router.post("/drafts/:id/approve", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const id = parseInt(req.params.id, 10)
   const editedBody: string | undefined = req.body?.editedBody ? String(req.body.editedBody) : undefined
@@ -190,9 +191,9 @@ router.post("/drafts/:id/approve", async (req, res) => {
   } catch (err) {
     res.status(502).json({ ok: false, sent: false, error: (err as Error).message })
   }
-})
+}))
 
-router.post("/drafts/:id/reject", async (req, res) => {
+router.post("/drafts/:id/reject", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const id = parseInt(req.params.id, 10)
   const result = await rejectAgentDraft(id)
@@ -209,24 +210,24 @@ router.post("/drafts/:id/reject", async (req, res) => {
   }).catch(() => {})
 
   res.json({ ok: true })
-})
+}))
 
 // ── Meetings + orchestration ────────────────────────────────────────────────────
 
-router.get("/meetings", async (_req, res) => {
+router.get("/meetings", guard(async (_req, res) => {
   if (!isDbConnected()) return res.json({ demo: true, meetings: [] })
   const meetings = await getUpcomingMeetings(24 * 14)
   res.json({ meetings })
-})
+}))
 
-router.post("/orchestrate", async (_req, res) => {
+router.post("/orchestrate", guard(async (_req, res) => {
   const summary = await runSmsOrchestration()
   res.json(summary)
-})
+}))
 
 // ── Market reports ──────────────────────────────────────────────────────────────
 
-router.get("/market-report/:suburb", async (req, res) => {
+router.get("/market-report/:suburb", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const suburb = req.params.suburb.replace(/-/g, " ")
   const all = await listContacts({})
@@ -237,9 +238,9 @@ router.get("/market-report/:suburb", async (req, res) => {
   const agentCtx = await getAgentContext((req as any).agentId)
   const report = await generateMarketReport(suburb, relevant.length > 0 ? relevant : all.slice(0, 5), agentCtx)
   res.json(report)
-})
+}))
 
-router.post("/sequences/market-report", async (req, res) => {
+router.post("/sequences/market-report", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const contactId = req.body?.contactId ? parseInt(String(req.body.contactId), 10) : NaN
   const suburb = req.body?.suburb ? String(req.body.suburb).trim() : ""
@@ -268,11 +269,11 @@ router.post("/sequences/market-report", async (req, res) => {
   })
 
   res.json({ ok: true, draftId, preview: opener.draft, suburb, report: marketData })
-})
+}))
 
 // ── Ready-queue (CRM-triggered auto-outreach) ───────────────────────────────────
 
-router.post("/run-ready", async (_req, res) => {
+router.post("/run-ready", guard(async (_req, res) => {
   if (!isDbConnected()) return noDb(res)
   const results = await runReadyOutreach()
   res.json({
@@ -280,52 +281,52 @@ router.post("/run-ready", async (_req, res) => {
       contactId: r.contactId, name: r.name, draftId: r.draftId, preview: r.preview, skipped: r.skipped,
     })),
   })
-})
+}))
 
 // ── Settings (Voice tab toggles) ────────────────────────────────────────────────
 
-router.get("/settings", async (_req, res) => {
+router.get("/settings", guard(async (_req, res) => {
   if (!isDbConnected()) return res.json({ autoSend: false })
   const value = await getSetting("sms_agent_autosend")
   res.json({ autoSend: value === "true" })
-})
+}))
 
-router.post("/settings", async (req, res) => {
+router.post("/settings", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   if (typeof req.body?.autoSend !== "boolean") {
     return res.status(400).json({ error: "autoSend (boolean) is required" })
   }
   await setSetting("sms_agent_autosend", req.body.autoSend ? "true" : "false")
   res.json({ ok: true, autoSend: req.body.autoSend })
-})
+}))
 
 // ── Demo: Past Client Reconnection ──────────────────────────────────────────────
 
-router.get("/demo/target", async (_req, res) => {
+router.get("/demo/target", guard(async (_req, res) => {
   if (!isDbConnected()) return res.json({ phone: null })
   const phone = await getSetting("demo_target_phone")
   res.json({ phone })
-})
+}))
 
-router.post("/demo/target", async (req, res) => {
+router.post("/demo/target", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : ""
   if (!phone) return res.status(400).json({ error: "phone (string) is required" })
   await setSetting("demo_target_phone", phone)
   res.json({ ok: true, phone })
-})
+}))
 
-router.post("/seed-demo-pastclients", async (_req, res) => {
+router.post("/seed-demo-pastclients", guard(async (_req, res) => {
   if (!isDbConnected()) return noDb(res)
   const ids = []
   for (const persona of buildDemoPastClientPersonas()) {
     ids.push(await upsertContact(persona))
   }
   res.json({ ok: true, ids })
-})
+}))
 
 // Generate an opener and queue it for approval (does not send).
-router.post("/contacts/:id/queue-opener", async (req, res) => {
+router.post("/contacts/:id/queue-opener", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const id = parseInt(req.params.id, 10)
   const contact = await getContactById(id)
@@ -341,11 +342,11 @@ router.post("/contacts/:id/queue-opener", async (req, res) => {
     voiceConfidence: opener.voiceConfidence,
   })
   res.json({ ok: true, draftId, preview: opener.draft })
-})
+}))
 
 // ── Seed (Stage 1 test bed) ─────────────────────────────────────────────────────
 
-router.post("/seed-stage1", async (req, res) => {
+router.post("/seed-stage1", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const name = req.body?.name ? String(req.body.name) : "Test Partner"
   const contact = buildStage1TestContact(name)
@@ -359,11 +360,11 @@ router.post("/seed-stage1", async (req, res) => {
     voiceConfidence: vp.confidence,
     note: "Replace starter samples via POST /calibrate with 20+ of Vinuth's real texts. Sends redirect to TEST_RECIPIENT_PHONE.",
   })
-})
+}))
 
 // ── Seed Stage 2 contact ────────────────────────────────────────────────────────
 
-router.post("/seed-stage2", async (req, res) => {
+router.post("/seed-stage2", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const name = req.body?.name ? String(req.body.name) : "Stage 2 Contact"
   const phone = req.body?.phone ? String(req.body.phone) : "+61426719845"
@@ -375,11 +376,11 @@ router.post("/seed-stage2", async (req, res) => {
     phone: contact.phone,
     note: "Stage 2 contact added. Messages go to their REAL number (not test-redirected). Use /contacts/:id/suggest for AI recommendations.",
   })
-})
+}))
 
 // ── Suggest (AI-generated message options based on thread history) ───────────
 
-router.post("/contacts/:id/suggest", async (req, res) => {
+router.post("/contacts/:id/suggest", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const id = parseInt(req.params.id, 10)
   const contact = await getContactById(id)
@@ -388,11 +389,11 @@ router.post("/contacts/:id/suggest", async (req, res) => {
   const agentCtx = await getAgentContext((req as any).agentId)
   const result = await generateSuggestions(contact, agentCtx)
   res.json(result)
-})
+}))
 
 // ── Send (manual message typed in PropOS, delivered via iMessage) ──────────────
 
-router.post("/contacts/:id/send", async (req, res) => {
+router.post("/contacts/:id/send", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const id = parseInt(req.params.id, 10)
   const body = typeof req.body?.message === "string" ? req.body.message.trim() : ""
@@ -415,11 +416,11 @@ router.post("/contacts/:id/send", async (req, res) => {
   } catch (err) {
     res.status(502).json({ ok: false, sent: false, error: (err as Error).message })
   }
-})
+}))
 
 // ── Generate appraisal pitch link ───────────────────────────────────────────────
 
-router.post("/contacts/:id/pitch", async (req, res) => {
+router.post("/contacts/:id/pitch", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const id = parseInt(req.params.id, 10)
   if (isNaN(id)) return res.status(400).json({ error: "invalid id" })
@@ -464,11 +465,11 @@ router.post("/contacts/:id/pitch", async (req, res) => {
   await updateContact(id, { personalisation: { pitch_url: url } })
 
   res.json({ url, slug })
-})
+}))
 
 // ── Initiate (generate + send an opener) ────────────────────────────────────────
 
-router.post("/initiate/:contactId", async (req, res) => {
+router.post("/initiate/:contactId", guard(async (req, res) => {
   if (!isDbConnected()) return noDb(res)
   const contactId = parseInt(req.params.contactId, 10)
   const contact = await getContactById(contactId)
@@ -491,6 +492,6 @@ router.post("/initiate/:contactId", async (req, res) => {
   } catch (err) {
     res.status(502).json({ ok: false, sent: false, error: (err as Error).message })
   }
-})
+}))
 
 export default router
