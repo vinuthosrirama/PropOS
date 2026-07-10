@@ -165,6 +165,18 @@ export const CAMERON_PAST_BUYERS: PastBuyer[] = [
     notes: "Young family — Sam is a sparky, Jess is on mat leave with their second (baby Archie, 4 months). Their first, Poppy, is 3. The 3-bed worked fine with one kid but they're already running out of room. Sam mentioned wanting a proper garage/workshop. Jess wants to be near Berwick Chase Primary for when Poppy starts school in 2028. Would move tomorrow if they could afford the upgrade.",
     lastContactDate: "2025-05-10",
   },
+  {
+    id: 5011,
+    name: "Helen & Bruce McDonald",
+    phone: "0415 883 354", email: "vinuth.srirama@outlook.com",
+    purchaseAddress: "30 Rosewood Drive", suburb: "Berwick",
+    purchaseDate: "2015-04-18", purchasePrice: 585000, deposit: 117000,
+    propertyType: "House", beds: 4, baths: 2, land: 650,
+    status: "owner-occupier",
+    notes: "Helen and Bruce, lovely couple, kids nearly grown — youngest starting uni soon. Last time we met they mentioned they'd been thinking about a townhouse once the kids are more independent. Big block on Rosewood Drive, held since 2015, sitting on serious equity. Helen prefers a friendly catch-up over anything formal — coffee (or tea for Bruce).",
+    lastContactDate: "2026-03-14",
+    personalisationHook: "The townhouse they both mentioned the last time we met — youngest starting uni soon, Rosewood Drive equity can fund the move.",
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -356,6 +368,7 @@ export const CURRENT_VALUE_ESTIMATES: Record<number, number> = {
   5008: 920000,   // 19 Embling Street, Berwick — Domain $790K–$1.05M (mid)
   5009: 720000,   // 23 Coachella Way, Berwick — Domain $620K–$820K (mid)
   5010: 900000,   // 11 Buchanan Road, Berwick — Domain $770K–$1.03M (mid)
+  5011: 1210000,  // 30 Rosewood Drive, Berwick — internals estimate (demo, matches cached outreach)
   // Pas's buyers — Domain.com.au estimates scraped May 2026
   6001: 690000,   // 16 Redwood Avenue, HP — Domain $590K–$790K (mid)
   6002: 750000,   // 11 Gleneadie Close, HP — Domain $640K–$860K (mid)

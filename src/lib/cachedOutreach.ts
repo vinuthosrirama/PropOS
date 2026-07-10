@@ -112,6 +112,21 @@ const CACHE: Record<string, CachedOutreach> = {
     ],
   },
 
+  // ── Helen & Bruce McDonald — vendor prospect, 30 Rosewood Drive Berwick ─────
+  // Hand-written per Vinuth 10 Jul 2026. Served as PRIMARY source in the vendor
+  // outreach flow (checked before the LLM call) so the demo works with the
+  // server down. $1.21M figure matches CURRENT_VALUE_ESTIMATES[5011].
+  "helen & bruce mcdonald|30": {
+    sms: "Hey Helen, hope you, Bruce and the little ones are doing well! A colleague of mine sold a property just down the road from Rosewood Drive, and I just checked out of curiosity and its sitting on a fair bit of equity to use for that townhouse you both mentioned the last time we met. Thoughts on meeting for a coffee (or tea) this week? Cheers, Cam, Peake Real Estate",
+    emailSubject: "Some good news on Rosewood Drive, Helen",
+    emailBody: [
+      "Hey Helen, Cameron from Peake here. It's been a little while since we last connected! Hope Bruce and the little ones are doing well, you mentioned your youngest was starting uni soon!",
+      "A colleague of mine sold a property just down the road from Rosewood Drive, and the suburb has grown nicely and a quick look at our internals makes your property $1.21M, representing a fair bit of equity since 2015. If you were still thinking about that townhouse, more than happy to meet and have a bit more of a discussion on what we can do!",
+      "More than happy to provide a complimentary appraisal, no obligation at all. Happy to call or come by whenever suits.",
+      "Cheers,\nCameron, Peake",
+    ],
+  },
+
   // ── Grace Chen — family buyer, backyard + storage + schools ─────────────────
   "grace chen|7": {
     sms: "Hi Grace, Cameron here from Peake. New 4 bed on Atkinson Dr, Berwick. Bring the little one for a look!",

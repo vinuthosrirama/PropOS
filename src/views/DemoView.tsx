@@ -6869,10 +6869,10 @@ function NurtureSequencePanel({ entry, agent, theme }: { entry: SegmentedBuyer; 
   const signoff   = buyer.status === "investor" ? "Kind regards" : "Cheers"
 
   const templates = [
-    { sms: `Hi ${fname}, ${agentFirst} from ${agent.agency}. Quick market update on ${buyer.suburb}. Your place is looking really strong. Worth a chat? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 700), emailSubject: `Market update for ${buyer.suburb}, ${fname}` },
-    { sms: `Hi ${fname}, ${agentFirst} here. ${buyer.suburb} clearance rate is tracking well. Happy to share the data. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 700), emailSubject: `${buyer.suburb} market moving, ${fname}` },
+    { sms: `Hi ${fname}, hope you've been well! Quick market update on ${buyer.suburb}. Your place is looking really strong. Worth a chat? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 700), emailSubject: `Market update for ${buyer.suburb}, ${fname}` },
+    { sms: `Hi ${fname}, ${buyer.suburb} clearance rate is tracking well. Happy to share the data. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 700), emailSubject: `${buyer.suburb} market moving, ${fname}` },
     { sms: `Hi ${fname}, a comparable property in ${buyer.suburb} just sold for ${fmtK(Math.round(fin.currentEstimate * 1.03 / 5000) * 5000)}. Want the full comps? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 700), emailSubject: `Comparable sale you should see, ${fname}` },
-    { sms: `Hi ${fname}, ${agentFirst} here. Just circling back. Happy to chat whenever the timing suits. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 700), emailSubject: `Still here when you're ready, ${fname}` },
+    { sms: `Hi ${fname}, just circling back. Happy to chat whenever the timing suits. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`.slice(0, 700), emailSubject: `Still here when you're ready, ${fname}` },
   ]
 
   const handleEnable = () => {
@@ -7815,6 +7815,16 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
   const handleGenerate = async () => {
     setGenerating(true)
 
+    // Hand-vetted cached outreach is the PRIMARY source for known demo
+    // contacts — no LLM call, works even when the server is down.
+    const cachedVendor = getCachedOutreach(buyer.name, buyer.purchaseAddress)
+    if (cachedVendor) {
+      await new Promise(r => setTimeout(r, 900))  // brief pause so the generating state reads naturally
+      setGenerating(false)
+      setInlineOutreach({ sms: cachedVendor.sms, emailSubject: cachedVendor.emailSubject, emailBody: cachedVendor.emailBody })
+      return
+    }
+
     // Auto-save voice notes to both Sheets and Supabase before generating
     if (voiceNotes) {
       const merged = [buyer.notes, voiceNotes].filter(Boolean).join("\n\nVoice note: ")
@@ -7883,7 +7893,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
       const estStr = fmtDollar(fin.currentEstimate)
       const equityStr = fmtDollar(fin.equityGain)
       const signoff = buyer.status === "investor" ? "Kind regards" : "Cheers"
-      const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. ${addr} is now worth ~${estStr} (${equityStr} equity since ${payload.purchaseYear}). Worth a quick chat? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
+      const smsRaw = `Hi ${fname}, hope you and the family have been well! ${addr} is now worth ~${estStr} (${equityStr} equity since ${payload.purchaseYear}). Worth a quick chat? ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
       const emailSubject = stripDashes(`Market update on ${buyer.purchaseAddress}, ${fname}`)
       const cgtLine = fin.cgtSavingsBy2027 > 0 ? ` The current 50% CGT discount saves you approximately ${fmtDollar(fin.cgtSavingsBy2027)} if you sell before July 2027.` : ""
       const emailBody = [
@@ -8661,7 +8671,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 id: "cgt", icon: "⏰", title: "CGT Deadline",
                 hook: `Save ${fmtDollar(fin.cgtSavingsBy2027)} in tax`, sub: "Before July 2027 cutoff", color: "#ef4444",
                 buildOutreach: () => {
-                  const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Selling before July 2027 saves you ~${fmtDollar(fin.cgtSavingsBy2027)} in tax. Happy to run the numbers. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
+                  const smsRaw = `Hi ${fname}, quick heads up, selling before July 2027 saves you ~${fmtDollar(fin.cgtSavingsBy2027)} in tax. Happy to run the numbers. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
                   const sms = stripDashes(smsRaw.slice(0, 700))
                   const emailSubject = `Your CGT window, ${fname}`
                   const emailBody = [
@@ -8677,7 +8687,7 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
                 id: "equity", icon: "💰", title: "Equity Position",
                 hook: `${fmtDollar(fin.equityGain)} in equity`, sub: `Built since ${year}`, color: "#66bb6a",
                 buildOutreach: () => {
-                  const smsRaw = `Hi ${fname}, ${agentFirst} from ${agent.agency}. Your place has grown ${fmtDollar(fin.equityGain)} since ${year}. Worth knowing your options. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
+                  const smsRaw = `Hi ${fname}, hope you've been well! Your place has grown ${fmtDollar(fin.equityGain)} since ${year}. Worth knowing your options. ${signoff}, ${agentFirst}${agent.agency ? `, ${agent.agency}` : ""}`
                   const sms = stripDashes(smsRaw.slice(0, 700))
                   const emailSubject = `Your equity position, ${fname}`
                   const emailBody = [
