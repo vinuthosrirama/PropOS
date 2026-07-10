@@ -9922,6 +9922,8 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const [sent, setSent] = useState(false)
   const [sendingToSelf, setSendingToSelf] = useState(false)
   const [sentToSelf, setSentToSelf] = useState(false)
+  // Single lock: any active send (channel OR self) blocks all other send buttons
+  const anySending = sendingChannel !== null || sendingToSelf
   const [deliveryNote, setDeliveryNote] = useState("")
   const bpRV = useBreakpoint()
   const isMobileRV = bpRV === "mobile"
@@ -10479,39 +10481,39 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       {/* Send buttons */}
       <div style={{ display: "flex", gap: 10 }}>
         <motion.button
-          whileHover={{ scale: sendingChannel ? 1 : 1.02 }}
-          whileTap={{ scale: sendingChannel ? 1 : 0.97 }}
+          whileHover={{ scale: anySending ? 1 : 1.02 }}
+          whileTap={{ scale: anySending ? 1 : 0.97 }}
           onClick={() => handleSend("sms")}
-          disabled={sendingChannel !== null}
+          disabled={anySending}
           style={{
             flex: 1, padding: "15px",
             borderRadius: 14, border: "none",
-            background: sendingChannel !== null
+            background: anySending
               ? C.bg3
               : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
-            color: sendingChannel !== null ? C.muted : "white",
-            fontSize: 15, fontWeight: 700, cursor: sendingChannel !== null ? "default" : "pointer",
+            color: anySending ? C.muted : "white",
+            fontSize: 15, fontWeight: 700, cursor: anySending ? "default" : "pointer",
             fontFamily: FONT, letterSpacing: -0.3,
-            boxShadow: sendingChannel !== null ? "none" : `0 6px 24px ${theme.glow}`,
+            boxShadow: anySending ? "none" : `0 6px 24px ${theme.glow}`,
           }}
         >
           {sendingChannel === "sms" ? "Sending..." : "Send SMS"}
         </motion.button>
         <motion.button
-          whileHover={{ scale: sendingChannel ? 1 : 1.02 }}
-          whileTap={{ scale: sendingChannel ? 1 : 0.97 }}
+          whileHover={{ scale: anySending ? 1 : 1.02 }}
+          whileTap={{ scale: anySending ? 1 : 0.97 }}
           onClick={() => handleSend("email")}
-          disabled={sendingChannel !== null}
+          disabled={anySending}
           style={{
             flex: 1, padding: "15px",
             borderRadius: 14, border: "none",
-            background: sendingChannel !== null
+            background: anySending
               ? C.bg3
               : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
-            color: sendingChannel !== null ? C.muted : "white",
-            fontSize: 15, fontWeight: 700, cursor: sendingChannel !== null ? "default" : "pointer",
+            color: anySending ? C.muted : "white",
+            fontSize: 15, fontWeight: 700, cursor: anySending ? "default" : "pointer",
             fontFamily: FONT, letterSpacing: -0.3,
-            boxShadow: sendingChannel !== null ? "none" : `0 6px 24px ${theme.glow}`,
+            boxShadow: anySending ? "none" : `0 6px 24px ${theme.glow}`,
           }}
         >
           {sendingChannel === "email" ? "Sending..." : "Send Email"}
@@ -10547,14 +10549,14 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
 
       <button
         onClick={handleSendToSelf}
-        disabled={sendingToSelf || sentToSelf}
+        disabled={anySending || sentToSelf}
         style={{
           width: "100%", padding: "13px",
           borderRadius: 14, marginTop: 12,
           background: "transparent",
           border: `1px solid ${accentColor}55`,
           color: sentToSelf ? C.green : accentColor,
-          fontSize: 14, fontWeight: 600, cursor: sendingToSelf || sentToSelf ? "default" : "pointer",
+          fontSize: 14, fontWeight: 600, cursor: anySending || sentToSelf ? "default" : "pointer",
           fontFamily: FONT, letterSpacing: -0.2,
         }}
       >
