@@ -28,7 +28,7 @@ import authRouter from "./routes/auth.js"
 import { loadOptOuts, addOptOut } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
 import { activeTransport, smsConfigured, checkSmsTransport, checkTransportChain, sendSMS } from "./lib/sms.js"
-import { parseBBWebhook, parseBBSendError, registerBlueBubblesWebhook, getTrackedSend } from "./lib/bluebubbles.js"
+import { parseBBWebhook, parseBBSendError, registerBlueBubblesWebhook, getTrackedSend, wasSyncHandled } from "./lib/bluebubbles.js"
 import { watchIncomingImsg } from "./lib/imsg.js"
 import { parseTeleLinkWebhook, registerTeleLinkWebhook }            from "./lib/telelink.js"
 import { parseTextingBlueWebhook }                                   from "./lib/textingblue.js"
@@ -69,6 +69,7 @@ import { startSmsAgentScheduler } from "./lib/smsOrchestrator.js"
 import { startReadyOutreachScheduler } from "./lib/smsReadyOutreach.js"
 import { runOptimisationCycle } from "./lib/promptOptimiser.js"
 import { startTransportHealthMonitor } from "./lib/transportHealthMonitor.js"
+import { startShortcutQueueReaper } from "./lib/shortcutRelay.js"
 import { startBackendHealthMonitor } from "./lib/backendHealthMonitor.js"
 import { requireAuth } from "./middleware/auth.js"
 import { verifyAccessToken } from "./lib/auth.js"
@@ -379,14 +380,23 @@ app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Respons
   if (sendErr) {
     console.warn(`[bluebubbles] delivery failure guid=${sendErr.guid}: ${sendErr.reason}`)
 
+    // The synchronous poll in sendViaBlueBubbles catches most failures before
+    // they reach here and fails over immediately; if it did, redispatching again
+    // from this webhook would deliver the same message twice. Skip those guids.
+    if (wasSyncHandled(sendErr.guid)) {
+      console.log(`[bluebubbles] send-error guid=${sendErr.guid} already handled by the sync fallback — skipping redispatch`)
+      return
+    }
+
     // BB's error payload often omits the original body/recipient — fall back to our
-    // own send-time tracking (bluebubbles.ts trackOutbound/getTrackedSend) before
-    // giving up. The synchronous poll in sendViaBlueBubbles already catches most of
-    // this case before it even reaches here; this webhook path is the backstop for
-    // failures that only surface after the poll window closes.
-    const recovered = (!sendErr.to || !sendErr.body) ? getTrackedSend(sendErr.guid) : null
+    // own send-time tracking (bluebubbles.ts trackOutbound/getTrackedSend). Always
+    // look up the tracked send even when to/body are present: it carries the
+    // original liveMode, without which a LIVE failover would get redirected to
+    // TEST_RECIPIENT_PHONE by the next transport.
+    const recovered = getTrackedSend(sendErr.guid)
     const to   = sendErr.to   || recovered?.to
     const body = sendErr.body || recovered?.body
+    const liveMode = recovered?.liveMode ?? false
 
     if (!to || !body) {
       console.warn(`[bluebubbles] send-error guid=${sendErr.guid} — payload missing to/body and no tracked send found, cannot redispatch (reason: ${sendErr.reason})`)
@@ -396,7 +406,7 @@ app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Respons
     redispatchedGuids.add(sendErr.guid)
     if (redispatchedGuids.size > 1000) redispatchedGuids.clear()
 
-    void sendSMS(to, body, ["bluebubbles"])
+    void sendSMS(to, body, ["bluebubbles"], liveMode)
       .then(r => console.log(`[bluebubbles] redispatch guid=${sendErr.guid} succeeded via "${r.transport}"`))
       .catch(e => console.error(`[bluebubbles] redispatch guid=${sendErr.guid} failed on all transports: ${(e as Error).message}`))
   }
@@ -527,6 +537,7 @@ app.listen(PORT, async () => {
   startSmsAgentScheduler()
   startReadyOutreachScheduler()
   startTransportHealthMonitor()
+  startShortcutQueueReaper()
   startBackendHealthMonitor()
 
   // Prompt evolution: Sunday 2am Melbourne — rewrite SMS style rules from accumulated signals

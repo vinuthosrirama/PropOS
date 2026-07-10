@@ -77,10 +77,15 @@ export async function enqueueShortcutMessage(
 
   if (!deviceId) throw new Error("SHORTCUT_RELAY_DEVICE_ID not set")
 
+  // Defensive cap only — iMessage/SMS via Messages has no 320-char limit, and
+  // the old 320 slice silently cut long outreach texts off mid-sentence.
+  if (actualBody.length > 2000) {
+    console.warn(`[shortcut-relay] body truncated from ${actualBody.length} to 2000 chars for ${actualTo}`)
+  }
   const rows = await query<{ id: string }>(
     `INSERT INTO shortcut_queue (device_id, to_phone, body)
      VALUES ($1, $2, $3) RETURNING id`,
-    [deviceId, actualTo, actualBody.slice(0, 320)],
+    [deviceId, actualTo, actualBody.slice(0, 2000)],
   )
 
   const id = rows[0]?.id
@@ -128,18 +133,62 @@ export async function markSent(messageId: string): Promise<void> {
   )
 }
 
+const MAX_SEND_ATTEMPTS = 3
+
 /** Mark a queued message as failed (Shortcut couldn't send). */
 export async function markFailed(messageId: string, reason?: string): Promise<void> {
-  // Revert claimed → pending so it can be retried on next poll
-  await execute(
+  // Revert claimed → pending for retry, but cap attempts: a permanently
+  // undeliverable message must not cycle forever and starve the poll batch.
+  const rows = await query<{ attempts: number; status: string }>(
     `UPDATE shortcut_queue
-     SET status = 'pending', claimed_at = NULL
-     WHERE id = $1 AND status = 'claimed'`,
-    [messageId],
+     SET attempts   = attempts + 1,
+         status     = CASE WHEN attempts + 1 >= $2 THEN 'failed' ELSE 'pending' END,
+         claimed_at = NULL
+     WHERE id = $1 AND status = 'claimed'
+     RETURNING attempts, status`,
+    [messageId, MAX_SEND_ATTEMPTS],
   )
-  if (reason) {
-    console.warn(`[shortcut-relay] message ${messageId} failed: ${reason}`)
+  const row = rows[0]
+  if (row?.status === "failed") {
+    console.error(`[shortcut-relay] message ${messageId} FAILED terminally after ${row.attempts} attempts${reason ? `: ${reason}` : ""}`)
+  } else if (reason) {
+    console.warn(`[shortcut-relay] message ${messageId} failed (attempt ${row?.attempts ?? "?"}): ${reason}`)
   }
+}
+
+// ── Stale-claim reaper ────────────────────────────────────────────────────────
+// If the iPhone Shortcut claims messages then dies before confirming (iOS kills
+// the automation, reboot, network drop), rows would stay 'claimed' forever and
+// the message silently lost. The reaper reverts stale claims to 'pending'
+// (counting the lost cycle as an attempt, so the cap still applies).
+
+const REAPER_INTERVAL_MS  = 10 * 60 * 1_000
+
+export async function reapStaleClaims(): Promise<void> {
+  if (!isDbConnected()) return
+  try {
+    const rows = await query<{ id: string }>(
+      `UPDATE shortcut_queue
+       SET attempts   = attempts + 1,
+           status     = CASE WHEN attempts + 1 >= $1 THEN 'failed' ELSE 'pending' END,
+           claimed_at = NULL
+       WHERE status = 'claimed' AND claimed_at < NOW() - INTERVAL '10 minutes'
+       RETURNING id`,
+      [MAX_SEND_ATTEMPTS],
+    )
+    if (rows.length > 0) {
+      console.warn(`[shortcut-relay] reaper recovered ${rows.length} stale claimed message(s)`)
+    }
+  } catch (err) {
+    console.warn(`[shortcut-relay] reaper failed: ${(err as Error).message}`)
+  }
+}
+
+export function startShortcutQueueReaper(): void {
+  void reapStaleClaims()
+  const t = setInterval(() => { void reapStaleClaims() }, REAPER_INTERVAL_MS)
+  t.unref()
+  console.log("  Shortcut-relay queue reaper: started (every 10 min)")
 }
 
 // ── Device registration ───────────────────────────────────────────────────────

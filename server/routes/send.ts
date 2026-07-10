@@ -115,7 +115,10 @@ router.post("/", async (req, res) => {
       results.errors.push("SMS skipped: no SMS transport configured (set SMS_TRANSPORT=bluebubbles)")
     } else {
       try {
-        results.sms = await withRetry(() => sendSMS(phone, sms, [], liveMode))
+        // No outer retry here: sendSMS's transport chain IS the retry, and each
+        // transport retries internally. Re-running the whole chain on a timeout
+        // risks duplicate texts (a 15s timeout does not mean BB didn't send).
+        results.sms = await sendSMS(phone, sms, [], liveMode)
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         results.errors.push(`SMS failed: ${msg}`)

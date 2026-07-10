@@ -24,6 +24,8 @@
  * API reference: https://docs.bluebubbles.app/api-reference
  */
 
+import { query, execute, isDbConnected } from "./db.js"
+
 const BB_URL      = () => process.env.BLUEBUBBLES_URL?.replace(/\/$/, "") ?? ""
 const BB_PASSWORD = () => process.env.BLUEBUBBLES_PASSWORD ?? ""
 
@@ -45,12 +47,12 @@ function bbUrl(path: string): string {
 // We track our own tempGuid → {to, body} so the webhook handler can recover
 // the redispatch target regardless of what BlueBubbles' payload includes.
 // Bounded and TTL'd so a long-running server doesn't leak memory.
-interface TrackedSend { to: string; body: string; at: number }
+interface TrackedSend { to: string; body: string; liveMode: boolean; at: number }
 const outboundTracker = new Map<string, TrackedSend>()
 const TRACKER_TTL_MS = 10 * 60 * 1_000   // 10 minutes — plenty for any async error to arrive
 
-function trackOutbound(guid: string, to: string, body: string): void {
-  outboundTracker.set(guid, { to, body, at: Date.now() })
+function trackOutbound(guid: string, to: string, body: string, liveMode: boolean): void {
+  outboundTracker.set(guid, { to, body, liveMode, at: Date.now() })
   if (outboundTracker.size > 500) {
     // Sweep expired entries rather than let the map grow unbounded
     const cutoff = Date.now() - TRACKER_TTL_MS
@@ -58,12 +60,66 @@ function trackOutbound(guid: string, to: string, body: string): void {
   }
 }
 
-/** Look up the original recipient/body for a guid we sent, for webhook-driven redispatch. */
-export function getTrackedSend(guid: string): { to: string; body: string } | null {
+/** Look up the original recipient/body/liveMode for a guid we sent, for webhook-driven redispatch. */
+export function getTrackedSend(guid: string): { to: string; body: string; liveMode: boolean } | null {
   const entry = outboundTracker.get(guid)
   if (!entry) return null
   if (Date.now() - entry.at > TRACKER_TTL_MS) { outboundTracker.delete(guid); return null }
-  return { to: entry.to, body: entry.body }
+  return { to: entry.to, body: entry.body, liveMode: entry.liveMode }
+}
+
+// ── Sync/async dedup registry ─────────────────────────────────────────────────
+// When the synchronous delivery poll confirms a failure, the transport chain
+// falls through to the next transport immediately. BlueBubbles may STILL fire a
+// message-send-error webhook for the same guid seconds later; without this
+// registry the webhook handler would redispatch a message that was already
+// re-sent, and the recipient would get it twice.
+const syncHandledGuids = new Set<string>()
+
+function markSyncHandled(...guids: string[]): void {
+  for (const g of guids) if (g) syncHandledGuids.add(g)
+  if (syncHandledGuids.size > 2000) syncHandledGuids.clear()
+}
+
+/** True if the sync send path already handled (failed over) this guid. */
+export function wasSyncHandled(guid: string): boolean {
+  return syncHandledGuids.has(guid)
+}
+
+// ── Learned service routing ───────────────────────────────────────────────────
+// Once a number is confirmed non-iMessage (Android), remember it so future
+// sends go straight to green-bubble SMS instead of re-failing the iMessage leg.
+// DB-backed with an in-memory layer; fails open (worst case: one wasted
+// iMessage attempt re-learns the fact). 90-day expiry — numbers switch platforms.
+const smsOnlyMemory = new Map<string, number>()
+const SMS_ONLY_TTL_MS = 90 * 24 * 60 * 60 * 1_000
+
+async function isKnownSmsOnly(phone: string): Promise<boolean> {
+  const hit = smsOnlyMemory.get(phone)
+  if (hit && Date.now() - hit < SMS_ONLY_TTL_MS) return true
+  if (!isDbConnected()) return false
+  try {
+    const rows = await query<{ phone: string }>(
+      `SELECT phone FROM handle_service_cache
+       WHERE phone = $1 AND sms_only = TRUE AND updated_at > NOW() - INTERVAL '90 days'`,
+      [phone],
+    )
+    if (rows.length > 0) { smsOnlyMemory.set(phone, Date.now()); return true }
+  } catch { /* fail open */ }
+  return false
+}
+
+async function rememberSmsOnly(phone: string): Promise<void> {
+  smsOnlyMemory.set(phone, Date.now())
+  if (!isDbConnected()) return
+  try {
+    await execute(
+      `INSERT INTO handle_service_cache (phone, sms_only, updated_at)
+       VALUES ($1, TRUE, NOW())
+       ON CONFLICT (phone) DO UPDATE SET sms_only = TRUE, updated_at = NOW()`,
+      [phone],
+    )
+  } catch { /* memory layer already updated */ }
 }
 
 /**
@@ -90,15 +146,50 @@ export async function sendViaBlueBubbles(
   const redirect   = testPhone && !isLive
   const actualTo   = redirect ? testPhone : to
   const actualBody = (redirect && showTestLabel) ? `[TEST to ${to}]\n${body}` : body
+  const safeNumber = norm(actualTo)
 
   // chatGuid service prefix. Default "any" lets the Private API pick iMessage/SMS.
   // BLUEBUBBLES_SERVICE=iMessage forces a real service for the AppleScript path
   // (AppleScript cannot use "any" — it errors -1700). Set this when the Private
   // API helper is not connected and you are messaging iMessage contacts.
-  const service    = process.env.BLUEBUBBLES_SERVICE?.trim() || "any"
-  const safeNumber = norm(actualTo)
-  const chatGuid   = `${service};-;${safeNumber}`
-  const tempGuid   = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const configured = process.env.BLUEBUBBLES_SERVICE?.trim() || "any"
+  // Learned routing: a number confirmed non-iMessage skips straight to SMS
+  // (green bubble via the iPhone's Text Message Forwarding), avoiding a doomed
+  // iMessage attempt + poll wait on every send.
+  const primary = (configured !== "SMS" && await isKnownSmsOnly(safeNumber)) ? "SMS" : configured
+
+  try {
+    return await attemptService(primary, safeNumber, actualBody, !!redirect, isLive)
+  } catch (err) {
+    // BLUEBUBBLES_SMS_FALLBACK=false disables the in-transport green-bubble
+    // retry (e.g. if this BB version misbehaves on the "SMS" service string).
+    const smsFallback = process.env.BLUEBUBBLES_SMS_FALLBACK?.trim() !== "false"
+    if (err instanceof DeliveryConfirmedFailure && primary !== "SMS" && smsFallback) {
+      // Confirmed the recipient can't receive on the primary (iMessage) service —
+      // almost always an Android number. Remember that, then retry once as a
+      // real SMS so it lands as a green bubble from the same number.
+      console.warn(`[bluebubbles] ${safeNumber} undeliverable via "${primary}" (${err.message}) — retrying as SMS`)
+      void rememberSmsOnly(safeNumber)
+      return await attemptService("SMS", safeNumber, actualBody, !!redirect, isLive)
+    }
+    throw err
+  }
+}
+
+/**
+ * One send attempt cycle (3 tries with backoff) against a specific BB service.
+ * Throws DeliveryConfirmedFailure immediately on a poll-confirmed failure so
+ * the caller can switch service or transport instead of burning retries.
+ */
+async function attemptService(
+  service: string,
+  safeNumber: string,
+  actualBody: string,
+  redirected: boolean,
+  liveMode: boolean,
+): Promise<{ sid: string; testMode: boolean }> {
+  const chatGuid = `${service};-;${safeNumber}`
+  const tempGuid = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
   const MAX_ATTEMPTS = 3
   let lastErr: unknown
@@ -128,8 +219,8 @@ export async function sendViaBlueBubbles(
       if (json.error) throw new Error(`BlueBubbles server error: ${json.error}`)
 
       const guid = json.data?.guid ?? tempGuid
-      trackOutbound(guid, actualTo, actualBody)
-      trackOutbound(tempGuid, actualTo, actualBody)   // webhook errors sometimes reference tempGuid instead
+      trackOutbound(guid, safeNumber, actualBody, liveMode)
+      trackOutbound(tempGuid, safeNumber, actualBody, liveMode)   // webhook errors sometimes reference tempGuid instead
 
       // BlueBubbles returns HTTP 200 "Message sent!" the instant it hands the
       // message to iMessage/AppleScript — before delivery is actually attempted.
@@ -143,19 +234,22 @@ export async function sendViaBlueBubbles(
       const deliveryCheck = await pollDeliveryStatus(guid)
       if (deliveryCheck?.failed) {
         // Confirmed delivery failure (e.g. recipient isn't iMessage-capable) — retrying
-        // the same "any" service call against BlueBubbles will fail the exact same way
-        // every time, so don't burn the retry budget on it. Throw immediately so sms.ts's
-        // transport chain can move on to the next transport (e.g. httpsms) right away.
+        // the same service call against BlueBubbles will fail the exact same way
+        // every time, so don't burn the retry budget on it. Throw immediately so the
+        // caller can switch to the SMS service or the next transport right away.
+        // Mark both guids handled so the async message-send-error webhook for this
+        // same failure doesn't redispatch a second copy.
+        markSyncHandled(guid, tempGuid)
         throw new DeliveryConfirmedFailure(deliveryCheck.reason ?? "unknown reason")
       }
 
-      return { sid: guid, testMode: !!redirect }
+      return { sid: guid, testMode: redirected }
     } catch (err) {
       lastErr = err
       if (err instanceof DeliveryConfirmedFailure) break
       if (attempt < MAX_ATTEMPTS) {
         const backoff = 500 * Math.pow(2, attempt - 1)   // 500ms, 1000ms
-        console.warn(`[bluebubbles] attempt ${attempt} failed, retrying in ${backoff}ms:`, (err as Error).message)
+        console.warn(`[bluebubbles] ${service} attempt ${attempt} failed, retrying in ${backoff}ms:`, (err as Error).message)
         await new Promise(r => setTimeout(r, backoff))
       }
     }

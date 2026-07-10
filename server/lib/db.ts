@@ -295,10 +295,18 @@ async function migrate(): Promise<void> {
         sent_at    TIMESTAMPTZ
       )`],
 
+    ["CREATE handle_service_cache", `
+      CREATE TABLE IF NOT EXISTS handle_service_cache (
+        phone      TEXT PRIMARY KEY,
+        sms_only   BOOLEAN NOT NULL DEFAULT TRUE,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`],
+
     // ── Phase 2: Add columns missing from pre-existing tables
     //    Each is a separate query so one missing column doesn't block the rest.
     //    All idempotent — ADD COLUMN IF NOT EXISTS is a no-op if column exists.
 
+    ["ALTER shortcut_queue: attempts",    `ALTER TABLE shortcut_queue ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0`],
     ["ALTER contacts: agent_id",          `ALTER TABLE contacts ADD COLUMN IF NOT EXISTS agent_id          TEXT NOT NULL DEFAULT 'default'`],
     ["ALTER contacts: pipeline",          `ALTER TABLE contacts ADD COLUMN IF NOT EXISTS pipeline          TEXT`],
     ["ALTER contacts: priority_score",    `ALTER TABLE contacts ADD COLUMN IF NOT EXISTS priority_score    INTEGER`],
