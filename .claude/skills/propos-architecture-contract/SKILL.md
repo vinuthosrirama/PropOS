@@ -24,7 +24,8 @@ All facts below were verified directly against source on 2026-07-05. File:line r
                                  │  static assets + /api/* fetch calls
                                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  Cloudflare Pages project "openhome-engine"  →  propos.addvantage.site   │
+│  Pages project serving propos.addvantage.site: propos-demo as of        │
+│  2026-07-10 (was openhome-engine until ~9 Jul; verify via API)           │
 │    Serves dist/ (built SPA)                                              │
 │    functions/api/[[path]].ts: real proxy Function (NOT a stub):         │
 │      catches every /api/* request, rewrites origin to                    │

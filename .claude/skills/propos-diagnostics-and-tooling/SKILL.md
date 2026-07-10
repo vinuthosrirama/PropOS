@@ -36,7 +36,7 @@ Scripts directory: `.claude/skills/propos-diagnostics-and-tooling/scripts/` (rep
 | live vs dist | dist vs server/public | Meaning |
 |---|---|---|
 | match | match | Deployed and consistent. Done. |
-| mismatch | match | Built + synced locally but never deployed to Pages, or CI deployed to the WRONG project. Known standing issue: `.github/workflows/deploy.yml` deploys to Pages project `propos-demo` while `propos.addvantage.site` is served by `openhome-engine` (verified 2026-07-06; see propos-failure-archaeology). CI being green therefore proves nothing about the live site. |
+| mismatch | match | Built + synced locally but never deployed to Pages, or CI deployed to the WRONG project. Known standing issue: `.github/workflows/deploy.yml` deploys to Pages project `propos-demo` while `propos.addvantage.site` is served by `openhome-engine` (verified 2026-07-06; see propos-failure-archaeology). CI being green therefore proves nothing about the live site. **UPDATE 2026-07-10 (verified via Cloudflare API):** the custom domain `propos.addvantage.site` is now attached to the `propos-demo` project, NOT `openhome-engine`. CI's target (`propos-demo`) is therefore currently the live one. Deploy to BOTH projects when in doubt, and re-verify domain attachment with the Pages projects API before trusting either. |
 | match | mismatch | Live matches dist but `server/public/` is stale: the NEXT `flyctl deploy` would ship an old frontend on the Fly-served path. Run `npm run build` (it re-syncs). |
 | mismatch | mismatch | Local tree is behind or ahead of everything; establish what deployed last via `npx wrangler pages deployment list --project-name openhome-engine`. |
 
