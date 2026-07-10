@@ -4,7 +4,8 @@
 > iMessage off), the text still arrives, sent as a real green-bubble SMS from the
 > agent's own number. Primary mechanism: BlueBubbles + Text Message Forwarding.
 > Detection: try iMessage first, fall back to SMS on confirmed failure.
-> Status: PLAN ONLY. Nothing in this document has been implemented yet.
+> Status: IMPLEMENTED 10 Jul 2026 across all four sending repos (section 7).
+> Live verification (Phase 3 matrix) still outstanding.
 
 ---
 
@@ -341,3 +342,62 @@ Why this cannot silently lose a message: every leg either confirms delivery,
 hands to the next leg, or lands in a DB queue with a reaper and an attempt cap
 whose terminal state fires an email alert. The only fail-open window left is
 5.7's Apple-side void, and the +60s verifier closes that for first contacts.
+
+---
+
+## 7. Implementation record (10 Jul 2026)
+
+Everything below is COMMITTED code, per repo. PropOS covers VendorOS and
+BuyerOS (they are views inside the same app and share /api/send).
+
+### 7.1 PropOS (commit d74476b, repo vinuthosrirama/PropOS)
+| Change | File | Defect closed |
+|---|---|---|
+| SMS;-; retry on confirmed iMessage failure, gated by `BLUEBUBBLES_SMS_FALLBACK` (default on) | server/lib/bluebubbles.ts `attemptService()` | Phase 1 |
+| Learned `sms_only` routing cache, DB (`handle_service_cache`) + memory, 90-day TTL, fail-open | server/lib/bluebubbles.ts, server/lib/db.ts | Phase 1 step 5 |
+| liveMode tracked per send; webhook redispatch passes it through | server/lib/bluebubbles.ts, server/index.ts | 5.2 |
+| `markSyncHandled`/`wasSyncHandled` registry; webhook skips guids the sync poll already failed over | server/lib/bluebubbles.ts, server/index.ts | 5.3 |
+| 320-char truncation removed (defensive 2000 cap + warning) | server/lib/shortcutRelay.ts | 5.1 |
+| `attempts` column + cap (3) with terminal 'failed' state | server/lib/shortcutRelay.ts, server/lib/db.ts | 5.5 |
+| Stale-claim reaper (10-min interval, counts as an attempt) | server/lib/shortcutRelay.ts, wired in server/index.ts | 5.4 |
+| Outer `withRetry` removed from the SMS leg of /api/send | server/routes/send.ts | 5.6 |
+
+`cd server && npx tsc --noEmit` clean. NOT yet pushed/deployed: push to main
+and `flyctl deploy --app addvantageadvisory` are deploy decisions pending
+founder approval. Fly secret to REMOVE at deploy time: `BLUEBUBBLES_SERVICE`
+should stay `iMessage` (primary), but verify `BLUEBUBBLES_METHOD` per Phase 2
+before switching to private-api.
+
+### 7.2 ConciergeOS (commit 1a6aa54, Cloudflare Worker)
+src/lib/bluebubbles.js rewritten: `sendViaService()` helper, iMessage first
+then SMS on definite failure; short delivery poll (3 x 700ms, fail-open)
+catches BB's silent post-200 failures; 4xx no longer retried (was an
+accidental 3x loop on non-retryable errors); timeouts never trigger the SMS
+retry (duplicate guard). Deploy = `npx wrangler deploy` (pending approval).
+
+### 7.3 addvantage-main-site (commit bc0172e, Cloudflare Pages Functions)
+functions/api/demo-send.js and functions/api/generate-send.js: same
+iMessage-then-SMS pattern, timeout-excluded. No delivery poll here (demo
+endpoints, latency-sensitive; BB HTTP errors are the realistic Android
+failure with apple-script method). Push to main = production deploy of the
+live business site: pending founder approval.
+
+### 7.4 addvantage-crm (commit 15a5419, branch claude/gohighlevel-crm-clone-9hz51h)
+lib/providers.js `sendIMessage()`: on non-simulated failure retries once with
+service "SMS" (diag event `fallback_sms_service`). outbound/bluebubbles.py
+`send()`: HTTPError on iMessage retries as SMS; timeouts do not retry.
+Self-test 58/58 green.
+
+### 7.5 Not patched (checked, no defect)
+- BookingAgent app/server/lib/bluebubbles.ts: no hardcoded `iMessage;-;`
+  chatGuid found; repo is the ConciergeOS predecessor, not deployed.
+
+### 7.6 Outstanding
+1. Deploys (all pending founder approval): PropOS push + flyctl deploy;
+   ConciergeOS wrangler deploy; main-site push.
+2. Phase 0 manual proof + Phase 3 live verification matrix (section 3).
+3. Phase 2 method migration (apple-script to private-api) after Phase 0.
+4. 5.7 (+60s dateDelivered verifier) and 5.8 (DB-backed send tracker):
+   designed, not yet implemented.
+5. 5.9 ops items: pmset/caffeinate, shortcut-queue age + device last_seen
+   alerts in transportHealthMonitor.
