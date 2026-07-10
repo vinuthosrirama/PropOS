@@ -38,6 +38,34 @@ function bbUrl(path: string): string {
   return `${BB_URL()}${path}?password=${encodeURIComponent(BB_PASSWORD())}`
 }
 
+// ── Outbound send tracking ────────────────────────────────────────────────────
+// BlueBubbles' async message-send-error webhook payload often omits the
+// original recipient/body (documented gap — see the webhook handler in
+// index.ts), which silently defeats the fallback-transport redispatch.
+// We track our own tempGuid → {to, body} so the webhook handler can recover
+// the redispatch target regardless of what BlueBubbles' payload includes.
+// Bounded and TTL'd so a long-running server doesn't leak memory.
+interface TrackedSend { to: string; body: string; at: number }
+const outboundTracker = new Map<string, TrackedSend>()
+const TRACKER_TTL_MS = 10 * 60 * 1_000   // 10 minutes — plenty for any async error to arrive
+
+function trackOutbound(guid: string, to: string, body: string): void {
+  outboundTracker.set(guid, { to, body, at: Date.now() })
+  if (outboundTracker.size > 500) {
+    // Sweep expired entries rather than let the map grow unbounded
+    const cutoff = Date.now() - TRACKER_TTL_MS
+    for (const [g, v] of outboundTracker) if (v.at < cutoff) outboundTracker.delete(g)
+  }
+}
+
+/** Look up the original recipient/body for a guid we sent, for webhook-driven redispatch. */
+export function getTrackedSend(guid: string): { to: string; body: string } | null {
+  const entry = outboundTracker.get(guid)
+  if (!entry) return null
+  if (Date.now() - entry.at > TRACKER_TTL_MS) { outboundTracker.delete(guid); return null }
+  return { to: entry.to, body: entry.body }
+}
+
 /**
  * Send a text message via BlueBubbles with retry (max 3 attempts, exponential backoff).
  * chatGuid prefix "any" lets BB auto-pick iMessage vs SMS.
@@ -99,9 +127,32 @@ export async function sendViaBlueBubbles(
       const json = await res.json() as { data?: { guid?: string }; error?: string }
       if (json.error) throw new Error(`BlueBubbles server error: ${json.error}`)
 
-      return { sid: json.data?.guid ?? tempGuid, testMode: !!redirect }
+      const guid = json.data?.guid ?? tempGuid
+      trackOutbound(guid, actualTo, actualBody)
+      trackOutbound(tempGuid, actualTo, actualBody)   // webhook errors sometimes reference tempGuid instead
+
+      // BlueBubbles returns HTTP 200 "Message sent!" the instant it hands the
+      // message to iMessage/AppleScript — before delivery is actually attempted.
+      // For a brand-new SMS-only contact this means we'd report success even
+      // though the send silently fails a moment later (documented BlueBubbles
+      // behavior, not a bug on our end). A short poll catches that failure
+      // synchronously so the transport chain in sms.ts can fall through to the
+      // next transport immediately, instead of only relying on the async
+      // message-send-error webhook (which BlueBubbles doesn't always fire, and
+      // whose payload doesn't always include enough to redispatch anyway).
+      const deliveryCheck = await pollDeliveryStatus(guid)
+      if (deliveryCheck?.failed) {
+        // Confirmed delivery failure (e.g. recipient isn't iMessage-capable) — retrying
+        // the same "any" service call against BlueBubbles will fail the exact same way
+        // every time, so don't burn the retry budget on it. Throw immediately so sms.ts's
+        // transport chain can move on to the next transport (e.g. httpsms) right away.
+        throw new DeliveryConfirmedFailure(deliveryCheck.reason ?? "unknown reason")
+      }
+
+      return { sid: guid, testMode: !!redirect }
     } catch (err) {
       lastErr = err
+      if (err instanceof DeliveryConfirmedFailure) break
       if (attempt < MAX_ATTEMPTS) {
         const backoff = 500 * Math.pow(2, attempt - 1)   // 500ms, 1000ms
         console.warn(`[bluebubbles] attempt ${attempt} failed, retrying in ${backoff}ms:`, (err as Error).message)
@@ -111,6 +162,56 @@ export async function sendViaBlueBubbles(
   }
 
   throw lastErr
+}
+
+class DeliveryConfirmedFailure extends Error {
+  constructor(reason: string) {
+    super(`BlueBubbles delivery failed: ${reason}`)
+    this.name = "DeliveryConfirmedFailure"
+  }
+}
+
+/**
+ * Poll BlueBubbles for a short window to check whether a just-sent message
+ * actually delivered, catching the "returns 200 immediately, fails silently
+ * a moment later" case documented for brand-new SMS-only contacts.
+ *
+ * Fails OPEN by design: any unexpected response shape, timeout, or 404 means
+ * we return null (treat as success) rather than risk blocking a genuinely
+ * working iMessage send on a guess about BlueBubbles' exact field names.
+ * A hard failure is only reported when the message resource explicitly
+ * carries a non-empty `error` object.
+ */
+async function pollDeliveryStatus(guid: string): Promise<{ failed: boolean; reason?: string } | null> {
+  if (guid.startsWith("temp-")) return null   // no real guid to look up yet
+  const POLL_ATTEMPTS = 5
+  const POLL_INTERVAL_MS = 700
+
+  for (let i = 0; i < POLL_ATTEMPTS; i++) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS))
+    try {
+      const res = await fetch(bbUrl(`/api/v1/message/${encodeURIComponent(guid)}`), {
+        signal: AbortSignal.timeout(4_000),
+      })
+      if (!res.ok) continue   // 404/5xx — message resource not ready yet or endpoint unsupported, keep polling
+      const json = await res.json().catch(() => null) as
+        | { data?: { error?: unknown; dateDelivered?: string | null; dateCreated?: string | null } }
+        | null
+      const data = json?.data
+      if (!data) continue
+
+      const err = data.error
+      const hasError = err !== null && err !== undefined && err !== 0 &&
+        !(typeof err === "object" && Object.keys(err as object).length === 0)
+      if (hasError) {
+        const reason = typeof err === "string" ? err : JSON.stringify(err).slice(0, 200)
+        return { failed: true, reason }
+      }
+    } catch {
+      // Network hiccup mid-poll — keep trying, fail open at the end
+    }
+  }
+  return null
 }
 
 /**

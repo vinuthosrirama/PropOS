@@ -28,7 +28,7 @@ import authRouter from "./routes/auth.js"
 import { loadOptOuts, addOptOut } from "./lib/compliance.js"
 import { gmailConfigured } from "./lib/gmail.js"
 import { activeTransport, smsConfigured, checkSmsTransport, checkTransportChain, sendSMS } from "./lib/sms.js"
-import { parseBBWebhook, parseBBSendError, registerBlueBubblesWebhook } from "./lib/bluebubbles.js"
+import { parseBBWebhook, parseBBSendError, registerBlueBubblesWebhook, getTrackedSend } from "./lib/bluebubbles.js"
 import { watchIncomingImsg } from "./lib/imsg.js"
 import { parseTeleLinkWebhook, registerTeleLinkWebhook }            from "./lib/telelink.js"
 import { parseTextingBlueWebhook }                                   from "./lib/textingblue.js"
@@ -379,18 +379,24 @@ app.post("/api/webhook/bluebubbles", express.json(), (req: Request, res: Respons
   if (sendErr) {
     console.warn(`[bluebubbles] delivery failure guid=${sendErr.guid}: ${sendErr.reason}`)
 
-    if (!sendErr.to || !sendErr.body) {
-      // BB's error payload often omits the original body/recipient — redispatch impossible.
-      // The synchronous cascade already tried fallback transports at send time, so this
-      // is expected in many cases. No further action needed.
-      console.warn(`[bluebubbles] send-error guid=${sendErr.guid} — payload missing to/body, cannot redispatch (reason: ${sendErr.reason})`)
+    // BB's error payload often omits the original body/recipient — fall back to our
+    // own send-time tracking (bluebubbles.ts trackOutbound/getTrackedSend) before
+    // giving up. The synchronous poll in sendViaBlueBubbles already catches most of
+    // this case before it even reaches here; this webhook path is the backstop for
+    // failures that only surface after the poll window closes.
+    const recovered = (!sendErr.to || !sendErr.body) ? getTrackedSend(sendErr.guid) : null
+    const to   = sendErr.to   || recovered?.to
+    const body = sendErr.body || recovered?.body
+
+    if (!to || !body) {
+      console.warn(`[bluebubbles] send-error guid=${sendErr.guid} — payload missing to/body and no tracked send found, cannot redispatch (reason: ${sendErr.reason})`)
       return
     }
     if (redispatchedGuids.has(sendErr.guid)) return  // already retried once
     redispatchedGuids.add(sendErr.guid)
     if (redispatchedGuids.size > 1000) redispatchedGuids.clear()
 
-    void sendSMS(sendErr.to, sendErr.body, ["bluebubbles"])
+    void sendSMS(to, body, ["bluebubbles"])
       .then(r => console.log(`[bluebubbles] redispatch guid=${sendErr.guid} succeeded via "${r.transport}"`))
       .catch(e => console.error(`[bluebubbles] redispatch guid=${sendErr.guid} failed on all transports: ${(e as Error).message}`))
   }
