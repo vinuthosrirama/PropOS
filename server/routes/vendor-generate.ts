@@ -130,7 +130,10 @@ router.post("/", async (req, res) => {
     )
     // Signature phrasing (see docs/VOICE_CORPUS_VINUTH.md) even in the last-resort
     // template, so a genuine outage still sounds like a person, not a mail-merge.
-    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. It's been a little while, ${addr} is sitting on a fair bit of equity, about ${equityStr} since ${params.purchaseYear}. More than happy to grab a coffee (or tea) and run through the numbers if you're keen? ${signoff}, ${agentSig}`
+    // Identity appears ONCE (the sign-off) — a live send doubled up "Cameron from
+    // Peake" at both ends. These are known past clients; open warm, not with a
+    // self-introduction.
+    const smsRaw = `${greeting} ${fname}, hope you and the family have been well! It's been a little while, and ${addr} is sitting on a fair bit of equity, about ${equityStr} since ${params.purchaseYear}. More than happy to grab a coffee (or tea) and run through the numbers if you're keen? ${signoff}, ${agentSig}`
     const sms = clampSMS(sanitise(smsRaw))
     return res.json({
       sms,
@@ -263,6 +266,8 @@ Hard rules:
 - HARD CONSTRAINT: NEVER use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma or period instead.
 - SMS has no strict length cap. Match the training examples' natural length, do not compress or pad. Reads like a real text, warm, not salesy.
 - SMS sign-off: "${signoff}, ${agentSig}" (match agent voice style above)
+- Your identity appears ONCE in the SMS: the sign-off. NEVER also introduce yourself by name at the start ("${agentFirst} from ${agencyLabel}") — this is a known past client, they have your number.
+- Open the SMS WARM: a personal line drawn from the CRM personal detail below if one exists (e.g. "hope the cake business is keeping you busy!", "hope the footy season's treating Bruce well!"), otherwise "hope you and the family have been well". The warm line comes FIRST, before any market or equity talk.
 - Email: 2-3 short paragraphs maximum
 - This is vendor prospecting — you sold this person a home and now you're reaching out about their property's value growth. Never say "I remember you from the open home."
 - Reference the settlement — "hope you've been well since we settled on ${addr}" is a natural opener
@@ -344,7 +349,7 @@ Respond ONLY with valid JSON, no markdown:
     const cgtLine = params.cgtSavingsBy2027 > 0
       ? ` The current 50% CGT discount saves you approximately ${fmtK(params.cgtSavingsBy2027)} if you sell before July 2027.`
       : ""
-    const smsRaw = `${greeting} ${fname}, ${agentFirst} from ${agencyLabel}. It's been a little while, ${addr} is sitting on a fair bit of equity today, about ${equityStr} since ${params.purchaseYear}. More than happy to grab a coffee (or tea) if you're keen? ${signoff}, ${agentSig}`
+    const smsRaw = `${greeting} ${fname}, hope you and the family have been well! ${addr} is sitting on a fair bit of equity today, about ${equityStr} since ${params.purchaseYear}. More than happy to grab a coffee (or tea) if you're keen? ${signoff}, ${agentSig}`
     return res.json({
       sms: clampSMS(sanitise(smsRaw)),
       email: {

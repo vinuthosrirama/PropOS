@@ -75,6 +75,7 @@ Hard rules — never break these:
 - Write in first person as ${agentName} — use "I" throughout. This is a personal message from the agent to someone they already know.
 - HARD CONSTRAINT: never use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma, period, or "and" instead.
 - SMS has no strict length cap. Match the length of the training examples above naturally, do not compress or pad. Read like a real text message, not a marketing blast.
+- Your identity appears ONCE in the SMS: the sign-off. Never also introduce yourself by name at the start; the recipient already knows you.
 - VOICE MATCH: Your sign-off in the SMS MUST match the closing style from the training examples above. If examples show "Cheers" or "Cheers ${agentFirst}", use that. Do not default to "Thanks" or "Regards" if the training shows otherwise.
 - Email must be 2-3 short paragraphs maximum
 - Always use the lead's first name at least once

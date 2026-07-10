@@ -51,6 +51,17 @@ Tone by persona:
 
 ## 3. Hard rules (carry over from house style)
 
+0a. **Identity appears ONCE per SMS: the sign-off.** Never also introduce yourself by name
+   at the start ("Cameron from Peake...") when the message ends with the sign-off block —
+   a live send doubled up and Vinuth flagged it (10 Jul). Known past clients get a WARM
+   opener instead: personalised from CRM notes where available ("hope the cake business is
+   keeping you busy!"), else "hope you and the family have been well". Emails may keep the
+   intro (his own email samples do).
+0b. **Multi-segment sends split at SENTENCE boundaries only, never mid-sentence.**
+   Enforced in `server/lib/sms.ts` `splitIntoSegments()` (greedy sentence packing,
+   ~160 chars/segment, a long sentence is sent whole rather than cut). A live send was
+   chopped at its midpoint word and Vinuth flagged it (10 Jul).
+
 1. **No em-dashes (—) or en-dashes (–).** Use commas. Runtime `.replace(/[—–]/g, ',')` safety net still applies.
 2. **SMS = up to 2 segments (~300 chars).** Do not force under 160 — compressing kills his relational cadence.
 3. First person as the agent ("I"), lead's first name used, partner named where known.

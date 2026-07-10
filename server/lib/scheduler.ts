@@ -25,7 +25,10 @@ import { buildEmailHTML } from "./emailTemplate.js"
 import { addAgentMessageToThread } from "./conversations.js"
 import { logOutreach } from "./db.js"
 import { generateMessageHaiku } from "./claude.js"
+import { getOpenAIClient } from "./openai.js"
 import type { GenerateParams } from "./openai.js"
+import { sanitiseText, ensureSignoff } from "./sanitise.js"
+import { withRetry } from "./llmUtils.js"
 
 // ---------------------------------------------------------------------------
 // Nurture step definitions
@@ -366,10 +369,65 @@ async function generateNurtureMessage(
   const firstName   = job.contact_name.split(" ")[0]
   const agentFirst  = (ctx.agentName || "Agent").split(" ")[0]
   const agentAgency = ctx.agentAgency || ""
-  const fromAgency  = agentAgency ? ` from ${agentAgency}` : ""
   const anchor = step?.anchor ?? "Checking in on your situation."
 
-  // Try LLM generation first
+  const template = () => nurtureTemplate(job, ctx, step)
+
+  // OpenAI is primary — this repo currently runs without a working Anthropic
+  // key, and a stray ANTHROPIC_API_KEY in any environment must not silently
+  // take over. This mirrors the provider order already used everywhere else
+  // (generate.ts, vendor-generate.ts) — scheduler.ts had been missed, which
+  // is why nurture follow-ups (day 7/14/30) kept coming out generic/robotic
+  // instead of using the trained voice corpus.
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const vocBlock = ctx.voiceContext ? `\n=== AGENT VOICE STYLE ===\n${ctx.voiceContext}\n` : ""
+      const notesBlock = ctx.notes ? `\nCRM notes: ${ctx.notes}` : ""
+
+      const prompt = `You are ${ctx.agentName || "Agent"}, a real estate agent at ${agentAgency}.
+${vocBlock}
+Hard rules:
+- Write in first person as ${ctx.agentName || agentFirst} — use "I" throughout. This is a personal follow-up to someone you already know.
+- HARD CONSTRAINT: never use em-dashes (—), en-dashes (–), or double-hyphens (--). Use a comma or period instead.
+- SMS has no strict length cap. Match the training examples' natural length, do not compress or pad. Reads like a real text, not a marketing blast.
+- Your identity appears ONCE in the SMS: the sign-off. Never also introduce yourself by name at the start — this is a known contact, they have your number.
+- Open the SMS WARM: a personal line drawn from the CRM notes below if one exists, otherwise "hope you and the family have been well". The warm line comes FIRST, before any market talk.
+- Email: 2-3 short paragraphs maximum
+- No spam words (FREE, URGENT, ACT NOW etc.)
+- NEVER use AI-writing tells: leverage, utilize, robust, seamless, holistic, actionable, synergy, pivotal, transformative, cornerstone, empower, nuanced, paramount, comprehensive. Plain words only.
+- NO hollow openers: never start with "I wanted to reach out", "I hope this finds you well", "just wanted to touch base".
+
+CONTACT: ${job.contact_name}${notesBlock}
+FOLLOW-UP STEP ${job.step} (${step?.strategyLabel ?? "Check-In"}): ${anchor}
+
+Respond ONLY with valid JSON, no markdown:
+{"sms":"...","email":{"subject":"...","body":["paragraph 1","paragraph 2"]}}`
+
+      const completion = await withRetry(() => getOpenAIClient().chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 500,
+        temperature: 0.7,
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content: prompt }],
+      }))
+
+      const raw = completion.choices[0]?.message?.content ?? "{}"
+      const parsed = JSON.parse(raw) as NurtureMessage
+      if (!parsed.sms || !parsed.email?.subject) throw new Error("incomplete nurture generation")
+
+      return {
+        sms: ensureSignoff(sanitiseText(parsed.sms), agentFirst, agentAgency),
+        email: {
+          subject: sanitiseText(parsed.email.subject),
+          body: (parsed.email.body ?? []).map(sanitiseText),
+        },
+      }
+    } catch {
+      // Fall through to Anthropic, then template
+    }
+  }
+
+  // Anthropic fallback (only reached when OpenAI is unset or fails)
   if (process.env.ANTHROPIC_API_KEY) {
     try {
       const params: GenerateParams = {
@@ -392,48 +450,58 @@ async function generateNurtureMessage(
       }
       const result = await generateMessageHaiku(params)
       return {
-        sms: result.sms,
-        email: { subject: result.email.subject, body: result.email.body },
+        sms: ensureSignoff(sanitiseText(result.sms), agentFirst, agentAgency),
+        email: { subject: sanitiseText(result.email.subject), body: result.email.body.map(sanitiseText) },
       }
     } catch {
       // Fall through to template
     }
   }
 
-  // Template fallback
+  return template()
+}
+
+// Deterministic fallback — only reached when both LLM providers are unset or fail.
+// Warm opener + single sign-off, matching docs/VOICE_CORPUS_VINUTH.md rules 0a/0b.
+function nurtureTemplate(job: NurtureJobRow, ctx: NurtureContext, step: NurtureStep | undefined): NurtureMessage {
+  const firstName   = job.contact_name.split(" ")[0]
+  const agentFirst  = (ctx.agentName || "Agent").split(" ")[0]
+  const agentAgency = ctx.agentAgency || ""
+  const agentSig    = agentAgency ? `${agentFirst}, ${agentAgency}` : agentFirst
+
   const templates: NurtureMessage[] = [
     {
-      sms: `Hi ${firstName}, ${agentFirst} here. A couple of strong sales just came through in your suburb. Happy to share the numbers if you're keen? Cheers`,
+      sms: `Hi ${firstName}, hope you've been well! A couple of strong sales just came through in your suburb, happy to share the numbers if you're keen? Cheers, ${agentSig}`,
       email: {
         subject: `Recent sales in your suburb, ${firstName}`,
         body: [
-          `Hi ${firstName},`,
+          `Hi ${firstName}, hope you've been well.`,
           `A few strong results have come through in your suburb recently that are worth knowing about. They paint a pretty good picture of where your property sits right now. Happy to walk you through the numbers whenever suits.`,
-          `Cheers,\n${agentFirst}`,
+          `Cheers,\n${agentSig}`,
         ],
       },
     },
     {
-      sms: `Hi ${firstName}, ${agentFirst}${fromAgency} here. Another owner nearby just decided to go to market. Timing for sellers is looking good right now. Worth a quick chat? Cheers`,
+      sms: `Hi ${firstName}, hope things have been good on your end! Another owner nearby just decided to go to market, timing for sellers is looking good right now. Worth a quick chat? Cheers, ${agentSig}`,
       email: {
         subject: `Thought you'd want to know, ${firstName}`,
         body: [
-          `Hi ${firstName},`,
+          `Hi ${firstName}, hope things have been good on your end.`,
           `Another owner in your area just made the call to list. That's a decent sign of where confidence sits right now, and the same conditions apply to your place.`,
           `No pressure at all, but if you'd like to catch up for a coffee and talk through your options, I'm happy to do that.`,
-          `Cheers,\n${agentFirst}`,
+          `Cheers,\n${agentSig}`,
         ],
       },
     },
     {
-      sms: `Hi ${firstName}, ${agentFirst} here. Just checking in, no particular agenda. If you've had any thoughts about your property lately, always happy to chat. Cheers`,
+      sms: `Hi ${firstName}, hope you and the family have been well! Just checking in, no particular agenda. If you've had any thoughts about your property lately, always happy to chat. Cheers, ${agentSig}`,
       email: {
         subject: `Checking in, ${firstName}`,
         body: [
-          `Hi ${firstName},`,
+          `Hi ${firstName}, hope you and the family have been well.`,
           `No particular news, just wanted to see how things are going. If your situation has changed at all or you've been thinking about your property, I'm always happy to have a no-pressure chat.`,
           `Otherwise, hope all's going well.`,
-          `Cheers,\n${agentFirst}`,
+          `Cheers,\n${agentSig}`,
         ],
       },
     },
