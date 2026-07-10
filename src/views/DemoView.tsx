@@ -9919,6 +9919,8 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
   const [bodyText, setBodyText] = useState(initBody.join("\n\n"))
   const [editMode, setEditMode] = useState<"sms" | "email" | null>(null)
   const [sendingChannel, setSendingChannel] = useState<"sms" | "email" | null>(null)
+  const [smsSentOk, setSmsSentOk] = useState(false)
+  const [emailSentOk, setEmailSentOk] = useState(false)
   const [sent, setSent] = useState(false)
   const [sendingToSelf, setSendingToSelf] = useState(false)
   const [sentToSelf, setSentToSelf] = useState(false)
@@ -10128,6 +10130,10 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       const delivered = deliveryRes?.ok === true
       const vTransport: string = deliveryRes?.sms?.transport ?? "sms"
       const vTransportLabel = vTransport === "bluebubbles" ? "BlueBubbles" : vTransport === "imsg" ? "iMessage" : vTransport
+      if (delivered) {
+        if (channel === "sms") setSmsSentOk(true)
+        if (channel === "email") setEmailSentOk(true)
+      }
       setDeliveryNote(
         delivered
           ? channel === "sms"
@@ -10175,7 +10181,6 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
       }
     } catch {}
     setSendingChannel(null)
-    setSent(true)
   }
 
   const handleSendToSelf = async () => {
@@ -10486,7 +10491,9 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           style={{
             flex: 1, padding: "15px",
             borderRadius: 14, border: "none",
-            background: sendingChannel === "sms"
+            background: smsSentOk
+              ? "#166534"
+              : sendingChannel === "sms"
               ? C.bg3
               : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
             color: sendingChannel === "sms" ? C.muted : "white",
@@ -10495,7 +10502,7 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
             boxShadow: sendingChannel === "sms" ? "none" : `0 6px 24px ${theme.glow}`,
           }}
         >
-          {sendingChannel === "sms" ? "Sending..." : "Send SMS"}
+          {sendingChannel === "sms" ? "Sending..." : smsSentOk ? "✓ SMS Sent" : "Send SMS"}
         </motion.button>
         <motion.button
           whileHover={{ scale: sendingChannel === "email" ? 1 : 1.02 }}
@@ -10505,7 +10512,9 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
           style={{
             flex: 1, padding: "15px",
             borderRadius: 14, border: "none",
-            background: sendingChannel === "email"
+            background: emailSentOk
+              ? "#166534"
+              : sendingChannel === "email"
               ? C.bg3
               : `linear-gradient(135deg, ${theme.gradient[0]}, ${theme.gradient[1]})`,
             color: sendingChannel === "email" ? C.muted : "white",
@@ -10514,9 +10523,24 @@ function VendorReviewPanel({ entry, agent, theme, sms: initSMS, emailSubject: in
             boxShadow: sendingChannel === "email" ? "none" : `0 6px 24px ${theme.glow}`,
           }}
         >
-          {sendingChannel === "email" ? "Sending..." : "Send Email"}
+          {sendingChannel === "email" ? "Sending..." : emailSentOk ? "✓ Email Sent" : "Send Email"}
         </motion.button>
       </div>
+      {(smsSentOk || emailSentOk) && (
+        <motion.button
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => setSent(true)}
+          style={{
+            width: "100%", marginTop: 10, padding: "13px",
+            borderRadius: 14, border: `1px solid ${theme.primary}55`,
+            background: "transparent", color: theme.primary,
+            fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+          }}
+        >
+          Done — view summary →
+        </motion.button>
+      )}
       <div style={{ textAlign: "center", fontSize: 11, color: C.faint, marginTop: 10 }}>
         Preview what your leads receive.
       </div>
