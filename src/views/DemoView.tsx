@@ -7816,8 +7816,10 @@ function VendorProfilePage({ entry, agent, theme, onBack, onReview, vendorSettin
     setGenerating(true)
 
     // Hand-vetted cached outreach is the PRIMARY source for known demo
-    // contacts — no LLM call, works even when the server is down.
-    const cachedVendor = getCachedOutreach(buyer.name, buyer.purchaseAddress)
+    // contacts — no LLM call, works even when the server is down. Toggle
+    // off in Settings → Outreach Generation to always use OpenAI instead.
+    const useTemplates = vendorSettings?.useTemplateOutreach !== false
+    const cachedVendor = useTemplates ? getCachedOutreach(buyer.name, buyer.purchaseAddress) : null
     if (cachedVendor) {
       await new Promise(r => setTimeout(r, 900))  // brief pause so the generating state reads naturally
       setGenerating(false)

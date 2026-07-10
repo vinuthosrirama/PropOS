@@ -203,6 +203,8 @@ export interface VendorDisplaySettings {
   showTabPropertyPitch: boolean
   showTabGci:           boolean
   showTabAppraisal:     boolean   // "Instant CMA" tab (DemoView's VendorProfilePage only)
+  // Added in v6 — outreach generation mode
+  useTemplateOutreach:  boolean   // true = hand-written cached templates first, fallback to AI; false = always AI-generate
 }
 
 export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
@@ -229,6 +231,7 @@ export const DEFAULT_VENDOR_SETTINGS: VendorDisplaySettings = {
   showTabPropertyPitch: true,
   showTabGci:           true,
   showTabAppraisal:     true,
+  useTemplateOutreach:  true,
 }
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────

@@ -135,26 +135,6 @@ async function dispatchSMS(
 }
 
 /**
- * Splits a message into up to 2 natural SMS-length chunks (~160 chars each,
- * matching Vinuth's 2-segment voice — see docs/VOICE_CORPUS_VINUTH.md). Splits
- * on the nearest word boundary to the midpoint rather than a hard character cut.
- */
-function splitIntoSegments(body: string): string[] {
-  const LIMIT = 160
-  if (body.length <= LIMIT) return [body]
-  const mid = Math.min(LIMIT, Math.ceil(body.length / 2))
-  let splitAt = -1
-  for (let offset = 0; offset < 30; offset++) {
-    if (body[mid - offset] === " ") { splitAt = mid - offset; break }
-    if (body[mid + offset] === " ") { splitAt = mid + offset; break }
-  }
-  if (splitAt === -1) splitAt = mid
-  const first = body.slice(0, splitAt).trim()
-  const second = body.slice(splitAt).trim()
-  return second ? [first, second] : [first]
-}
-
-/**
  * Walks the transport chain in order until one send succeeds.
  * Every transport's outcome is recorded in `attempts` for diagnostics.
  */
@@ -180,24 +160,17 @@ export async function sendSMS(
     )
   }
 
-  const segments = splitIntoSegments(body)
   const attempts: SmsAttempt[] = []
 
+  // Send the full message as ONE text. iMessage (BlueBubbles/imsg/textingblue)
+  // has no 160-char limit — splitting was a carrier-SMS artifact that made
+  // long messages arrive as two separate bubbles instead of one.
   for (const transport of chain) {
     try {
-      const r = await dispatchSMS(transport, to, segments[0], liveMode)
+      const r = await dispatchSMS(transport, to, body, liveMode)
       attempts.push({ transport, ok: true })
       const usedFallback = attempts.length > 1
       if (usedFallback) console.warn(`[sms] "${transport}" succeeded for ${to} after ${attempts.length - 1} failed transport(s)`)
-      // Fire the second segment as its own separate BlueBubbles text, same transport.
-      // Segment 1 already succeeded, so a segment-2 failure is logged, not thrown.
-      if (segments[1]) {
-        try {
-          await dispatchSMS(transport, to, segments[1], liveMode)
-        } catch (err) {
-          console.warn(`[sms] second segment failed on "${transport}" for ${to}: ${err instanceof Error ? err.message : String(err)}`)
-        }
-      }
       return { ...r, transport, fallback: usedFallback, attempts }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

@@ -2164,6 +2164,8 @@ const VENDOR_PANEL_META: Array<{
   { key: "showTabPropertyPitch", label: "Prop. Pitch tab",    description: "Property pitch showcase",                                 group: "Vendor Tabs" },
   { key: "showTabGci",           label: "GCI Calc tab",       description: "Gross commission income calculator",                      group: "Vendor Tabs" },
   { key: "showTabAppraisal",     label: "Instant CMA tab",    description: "Instant CMA / appraisal generator",                       group: "Vendor Tabs" },
+  // ── Outreach generation mode ──────────────────────────────────────────────
+  { key: "useTemplateOutreach",  label: "Use template outreach", description: "Hand-written cached templates first, AI as fallback. Off = always generate via OpenAI.", group: "Outreach Generation" },
 ]
 
 function TogglePill({ on }: { on: boolean }) {
@@ -2206,7 +2208,7 @@ function VendorPanelToggles({
     return acc
   }, {})
 
-  const groupOrder = ["BuyerOS", "Vendor Tabs", "Vendor Profile", "Interface Controls", "Demo Mode"]
+  const groupOrder = ["BuyerOS", "Outreach Generation", "Vendor Tabs", "Vendor Profile", "Interface Controls", "Demo Mode"]
 
   const groupLabel: React.CSSProperties = {
     fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
