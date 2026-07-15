@@ -891,7 +891,7 @@ function VendorPortfolioPage({ agent, theme, onAnalyse, onSelectBuyer, showMarke
           border: `1px solid rgba(166,218,255,0.15)`, padding: "14px 18px",
         }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.blue, marginBottom: 4 }}>
-            Using demo data — your live CRM loads automatically once connected
+            Using demo data, your live CRM loads automatically once connected
           </div>
           <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>
             {supabaseConnected()
